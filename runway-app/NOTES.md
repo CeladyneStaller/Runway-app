@@ -1,6 +1,10 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 89 tests · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 98 · `npm run lint` → oxlint
+
+**Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
+Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
+vice versa. Pick one and stay there, or move between them with Export/Import.
 
 ## What this is
 
@@ -157,6 +161,17 @@ unaffected — the vector is *reading* a crafted file. This app reads SF-424A wo
 point is that they come from elsewhere: a subrecipient, a program officer, a partner. That is exactly
 the exposure. Being local-first bounds the blast radius to your own tab — no server, no other users,
 nothing to pivot to — but "bounded" is not "none", and the fix is one line.
+
+## jsdom is not a browser
+
+`test/setup.js` stubs the two things it lacks that this app uses. Both were printing stack traces on a
+*passing* run, which is how you train yourself to stop reading test output:
+
+- **`fake-indexeddb/auto`** — real IndexedDB semantics in memory. This is not silence: it's why
+  `test/engine/storage.test.js` exists at all. The seam had no coverage because nothing could exercise
+  it, including the case that matters most — an unreadable document must be *parked*, not dropped.
+- **Downloads** — jsdom has no `createObjectURL` and treats an anchor click as navigation, reported
+  asynchronously so it surfaces in an unrelated file's output. Anchors carrying `download` now no-op.
 
 ## Known gap
 
