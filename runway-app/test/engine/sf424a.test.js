@@ -5,7 +5,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as XLSX from "xlsx";
-import { importWorkbook, exportBudget, computeGrant } from "../../src/engine";
+import { computeGrant } from "../../src/engine";
+import { importWorkbook, exportBudget } from "../../src/engine/sf424a";   // not in the barrel — see engine/index.js
 
 // jsdom rewrites import.meta.url to an http: URL, so resolve from cwd instead.
 const wbPath = resolve(process.cwd(), "test/fixtures/celadyne.xlsx");

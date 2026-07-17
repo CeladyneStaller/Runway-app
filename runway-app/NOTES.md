@@ -162,6 +162,31 @@ point is that they come from elsewhere: a subrecipient, a program officer, a par
 the exposure. Being local-first bounds the blast radius to your own tab — no server, no other users,
 nothing to pivot to — but "bounded" is not "none", and the fix is one line.
 
+## Why sf424a is not in the engine barrel
+
+`src/engine/index.js` re-exports every engine module **except `sf424a.js`**, and that is deliberate.
+
+SheetJS is 7.3 MB on disk and **432 kB of a 793 kB bundle — 54% of it**. It is needed only when someone
+imports or exports a workbook. One `export * from "./sf424a.js"` in the barrel meant that
+`import { buildProjection } from "../engine"` dragged all of SheetJS into the main chunk, so every page
+load paid for a feature almost nobody uses on any given visit.
+
+```
+BEFORE   index  793.25 kB  gzip 240.76 kB   one chunk, everyone pays
+AFTER    index  363.16 kB  gzip  97.50 kB   <- initial load, 60% smaller
+         xlsx   424.70 kB  gzip 141.48 kB   <- fetched on first workbook touch
+         sf424a  10.17 kB  gzip   3.64 kB
+```
+
+**Import it directly and dynamically:**
+
+```js
+const { importWorkbook } = await import("../../engine/sf424a");
+```
+
+If you ever add it back to the barrel, the bundle silently doubles and nothing fails. That is the whole
+hazard: a barrel file makes a heavy dependency look free.
+
 ## jsdom is not a browser
 
 `test/setup.js` stubs the two things it lacks that this app uses. Both were printing stack traces on a

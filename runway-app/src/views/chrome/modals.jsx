@@ -1,10 +1,8 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useState } from "react";
-import * as XLSX from "xlsx";
 import { TIMING_LABEL, grantPaymentsAt } from "../../engine/grant";
 import { moneyFull } from "../../engine/money";
 import { BINDING, FLEX, poBeyondHorizon, poPaidMonth, targetStatus } from "../../engine/sales";
-import { exportBudget, exportSchedule, importWorkbook, parseScheduleAoa } from "../../engine/sf424a";
 import { HORIZON, monthLabel, monthLong, uid } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
 import { Payroll } from "../Payroll";
@@ -176,15 +174,20 @@ export function POModal({ onClose, onSave }) {
 export function GrantIOModal({ p, g, R, setGrant, onClose }) {
   const [billing, setBilling] = useState(g.reimburseTiming || "arrears");
   const [msg, setMsg] = useState(null);
-  const readWb = (file, cb) => { const reader = new FileReader(); reader.onload = (e) => { try { cb(XLSX.read(e.target.result, { type: "array" })); } catch (err) { setMsg({ ok: false, text: "Couldn't read that file — is it an .xlsx?" }); } }; reader.readAsArrayBuffer(file); };
-  const onBudget = (e) => { const f = e.target.files[0]; if (!f) return; readWb(f, (wb) => {
+  // SheetJS and the SF-424A parser load on first use, not on page load. They are over half the
+  // bundle and are needed only when someone actually touches a workbook.
+  const sheets = () => Promise.all([import("xlsx"), import("../../engine/sf424a")]);
+  const readWb = (file, cb) => sheets().then(([XLSX]) => { const reader = new FileReader(); reader.onload = (e) => { try { cb(XLSX.read(e.target.result, { type: "array" })); } catch (err) { setErr(String(err.message || err)); } }; reader.readAsArrayBuffer(file); });
+  const onBudget = (e) => { const f = e.target.files[0]; if (!f) return; readWb(f, async (wb) => {
+    const { importWorkbook } = await import("../../engine/sf424a");
     const { periods, categories, costSharePct } = importWorkbook(wb);
     if (!periods.length) { setMsg({ ok: false, text: "No SF-424A budget tabs found in that workbook." }); return; }
     const nItems = Object.values(categories).reduce((a, c) => a + (Array.isArray(c) ? c.length : (c.rates ? c.rates.length : 0)), 0);
     setGrant(p.id, { reimburseTiming: billing, periods, categories, costSharePct });
     setMsg({ ok: true, text: `Imported ${periods.length} budget period${periods.length !== 1 ? "s" : ""} and ${nItems} line item${nItems !== 1 ? "s" : ""} from the SF-424A tabs, reimbursed ${TIMING_LABEL[billing].toLowerCase()}.` });
   }); e.target.value = ""; };
-  const onSchedule = (e) => { const f = e.target.files[0]; if (!f) return; readWb(f, (wb) => {
+  const onSchedule = (e) => { const f = e.target.files[0]; if (!f) return; readWb(f, async (wb) => {
+    const [XLSX, { parseScheduleAoa }] = await sheets();
     const ms = parseScheduleAoa(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null }));
     if (!ms.length) { setMsg({ ok: false, text: "No milestones found in that file." }); return; }
     setGrant(p.id, { milestones: ms, reimburseTiming: "milestone" });
@@ -202,11 +205,11 @@ export function GrantIOModal({ p, g, R, setGrant, onClose }) {
           <div className="modal-sec">Export</div>
           <div className="ioRow">
             <div><b>SF-424A budget justification</b><span>One tab per object-class category (Personnel, Fringe, Travel, Equipment, Supplies, Contractual, Construction, Other, Indirect) plus the Section B summary — line detail and justification text included.</span></div>
-            <button className="addbtn ghost" onClick={() => exportBudget(p, g, R)}>{I.download} Budget .xlsx</button>
+            <button className="addbtn ghost" onClick={async () => (await import("../../engine/sf424a")).exportBudget(p, g, R)}>{I.download} Budget .xlsx</button>
           </div>
           <div className="ioRow">
             <div><b>Milestone / award schedule</b><span>A separate file — payment on each milestone.</span></div>
-            <button className="addbtn ghost" onClick={() => exportSchedule(p, g)}>{I.download} Schedule .xlsx</button>
+            <button className="addbtn ghost" onClick={async () => (await import("../../engine/sf424a")).exportSchedule(p, g)}>{I.download} Schedule .xlsx</button>
           </div>
 
           <div className="modal-sec">Import</div>
