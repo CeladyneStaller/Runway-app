@@ -46,3 +46,22 @@ describe("the document is the unit", () => {
     expect(JSON.stringify(before)).toBe(snapshot);   // the original is untouched
   });
 });
+
+describe("the rail foot", () => {
+  it("carries the document's identity, not the demo's", () => {
+    // It used to read `Northwind Labs / Projection start · Jul 2026` — hardcoded. Someone else's
+    // company name, in the chrome, on every screen, forever.
+    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Celadyne", startY: 2029, startM: 3 }} setDoc={() => {}} />);
+    const foot = container.querySelector(".railfoot");
+    expect(foot.querySelector(".docname").value).toBe("Celadyne");
+    expect(foot.textContent).toContain("April 2029");
+    expect(foot.textContent).not.toContain("Northwind Labs");
+  });
+  it("keeps Export and Import in the rail, not floating in a horizontal bar", () => {
+    // .docbar was `display:flex; margin-left:auto` inside a 200px sticky COLUMN — frozen, wherever.
+    const { container } = render(<RunwayApp doc={demoDoc()} setDoc={() => {}} />);
+    expect(container.querySelectorAll(".docbar")).toHaveLength(0);
+    const acts = [...container.querySelectorAll(".railfoot .addbtn")].map(b => b.textContent);
+    expect(acts).toEqual(["Export", "Import"]);
+  });
+});

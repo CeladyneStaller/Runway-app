@@ -9,6 +9,22 @@ import { I } from "./chrome/icons";
 import { CashActualModal } from "./chrome/modals";
 
 export function History({ hist, setHist, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+  // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
+  // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
+  // disagree with the projection start.
+  // A month is appended as the most recent one — the list is ordered oldest -> newest and its
+  // position IS its date.
+  const addMonth = () => setHist(h => [...h, { v: Math.round(itemizedOpex) || 0 }]);
+  const upMonth = (i, patch) => setHist(h => h.map((x, j) => j === i ? { ...x, ...patch } : x));
+  // flagOverrides is keyed by INDEX, so deleting a month silently re-points every later override at
+  // the wrong month. Rebuild the map rather than leave it dangling.
+  const delMonth = (i) => {
+    setHist(h => h.filter((_, j) => j !== i));
+    setFlagOverrides(o => Object.fromEntries(
+      Object.entries(o).filter(([k]) => +k !== i).map(([k, v]) => [+k > i ? +k - 1 : +k, v])));
+  };
+
+  const hlabel = (i) => monthLabel(START_Y, START_M, i - hist.length);
   const { START_Y, START_M } = useStart();
   const max = Math.max(...hist.map(h => h.v), itemizedOpex);
   const { rows, avg, trailing, trend, applied, flaggedCount } = burnStats(hist, itemizedOpex, flagOverrides, method);
@@ -115,7 +131,7 @@ export function History({ hist, setHist, flagOverrides, setFlagOverrides, method
                     {excess > 0 && <div className={"seg exc" + (r.flagged ? " flag" : "")} style={{ height: `${(excess / r.v) * 100}%` }} />}
                     <div className="seg exp" style={{ height: `${(Math.min(r.v, itemizedOpex) / r.v) * 100}%` }} />
                   </div>
-                  <div className="bm">{r.mo} ’26{r.flagged ? <span className="flagtag">⚠ mismatch</span> : null}</div>
+                  <div className="bm">{hlabel(r.i)}{r.flagged ? <span className="flagtag">⚠ mismatch</span> : null}</div>
                 </div>
               );
             })}
@@ -126,6 +142,47 @@ export function History({ hist, setHist, flagOverrides, setFlagOverrides, method
             <span><i className="sw flag" /> Flagged mismatch</span>
           </div>
         </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-h">
+          <div><h3>Recorded months</h3><p>What actually left the bank each month — from your bank statement or your books, not from the model. This is the only input that can disagree with your line items, which is exactly what makes it worth having.</p></div>
+          <button className="addbtn ghost" onClick={addMonth}>{I.plus} Month</button>
+        </div>
+        {hist.length === 0 ? (
+          <div className="emptytab">
+            No months recorded. Without them there is no measured burn, so the projection can only tell you
+            what your line items claim — never what they miss. Add the last few months from your bank statement.
+          </div>
+        ) : (
+          <table className="tbl">
+            <thead><tr><th>Month</th><th style={{ textAlign: "right" }}>Total spend</th><th>Note</th><th>Variance</th><th>In the run-rate</th><th></th></tr></thead>
+            <tbody>
+              {hist.map((h, i) => {
+                const r = rows[i] || {};
+                return (
+                  <tr key={i}>
+                    <td className="num" style={{ fontSize: 12.5 }}>{hlabel(i)}</td>
+                    <td className="amt"><input className="inp" type="number" value={h.v} onChange={e => upMonth(i, { v: +e.target.value })} /></td>
+                    <td><input className="inp" style={{ width: 190, textAlign: "left" }} value={h.note || ""} placeholder="one-off? severance? equipment?" onChange={e => upMonth(i, { note: e.target.value })} /></td>
+                    <td className="num" style={{ fontSize: 12, color: Math.abs(r.variance || 0) > 1 ? "var(--muted)" : "var(--muted-2)" }}>
+                      {r.variance >= 0 ? "+" : "−"}{money(Math.abs(r.variance || 0))}
+                    </td>
+                    <td>
+                      <button className={"conf " + (r.flagged ? "speculative" : "committed")}
+                        title={r.flagged ? (flagOverrides[i] !== undefined ? "Excluded by you" : "Auto-excluded: too far from the median to be typical") : "Counted in the run-rate"}
+                        onClick={() => setFlagOverrides(o => ({ ...o, [i]: !r.flagged }))}>
+                        {r.flagged ? "excluded" : "counted"}
+                      </button>
+                    </td>
+                    <td style={{ textAlign: "right" }}><button className="iconbtn" onClick={() => delMonth(i)} aria-label="Delete month">{I.trash}</button></td>
+                  </tr>
+                );
+              })}
+              <tr className="totrow"><td>Measured average</td><td className="amt num">{moneyFull(hist.reduce((a, h) => a + (h.v || 0), 0) / (hist.length || 1))}</td><td colSpan={4} style={{ fontFamily: "var(--fb)", fontSize: 11.5, color: "var(--muted-2)", fontWeight: 400 }}>all months, before exclusions — the run-rate below uses only the counted ones</td></tr>
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="panel">

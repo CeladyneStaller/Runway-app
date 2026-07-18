@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 98 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 103 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -206,11 +206,11 @@ template. `test/engine/sf424a.test.js` encodes this as an `it.fails`, so it docu
 flips loudly the day someone closes it. Related: an import yields only `{periods, categories,
 costSharePct}` — billing terms, funder and payment lag aren't in an SF-424A, so they stay at defaults.
 
-**There is no way to enter spend history.** `HIST` was a module constant, so the History view has only
-ever displayed the demo's six months — it was never editable. That was invisible while the seed was the
-default; the empty state makes it load-bearing, because the measured-burn baseline is one of the app's
-better ideas and a new user cannot feed it. `setHist` is wired through to `History.jsx` and unused,
-which is where that work starts.
+*(closed — spend history is editable under **Spend history → Burn**. Months are ordered oldest → newest
+and **position is the date**: labels derive from the projection start rather than being typed, so they
+follow `startY`/`startM` instead of the hardcoded `’26` they used to carry. `flagOverrides` is keyed by
+index, so deleting a month rebuilds the map — otherwise an override on month 3 silently starts
+excluding month 4. Covered by `test/views/history.test.jsx`.)*
 
 ## Next
 

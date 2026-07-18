@@ -148,6 +148,8 @@ export const SEED_MILESTONES = [
   { id: uid(), label: "Product launch",   y: 2027, m: 0, day: 15 },
 ];
 
+// Ordered oldest -> newest. Position IS the date: the last entry is the month before month 0, so
+// these labels derive from the projection start rather than being typed. `mo` is vestigial.
 export const HIST = [
   { mo: "Jan", v: 72000 }, { mo: "Feb", v: 76000 }, { mo: "Mar", v: 74000 },
   { mo: "Apr", v: 108000, note: "one-off: equipment" }, { mo: "May", v: 78000 }, { mo: "Jun", v: 82000 },

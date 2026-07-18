@@ -381,10 +381,18 @@
 .splash{padding:60px 24px;text-align:center;font-family:var(--fb);color:var(--muted);font-size:14px}
 
 /* ---- shell chrome added at extraction ---- */
-.docbar{display:flex;align-items:center;gap:6px;margin-left:auto}
-.docname{font-family:var(--fd);font-size:12.5px;font-weight:500;color:var(--on-dark-mute);background:rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:5px 9px;width:150px}
-.docname:focus{outline:none;border-color:rgba(255,255,255,.28);color:#fff}
+/* The rail is a 200px sticky column, so anything in it stacks. An earlier version of this was a
+   horizontal flex row with margin-left:auto — in a vertical column that means "frozen, wherever". */
+.docname{display:block;width:100%;font-family:var(--fd);font-size:12.5px;font-weight:600;color:#fff;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;
+  padding:6px 8px;margin-bottom:8px;letter-spacing:-.01em}
+.docname::placeholder{color:var(--on-dark-mute);font-weight:400}
+.docname:focus{outline:none;border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.1)}
+.railmeta{font-size:11px;color:var(--on-dark-mute);line-height:1.55;margin-bottom:10px}
+.docacts{display:flex;gap:6px}
+.docacts .addbtn{flex:1;justify-content:center;padding:5px 6px;font-size:11px;color:var(--on-dark-mute);
+  border-color:rgba(255,255,255,.14);background:transparent;cursor:pointer}
+.docacts .addbtn:hover{color:#fff;border-color:rgba(255,255,255,.32);background:rgba(255,255,255,.06)}
 .empty-shell{max-width:520px;margin:14vh auto;text-align:center;padding:0 24px}
 .empty-shell .mark{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;
   border-radius:9px;background:var(--ink);margin-bottom:18px}

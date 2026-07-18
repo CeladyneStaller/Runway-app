@@ -232,18 +232,21 @@ function RunwayApp({ doc, setDoc }) {
             <span className="mark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M3 17 9 9l4 3 8-9" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
             <div><b>Waterline</b><span>runway control</span></div>
           </div>
-          <div className="docbar">
-            <input className="docname" value={doc.name} onChange={e => setDoc(d => ({ ...d, name: e.target.value }))} aria-label="Model name" />
-            <button className="addbtn ghost" onClick={doExport} title="Download this model as JSON">Export</button>
-            <label className="addbtn ghost" style={{ cursor: "pointer" }}>Import
-              <input type="file" accept="application/json,.json" style={{ display: "none" }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
-            </label>
-          </div>
           {NAV.map(([k, label, icon]) => (
             <button key={k} className={"nav" + (view === k ? " on" : "")} onClick={() => setView(k)}>{icon}{label}</button>
           ))}
-          <div className="railfoot">Northwind Labs<br/>Projection start · Jul 2026<br/>18-month horizon</div>
+          <div className="railfoot">
+            <input className="docname" value={doc.name} onChange={e => setDoc(d => ({ ...d, name: e.target.value }))}
+              aria-label="Model name" placeholder="Untitled model" />
+            <div className="railmeta">Projection start · {monthLong(startY, startM)}<br />{HORIZON}-month horizon</div>
+            <div className="docacts">
+              <button className="addbtn ghost" onClick={doExport} title="Download this model as JSON — your only backup">Export</button>
+              <label className="addbtn ghost" title="Replace this model with a JSON file">Import
+                <input type="file" accept="application/json,.json" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
+              </label>
+            </div>
+          </div>
         </aside>
 
         {/* MAIN */}
