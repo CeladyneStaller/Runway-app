@@ -13,6 +13,7 @@ export * from "./importer.js";
 export * from "./money.js";
 export * from "./payroll.js";
 export * from "./projection.js";
+export * from "./revenue.js";
 export * from "./projects.js";
 export * from "./sales.js";
 export * from "./summary.js";

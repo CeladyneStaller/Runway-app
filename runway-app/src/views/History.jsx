@@ -9,7 +9,7 @@ import { useStart } from "../state/StartCtx";
 import { I } from "./chrome/icons";
 import { CashActualModal } from "./chrome/modals";
 
-export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
   // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
   // disagree with the projection start.
@@ -236,6 +236,23 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
         const delMonthL = (mi) => { setHist(h => h.filter((_, i) => i !== mi)); setFlagOverrides(o => Object.fromEntries(Object.entries(o).filter(([k]) => +k !== mi).map(([k, v]) => [+k > mi ? +k - 1 : +k, v]))); };
         const setMap = (code, id) => setCodeMap(m => ({ ...m, [code]: id }));
         return (<>
+          {revenueVariances.length > 0 && (
+            <div className="panel" style={{ marginBottom: 16, borderColor: "var(--caution)" }}>
+              <div className="panel-h"><div><h3>Recorded revenue differs from projection</h3><p>Where your books recorded a different amount than the model projected, the recorded number is used — this just flags the gap so a surprise doesn't hide inside the runway. Future months are unaffected.</p></div>
+                <span className="chip warn">{revenueVariances.length}</span></div>
+              <table className="tbl"><thead><tr><th>Project</th><th>Month</th><th style={{ textAlign: "right" }}>Projected</th><th style={{ textAlign: "right" }}>Recorded</th><th style={{ textAlign: "right" }}>Difference</th></tr></thead>
+                <tbody>{revenueVariances.map((v, i) => (
+                  <tr key={i}>
+                    <td style={{ fontSize: 12.5 }}>{projects.find(p => p.id === v.projectId)?.name || "—"}</td>
+                    <td className="num" style={{ fontSize: 12 }}>{hlabel(v.month)}</td>
+                    <td className="amt num" style={{ color: "var(--muted)" }}>{moneyFull(v.projected)}</td>
+                    <td className="amt num">{moneyFull(v.actual)}</td>
+                    <td className="amt num" style={{ color: v.delta < 0 ? "var(--danger)" : "var(--signal-ink)" }}>{v.delta >= 0 ? "+" : "−"}{moneyFull(Math.abs(v.delta))}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
           {unmapped.length > 0 && (
             <div className="panel" style={{ marginBottom: 16, borderColor: "var(--caution)" }}>
               <div className="panel-h"><div><h3>Unmapped cost codes</h3><p>These codes appear in your ledger but aren't assigned to a project yet. Until they are, their spend sits in overhead and never reaches a project's budget.</p></div>

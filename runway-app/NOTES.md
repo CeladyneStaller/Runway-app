@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 173 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 185 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -293,10 +293,16 @@ work is the actuals model underneath it.
   unchanged). UI: an "Unmapped customers" panel in the Ledger tab, twin of the code panel, built as you
   go. The importer seam now emits customer/category/period/kind on each line. Tests:
   `test/engine/customer-mapping.test.js`.
-- **Piece 3 — REVENUE REPLACES PROJECTION (the hard one).** Where a project has recorded revenue
-  actuals, suppress its projected revenue (grants/POs) for that month and use the actual. Per-project,
-  per-month, runway-critical — gets its own careful turn and test suite. `codedRevenue` (built in
-  Piece 1) is its input.
+- **Piece 3 — REVENUE REPLACES PROJECTION (DONE).** `src/engine/revenue.js` (`applyRevenueActuals`),
+  tested in `test/engine/revenue.test.js`. The four pinned rules: PAST-ONLY (replace up to each
+  project's last recorded revenue month, per-project bound, forward forecast untouched); TOTAL
+  SUPPRESSION (a recorded month removes ALL that project's projected revenue lines, incl. a recorded
+  $0); ALWAYS ON (no toggle); FLAGGED (variances surfaced in a Ledger-tab panel, but the actual is
+  still used). Design: a PURE pre-processing step that swaps projected-revenue lines for one-time
+  actual lines, then the untouched buildProjection runs — no surgery in the hot loop. Golden-safe: with
+  no revenue actuals it returns the SAME line-item reference, so the demo (5.6mo) is provably
+  unchanged. PO revenue lines resolve to a project via `poProject` (poId->projectId); project lines
+  carry projectId directly.
 - **Piece 4 — THE IMPORTER.** The column-mapping importer: map 8 columns (date/customer/project/period/
   category/amount/kind/note), save an import profile, feed the `mergeImport` seam. The seam itself is
   already built: `src/engine/importer.js`: `src/engine/importer.js` (`mergeImport`,

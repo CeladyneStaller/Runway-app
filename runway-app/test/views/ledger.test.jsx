@@ -51,3 +51,18 @@ describe("customer mapping (Piece 2)", () => {
     expect(panel.textContent).toMatch(/Acme Corp/);
   });
 })
+
+describe("revenue replacement (Piece 3)", () => {
+  it("flags recorded revenue that differs from projection", () => {
+    const d = demoDoc();
+    d.history = [
+      { month: 0, lines: [{ code: "5000", amount: 12345, kind: "revenue", note: "actual payment" }] },
+      ...d.history.slice(1),
+    ];
+    const { container } = render(<RunwayApp doc={d} setDoc={() => {}} />);
+    fireEvent.click([...container.querySelectorAll("button")].find(b => /Spend history/.test(b.textContent)));
+    fireEvent.click([...container.querySelectorAll(".subtab")].find(b => b.textContent.startsWith("Ledger")));
+    expect(container.textContent).toMatch(/Recorded revenue differs from projection/);
+    expect(container.textContent).toMatch(/Catalyst/);
+  });
+})

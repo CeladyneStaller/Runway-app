@@ -8,6 +8,8 @@ import { money, moneyFull } from "./engine/money";
 import { compileEmployee, empCostAt } from "./engine/payroll";
 import { anchorToActuals, balanceAtDate, buildProjection, tagRevenue, zeroInfo } from "./engine/projection";
 import { compileProject, resolveProjectRates, syncFulfilStage } from "./engine/projects";
+import { applyRevenueActuals } from "./engine/revenue";
+import { codedRevenue } from "./engine/coding";
 import { blankFulfillment, compilePO, devLines, poDevNeeded, poNeedsReview } from "./engine/sales";
 import { HORIZON, dateLong, dateShort, dateStamp, monthLong, uid } from "./engine/time";
 import { SEED_ROUNDS } from "./seed";
@@ -119,7 +121,25 @@ function RunwayApp({ doc, setDoc }) {
 
   const salesLines = useMemo(() => pos.flatMap(po => compilePO(po).map(l => ({ ...l, poId: po.id, poRef: `${po.customer} · ${po.po}` }))), [pos]);
   const roundLines = useMemo(() => rounds.flatMap(x => compileInstrument(x, rounds)), [rounds]);
-  const allLines = useMemo(() => tagRevenue([...lines, ...employeeLines, ...projectLines, ...salesLines, ...roundLines, ...baselineLines]), [lines, employeeLines, projectLines, salesLines, roundLines, baselineLines]);
+  // Per-project recorded revenue, from the coded ledger. Piece 3: these REPLACE projected revenue for
+  // each project's past (up to its last recorded month); the forward forecast is untouched.
+  const revActuals = useMemo(() => {
+    const maps = { codeMap, customerMap };
+    const out = {};
+    for (const p of rProjects) {
+      const r = codedRevenue(p.id, hist, maps);
+      if (Object.keys(r).length) out[p.id] = r;
+    }
+    return out;
+  }, [rProjects, hist, codeMap, customerMap]);
+  const poProject = useMemo(() => Object.fromEntries(pos.filter(p => p.projectId).map(p => [p.id, p.projectId])), [pos]);
+
+  const rawLines = useMemo(() => tagRevenue([...lines, ...employeeLines, ...projectLines, ...salesLines, ...roundLines, ...baselineLines]), [lines, employeeLines, projectLines, salesLines, roundLines, baselineLines]);
+  const revReplace = useMemo(() => applyRevenueActuals(rawLines, revActuals, toggles, { poProject }),
+    [rawLines, revActuals, toggles, poProject]);
+  const allLines = revReplace.lineItems;
+  const revenueVariances = revReplace.variances;
+
   // Memoised so dependents can depend on IT rather than on its ingredients. Rebuilt every render,
   // it would defeat every memo below; listed by hand, its ingredients drift out of sync (that is how
   // `hist` went missing above). One object, one dependency, verifiable by the linter.
@@ -377,7 +397,7 @@ function RunwayApp({ doc, setDoc }) {
           {view === "proj" && <Projects projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
-          {view === "hist" && <History hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
+          {view === "hist" && <History hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
         </main>
       </div>
