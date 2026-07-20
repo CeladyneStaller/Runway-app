@@ -60,3 +60,30 @@ describe("the app shell", () => {
     expect(container.textContent).toMatch(/Loading/i);
   });
 });
+
+describe("collapsed project headers", () => {
+  it("fold a project to its summary, expand it back", () => {
+    let d = demoDoc();
+    const { container } = render(<RunwayApp doc={d} setDoc={(v) => { d = typeof v === "function" ? v(d) : v; }} />);
+    fireEvent.click([...container.querySelectorAll("button")].find(b => /Projects/.test(b.textContent)));
+    const fold = container.querySelector(".projfold");
+    fireEvent.click(fold);
+    const c = container.querySelector(".collapsed");
+    expect(c).toBeTruthy();
+    expect(c.querySelector(".ttag").textContent).toMatch(/Internal|Grant|PO fulfillment|Proposal/);
+    expect(c.querySelector(".csum-name").textContent.length).toBeGreaterThan(0);
+    expect(c.textContent).not.toMatch(/NaN|undefined/);
+  });
+  it("each project type shows its own financial fields", () => {
+    let d = demoDoc();
+    const { container } = render(<RunwayApp doc={d} setDoc={(v) => { d = typeof v === "function" ? v(d) : v; }} />);
+    fireEvent.click([...container.querySelectorAll("button")].find(b => /Projects/.test(b.textContent)));
+    fireEvent.click([...container.querySelectorAll(".subtab")].find(b => b.textContent.startsWith("All")) || container);
+    // collapse everything via the bar
+    const bar = [...container.querySelectorAll(".linkbtn")].find(b => /Collapse all/.test(b.textContent));
+    if (bar) fireEvent.click(bar);
+    const tags = [...container.querySelectorAll(".collapsed .ttag")].map(t => t.textContent);
+    expect(tags.some(t => /Grant/.test(t))).toBe(true);
+    expect(tags.some(t => /fulfillment/i.test(t))).toBe(true);
+  });
+});

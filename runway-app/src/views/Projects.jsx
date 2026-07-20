@@ -1,11 +1,13 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import React, { useState } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { MS_STATUS, TIMING_LABEL, computeGrant, isMsBilled, msPaid, msTier } from "../engine/grant";
 import { tripCost } from "../engine/history";
 import { money, moneyFull } from "../engine/money";
 import { HRS_YR, empHourlyAt, empTitleAt } from "../engine/payroll";
 import { buildProjection, lineSpan } from "../engine/projection";
 import { blankGrant, blankInternal, compileProject } from "../engine/projects";
+import { projectSummary } from "../engine/summary";
+import { codedActuals, effectiveActuals } from "../engine/coding";
 import { PHASES, laborLine, poDevNeeded } from "../engine/sales";
 import { HORIZON, clampM, monthLabel, nMon, uid } from "../engine/time";
 import { useStart } from "../state/StartCtx";
@@ -14,8 +16,16 @@ import { MOPTS, StageBar, TypeSeg, revOf, timingLabel } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { GrantIOModal } from "./chrome/modals";
 
-export function Projects({ projects, setProjects, projWeeks, employees, pos = [] }) {
+const ActualsCtx = createContext({ setProjects: () => {}, hist: [], codeMap: {} });
+const useProjectsSetter = () => useContext(ActualsCtx).setProjects;
+const useActualsCtx = () => useContext(ActualsCtx);
+
+export function Projects({ projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {} }) {
   const [tab, setTab] = useState("all");
+  const [collapsed, setCollapsed] = useState(() => new Set());   // UI state — which cards are folded
+  const toggle = (id) => setCollapsed(c => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allShownCollapsed = (list) => list.length > 0 && list.every(p => collapsed.has(p.id));
+  const setMany = (list, on) => setCollapsed(c => { const n = new Set(c); list.forEach(p => on ? n.add(p.id) : n.delete(p.id)); return n; });
   const setP = (id, patch) => setProjects(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p));
   const setGrant = (id, patch) => setProjects(ps => ps.map(p => p.id === id ? { ...p, grant: { ...p.grant, ...patch } } : p));
   const delP = (id) => setProjects(ps => ps.filter(p => p.id !== id));
@@ -52,7 +62,9 @@ export function Projects({ projects, setProjects, projWeeks, employees, pos = []
     proposals: ["No proposals in flight.", "Submitted something? Track it here and model the win before you hear back."],
     all: ["Nothing here yet.", "Add an internal project, a grant, or a proposal to get started."] }[tab];
 
+  const actualsCtx = { setProjects, hist, codeMap };
   return (
+    <ActualsCtx.Provider value={actualsCtx}>
     <>
       <div className="subtabs">
         {TABS.map(([k, label, n]) => (
@@ -108,15 +120,28 @@ export function Projects({ projects, setProjects, projWeeks, employees, pos = []
         {(tab === "all" || tab === "grants") && <button className="addbtn ghost" onClick={addGrant}>{I.plus} Grant</button>}
       </div>
 
-      {shown.map(p => p.type === "fulfillment"
-        ? <FulfillmentCard key={p.id} p={p} po={pos.find(x => x.id === p.poId)} setP={setP} setPById={setP} delP={delP} employees={employees} />
-        : p.type === "grant"
-        ? <GrantCard key={p.id} p={p} setP={setP} setGrant={setGrant} setType={setType} delP={delP} employees={employees} />
-        : <InternalCard key={p.id} p={p} setProjects={setProjects} setP={setP} setType={setType} delP={delP} />)}
+      {shown.length > 1 && (
+        <div className="collapsebar">
+          <button className="linkbtn" onClick={() => setMany(shown, !allShownCollapsed(shown))}>
+            {allShownCollapsed(shown) ? "Expand all" : "Collapse all"}
+          </button>
+        </div>
+      )}
+      {shown.map(p => collapsed.has(p.id)
+        ? <CollapsedProject key={p.id} p={p} pos={pos} hist={hist} codeMap={codeMap} onExpand={() => toggle(p.id)} />
+        : <div className="projwrap" key={p.id}>
+            <button className="projfold" onClick={() => toggle(p.id)} title="Collapse">{I.chevUp || "−"}</button>
+            {p.type === "fulfillment"
+              ? <FulfillmentCard p={p} po={pos.find(x => x.id === p.poId)} setP={setP} setPById={setP} delP={delP} employees={employees} />
+              : p.type === "grant"
+              ? <GrantCard p={p} setP={setP} setGrant={setGrant} setType={setType} delP={delP} employees={employees} />
+              : <InternalCard p={p} setProjects={setProjects} setP={setP} setType={setType} delP={delP} />}
+          </div>)}
       {shown.length === 0 && (
         <div className="emptytab"><b>{empty[0]}</b><span>{empty[1]}</span></div>
       )}
     </>
+    </ActualsCtx.Provider>
   );
 }
 
@@ -198,6 +223,8 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP }) 
         </table>
         <button className="addbtn ghost" style={{ marginTop: 12 }} onClick={addLine}>{I.plus} Add cost line</button>
       </div>
+      {!prospective && <ActualsOverride p={p} />}
+
     </div>
   );
 }
@@ -245,6 +272,8 @@ export function GrantCard({ p, setP, setGrant, setType, delP, employees = [] }) 
         {ms && <MilestoneTable p={p} g={g} setGrant={setGrant} />}
         <GrantBudget p={p} g={g} R={R} setGrant={setGrant} employees={employees} />
       </div>
+
+      {!prospective && <ActualsOverride p={p} />}
     </div>
   );
 }
@@ -443,6 +472,8 @@ export function FulfillmentCard({ p, po, setP, setPById, delP, employees = [] })
           <button className="addbtn ghost" onClick={() => addLabor("development")}>{I.plus} Labour</button>
         </div>
       </div>
+
+      {!prospective && <ActualsOverride p={p} />}
     </div>
   );
 }
@@ -786,3 +817,151 @@ export function GrantBudget({ p, g, R, setGrant, employees = [] }) {
 
 /* ---- (PeriodGrant removed: reimbursement controls now live in GrantCard, since
        "milestone" is just another reimbursement type rather than a separate model) ---- */
+
+
+
+/* ---- per-project actuals override: redistribute coded spend WITHIN a project ----
+   Coded spend is the source of truth. This lets you move it between months (a milestone that billed
+   to a different period than it landed) without changing the total — and it shouts if you do change
+   the total, because that's no longer redistribution. */
+function ActualsOverride({ p }) {
+  const { START_Y, START_M } = useStart();
+  const { setProjects, hist, codeMap } = useActualsCtx();
+  const coded = codedActuals(p.id, hist, codeMap);
+  const months = [...new Set([...Object.keys(coded), ...Object.keys(p.actualsOverride || {})].map(Number))].sort((a, b) => a - b);
+  const eff = effectiveActuals(p, hist, codeMap);
+  const setOv = (m, v) => setProjects(ps => ps.map(x => x.id === p.id ? { ...x, actualsOverride: { ...(x.actualsOverride || {}), [m]: v } } : x));
+  const clearOv = (m) => setProjects(ps => ps.map(x => {
+    if (x.id !== p.id) return x;
+    const o = { ...(x.actualsOverride || {}) }; delete o[m];
+    return { ...x, actualsOverride: Object.keys(o).length ? o : undefined };
+  }));
+  const clearAll = () => setProjects(ps => ps.map(x => x.id === p.id ? { ...x, actualsOverride: undefined } : x));
+
+  const codedTotal = Object.values(coded).reduce((a, v) => a + v, 0);
+  if (months.length === 0) return (
+    <div className="ovnote">No coded spend for this project yet. Code ledger lines to it under <b>Spend history → Ledger</b> and it appears here, month by month.</div>
+  );
+
+  return (
+    <div className="override">
+      <div className="override-h">
+        <div><b>Recorded spend</b><span>Coded from your ledger. Override a month to redistribute — the total should stay put.</span></div>
+        {p.actualsOverride && <button className="linkbtn" onClick={clearAll}>Reset to coded</button>}
+      </div>
+      <table className="tbl compact">
+        <thead><tr><th>Month</th><th style={{ textAlign: "right" }}>Coded</th><th style={{ textAlign: "right" }}>Recorded</th><th></th></tr></thead>
+        <tbody>
+          {months.map(m => {
+            const c = coded[m] || 0;
+            const ov = p.actualsOverride?.[m];
+            const has = ov !== undefined;
+            return (
+              <tr key={m}>
+                <td className="num" style={{ fontSize: 12 }}>{monthLabel(START_Y, START_M, m)}</td>
+                <td className="amt num" style={{ color: "var(--muted)" }}>{moneyFull(c)}</td>
+                <td className="amt">
+                  <input className="inp" type="number" value={has ? ov : c}
+                    style={has ? { borderColor: "var(--caution)" } : null}
+                    onChange={e => setOv(m, +e.target.value)} />
+                </td>
+                <td style={{ textAlign: "right" }}>{has && <button className="iconbtn" onClick={() => clearOv(m)} title="Back to coded" aria-label="Reset month">{I.swap || "×"}</button>}</td>
+              </tr>
+            );
+          })}
+          <tr className="totrow">
+            <td>Total</td>
+            <td className="amt num" style={{ color: "var(--muted)" }}>{moneyFull(codedTotal)}</td>
+            <td className="amt num" style={eff.flagged ? { color: "var(--caution)" } : null}>{moneyFull(eff.effTotal ?? codedTotal)}</td>
+            <td />
+          </tr>
+        </tbody>
+      </table>
+      {eff.flagged && (
+        <div className="ovflag">
+          Your override totals <b className="num">{moneyFull(eff.effTotal)}</b> against <b className="num">{moneyFull(codedTotal)}</b> coded — a difference of <b className="num">{moneyFull(Math.abs(eff.delta))}</b>. That's not redistribution, it's a changed total. Fine if you mean it (spend your books haven't coded yet), but the project now disagrees with the ledger.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- collapsed header: type · name · who · a type-shaped financial line ---- */
+const TYPE_TAG = {
+  internal: ["Internal", "var(--ink-3)"],
+  grant: ["Grant", "var(--signal-ink)"],
+  fulfillment: ["PO fulfillment", "var(--ink-2)"],
+  proposal: ["Proposal", "var(--caution)"],
+};
+const BUDGET_TAG = {
+  over: ["over budget", "var(--danger)", "rgba(188,59,42,.1)"],
+  "at-risk": ["at risk", "var(--caution)", "rgba(201,130,27,.1)"],
+  "on-budget": ["on budget", "var(--signal-ink)", "rgba(16,135,107,.1)"],
+  none: null,
+};
+
+function BudgetChip({ tag }) {
+  const t = BUDGET_TAG[tag];
+  if (!t) return null;
+  return <span className="schip" style={{ color: t[1], background: t[2] }}>{t[0]}</span>;
+}
+const F = ({ label, children, accent }) => (
+  <div className="csum-f"><span className="csum-l">{label}</span><span className="csum-v" style={accent ? { color: accent } : null}>{children}</span></div>
+);
+
+function CollapsedProject({ p, pos, hist, codeMap, onExpand }) {
+  const { START_Y, START_M } = useStart();
+  const s = projectSummary(p, pos, hist, codeMap);
+  const [tlabel, tcolor] = TYPE_TAG[s.type] || TYPE_TAG.internal;
+  const ml = (m) => monthLabel(START_Y, START_M, m);
+
+  return (
+    <div className="collapsed" onClick={onExpand} role="button" tabIndex={0}
+      onKeyDown={e => (e.key === "Enter" || e.key === " ") && onExpand()}>
+      <button className="projfold" title="Expand">{I.chevDown || "+"}</button>
+      <div className="csum-head">
+        <span className="ttag" style={{ background: tcolor }}>{tlabel}</span>
+        <span className="csum-name">{s.name}</span>
+        {s.who && <span className="csum-who">{s.who}</span>}
+        <div style={{ flex: 1 }} />
+        <BudgetChip tag={s.tag} />
+        {s.actualsFlagged && <span className="schip" style={{ color: "var(--caution)", background: "rgba(201,130,27,.1)" }} title="A manual override changes this project's total spend, not just its distribution">override ≠ coded</span>}
+      </div>
+
+      <div className="csum-fin">
+        {s.type === "internal" && <>
+          <F label="Budget">{moneyFull(s.budget)}</F>
+          <F label="Spend" accent={s.spent > s.budget ? "var(--danger)" : undefined}>{s.spent > 0 ? moneyFull(s.spent) : "—"}</F>
+          <F label="Timeline">{ml(s.start)} → {ml(s.end)}</F>
+        </>}
+
+        {s.kind === "grant" && s.type === "grant" && <>
+          <F label="Total budget">{moneyFull(s.total)}</F>
+          <F label="Funder / cost-share">{money(s.federal)} / {money(s.costShare)}</F>
+          <F label="Reimbursement">
+            {s.isMilestone
+              ? <>{s.milestonesDone}/{s.milestonesTotal} milestones{s.nextDue ? <> · next {ml(s.nextDue.month)}</> : ""}</>
+              : (s.billing === "arrears" ? "In arrears" : s.billing === "advance" ? "Advance" : "Monthly")}
+          </F>
+          <F label="Cash in / cost to date">{s.cashIn > 0 ? money(s.cashIn) : "—"} / {s.costToDate > 0 ? money(s.costToDate) : "—"}</F>
+        </>}
+
+        {s.type === "fulfillment" && <>
+          <F label="Order value">{moneyFull(s.orderValue)}</F>
+          <F label="Cost to fulfil">{moneyFull(s.costToFulfil)}</F>
+          <F label="Margin" accent={s.margin < 0 ? "var(--danger)" : "var(--signal-ink)"}>{moneyFull(s.margin)} · {(s.marginPct * 100).toFixed(0)}%</F>
+          <F label="Cost to date">{s.costToDate > 0 ? moneyFull(s.costToDate) : "—"}</F>
+        </>}
+
+        {s.type === "proposal" && <>
+          <F label="Type">{s.kind === "grant" ? "Grant" : "Internal"}</F>
+          <F label="Total budget">{moneyFull(s.total)}</F>
+          <F label="Funder / cost-share">{money(s.federal)} / {money(s.costShare)}</F>
+          {s.isMilestone
+            ? <F label="Reimbursement">{s.milestonesDone}/{s.milestonesTotal} milestones{s.nextDue ? <> · next {ml(s.nextDue.month)}</> : ""}</F>
+            : <F label="Decision">{s.decisionMonth != null ? ml(s.decisionMonth) : "—"}</F>}
+        </>}
+      </div>
+    </div>
+  );
+}

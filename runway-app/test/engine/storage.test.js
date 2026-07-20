@@ -1,6 +1,6 @@
 // storage.js is the multi-user seam and had no coverage — because jsdom has no IndexedDB, so nothing
 // could exercise it. fake-indexeddb fixes that, which turns two lines of test noise into a real test.
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { clear, get, keys, set } from "idb-keyval";
 import { load, save } from "../../src/state/storage";
 import { emptyDoc, demoDoc, SCHEMA_VERSION } from "../../src/state/document";
@@ -33,11 +33,16 @@ describe("storage", () => {
   it("never destroys a document it cannot read", async () => {
     // The nightmare: a document from a future build, or one corrupted by a bad migration. Falling back
     // to empty is fine. Losing the original is not — that's someone's financial model.
+    // We assert the warning fires (it's part of the contract, and it keeps the expected log off the
+    // test console instead of looking like a failure).
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     await set("runway:doc", { schemaVersion: 99, cash: 1234567, employees: [{ id: "x" }] });
     const d = await load();
     expect(d.cash).toBe(0);                                     // we fall back...
+    expect(spy, "recovery must warn, not fail silently").toHaveBeenCalled();
     const parked = (await keys()).find(k => String(k).includes("unreadable"));
     expect(parked, "an unreadable document must be parked, not dropped").toBeTruthy();
     expect((await get(parked)).cash).toBe(1234567);             // ...and the original survives
+    spy.mockRestore();
   });
 });

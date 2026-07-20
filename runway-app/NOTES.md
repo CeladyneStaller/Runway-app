@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 103 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 136 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -211,6 +211,53 @@ and **position is the date**: labels derive from the projection start rather tha
 follow `startY`/`startM` instead of the hardcoded `’26` they used to carry. `flagOverrides` is keyed by
 index, so deleting a month rebuilds the map — otherwise an override on month 3 silently starts
 excluding month 4. Covered by `test/views/history.test.jsx`.)*
+
+## Coded spend ledger (schema v2)
+
+Company spend is a **coded ledger**, not a monthly total: `history[i] = { month, lines: [{ code,
+amount, note }] }`. A `codeMap` on the document (`{ code -> projectId | "overhead" }`) routes each code
+to a project. This is the shape a QuickBooks class export arrives in, so the manual editor
+(Spend history → **Ledger**) and the eventual QB import are the same code path.
+
+How it flows (`src/engine/coding.js`, tested in `test/engine/coding.test.js`):
+- **Coded lines → project actuals**, derived not stored (`codedActuals`). A code mapped to a project
+  fills that project's `costToDate` and drives its budget tag.
+- **Uncoded + overhead-coded lines stay in the company baseline** (`overheadByMonth`) — so the
+  measured-burn "$78k bank vs $67k line items" gap survives coding untouched.
+- **`monthTotal` is the derived monthly total**, kept as `h.v` on burnStats rows so the chart and burn
+  math never learned months became ledgers.
+- **Manual override** (`project.actualsOverride`) wins per month and is meant to redistribute WITHIN a
+  project. `effectiveActuals` flags it (`override ≠ coded` on the collapsed header) only when the
+  override changes the project's *total* — redistribution is silent, invention is loud.
+
+Migration v1→v2 turns each `{ mo, v, note }` into a one-line ledger; totals are preserved exactly
+(verified: the demo's 72/76/74/108/70/62 are unchanged). Unmapped codes surface in a panel at the top
+of the Ledger tab and sit in overhead until assigned.
+
+The per-project override editor now exists: expand any real project on the Projects tab → **Recorded
+spend**. It shows each coded month (Coded vs Recorded), writing `actualsOverride` per month. Redistribute
+freely; the moment the override total diverges from the coded total, an amber note fires — that's a
+changed total, not a redistribution. One shared `ActualsOverride` component in all card types, fed by
+an `ActualsCtx` (so it reaches `setProjects` without threading through four signatures). Tested in
+`test/views/override.test.jsx`, including that a same-total redistribution stays silent.
+
+## Project actuals (Wave 3, started)
+
+Projects now carry `actuals: { [month]: spend }` — the same shape as `cashActuals`. This backs the
+collapsed project headers (Projects tab, fold button top-right of each card) and their budget tag,
+which has **three** states, not two:
+
+- **over** — recorded spend exceeds the whole budget.
+- **at-risk** — under budget overall, but ahead of what the cost lines say you'd have spent by the last
+  recorded month. On budget today, tracking over. This is the state that needs the projection, not just
+  the total, and it's the one worth having.
+- **on-budget** — at or under plan. No actuals => no tag; a tag invented from no data is worse than none.
+
+`src/engine/summary.js` is the pure core (`projectSummary`, `budgetTag`), fully tested in
+`test/engine/summary.test.js`. What's NOT done: an actuals *editor*. Coded ledger spend fills project actuals automatically, and the per-project
+override (Projects → expand → Recorded spend) handles redistribution. Direct hand-entry of raw
+`p.actuals` was retired in favour of coding. Cost-share reconciliation (does the grant's match actually get spent?) also
+still wants doing, and now has the data shape to do it against.
 
 ## Next
 

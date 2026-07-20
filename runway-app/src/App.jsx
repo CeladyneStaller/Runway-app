@@ -31,6 +31,8 @@ function RunwayApp({ doc, setDoc }) {
   const setCash = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.cash) : v; return { ...d, cash: nv }; });
 
   const hist = doc.history;
+  const codeMap = doc.codeMap || {};
+  const setCodeMap = (v) => setDoc(d => ({ ...d, codeMap: typeof v === "function" ? v(d.codeMap || {}) : v }));
   const setHist = (v) => setDoc(d => ({ ...d, history: typeof v === "function" ? v(d.history) : v }));
 
   const [view, setView] = useState("dash");
@@ -370,10 +372,10 @@ function RunwayApp({ doc, setDoc }) {
 
           {view === "flow" && <CashFlow lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
           {view === "pay" && <Payroll employees={employees} setEmployees={setEmployees} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
-          {view === "proj" && <Projects projects={rProjects} setProjects={setProjects} projWeeks={projWeeks} employees={employees} pos={pos} />}
+          {view === "proj" && <Projects projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
-          {view === "hist" && <History hist={hist} setHist={setHist} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
+          {view === "hist" && <History hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
         </main>
       </div>

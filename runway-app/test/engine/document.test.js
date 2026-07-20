@@ -40,7 +40,7 @@ describe("history belongs to the document, not the engine", () => {
   });
   it("the demo carries its own history", () => {
     expect(demoDoc().history.length).toBeGreaterThan(0);
-    expect(burnStats(demoDoc().history, 0, {}, "trailing").applied).toBeCloseTo(78000, -2);
+    expect(burnStats(demoDoc().history, 0, {}, "trailing").applied).toBeCloseTo(73333, -2);   // months 4-5 (108k outlier auto-excluded)
   });
   it("the engine never reaches for data it wasn't handed", () => {
     expect(burnStats(undefined, 0, {}, "trailing").applied).toBe(0);

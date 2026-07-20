@@ -2,13 +2,14 @@
 import React, { useState } from "react";
 import { grantPaymentsAt } from "../engine/grant";
 import { burnStats } from "../engine/history";
+import { monthTotal, codedActuals, overheadByMonth, codesInLedger, unmappedCodes, OVERHEAD } from "../engine/coding";
 import { money, moneyFull } from "../engine/money";
 import { HORIZON, monthLabel } from "../engine/time";
 import { useStart } from "../state/StartCtx";
 import { I } from "./chrome/icons";
 import { CashActualModal } from "./chrome/modals";
 
-export function History({ hist, setHist, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+export function History({ hist, setHist, codeMap, setCodeMap, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
   // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
   // disagree with the projection start.
@@ -26,7 +27,7 @@ export function History({ hist, setHist, flagOverrides, setFlagOverrides, method
 
   const hlabel = (i) => monthLabel(START_Y, START_M, i - hist.length);
   const { START_Y, START_M } = useStart();
-  const max = Math.max(...hist.map(h => h.v), itemizedOpex);
+  const max = Math.max(...hist.map(monthTotal), itemizedOpex);
   const { rows, avg, trailing, trend, applied, flaggedCount } = burnStats(hist, itemizedOpex, flagOverrides, method);
   const covered = applied <= itemizedOpex + 0.5;
   const methodName = method === "simple" ? "simple average" : method === "trailing" ? "trailing 3-month" : "linear trend";
@@ -43,7 +44,7 @@ export function History({ hist, setHist, flagOverrides, setFlagOverrides, method
   const latest = actualRows.length ? (() => { const r = actualRows[actualRows.length - 1]; const model = modelStarts[r.m] ?? 0; const varc = r.cash - model; return { m: r.m, varc, pct: model ? Math.abs(varc / model * 100).toFixed(1) : "0" }; })() : null;
 
   const [tab, setTab] = useState("summary");
-  const TABS = [["summary", "Summary"], ["burn", "Burn"], ["cash", "Cash on hand"]];
+  const TABS = [["summary", "Summary"], ["burn", "Burn"], ["ledger", "Ledger"], ["cash", "Cash on hand"]];
   const driftCallout = latest && (
     <div className="callout" style={{ margin: "0 16px 16px", borderLeftColor: latest.varc >= 0 ? "var(--signal)" : "var(--danger)" }}>
       As of <b>{monthLabel(START_Y, START_M, latest.m)}</b>, actual cash is <b className="num">{latest.varc >= 0 ? "+" : "−"}{moneyFull(Math.abs(latest.varc))}</b> ({latest.pct}% {latest.varc >= 0 ? "above" : "below"}) versus the model — {latest.varc >= 0 ? "you’re burning slower than planned." : "you’re burning faster than planned."}
@@ -221,6 +222,80 @@ export function History({ hist, setHist, flagOverrides, setFlagOverrides, method
         </div>
       </div>
       </>)}
+
+      {tab === "ledger" && (() => {
+        const unmapped = unmappedCodes(hist, codeMap);
+        const projName = (id) => id === OVERHEAD ? "Overhead (baseline)" : (projects.find(p => p.id === id)?.name || "—");
+        // ledger mutation
+        const addMonthL = () => setHist(h => [...h, { month: h.length, lines: [{ code: "", amount: 0, note: "" }] }]);
+        const addLine = (mi) => setHist(h => h.map((m, i) => i === mi ? { ...m, lines: [...(m.lines || []), { code: "", amount: 0, note: "" }] } : m));
+        const upLine = (mi, li, patch) => setHist(h => h.map((m, i) => i === mi ? { ...m, lines: m.lines.map((l, j) => j === li ? { ...l, ...patch } : l) } : m));
+        const delLine = (mi, li) => setHist(h => h.map((m, i) => i === mi ? { ...m, lines: m.lines.filter((_, j) => j !== li) } : m));
+        const delMonthL = (mi) => { setHist(h => h.filter((_, i) => i !== mi)); setFlagOverrides(o => Object.fromEntries(Object.entries(o).filter(([k]) => +k !== mi).map(([k, v]) => [+k > mi ? +k - 1 : +k, v]))); };
+        const setMap = (code, id) => setCodeMap(m => ({ ...m, [code]: id }));
+        return (<>
+          {unmapped.length > 0 && (
+            <div className="panel" style={{ marginBottom: 16, borderColor: "var(--caution)" }}>
+              <div className="panel-h"><div><h3>Unmapped cost codes</h3><p>These codes appear in your ledger but aren't assigned to a project yet. Until they are, their spend sits in overhead and never reaches a project's budget.</p></div>
+                <span className="chip warn">{unmapped.length} to map</span></div>
+              <table className="tbl"><thead><tr><th>Code</th><th>Seen in</th><th>Maps to</th></tr></thead>
+                <tbody>{unmapped.map(c => {
+                  const total = hist.reduce((a, m) => a + (m.lines || []).filter(l => (l.code || "").trim() === c).reduce((b, l) => b + (+l.amount || 0), 0), 0);
+                  return <tr key={c}>
+                    <td className="num" style={{ fontWeight: 600 }}>{c}</td>
+                    <td className="num" style={{ color: "var(--muted)" }}>{moneyFull(total)}</td>
+                    <td><select className="sel" value={codeMap[c] || ""} onChange={e => setMap(c, e.target.value)}>
+                      <option value="" disabled>Choose…</option>
+                      <option value={OVERHEAD}>Overhead (baseline)</option>
+                      {projects.filter(p => !p.stage || p.stage !== "prospective").map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="panel">
+            <div className="panel-h"><div><h3>Spend ledger</h3><p>Every line that left the bank, coded the way your books code it. Coded lines flow to their project automatically; uncoded lines stay in the company baseline. This is the shape a QuickBooks class export lands in.</p></div>
+              <button className="addbtn ghost" onClick={addMonthL}>{I.plus} Month</button></div>
+            {hist.length === 0 ? (
+              <div className="emptytab">No spend recorded. Add a month, then code each line to a project — or leave it uncoded and it becomes overhead.</div>
+            ) : (
+              <div style={{ padding: "4px 16px 12px" }}>
+                {hist.map((m, mi) => {
+                  const tot = monthTotal(m);
+                  return (
+                    <div key={mi} className="ledmonth">
+                      <div className="ledmonth-h">
+                        <b>{hlabel(mi)}</b>
+                        <span className="num" style={{ color: "var(--muted)" }}>{moneyFull(tot)}</span>
+                        <div style={{ flex: 1 }} />
+                        <button className="addbtn ghost" onClick={() => addLine(mi)}>{I.plus} Line</button>
+                        <button className="iconbtn" onClick={() => delMonthL(mi)} aria-label="Delete month">{I.trash}</button>
+                      </div>
+                      <table className="tbl compact"><thead><tr><th style={{ width: 90 }}>Code</th><th>Maps to</th><th style={{ textAlign: "right", width: 120 }}>Amount</th><th>Note</th><th></th></tr></thead>
+                        <tbody>{(m.lines || []).map((l, li) => {
+                          const code = (l.code || "").trim();
+                          const dest = code ? codeMap[code] : null;
+                          return <tr key={li}>
+                            <td><input className="inp" style={{ width: 74, textAlign: "left" }} value={l.code || ""} placeholder="—" onChange={e => upLine(mi, li, { code: e.target.value })} /></td>
+                            <td style={{ fontSize: 12 }}>{!code ? <span style={{ color: "var(--muted-2)" }}>overhead</span>
+                              : dest ? <span style={{ color: dest === OVERHEAD ? "var(--muted-2)" : "var(--signal-ink)" }}>{projName(dest)}</span>
+                              : <span className="devchip on">unmapped</span>}</td>
+                            <td className="amt"><input className="inp" type="number" value={l.amount} onChange={e => upLine(mi, li, { amount: +e.target.value })} /></td>
+                            <td><input className="inp" style={{ width: 180, textAlign: "left" }} value={l.note || ""} onChange={e => upLine(mi, li, { note: e.target.value })} /></td>
+                            <td style={{ textAlign: "right" }}><button className="iconbtn" onClick={() => delLine(mi, li)} aria-label="Delete line">{I.trash}</button></td>
+                          </tr>;
+                        })}</tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>);
+      })()}
 
       {tab === "cash" && (<>
       <div className="panel">

@@ -151,8 +151,14 @@ export const SEED_MILESTONES = [
 // Ordered oldest -> newest. Position IS the date: the last entry is the month before month 0, so
 // these labels derive from the projection start rather than being typed. `mo` is vestigial.
 export const HIST = [
-  { mo: "Jan", v: 72000 }, { mo: "Feb", v: 76000 }, { mo: "Mar", v: 74000 },
-  { mo: "Apr", v: 108000, note: "one-off: equipment" }, { mo: "May", v: 78000 }, { mo: "Jun", v: 82000 },
+  // A coded ledger, the shape a QuickBooks class export arrives in. Codes map to projects via the
+  // document's codeMap (seeded in demoDoc); uncoded lines stay in the company baseline.
+  { month: 0, lines: [{ code: "6000", amount: 44000, note: "payroll" }, { code: "5000", amount: 20000, note: "Catalyst — materials" }, { code: "", amount: 8000, note: "rent, software" }] },
+  { month: 1, lines: [{ code: "6000", amount: 46000, note: "payroll" }, { code: "5000", amount: 22000, note: "Catalyst — materials" }, { code: "5100", amount: 8000, note: "Mobile app — contractors" }] },
+  { month: 2, lines: [{ code: "6000", amount: 46000, note: "payroll" }, { code: "5100", amount: 18000, note: "Mobile app — contractors" }, { code: "", amount: 10000, note: "rent, software" }] },
+  { month: 3, lines: [{ code: "6000", amount: 48000, note: "payroll" }, { code: "5000", amount: 24000, note: "Catalyst — materials" }, { code: "9000", amount: 36000, note: "one-off: test equipment" }] },
+  { month: 4, lines: [{ code: "6000", amount: 48000, note: "payroll" }, { code: "5100", amount: 22000, note: "Mobile app — contractors" }] },
+  { month: 5, lines: [{ code: "6000", amount: 50000, note: "payroll" }, { code: "", amount: 12000, note: "rent, software" }] },
 ];
 
 // Every PO ships with its fulfillment project already attached — booking revenue with no cost of

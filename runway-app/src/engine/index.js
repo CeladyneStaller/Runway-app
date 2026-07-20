@@ -6,6 +6,7 @@
 // from "../engine"` pulled all of SheetJS into the main chunk, so everyone paid for it on every load.
 // Import it directly, and dynamically:  const { importWorkbook } = await import("../engine/sf424a");
 export * from "./capital.js";
+export * from "./coding.js";
 export * from "./grant.js";
 export * from "./history.js";
 export * from "./money.js";
@@ -13,4 +14,5 @@ export * from "./payroll.js";
 export * from "./projection.js";
 export * from "./projects.js";
 export * from "./sales.js";
+export * from "./summary.js";
 export * from "./time.js";
