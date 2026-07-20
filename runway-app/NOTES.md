@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 202 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 214 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -316,7 +316,21 @@ work is the actuals model underneath it.
     profile) -> live preview (sample rows + a merge report: N import, M before start, K skipped, J need
     mapping) -> commit. Saves an `importProfiles` entry so re-imports from the same source skip mapping.
   * Feeds the existing `mergeImport` seam; unmapped customers/codes then flow through the Piece 2 panels.
-  ALL FOUR PIECES COMPLETE. Note: `importProfiles` on the document is filled via the emptyDoc spread in
+  ALL FOUR PIECES COMPLETE.
+
+## Plot against reality (per-project charts)
+
+Each expanded project card charts projected-vs-actual over time. `src/engine/projectchart.js`
+(`projectSeries`) is the pure data layer, tested in `test/engine/projectchart.test.js`:
+- Three metrics — cost, revenue, net (revenue − cost) — each as a projected line plus a recorded-actual
+  overlay. Projected comes from the project's compiled line items; actual from codedActuals/codedRevenue.
+- The asymmetry is the point: projection runs the full horizon; the actual series STOPS at the last
+  recorded month (`actualThrough`) — you can't have an actual for a month that hasn't happened.
+- Monthly ⇄ cumulative toggle (cumulative is a running sum; better for "tracking to budget").
+- Runway is deliberately NOT per-project — a single project doesn't run dry, the company does; that
+  stays the company RunwayChart.
+UI: `ProjectChart.jsx`, an inline SVG in the expanded card (all three card types via `ProjectChartWrap`,
+which pulls hist/maps from ActualsCtx). Tested in `test/views/projectchart.test.js`. Note: `importProfiles` on the document is filled via the emptyDoc spread in
   migrate(), so no schema bump was needed. The full engine seam lives in `src/engine/importer.js`: `src/engine/importer.js` (`mergeImport`,
   `monthIndexOf`, `codesInRows`), tested in `test/engine/importer.test.js`. It takes already-parsed
   `ImportRow[]` ({ date, code, amount, note }) and merges them into the ledger, bucketing by month off

@@ -7,6 +7,7 @@ import { HRS_YR, empHourlyAt, empTitleAt } from "../engine/payroll";
 import { buildProjection, lineSpan } from "../engine/projection";
 import { blankGrant, blankInternal, compileProject } from "../engine/projects";
 import { projectSummary } from "../engine/summary";
+import { ProjectChart } from "./chrome/ProjectChart";
 import { codedActuals, effectiveActuals } from "../engine/coding";
 import { PHASES, laborLine, poDevNeeded } from "../engine/sales";
 import { HORIZON, clampM, monthLabel, nMon, uid } from "../engine/time";
@@ -233,6 +234,7 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP }) 
         </table>
         <button className="addbtn ghost" style={{ marginTop: 12 }} onClick={addLine}>{I.plus} Add cost line</button>
       </div>
+      {!prospective && <ProjectChartWrap p={p} />}
       {!prospective && <ActualsOverride p={p} />}
 
     </div>
@@ -283,6 +285,7 @@ export function GrantCard({ p, setP, setGrant, setType, delP, employees = [] }) 
         <GrantBudget p={p} g={g} R={R} setGrant={setGrant} employees={employees} />
       </div>
 
+      {!prospective && <ProjectChartWrap p={p} />}
       {!prospective && <ActualsOverride p={p} />}
     </div>
   );
@@ -483,6 +486,7 @@ export function FulfillmentCard({ p, po, setP, setPById, delP, employees = [] })
         </div>
       </div>
 
+      {!prospective && <ProjectChartWrap p={p} />}
       {!prospective && <ActualsOverride p={p} />}
     </div>
   );
@@ -834,6 +838,11 @@ export function GrantBudget({ p, g, R, setGrant, employees = [] }) {
    Coded spend is the source of truth. This lets you move it between months (a milestone that billed
    to a different period than it landed) without changing the total — and it shouts if you do change
    the total, because that's no longer redistribution. */
+function ProjectChartWrap({ p }) {
+  const { hist, codeMap, customerMap } = useActualsCtx();
+  return <ProjectChart project={p} hist={hist} maps={{ codeMap, customerMap }} />;
+}
+
 function ActualsOverride({ p }) {
   const { START_Y, START_M } = useStart();
   const { setProjects, hist, codeMap, customerMap } = useActualsCtx();
