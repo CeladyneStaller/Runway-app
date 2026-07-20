@@ -439,8 +439,8 @@
 .collapsed{position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;
   padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
 .collapsed:hover{border-color:var(--ink-3);box-shadow:0 1px 3px rgba(12,26,34,.06)}
-.collapsed .projfold{top:12px}
-.csum-head{display:flex;align-items:center;gap:10px;padding-right:34px}
+.collapsed .projfold{top:12px;left:13px;right:auto}
+.csum-head{display:flex;align-items:center;gap:10px;padding-left:34px}
 .ttag{font-family:var(--fm);font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
   color:#fff;padding:3px 7px;border-radius:5px;white-space:nowrap}
 .csum-name{font-family:var(--fd);font-weight:600;font-size:14px;color:var(--ink);letter-spacing:-.01em}
@@ -517,3 +517,13 @@
 .pc-sw{width:14px;height:3px;border-radius:2px;display:inline-block}
 .pc-sw.proj{opacity:.6}
 .pc-none{color:var(--muted-2);font-style:italic}
+
+/* ---- cost code mapping modal ---- */
+.cm-empty{font-family:var(--fb);font-size:13px;color:var(--muted);padding:18px 4px;text-align:center}
+.cm-add{margin-top:18px;padding-top:16px;border-top:1px solid var(--line-2)}
+.cm-add-h{font-family:var(--fd);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-2);margin-bottom:10px}
+.cm-add-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cm-arrow{color:var(--muted-2);font-size:14px}
+.cm-sugg{margin-top:10px;font-family:var(--fb);font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cm-chip{font-family:var(--fm);font-size:11px;padding:2px 8px;border-radius:5px;border:1px solid var(--line);background:var(--card);color:var(--ink-2);cursor:pointer}
+.cm-chip:hover{border-color:var(--signal);background:var(--paper)}

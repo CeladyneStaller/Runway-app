@@ -8,6 +8,7 @@ import { HORIZON, monthLabel } from "../engine/time";
 import { useStart } from "../state/StartCtx";
 import { I } from "./chrome/icons";
 import { ImportModal } from "./chrome/ImportModal";
+import { CodeMapModal } from "./chrome/CodeMapModal";
 import { CashActualModal } from "./chrome/modals";
 
 export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
@@ -45,6 +46,7 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
   const latest = actualRows.length ? (() => { const r = actualRows[actualRows.length - 1]; const model = modelStarts[r.m] ?? 0; const varc = r.cash - model; return { m: r.m, varc, pct: model ? Math.abs(varc / model * 100).toFixed(1) : "0" }; })() : null;
 
   const [importing, setImporting] = useState(false);
+  const [codesOpen, setCodesOpen] = useState(false);
   const [tab, setTab] = useState("summary");
   const TABS = [["summary", "Summary"], ["burn", "Burn"], ["ledger", "Ledger"], ["cash", "Cash on hand"]];
   const driftCallout = latest && (
@@ -300,6 +302,7 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
           <div className="panel">
             <div className="panel-h"><div><h3>Spend ledger</h3><p>Every line that left the bank, coded the way your books code it. Coded lines flow to their project automatically; uncoded lines stay in the company baseline. This is the shape a QuickBooks class export lands in.</p></div>
               <div style={{ display: "flex", gap: 6 }}>
+                <button className="addbtn ghost" onClick={() => setCodesOpen(true)}>View cost codes</button>
                 <button className="addbtn ghost" onClick={() => setImporting(true)}>{I.plus} Import</button>
                 <button className="addbtn ghost" onClick={addMonthL}>{I.plus} Month</button>
               </div></div>
@@ -393,6 +396,9 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
           onClose={() => setActualModal(null)}
           onSave={(month, data) => { if (actualModal.editMonth != null && actualModal.editMonth !== month) delActual(actualModal.editMonth); saveActual(month, data); }}
         />
+      )}
+      {codesOpen && (
+        <CodeMapModal codeMap={codeMap} setCodeMap={setCodeMap} hist={hist} projects={projects} onClose={() => setCodesOpen(false)} />
       )}
       {importing && (
         <ImportModal

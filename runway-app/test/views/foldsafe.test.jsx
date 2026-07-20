@@ -13,14 +13,13 @@ describe("expanded-card collapse button doesn't sit on the delete button", () =>
   it("the header is indented so collapse clears the badge/name", () => {
     expect(css).toMatch(/\.projwrap \.pcard-h\{[^}]*padding-left:46px/);
   });
-  it("the base chevron rule stays right; only the expanded wrapper overrides it", () => {
-    // source: .projfold{...right:14px} is the base; .projwrap>.projfold flips it left
-    expect(css).toMatch(/\.projfold\{[^}]*right:14px/);
-    // and the override is MORE specific (child combinator under .projwrap), so it wins only there
-    const base = css.indexOf(".projfold{");
-    const scoped = css.indexOf(".projwrap>.projfold{");
-    expect(base).toBeGreaterThan(-1);
-    expect(scoped).toBeGreaterThan(-1);
+  it("the collapsed-header chevron is ALSO on the left (expand target away from delete)", () => {
+    // clicking to expand must not land the cursor where delete appears post-expansion
+    expect(css).toMatch(/\.collapsed \.projfold\{[^}]*left:13px/);
+    expect(css).toMatch(/\.collapsed \.projfold\{[^}]*right:auto/);
+  });
+  it("the collapsed header indents its type tag + title to clear the chevron", () => {
+    expect(css).toMatch(/\.csum-head\{[^}]*padding-left:34px/);
   });
 });
 

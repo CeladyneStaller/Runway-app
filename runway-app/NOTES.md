@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 218 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 223 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -324,8 +324,19 @@ work is the actuals model underneath it.
   Fix: `.projwrap>.projfold{left:13px;right:auto}` + `.projwrap .pcard-h{padding-left:46px}` moves
   collapse to the left in EXPANDED cards only; the collapsed-header chevron (`.collapsed .projfold`,
   no delete button beside it) keeps the base `.projfold` right position. Guarded by
-  `test/views/foldsafe.test.jsx`. Watch: the minifier reformats `.projfold` rules, so verify via
-  specificity (`.projwrap>` is 0,2,0 > base 0,1,0), not by grepping the bundle string.
+  `test/views/foldsafe.test.jsx`. The collapsed-header chevron is ALSO moved left
+  (`.collapsed .projfold{left:13px;right:auto}` + `.csum-head{padding-left:34px}`) so that clicking to
+  EXPAND doesn't land the cursor where the delete button appears once the card opens — the whole point
+  is the expand/collapse target is top-left in BOTH states, delete is always top-right. Watch: the
+  minifier reformats `.projfold` rules, so verify via specificity (`.collapsed .projfold` and
+  `.projwrap>.projfold` are both 0,2,0 > base 0,1,0), not by grepping the bundle string.
+
+- **"View cost codes" modal** (`CodeMapModal.jsx`, button in the ledger panel header). The FULL
+  code->project mapping table with add/delete — distinct from the ledger's "Unmapped cost codes" panel,
+  which only prompts for codes seen in spend but not yet mapped. Both coexist deliberately: the panel is
+  the nudge, the modal is the manager. Add-row offers ledger codes not yet mapped as datalist
+  suggestions + quick chips. A stale mapping (project since deleted) stays visible as an option rather
+  than silently vanishing. Guarded by `test/views/codemap.test.jsx`.
 
 ## Plot against reality (per-project charts)
 
