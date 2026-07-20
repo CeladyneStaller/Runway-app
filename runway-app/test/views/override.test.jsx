@@ -10,6 +10,9 @@ function openProjects(doc) {
   let d = doc;
   const { container } = render(<RunwayApp doc={d} setDoc={(v) => { d = typeof v === "function" ? v(d) : v; }} />);
   fireEvent.click([...container.querySelectorAll("button")].find(b => /Projects/.test(b.textContent)));
+  // projects now open collapsed on multi-project tabs; expand them so the override editor renders
+  const expandAll = [...container.querySelectorAll(".linkbtn")].find(b => /Expand all/.test(b.textContent));
+  if (expandAll) fireEvent.click(expandAll);
   return { container, get: () => d };
 }
 // the internal project "Mobile app launch" is coded 5100 -> {1:8000, 2:18000, 4:22000}

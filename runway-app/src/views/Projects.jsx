@@ -1,5 +1,5 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { MS_STATUS, TIMING_LABEL, computeGrant, isMsBilled, msPaid, msTier } from "../engine/grant";
 import { tripCost } from "../engine/history";
 import { money, moneyFull } from "../engine/money";
@@ -23,6 +23,10 @@ const useActualsCtx = () => useContext(ActualsCtx);
 export function Projects({ projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {} }) {
   const [tab, setTab] = useState("all");
   const [collapsed, setCollapsed] = useState(() => new Set());   // UI state — which cards are folded
+  // A sub-tab with more than one project opens collapsed, so you scan headers instead of a wall of
+  // cards. Fires ONCE per tab (tracked in autoDone) — otherwise expanding a card would re-fold it on
+  // the next render. Expanding, collapsing, and switching tabs all behave normally after.
+  const [autoDone, setAutoDone] = useState(() => new Set());
   const toggle = (id) => setCollapsed(c => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const allShownCollapsed = (list) => list.length > 0 && list.every(p => collapsed.has(p.id));
   const setMany = (list, on) => setCollapsed(c => { const n = new Set(c); list.forEach(p => on ? n.add(p.id) : n.delete(p.id)); return n; });
@@ -55,6 +59,11 @@ export function Projects({ projects, setProjects, projWeeks, employees, pos = []
   const nIncluded = proposals.filter(p => p.include).length;
 
   const shown = tab === "all" ? projects : tab === "internal" ? internals : tab === "grants" ? grants : tab === "fulfil" ? fulfils : proposals;
+  useEffect(() => {
+    if (autoDone.has(tab)) return;
+    setAutoDone(a => new Set(a).add(tab));
+    if (shown.length > 1) setCollapsed(c => { const n = new Set(c); shown.forEach(p => n.add(p.id)); return n; });
+  }, [tab, shown, autoDone]);
   const TABS = [["all", "All", projects.length], ["internal", "Internal", internals.length], ["grants", "Grants", grants.length], ["fulfil", "Fulfillment", fulfils.length], ["proposals", "Proposals", proposals.length]];
   const empty = { fulfil: ["No fulfillment projects yet.", "Create one from a purchase order in the Sales tab to model the cost of shipping it."],
     internal: ["No internal projects yet.", "Work funded from your own cash — R&D pushes, tooling, buildouts."],

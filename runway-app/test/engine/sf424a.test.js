@@ -36,17 +36,23 @@ describe("the Celadyne workbook — a real DOE EERE SF-424A budget justification
     expect(grand.personnel).toBeGreaterThan(0);
   });
 
-  // KNOWN GAP, deliberately encoded as a failing expectation: exportBudget writes a submission-ready
-  // SF-424A for a program officer; importWorkbook reads the DOE template. They are different
-  // documents, so "export, edit in Excel, re-import" does not work. `it.fails` documents that and will
-  // flip loudly the day someone makes them inverses.
-  it.fails("cannot yet read back its own export — export and import are not inverses", () => {
+  // KNOWN GAP, asserted as a passing test so it reads green while still guarding the boundary:
+  // exportBudget writes a submission-ready SF-424A for a program officer; importWorkbook reads the DOE
+  // template. Different documents, so "export, edit in Excel, re-import" does NOT round-trip. This test
+  // pins that it doesn't — and will fail (correctly demanding attention) the day someone makes them
+  // inverses, at which point the fix is to assert the round-trip succeeds instead.
+  it("does not round-trip its own export — export writes a submission, import reads a template", () => {
     const g1 = importWorkbook(read());
     const t1 = computeGrant(g1).grand.total;
     const wb2 = exportBudget({ name: "Round trip" }, g1, computeGrant(g1));
-    const g2 = importWorkbook(XLSX.read(XLSX.write(wb2, { type: "buffer", bookType: "xlsx" }), { type: "buffer" }));
-    expect(g2, "the app cannot read back its own export").toBeTruthy();
-    expect(computeGrant(g2).grand.total).toBeCloseTo(t1, 2);
+    let recovered = null;
+    try {
+      const g2 = importWorkbook(XLSX.read(XLSX.write(wb2, { type: "buffer", bookType: "xlsx" }), { type: "buffer" }));
+      recovered = g2 ? computeGrant(g2).grand.total : null;
+    } catch { recovered = null; }
+    // the gap: re-import either fails or lands on a different number. If this ever equals t1, the two
+    // formats have converged and this test should flip to expect(recovered).toBeCloseTo(t1).
+    expect(recovered).not.toBeCloseTo(t1, 2);
   });
 
   it("the imported grant carries only what the workbook actually says", () => {
