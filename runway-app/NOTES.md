@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 154 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 173 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -87,6 +87,13 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
 - **Fringe has two correct conventions.** Grants bill fringe as its own SF-424A category, so
   `empHourlyAt` is salary-only and right. Fulfilment margin has no such convention and needs
   `empCostAt` — loaded. That was F3.
+- **Dates in the importer are parsed LOCAL, not UTC.** `new Date("2026-08-01")` is UTC midnight, which
+  in any timezone behind UTC (all of the Americas) is the evening of July 31 — and `getMonth()` reads
+  local, so the 1st of a month silently buckets into the previous month. Day-10 dates survive; day-1
+  don't, which is why it passed in a UTC sandbox and failed on a US machine. `parseLocalDate` in
+  `importer.js` pulls Y/M/D from the string directly for date-only values. The suite is run under
+  `TZ=America/Denver` when checking date logic; `testTimeout` is 15s because the jsdom view tests have
+  no margin at the 5s default on a loaded machine.
 - **Buttons: the reset is scoped to `.rw button:not([class])`.** For five sessions the reset was
   `.rw button{background:none}` (specificity 0,1,1), which beat every single-class button rule (0,1,0),
   so solid buttons rendered as flat text. Fixed not by an `!important` arms race but by making the
@@ -266,7 +273,33 @@ still wants doing, and now has the data shape to do it against.
 ## Next
 
 - `useReducer` migration → then scenarios (a scenario is a replayable action list; same refactor)
-- QuickBooks / accounting import — the MERGE SEAM is built: `src/engine/importer.js` (`mergeImport`,
+## QuickBooks import — a 4-piece build (in progress)
+
+The full import turns "coded spend ledger" into a dimensioned general-ledger actuals system with grant
+reconciliation. Four pieces, in dependency order; the importer is LAST because three-quarters of the
+work is the actuals model underneath it.
+
+- **Piece 1 — DIMENSIONED LEDGER (DONE).** A ledger line grew from `{ code, amount, note }` to
+  `{ code, amount, note, kind?, category?, period? }`. Every new field is optional and defaults to
+  today's behaviour: **absent `kind` means cost**, so all pre-v3 data and the golden number are
+  unchanged (schema v2→v3 is purely additive; migration adds `customerMap`/`categoryMap`, touches no
+  line). The load-bearing guarantee, pinned in `test/engine/dimensions.test.js`: a revenue line is
+  money IN and never nets against spend — `monthTotal`, `codedActuals`, `overheadByMonth` all count
+  cost only; `monthRevenue` and `codedRevenue` capture revenue separately (for Piece 3).
+- **Piece 2 — CUSTOMER→PROJECT mapping (DONE).** A line can carry a `customer` alongside `code`, and a
+  `customerMap` resolves customer→project. The unifying change: all summations now route through one
+  `resolveLine(line, maps)` — customer first (more specific "which project"), then code. Backward
+  compatible: passing a bare `codeMap` reproduces the old behaviour exactly (all 163 prior tests
+  unchanged). UI: an "Unmapped customers" panel in the Ledger tab, twin of the code panel, built as you
+  go. The importer seam now emits customer/category/period/kind on each line. Tests:
+  `test/engine/customer-mapping.test.js`.
+- **Piece 3 — REVENUE REPLACES PROJECTION (the hard one).** Where a project has recorded revenue
+  actuals, suppress its projected revenue (grants/POs) for that month and use the actual. Per-project,
+  per-month, runway-critical — gets its own careful turn and test suite. `codedRevenue` (built in
+  Piece 1) is its input.
+- **Piece 4 — THE IMPORTER.** The column-mapping importer: map 8 columns (date/customer/project/period/
+  category/amount/kind/note), save an import profile, feed the `mergeImport` seam. The seam itself is
+  already built: `src/engine/importer.js`: `src/engine/importer.js` (`mergeImport`,
   `monthIndexOf`, `codesInRows`), tested in `test/engine/importer.test.js`. It takes already-parsed
   `ImportRow[]` ({ date, code, amount, note }) and merges them into the ledger, bucketing by month off
   the model start, appending (not replacing) existing months, and reporting pre-start / bad rows.

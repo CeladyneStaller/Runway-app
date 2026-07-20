@@ -2,14 +2,14 @@
 import React, { useState } from "react";
 import { grantPaymentsAt } from "../engine/grant";
 import { burnStats } from "../engine/history";
-import { monthTotal, codedActuals, overheadByMonth, codesInLedger, unmappedCodes, OVERHEAD } from "../engine/coding";
+import { monthTotal, codedActuals, overheadByMonth, codesInLedger, unmappedCodes, unmappedCustomers, lineCustomer, OVERHEAD } from "../engine/coding";
 import { money, moneyFull } from "../engine/money";
 import { HORIZON, monthLabel } from "../engine/time";
 import { useStart } from "../state/StartCtx";
 import { I } from "./chrome/icons";
 import { CashActualModal } from "./chrome/modals";
 
-export function History({ hist, setHist, codeMap, setCodeMap, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
   // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
   // disagree with the projection start.
@@ -225,7 +225,9 @@ export function History({ hist, setHist, codeMap, setCodeMap, flagOverrides, set
 
       {tab === "ledger" && (() => {
         const unmapped = unmappedCodes(hist, codeMap);
+        const unmappedCust = unmappedCustomers(hist, customerMap);
         const projName = (id) => id === OVERHEAD ? "Overhead (baseline)" : (projects.find(p => p.id === id)?.name || "—");
+        const setCust = (name, id) => setCustomerMap(m => ({ ...m, [name]: id }));
         // ledger mutation
         const addMonthL = () => setHist(h => [...h, { month: h.length, lines: [{ code: "", amount: 0, note: "" }] }]);
         const addLine = (mi) => setHist(h => h.map((m, i) => i === mi ? { ...m, lines: [...(m.lines || []), { code: "", amount: 0, note: "" }] } : m));
@@ -245,6 +247,27 @@ export function History({ hist, setHist, codeMap, setCodeMap, flagOverrides, set
                     <td className="num" style={{ fontWeight: 600 }}>{c}</td>
                     <td className="num" style={{ color: "var(--muted)" }}>{moneyFull(total)}</td>
                     <td><select className="sel" value={codeMap[c] || ""} onChange={e => setMap(c, e.target.value)}>
+                      <option value="" disabled>Choose…</option>
+                      <option value={OVERHEAD}>Overhead (baseline)</option>
+                      {projects.filter(p => !p.stage || p.stage !== "prospective").map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          )}
+
+          {unmappedCust.length > 0 && (
+            <div className="panel" style={{ marginBottom: 16, borderColor: "var(--signal)" }}>
+              <div className="panel-h"><div><h3>Unmapped customers</h3><p>These customers appear in your ledger (typically from an import) but aren't assigned to a project yet. A customer takes precedence over a cost code when both are present — it's the more specific answer to which project a line belongs to.</p></div>
+                <span className="chip" style={{ background: "rgba(16,135,107,.14)", color: "var(--signal-ink)" }}>{unmappedCust.length} to map</span></div>
+              <table className="tbl"><thead><tr><th>Customer</th><th>Seen in</th><th>Maps to</th></tr></thead>
+                <tbody>{unmappedCust.map(c => {
+                  const total = hist.reduce((a, m) => a + (m.lines || []).filter(l => lineCustomer(l) === c).reduce((b, l) => b + (+l.amount || 0), 0), 0);
+                  return <tr key={c}>
+                    <td className="num" style={{ fontWeight: 600 }}>{c}</td>
+                    <td className="num" style={{ color: "var(--muted)" }}>{moneyFull(total)}</td>
+                    <td><select className="sel" value={customerMap[c] || ""} onChange={e => setCust(c, e.target.value)}>
                       <option value="" disabled>Choose…</option>
                       <option value={OVERHEAD}>Overhead (baseline)</option>
                       {projects.filter(p => !p.stage || p.stage !== "prospective").map(p => <option key={p.id} value={p.id}>{p.name}</option>)}

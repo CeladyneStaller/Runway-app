@@ -33,7 +33,21 @@ describe("the spend ledger", () => {
   it("a v1 document migrates to a ledger without losing its totals", () => {
     const v1 = { schemaVersion: 1, cash: 100000, history: [{ mo: "Jan", v: 50000, note: "x" }], settings: {} };
     const d = migrate(v1);
-    expect(d.schemaVersion).toBe(2);
+    expect(d.schemaVersion).toBe(3);   // migrates through the full chain, not just to v2
     expect(d.history[0].lines).toEqual([{ code: "", amount: 50000, note: "x" }]);
   });
 });
+
+describe("customer mapping (Piece 2)", () => {
+  it("surfaces an unmapped customer with a project dropdown", () => {
+    let d = demoDoc();
+    d.history = [{ month: 0, lines: [{ customer: "Acme Corp", amount: 15000 }] }, ...d.history.slice(1)];
+    const { container } = render(<RunwayApp doc={d} setDoc={(v) => { d = typeof v === "function" ? v(d) : v; }} />);
+    fireEvent.click([...container.querySelectorAll("button")].find(b => /Spend history/.test(b.textContent)));
+    fireEvent.click([...container.querySelectorAll(".subtab")].find(b => b.textContent.startsWith("Ledger")));
+    expect(container.textContent).toMatch(/Unmapped customers/);
+    const panel = [...container.querySelectorAll(".panel")].find(p => /Unmapped customers/.test(p.textContent));
+    expect(panel.querySelector("select")).toBeTruthy();
+    expect(panel.textContent).toMatch(/Acme Corp/);
+  });
+})

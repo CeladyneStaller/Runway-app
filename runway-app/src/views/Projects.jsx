@@ -16,11 +16,11 @@ import { MOPTS, StageBar, TypeSeg, revOf, timingLabel } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { GrantIOModal } from "./chrome/modals";
 
-const ActualsCtx = createContext({ setProjects: () => {}, hist: [], codeMap: {} });
+const ActualsCtx = createContext({ setProjects: () => {}, hist: [], codeMap: {}, customerMap: {} });
 const useProjectsSetter = () => useContext(ActualsCtx).setProjects;
 const useActualsCtx = () => useContext(ActualsCtx);
 
-export function Projects({ projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {} }) {
+export function Projects({ projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} }) {
   const [tab, setTab] = useState("all");
   const [collapsed, setCollapsed] = useState(() => new Set());   // UI state — which cards are folded
   // A sub-tab with more than one project opens collapsed, so you scan headers instead of a wall of
@@ -71,7 +71,8 @@ export function Projects({ projects, setProjects, projWeeks, employees, pos = []
     proposals: ["No proposals in flight.", "Submitted something? Track it here and model the win before you hear back."],
     all: ["Nothing here yet.", "Add an internal project, a grant, or a proposal to get started."] }[tab];
 
-  const actualsCtx = { setProjects, hist, codeMap };
+  const actualsCtx = { setProjects, hist, codeMap, customerMap };
+  const maps = { codeMap, customerMap };
   return (
     <ActualsCtx.Provider value={actualsCtx}>
     <>
@@ -137,7 +138,7 @@ export function Projects({ projects, setProjects, projWeeks, employees, pos = []
         </div>
       )}
       {shown.map(p => collapsed.has(p.id)
-        ? <CollapsedProject key={p.id} p={p} pos={pos} hist={hist} codeMap={codeMap} onExpand={() => toggle(p.id)} />
+        ? <CollapsedProject key={p.id} p={p} pos={pos} hist={hist} codeMap={codeMap} customerMap={customerMap} onExpand={() => toggle(p.id)} />
         : <div className="projwrap" key={p.id}>
             <button className="projfold" onClick={() => toggle(p.id)} title="Collapse">{I.chevUp || "−"}</button>
             {p.type === "fulfillment"
@@ -835,10 +836,11 @@ export function GrantBudget({ p, g, R, setGrant, employees = [] }) {
    the total, because that's no longer redistribution. */
 function ActualsOverride({ p }) {
   const { START_Y, START_M } = useStart();
-  const { setProjects, hist, codeMap } = useActualsCtx();
-  const coded = codedActuals(p.id, hist, codeMap);
+  const { setProjects, hist, codeMap, customerMap } = useActualsCtx();
+  const maps = { codeMap, customerMap };
+  const coded = codedActuals(p.id, hist, maps);
   const months = [...new Set([...Object.keys(coded), ...Object.keys(p.actualsOverride || {})].map(Number))].sort((a, b) => a - b);
-  const eff = effectiveActuals(p, hist, codeMap);
+  const eff = effectiveActuals(p, hist, maps);
   const setOv = (m, v) => setProjects(ps => ps.map(x => x.id === p.id ? { ...x, actualsOverride: { ...(x.actualsOverride || {}), [m]: v } } : x));
   const clearOv = (m) => setProjects(ps => ps.map(x => {
     if (x.id !== p.id) return x;
@@ -918,9 +920,10 @@ const F = ({ label, children, accent }) => (
   <div className="csum-f"><span className="csum-l">{label}</span><span className="csum-v" style={accent ? { color: accent } : null}>{children}</span></div>
 );
 
-function CollapsedProject({ p, pos, hist, codeMap, onExpand }) {
+function CollapsedProject({ p, pos, hist, codeMap, customerMap, onExpand }) {
+  const maps = { codeMap, customerMap };
   const { START_Y, START_M } = useStart();
-  const s = projectSummary(p, pos, hist, codeMap);
+  const s = projectSummary(p, pos, hist, maps);
   const [tlabel, tcolor] = TYPE_TAG[s.type] || TYPE_TAG.internal;
   const ml = (m) => monthLabel(START_Y, START_M, m);
 

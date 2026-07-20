@@ -4,7 +4,7 @@
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const settings = () => ({
   fringePct: 0.30,
@@ -26,7 +26,9 @@ export const emptyDoc = () => {
     lines: [], employees: [], projects: [], milestones: [], pos: [], rounds: [],
     history: [],   // measured months of real spend. NOT the demo's — see engine/history.js.
     cashActuals: {}, flagOverrides: {},
-    codeMap: {},   // { code -> projectId | "overhead" }, built as you code spend
+    codeMap: {},       // { code -> projectId | "overhead" }, built as you code spend
+    customerMap: {},   // { customerName -> projectId }, for imports keyed on QuickBooks customer
+    categoryMap: {},   // { importedCategoryLabel -> object-class key }, for grant reconciliation
     settings: settings(),
   };
 };
@@ -60,6 +62,16 @@ export const demoDoc = () => ({
 const MIGRATIONS = {
   // v1 -> v2: a spend month was a single total { mo, v, note }. It becomes a one-line ledger so the
   // old data keeps working and can be coded later. `v` is preserved as a derived getter in the engine.
+  // v2 -> v3: ledger lines gain optional dimensions (kind/category/period). No line data changes —
+  // absent kind means cost, so every existing total is identical. Purely additive: ensure the new
+  // maps exist. This is what keeps the golden number pinned across the schema bump.
+  3: (d) => ({
+    ...d,
+    schemaVersion: 3,
+    customerMap: d.customerMap || {},
+    categoryMap: d.categoryMap || {},
+  }),
+
   2: (d) => ({
     ...d,
     schemaVersion: 2,

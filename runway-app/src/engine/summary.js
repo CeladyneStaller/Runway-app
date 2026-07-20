@@ -98,10 +98,10 @@ function fulfillmentSummary(p, pos) {
   };
 }
 
-export function projectSummary(p, pos, hist, codeMap) {
+export function projectSummary(p, pos, hist, maps) {
   // coded spend is the source of truth for a project's actuals; a manual override can redistribute
   // within it and is flagged upstream when it changes the total.
-  const eff = (hist || codeMap) ? effectiveActuals(p, hist, codeMap) : { actuals: p.actuals || {}, flagged: false };
+  const eff = (hist || maps) ? effectiveActuals(p, hist, maps) : { actuals: p.actuals || {}, flagged: false };
   const withActuals = { ...p, actuals: eff.actuals, _actualsFlagged: eff.flagged };
   const s = withActuals.type === "grant" ? grantSummary(withActuals)
     : withActuals.type === "fulfillment" ? fulfillmentSummary(withActuals, pos)
