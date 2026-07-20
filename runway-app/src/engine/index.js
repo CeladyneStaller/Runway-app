@@ -12,6 +12,7 @@ export * from "./history.js";
 export * from "./importer.js";
 export * from "./money.js";
 export * from "./payroll.js";
+export * from "./fringe.js";
 export * from "./projection.js";
 export * from "./revenue.js";
 export * from "./projects.js";

@@ -5,7 +5,8 @@ import { demoDoc, toJSON, fromJSON } from "./state/document";
 import { compileInstrument, roundMS } from "./engine/capital";
 import { burnStats } from "./engine/history";
 import { money, moneyFull } from "./engine/money";
-import { compileEmployee, empCostAt } from "./engine/payroll";
+import { compileEmployee, empCostAt, empSalaryMoAt } from "./engine/payroll";
+import { resolveFringeRate } from "./engine/fringe";
 import { anchorToActuals, balanceAtDate, buildProjection, tagRevenue, zeroInfo } from "./engine/projection";
 import { compileProject, resolveProjectRates, syncFulfilStage } from "./engine/projects";
 import { applyRevenueActuals } from "./engine/revenue";
@@ -69,7 +70,13 @@ function RunwayApp({ doc, setDoc }) {
   }); // recorded granular actuals (start-of-month) for model validation
   const anchorActuals = doc.settings.anchorActuals;
   const setAnchorActuals = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.anchorActuals) : v; return { ...d, settings: { ...d.settings, anchorActuals: nv } }; });
-  const fringePct = doc.settings.fringePct;
+  const fringeConfig = doc.settings.fringe || {};
+  const setFringe = (patch) => setDoc(d => ({ ...d, settings: { ...d.settings, fringe: { ...(d.settings.fringe || {}), ...(typeof patch === "function" ? patch(d.settings.fringe || {}) : patch) } } }));
+  // average annual salary across the current team — needed to express $/person insurance as a rate
+  const avgSalary = employees.length
+    ? (employees.reduce((a, e) => a + empSalaryMoAt(e, 0), 0) / employees.length) * 12
+    : 0;
+  const fringePct = resolveFringeRate(fringeConfig, avgSalary, doc.settings.fringePct ?? 0.30);
   const setFringePct = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.fringePct) : v; return { ...d, settings: { ...d.settings, fringePct: nv } }; });
   const rounds = doc.rounds;
   const setRounds = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.rounds) : v; return { ...d, rounds: nv }; });
@@ -395,7 +402,7 @@ function RunwayApp({ doc, setDoc }) {
           )}
 
           {view === "flow" && <CashFlow lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
-          {view === "pay" && <Payroll employees={employees} setEmployees={setEmployees} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
+          {view === "pay" && <Payroll employees={employees} setEmployees={setEmployees} fringeConfig={fringeConfig} setFringe={setFringe} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
           {view === "proj" && <Projects projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}

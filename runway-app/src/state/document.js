@@ -8,6 +8,12 @@ export const SCHEMA_VERSION = 3;
 
 const settings = () => ({
   fringePct: 0.30,
+  fringe: {                    // itemized/manual fringe config; fringePct above is the legacy fallback
+    mode: "itemized",
+    vacationDays: "", holidayDays: "", sickDays: "",
+    payrollTaxPct: "", k401Pct: "", k401MatchPct: "", insurancePerPerson: "",
+    manualPct: "",
+  },
   method: "trailing",
   applyBaseline: true,
   anchorActuals: true,

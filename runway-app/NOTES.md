@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 223 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 242 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -337,6 +337,18 @@ work is the actuals model underneath it.
   the nudge, the modal is the manager. Add-row offers ledger codes not yet mapped as datalist
   suggestions + quick chips. A stale mapping (project since deleted) stays visible as an option rather
   than silently vanishing. Guarded by `test/views/codemap.test.jsx`.
+
+- **Fringe rate: itemized OR manual (`src/engine/fringe.js`, `resolveFringeRate`).** The company fringe
+  % that `empCostAt` applies can be built from parts (PTO days/260, payroll tax %, 401k match capped by
+  employee deferral, insurance $/person as a % of AVERAGE salary) or typed as a manual %. Precedence:
+  manual wins when set; blank manual falls through to itemized; blank itemized falls to the legacy
+  `settings.fringePct` default — so an untouched doc is UNCHANGED (golden safe, still 5.6). `fringePct`
+  remains the single resolved output feeding everything downstream; only its computation changed, so the
+  `empHourlyAt` (salary-only, grants) vs `empCostAt` (salary+fringe) convention is untouched. Insurance
+  needs a salary base to become a %, so it's computed against average annual salary. UI: two-mode Fringe
+  tab. Engine tests `test/engine/fringe.test.js`, UI `test/views/fringe.test.jsx`. NOTE: the fringe UI
+  test needed a STATEFUL harness (a wrapper with useState) because the inner RunwayApp is controlled —
+  a setDoc that just mutates a local var doesn't re-render.
 
 ## Plot against reality (per-project charts)
 

@@ -1,6 +1,7 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useMemo, useState } from "react";
 import { money, moneyFull } from "../engine/money";
+import { itemizedFringeRate, itemizedIsEmpty } from "../engine/fringe";
 import { HRS_YR, empCostAt, empMonthlyOf, empSalaryAt, empSalaryMoAt, empTitleAt } from "../engine/payroll";
 import { teamLoad } from "../engine/projects";
 import { HORIZON, clampM, monthLabel, uid } from "../engine/time";
@@ -9,7 +10,7 @@ import { MOPTS } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { PayrollActionModal } from "./chrome/modals";
 
-export function Payroll({ employees, setEmployees, fringePct = 0, setFringePct, derivedBurn = 0, companyOpexNow = 0, rProjects = [], toggles }) {
+export function Payroll({ employees, setEmployees, fringePct = 0, setFringePct, fringeConfig = {}, setFringe = () => {}, derivedBurn = 0, companyOpexNow = 0, rProjects = [], toggles }) {
   const { START_Y, START_M } = useStart();
   const [modal, setModal] = useState(null); // { empId, action }
   const [tab, setTab] = useState("total");
@@ -279,15 +280,62 @@ export function Payroll({ employees, setEmployees, fringePct = 0, setFringePct, 
         </div>
       </>)}
 
-      {tab === "fringe" && (
-      <div className="panel" style={{ marginBottom: 18 }}>
-        <div className="panel-h">
-          <div><h3>Employer burden</h3><p>What every salary actually costs you on top of the number in the offer letter — payroll taxes, health, retirement match, insurance.</p></div>
-          <label className="fl" style={{ margin: 0 }}>Fringe rate %
-            <input className="inp" type="number" value={Math.round(fringePct * 1000) / 10}
-              onChange={e => setFringePct(Math.max(0, (+e.target.value) / 100))} />
+      {tab === "fringe" && (() => {
+        const mode = fringeConfig.mode || "itemized";
+        const avgSal = employees.length ? (salaryNow / employees.length) * 12 : 0;
+        const itemizedRate = itemizedFringeRate(fringeConfig, avgSal);
+        const setF = (k, v) => setFringe({ [k]: v });
+        const NUM = (k, label, suffix, ph) => (
+          <label className="frg-field" key={k}><span>{label}</span>
+            <div className="frg-inwrap">
+              <input className="inp" type="number" value={fringeConfig[k] ?? ""} placeholder={ph || "0"}
+                onChange={e => setF(k, e.target.value)} />
+              {suffix && <em>{suffix}</em>}
+            </div>
           </label>
-        </div>
+        );
+        return (
+        <div className="panel" style={{ marginBottom: 18 }}>
+          <div className="panel-h">
+            <div><h3>Employer burden</h3><p>What every salary actually costs you on top of the number in the offer letter. Build it from its parts, or set the blended rate directly.</p></div>
+            <div className="frg-modeseg">
+              <button className={"frg-mode" + (mode !== "manual" ? " on" : "")} onClick={() => setFringe({ mode: "itemized" })}>Itemized</button>
+              <button className={"frg-mode" + (mode === "manual" ? " on" : "")} onClick={() => setFringe({ mode: "manual" })}>Manual %</button>
+            </div>
+          </div>
+
+          {mode === "manual" ? (
+            <div className="frg-manual">
+              <label className="frg-field"><span>Fringe rate</span>
+                <div className="frg-inwrap">
+                  <input className="inp" type="number" value={fringeConfig.manualPct ?? ""} placeholder="30"
+                    onChange={e => setFringe({ manualPct: e.target.value })} />
+                  <em>%</em>
+                </div>
+              </label>
+              <p className="frg-hint">Leave blank to fall back to the itemized calculation{itemizedRate != null ? <> ({Math.round(itemizedRate * 1000) / 10}%)</> : null}.</p>
+            </div>
+          ) : (
+            <div className="frg-grid">
+              <div className="frg-group">
+                <div className="frg-gh">Paid time off</div>
+                {NUM("vacationDays", "Vacation", "days/yr")}
+                {NUM("holidayDays", "Holidays", "days/yr")}
+                {NUM("sickDays", "Sick leave", "days/yr")}
+              </div>
+              <div className="frg-group">
+                <div className="frg-gh">Taxes & benefits</div>
+                {NUM("payrollTaxPct", "Payroll taxes", "%")}
+                {NUM("insurancePerPerson", "Group insurance", "$/person")}
+              </div>
+              <div className="frg-group">
+                <div className="frg-gh">401(k)</div>
+                {NUM("k401Pct", "Plan (employee defers)", "%")}
+                {NUM("k401MatchPct", "Company match", "%")}
+                <p className="frg-hint">The company pays the match up to what employees defer.</p>
+              </div>
+            </div>
+          )}
         <div className="burden">
           <div className="bcalc">
             <span>Salaries<b className="num">{moneyFull(salaryNow)}</b></span>
@@ -303,7 +351,8 @@ export function Payroll({ employees, setEmployees, fringePct = 0, setFringePct, 
           </div>
         </div>
       </div>
-      )}
+        );
+      })()}
 
       {modal && modalEmp && (
         <PayrollActionModal
