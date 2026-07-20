@@ -1,3 +1,109 @@
+
+
+// Parse a File (CSV or Excel) into a raw grid { headers, rows }. SheetJS reads both to the same
+// array-of-arrays, so one path covers every format. Dynamically imports xlsx (it's 60% of the bundle;
+// only load it when someone actually imports). Async because both the file read and the xlsx import
+// are async.
+export async function fileToGrid(file) {
+  const XLSX = await import("xlsx");
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
+  // first non-empty row is the header; the rest are data
+  let hi = 0;
+  while (hi < aoa.length && aoa[hi].every(c => c === "" || c == null)) hi++;
+  const headers = (aoa[hi] || []).map(h => String(h).trim());
+  const rows = aoa.slice(hi + 1).filter(r => r.some(c => c !== "" && c != null));
+  return { headers, rows };
+}
+
+// ---- column-mapping profile: a raw grid -> ImportRow[] ----
+//
+// The whole point of Piece 4: the app never assumes column names. A file becomes a raw grid (headers +
+// rows of cells; SheetJS parses CSV and Excel to this identically), and a PROFILE says which column
+// feeds which field. Map once, save the profile, reuse it. That makes this a general expense importer
+// that QuickBooks — or Xero, or a bank export, or a hand spreadsheet — happens to feed.
+//
+//   Grid    = { headers: string[], rows: (string|number)[][] }
+//   Profile = { columns: { date, amount, code?, customer?, category?, period?, kind?, note? },
+//               dateFormat: "YMD" | "MDY" | "DMY",   // resolves 03/04 ambiguity — the user declares it
+//               amountMode: "signed" | "expensesPositive" | "debitCredit",
+//               kindColumn?, kindRevenueValue? }      // how to tell revenue rows from cost rows
+
+// Amount parsing. QuickBooks writes money several ways; the profile says which, so we never guess.
+// Returns { amount: magnitude>=0, kind: "cost"|"revenue" } or null if unparseable.
+export function parseAmount(raw, mode = "signed") {
+  if (raw == null || raw === "") return null;
+  let str = String(raw).trim();
+  const paren = /^\(.*\)$/.test(str);        // (1,234.00) => negative, accounting style
+  str = str.replace(/[()$£€,\s]/g, "");
+  let n = Number(str);
+  if (!Number.isFinite(n)) return null;
+  if (paren) n = -Math.abs(n);
+  // interpret sign by mode
+  if (mode === "expensesPositive") return { amount: Math.abs(n), kind: "cost" };
+  // signed / debitCredit: a positive number is cost (money out), negative is revenue (money in).
+  // This matches a typical expense-register export; the profile's kindColumn can override per-row.
+  return n >= 0 ? { amount: n, kind: "cost" } : { amount: -n, kind: "revenue" };
+}
+
+// Date parsing under a declared format. No inference — 03/04/2026 is March 4 or April 3 depending
+// ENTIRELY on the profile, because a column of valid dates cannot disambiguate itself. Returns a
+// Date (local, noon to dodge DST edges) or null.
+export function parseDateWith(raw, format = "YMD") {
+  if (raw == null || raw === "") return null;
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+  const str = String(raw).trim();
+  const parts = str.match(/(\d+)[-/.](\d+)[-/.](\d+)/);
+  if (!parts) { const d = new Date(str); return Number.isNaN(d.getTime()) ? null : d; }
+  let [, a, b, c] = parts.map(Number ? (x) => x : (x) => x);
+  a = +parts[1]; b = +parts[2]; c = +parts[3];
+  let y, mo, day;
+  if (format === "YMD") { y = a; mo = b; day = c; }
+  else if (format === "MDY") { mo = a; day = b; y = c; }
+  else { day = a; mo = b; y = c; }                 // DMY
+  if (y < 100) y += 2000;                            // two-digit year
+  const d = new Date(y, mo - 1, day, 12);            // noon local
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Apply a profile to a raw grid -> ImportRow[]. Pure and fully testable without any real file.
+export function applyProfile(grid, profile) {
+  const idx = {};
+  const H = (grid.headers || []).map(h => String(h).trim());
+  for (const [field, colName] of Object.entries(profile.columns || {})) {
+    if (colName == null || colName === "") continue;
+    const i = H.indexOf(String(colName).trim());
+    if (i >= 0) idx[field] = i;
+  }
+  const cell = (row, field) => (idx[field] != null ? row[idx[field]] : undefined);
+  const out = [];
+  for (const row of grid.rows || []) {
+    const parsedAmt = parseAmount(cell(row, "amount"), profile.amountMode || "signed");
+    const date = parseDateWith(cell(row, "date"), profile.dateFormat || "YMD");
+    // rows that don't yield a date+amount are subtotals/blank lines; mergeImport already counts them
+    if (!date || !parsedAmt) { out.push({ date: date || null, amount: parsedAmt ? parsedAmt.amount : NaN }); continue; }
+    let kind = parsedAmt.kind;
+    if (profile.kindColumn) {
+      const kv = String(cell(row, "kind") ?? "").trim().toLowerCase();
+      if (kv) kind = (kv === String(profile.kindRevenueValue ?? "revenue").toLowerCase()) ? "revenue" : "cost";
+    }
+    const period = cell(row, "period");
+    out.push({
+      date,
+      amount: parsedAmt.amount,
+      kind,
+      code: cell(row, "code") != null ? String(cell(row, "code")).trim() : undefined,
+      customer: cell(row, "customer") != null ? String(cell(row, "customer")).trim() : undefined,
+      category: cell(row, "category") != null ? String(cell(row, "category")).trim().toLowerCase() : undefined,
+      period: Number.isFinite(+period) && period !== "" && period != null ? +period : undefined,
+      note: cell(row, "note") != null ? String(cell(row, "note")).trim() : undefined,
+    });
+  }
+  return out;
+}
+
 // The import seam. Turns already-parsed transaction rows into ledger months and merges them into the
 // existing history. Deliberately format-agnostic: a QuickBooks CSV parser, an Excel parser, or a hand
 // mock all produce the same ImportRow[]; only they differ. Everything below is pure and testable.

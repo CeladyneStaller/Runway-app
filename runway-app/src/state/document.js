@@ -29,6 +29,7 @@ export const emptyDoc = () => {
     codeMap: {},       // { code -> projectId | "overhead" }, built as you code spend
     customerMap: {},   // { customerName -> projectId }, for imports keyed on QuickBooks customer
     categoryMap: {},   // { importedCategoryLabel -> object-class key }, for grant reconciliation
+    importProfiles: [], // saved column-mapping profiles for re-importing from the same source
     settings: settings(),
   };
 };

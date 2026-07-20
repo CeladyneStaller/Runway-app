@@ -7,9 +7,10 @@ import { money, moneyFull } from "../engine/money";
 import { HORIZON, monthLabel } from "../engine/time";
 import { useStart } from "../state/StartCtx";
 import { I } from "./chrome/icons";
+import { ImportModal } from "./chrome/ImportModal";
 import { CashActualModal } from "./chrome/modals";
 
-export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
   // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
   // disagree with the projection start.
@@ -43,6 +44,7 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
   const delActual = (m) => setCashActuals(a => { const n = { ...a }; delete n[m]; return n; });
   const latest = actualRows.length ? (() => { const r = actualRows[actualRows.length - 1]; const model = modelStarts[r.m] ?? 0; const varc = r.cash - model; return { m: r.m, varc, pct: model ? Math.abs(varc / model * 100).toFixed(1) : "0" }; })() : null;
 
+  const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState("summary");
   const TABS = [["summary", "Summary"], ["burn", "Burn"], ["ledger", "Ledger"], ["cash", "Cash on hand"]];
   const driftCallout = latest && (
@@ -297,7 +299,10 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
 
           <div className="panel">
             <div className="panel-h"><div><h3>Spend ledger</h3><p>Every line that left the bank, coded the way your books code it. Coded lines flow to their project automatically; uncoded lines stay in the company baseline. This is the shape a QuickBooks class export lands in.</p></div>
-              <button className="addbtn ghost" onClick={addMonthL}>{I.plus} Month</button></div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="addbtn ghost" onClick={() => setImporting(true)}>{I.plus} Import</button>
+                <button className="addbtn ghost" onClick={addMonthL}>{I.plus} Month</button>
+              </div></div>
             {hist.length === 0 ? (
               <div className="emptytab">No spend recorded. Add a month, then code each line to a project — or leave it uncoded and it becomes overhead.</div>
             ) : (
@@ -387,6 +392,17 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
           prevCashOf={prevCashOf}
           onClose={() => setActualModal(null)}
           onSave={(month, data) => { if (actualModal.editMonth != null && actualModal.editMonth !== month) delActual(actualModal.editMonth); saveActual(month, data); }}
+        />
+      )}
+      {importing && (
+        <ImportModal
+          startY={START_Y} startM={START_M} hist={hist} profiles={importProfiles}
+          onCommit={(history) => setHist(history)}
+          onSaveProfile={(prof) => setImportProfiles(ps => {
+            const others = (ps || []).filter(p => p.name !== prof.name);
+            return [...others, prof];
+          })}
+          onClose={() => setImporting(false)}
         />
       )}
     </>

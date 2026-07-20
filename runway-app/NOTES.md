@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 185 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 202 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -303,9 +303,21 @@ work is the actuals model underneath it.
   no revenue actuals it returns the SAME line-item reference, so the demo (5.6mo) is provably
   unchanged. PO revenue lines resolve to a project via `poProject` (poId->projectId); project lines
   carry projectId directly.
-- **Piece 4 — THE IMPORTER.** The column-mapping importer: map 8 columns (date/customer/project/period/
-  category/amount/kind/note), save an import profile, feed the `mergeImport` seam. The seam itself is
-  already built: `src/engine/importer.js`: `src/engine/importer.js` (`mergeImport`,
+- **Piece 4 — THE IMPORTER (DONE).** The app never assumes column names — it reads any CSV/Excel into a
+  raw grid and a PROFILE maps columns to fields, so it's a general expense importer that QuickBooks (or
+  Xero, or a bank export) feeds. Pieces:
+  * `fileToGrid(file)` — File -> { headers, rows } via SheetJS (CSV + Excel, one path).
+  * `applyProfile(grid, profile)` — PURE transform -> ImportRow[]. Handles the two danger zones:
+    date format is DECLARED not inferred (03/04 is March or April only per the profile; parsed at noon
+    local so the UTC-midnight day-shift bug can't recur), and amount sign is a declared mode
+    (signed / expensesPositive, parens = negative, strips $/,). Fully tested with no real file:
+    `test/engine/profile.test.js` (15 tests).
+  * `ImportModal` — file picker -> map columns (dropdowns pre-filled by fuzzy header guess or a saved
+    profile) -> live preview (sample rows + a merge report: N import, M before start, K skipped, J need
+    mapping) -> commit. Saves an `importProfiles` entry so re-imports from the same source skip mapping.
+  * Feeds the existing `mergeImport` seam; unmapped customers/codes then flow through the Piece 2 panels.
+  ALL FOUR PIECES COMPLETE. Note: `importProfiles` on the document is filled via the emptyDoc spread in
+  migrate(), so no schema bump was needed. The full engine seam lives in `src/engine/importer.js`: `src/engine/importer.js` (`mergeImport`,
   `monthIndexOf`, `codesInRows`), tested in `test/engine/importer.test.js`. It takes already-parsed
   `ImportRow[]` ({ date, code, amount, note }) and merges them into the ledger, bucketing by month off
   the model start, appending (not replacing) existing months, and reporting pre-start / bad rows.

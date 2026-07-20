@@ -37,6 +37,8 @@ function RunwayApp({ doc, setDoc }) {
   const setCodeMap = (v) => setDoc(d => ({ ...d, codeMap: typeof v === "function" ? v(d.codeMap || {}) : v }));
   const customerMap = doc.customerMap || {};
   const setCustomerMap = (v) => setDoc(d => ({ ...d, customerMap: typeof v === "function" ? v(d.customerMap || {}) : v }));
+  const importProfiles = doc.importProfiles || [];
+  const setImportProfiles = (v) => setDoc(d => ({ ...d, importProfiles: typeof v === "function" ? v(d.importProfiles || []) : v }));
   const setHist = (v) => setDoc(d => ({ ...d, history: typeof v === "function" ? v(d.history) : v }));
 
   const [view, setView] = useState("dash");
@@ -397,7 +399,7 @@ function RunwayApp({ doc, setDoc }) {
           {view === "proj" && <Projects projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
-          {view === "hist" && <History hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
+          {view === "hist" && <History hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
         </main>
       </div>
