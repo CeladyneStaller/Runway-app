@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 145 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 154 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -266,7 +266,15 @@ still wants doing, and now has the data shape to do it against.
 ## Next
 
 - `useReducer` migration → then scenarios (a scenario is a replayable action list; same refactor)
-- QuickBooks / accounting import → the ledger, code map, and override are all shaped for it now
+- QuickBooks / accounting import — the MERGE SEAM is built: `src/engine/importer.js` (`mergeImport`,
+  `monthIndexOf`, `codesInRows`), tested in `test/engine/importer.test.js`. It takes already-parsed
+  `ImportRow[]` ({ date, code, amount, note }) and merges them into the ledger, bucketing by month off
+  the model start, appending (not replacing) existing months, and reporting pre-start / bad rows.
+  WHAT'S LEFT: (1) the file parser — the ONLY format-dependent part, waiting on a real QuickBooks
+  export to see the actual column names; (2) an import UI (file picker → preview report → map new
+  codes → commit). A live QuickBooks *API* connection is NOT possible here: OAuth needs a client secret
+  and redirect URI, which need a server, which this app deliberately doesn't have. File import is the
+  fit, and everything downstream of the parsed rows already exists.
 - Cost-share reconciliation (does a grant's match actually get spent?) + a real profit number — has the data shape now
 - Labor prioritisation by leave-one-out: Δzero-date per 100 hours (the zero date is the discount rate)
 - Routing for the ~29 addressable places
