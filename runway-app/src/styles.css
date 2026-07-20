@@ -426,6 +426,12 @@
 .linkbtn{background:none;border:none;font-family:var(--fb);font-size:12px;color:var(--muted);cursor:pointer;padding:4px 6px}
 .linkbtn:hover{color:var(--ink)}
 .projwrap{position:relative}
+/* In an EXPANDED card the delete button sits at the header's right end, so the collapse button must
+   NOT also be top-right — that stacked a destructive control under a benign one. Move it to top-left
+   and indent the header so it clears the badge/name. The collapsed-header chevron (.collapsed .projfold)
+   stays right, where there's no delete button to clash with. */
+.projwrap>.projfold{left:13px;right:auto;top:13px}
+.projwrap .pcard-h{padding-left:46px}
 .projfold{position:absolute;top:14px;right:14px;z-index:2;width:24px;height:24px;border-radius:6px;
   border:1px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer;font-size:15px;
   line-height:1;display:flex;align-items:center;justify-content:center;font-family:var(--fm)}

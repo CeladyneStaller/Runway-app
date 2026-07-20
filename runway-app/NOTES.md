@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 214 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 218 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -317,6 +317,15 @@ work is the actuals model underneath it.
     mapping) -> commit. Saves an `importProfiles` entry so re-imports from the same source skip mapping.
   * Feeds the existing `mergeImport` seam; unmapped customers/codes then flow through the Piece 2 panels.
   ALL FOUR PIECES COMPLETE.
+
+- **Expanded-card collapse button is top-LEFT, not top-right.** The delete button (destructive) is the
+  last child of the card header flex row = top-right. The collapse button was `position:absolute;
+  top:14px;right:14px` = the SAME corner. Stacking a benign control on a destructive one is a hazard.
+  Fix: `.projwrap>.projfold{left:13px;right:auto}` + `.projwrap .pcard-h{padding-left:46px}` moves
+  collapse to the left in EXPANDED cards only; the collapsed-header chevron (`.collapsed .projfold`,
+  no delete button beside it) keeps the base `.projfold` right position. Guarded by
+  `test/views/foldsafe.test.jsx`. Watch: the minifier reformats `.projfold` rules, so verify via
+  specificity (`.projwrap>` is 0,2,0 > base 0,1,0), not by grepping the bundle string.
 
 ## Plot against reality (per-project charts)
 
