@@ -75,7 +75,7 @@ export function CashFlow({ lines, setLines, projWeeks, projectCount, payrollMont
     <div className="panel">
       <div className="panel-h">
         <div><h3>{kind === "revenue" ? "Company revenue" : "Company costs"}</h3><p>{kind === "revenue" ? "Lines you bill for directly. Click a confidence tag to cycle it." : "Your ongoing operating lines. Edit any figure — the runway updates live."}</p></div>
-        <button className="addbtn" onClick={() => add(kind)}>{I.plus} {kind === "revenue" ? "Revenue" : "Cost"}</button>
+        <button className="addbtn ghost" onClick={() => add(kind)}>{I.plus} {kind === "revenue" ? "Revenue" : "Cost"}</button>
       </div>
       <table className="tbl">
         <thead><tr><th>Line</th><th>Cadence</th><th style={{ textAlign: "right" }}>Amount</th><th>Timing</th><th style={{ textAlign: "right" }}>Growth</th><th>Confidence</th><th></th></tr></thead>

@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 140 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 145 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -87,9 +87,13 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
 - **Fringe has two correct conventions.** Grants bill fringe as its own SF-424A category, so
   `empHourlyAt` is salary-only and right. Fulfilment margin has no such convention and needs
   `empCostAt` — loaded. That was F3.
-- **The CSS reset at `.rw button{…background:none;color:inherit}` has specificity (0,1,1)** and beats
-  any single-class button style (0,1,0). Solid buttons render as flat text unless scoped deeper
-  (`.review .rvbtn`) or given `ghost`. This has bitten three times. **Decide it; don't inherit it.**
+- **Buttons: the reset is scoped to `.rw button:not([class])`.** For five sessions the reset was
+  `.rw button{background:none}` (specificity 0,1,1), which beat every single-class button rule (0,1,0),
+  so solid buttons rendered as flat text. Fixed not by an `!important` arms race but by making the
+  reset stop targeting classed buttons at all: `:not([class])` cannot match an element that has a
+  class. `.addbtn` is solid (ink/white) with a `.ghost` variant; `.rvbtn` has a real base plus `.go`
+  (signal) and `.no` (danger) intents — it previously had NO base style, only modifiers that never
+  existed in CSS. Guarded by `test/views/buttons.test.jsx`. A bare `<button>` still gets the reset.
 - **`sf424a.js` still clamps imported months.** Unreachable from the UI (the picker offers 0–18) but
   real for a workbook with a month-24 milestone. Open F8 residual.
 - **The demo's `cashActuals` drift ~$18.2k from the model on purpose** — it demonstrates the drift
@@ -202,8 +206,8 @@ hazard: a barrel file makes a heavy dependency look free.
 
 **`exportBudget` and `importWorkbook` are not inverses.** You cannot export a budget, edit it in Excel
 and read it back — export writes a submission-ready SF-424A for a program officer, import reads the DOE
-template. `test/engine/sf424a.test.js` encodes this as an `it.fails`, so it documents the gap today and
-flips loudly the day someone closes it. Related: an import yields only `{periods, categories,
+template. `test/engine/sf424a.test.js` asserts this as a passing test (`does not round-trip its own export`)
+that flips the day the two formats converge. Related: an import yields only `{periods, categories,
 costSharePct}` — billing terms, funder and payment lag aren't in an SF-424A, so they stay at defaults.
 
 *(closed — spend history is editable under **Spend history → Burn**. Months are ordered oldest → newest
@@ -262,7 +266,8 @@ still wants doing, and now has the data shape to do it against.
 ## Next
 
 - `useReducer` migration → then scenarios (a scenario is a replayable action list; same refactor)
-- Project actuals + accounting import → unlocks cost-share reconciliation and a real profit number
+- QuickBooks / accounting import → the ledger, code map, and override are all shaped for it now
+- Cost-share reconciliation (does a grant's match actually get spent?) + a real profit number — has the data shape now
 - Labor prioritisation by leave-one-out: Δzero-date per 100 hours (the zero date is the discount rate)
 - Routing for the ~29 addressable places
 

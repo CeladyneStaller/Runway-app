@@ -185,7 +185,7 @@ export function Payroll({ employees, setEmployees, fringePct = 0, setFringePct, 
       <div className="panel">
         <div className="panel-h">
           <div><h3>Employees</h3><p>Current salary and title per person. Use the actions to plan raises, promotions, and departures.</p></div>
-          <button className="addbtn" onClick={add}>{I.plus} Add employee</button>
+          <button className="addbtn ghost" onClick={add}>{I.plus} Add employee</button>
         </div>
         <table className="tbl">
           <thead><tr><th>Employee</th><th>Title</th><th style={{ textAlign: "right" }}>Current salary</th><th>Start</th><th style={{ textAlign: "right" }}>Monthly (loaded)</th><th></th></tr></thead>

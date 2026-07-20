@@ -301,7 +301,7 @@ export function History({ hist, setHist, codeMap, setCodeMap, flagOverrides, set
       <div className="panel">
         <div className="panel-h">
           <div><h3>Cash on hand — actual vs model</h3><p>Record your real numbers each month to validate the projection. Spend is derived from the change in cash net of income; the cash points also plot on the Dashboard chart.</p></div>
-          <button className="addbtn" onClick={() => setActualModal({ editMonth: null })}>{I.plus} Add month</button>
+          <button className="addbtn ghost" onClick={() => setActualModal({ editMonth: null })}>{I.plus} Add month</button>
         </div>
         <div className="pgrid">
           <table className="tbl">

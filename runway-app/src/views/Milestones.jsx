@@ -14,7 +14,7 @@ export function Milestones({ ms, setMilestones }) {
     <div className="panel">
       <div className="panel-h">
         <div><h3>Critical dates</h3><p>Projected cash balance at each date — including project spend. Green clears; red is a shortfall you'd need to cover.</p></div>
-        <button className="addbtn" onClick={add}>{I.plus} Add date</button>
+        <button className="addbtn ghost" onClick={add}>{I.plus} Add date</button>
       </div>
       <div>
         {ms.map((m) => {
