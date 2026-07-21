@@ -15,6 +15,8 @@ export * from "./money.js";
 export * from "./payroll.js";
 export * from "./fringe.js";
 export * from "./projection.js";
+export * from "./scenario.js";
+export * from "./buildmodel.js";
 export * from "./revenue.js";
 export * from "./projects.js";
 export * from "./projectchart.js";

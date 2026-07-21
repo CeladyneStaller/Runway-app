@@ -7,6 +7,8 @@ import { burnStats } from "./engine/history";
 import { money, moneyFull } from "./engine/money";
 import { compileEmployee, empCostAt, empSalaryMoAt } from "./engine/payroll";
 import { resolveFringeRate } from "./engine/fringe";
+import { buildModelFromDoc } from "./engine/buildmodel";
+import { Scenarios } from "./views/Scenarios";
 import { anchorToActuals, balanceAtDate, buildProjection, tagRevenue, zeroInfo } from "./engine/projection";
 import { compileProject, resolveProjectRates, syncFulfilStage } from "./engine/projects";
 import { applyRevenueActuals } from "./engine/revenue";
@@ -40,6 +42,8 @@ function RunwayApp({ doc, setDoc }) {
   const setCustomerMap = (v) => setDoc(d => ({ ...d, customerMap: typeof v === "function" ? v(d.customerMap || {}) : v }));
   const importProfiles = doc.importProfiles || [];
   const setImportProfiles = (v) => setDoc(d => ({ ...d, importProfiles: typeof v === "function" ? v(d.importProfiles || []) : v }));
+  const scenarios = doc.scenarios || [];
+  const setScenarios = (v) => setDoc(d => ({ ...d, scenarios: typeof v === "function" ? v(d.scenarios || []) : v }));
   const setHist = (v) => setDoc(d => ({ ...d, history: typeof v === "function" ? v(d.history) : v }));
 
   const [view, setView] = useState("dash");
@@ -209,6 +213,7 @@ function RunwayApp({ doc, setDoc }) {
   const NAV = [
     ["dash", "Dashboard", I.dash], ["flow", "Cash flow", I.flow], ["pay", "Payroll", I.pay], ["proj", "Projects", I.proj],
     ["sales", "Sales", I.sales], ["inv", "Investment", I.invest], ["hist", "Spend history", I.hist], ["ms", "Milestones", I.flag],
+    ["scn", "Scenarios", I.invest],
   ];
 
   const startCtx = useMemo(() => ({ START_Y: startY, START_M: startM }), [startY, startM]);
@@ -407,6 +412,7 @@ function RunwayApp({ doc, setDoc }) {
           {view === "sales" && <Sales pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
           {view === "hist" && <History hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
+          {view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios} />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
         </main>
       </div>

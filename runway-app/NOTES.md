@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 257 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 274 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -288,9 +288,32 @@ pulls hist/maps from ActualsCtx). Renders nothing for projects without a match. 
 `test/views/costshare.test.jsx`. This capital-C Closes the "category/period captured but unused" debt
 from Piece 1.
 
+## Scenarios (DONE — Architecture 1: overlay patches, NO reducer)
+
+The `useReducer` migration was DELIBERATELY NOT done — scenarios don't need it, and doing it alone was
+busywork (the ~20 setters are already pure immutable updates). Instead, Architecture 1: a scenario is
+overlay patches over a base doc; the existing engine runs on the result.
+- `src/engine/scenario.js` — a scenario is `{ id, name, patches[], saved }`. Three patch kinds:
+  `field` (top-level), `toggle` (settings.toggles.*), `item` (one collection item by id+field —
+  "delay THIS hire", "award THIS grant"). `applyScenario(base, scn)` deep-clones base + applies patches
+  (base NEVER mutated). Empty scenario = faithful copy = golden-safe. Stale patches (deleted item)
+  degrade to no-op. `PATCH_SCHEMA` declares patchable fields+types per collection (drives the builder).
+  Tests: `test/engine/scenario.test.js`.
+- `src/engine/buildmodel.js` — `buildModelFromDoc(doc)` reproduces App's inline model assembly (fringe
+  resolve, project rates, baseline burn, revenue replacement) as a PURE function, so a scenario runs
+  through the IDENTICAL pipeline. Pinned by `test/engine/buildmodel.test.js`: the demo doc through it
+  hits the golden 5.6mo. (App still has its own inline copy; buildModelFromDoc could de-dupe it later.)
+- `src/views/Scenarios.jsx` — dedicated view. Generic patch builder (collection→item→field→value),
+  side-by-side runway compare (base + up to 3 scenarios as overlaid curves + zero-date deltas), save or
+  throwaway. Persists via `doc.scenarios` (emptyDoc spread, no migration bump). Tests
+  `test/views/scenarios.test.jsx`.
+WATCH: zeroInfo returns {months:null} for cash-positive OR past-horizon — a directional test must keep
+the runway finite (lower cash, don't raise it).
+
 ## Next
 
-- `useReducer` migration → then scenarios (a scenario is a replayable action list; same refactor)
+- Labor prioritization (leave-one-out Δzero-date per 100h) — usefulness scales with pipeline concentration
+- Routing for the ~29 addressable views (pure polish; matters at product scale)
 ## QuickBooks import — a 4-piece build (COMPLETE)
 
 The full import turns "coded spend ledger" into a dimensioned general-ledger actuals system with grant
