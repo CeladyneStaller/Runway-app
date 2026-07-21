@@ -10,9 +10,11 @@ import { MOPTS, statusChipOf } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { POModal } from "./chrome/modals";
 
-export function Sales({ pos, setPos, projects, addPO, delPO, decideDev }) {
+export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects, addPO, delPO, decideDev }) {
   const { START_Y, START_M } = useStart();
-  const [tab, setTab] = useState("summary");
+  const TAB_KEYS = ["summary", "orders", "targets"];
+  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "summary";
+  const setTab = (t) => setRouteTab(t);
   const [adding, setAdding] = useState(false);
   const up = (id, patch) => setPos(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p));
 

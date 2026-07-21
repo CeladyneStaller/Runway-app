@@ -11,7 +11,7 @@ import { ImportModal } from "./chrome/ImportModal";
 import { CodeMapModal } from "./chrome/CodeMapModal";
 import { CashActualModal } from "./chrome/modals";
 
-export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+export function History({ routeTab, setRouteTab = () => {}, hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
   // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
   // disagree with the projection start.
@@ -47,7 +47,9 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
 
   const [importing, setImporting] = useState(false);
   const [codesOpen, setCodesOpen] = useState(false);
-  const [tab, setTab] = useState("summary");
+  const TAB_KEYS = ["summary", "burn", "ledger", "cash"];
+  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "summary";
+  const setTab = (t) => setRouteTab(t);
   const TABS = [["summary", "Summary"], ["burn", "Burn"], ["ledger", "Ledger"], ["cash", "Cash on hand"]];
   const driftCallout = latest && (
     <div className="callout" style={{ margin: "0 16px 16px", borderLeftColor: latest.varc >= 0 ? "var(--signal)" : "var(--danger)" }}>

@@ -10,10 +10,12 @@ import { MOPTS } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { PayrollActionModal } from "./chrome/modals";
 
-export function Payroll({ employees, setEmployees, fringePct = 0, setFringePct, fringeConfig = {}, setFringe = () => {}, derivedBurn = 0, companyOpexNow = 0, rProjects = [], toggles }) {
+export function Payroll({ routeTab, setRouteTab = () => {}, employees, setEmployees, fringePct = 0, setFringePct, fringeConfig = {}, setFringe = () => {}, derivedBurn = 0, companyOpexNow = 0, rProjects = [], toggles }) {
   const { START_Y, START_M } = useStart();
   const [modal, setModal] = useState(null); // { empId, action }
-  const [tab, setTab] = useState("total");
+  const TAB_KEYS = ["total", "employees", "fringe", "alloc"];
+  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "total";
+  const setTab = (t) => setRouteTab(t);
 
   const patch = (id, p) => setEmployees(es => es.map(e => e.id === id ? { ...e, ...p } : e));
   const del = (id) => setEmployees(es => es.filter(e => e.id !== id));

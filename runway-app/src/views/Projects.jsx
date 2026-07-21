@@ -22,8 +22,10 @@ const ActualsCtx = createContext({ setProjects: () => {}, hist: [], codeMap: {},
 const useProjectsSetter = () => useContext(ActualsCtx).setProjects;
 const useActualsCtx = () => useContext(ActualsCtx);
 
-export function Projects({ projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} }) {
-  const [tab, setTab] = useState("all");
+export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} }) {
+  const TAB_KEYS = ["all", "internal", "grants", "fulfil", "proposals"];
+  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "all";
+  const setTab = (t) => setRouteTab(t);
   const [collapsed, setCollapsed] = useState(() => new Set());   // UI state — which cards are folded
   // A sub-tab with more than one project opens collapsed, so you scan headers instead of a wall of
   // cards. Fires ONCE per tab (tracked in autoDone) — otherwise expanding a card would re-fold it on

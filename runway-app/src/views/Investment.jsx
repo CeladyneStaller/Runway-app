@@ -8,9 +8,11 @@ import { useStart } from "../state/StartCtx";
 import { MOPTS } from "./chrome/bits";
 import { I } from "./chrome/icons";
 
-export function Investment({ rounds, setRounds, zeroNoRaise, rowsNoRaise, rowsFin, rowsUp, zeroUp, toggles, setToggles }) {
+export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds, zeroNoRaise, rowsNoRaise, rowsFin, rowsUp, zeroUp, toggles, setToggles }) {
   const { START_Y, START_M } = useStart();
-  const [tab, setTab] = useState("summary");
+  const TAB_KEYS = ["summary", "stack", "goals"];
+  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "summary";
+  const setTab = (t) => setRouteTab(t);
   const up = (id, patch) => setRounds(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
   const del = (id) => setRounds(rs => rs.filter(r => r.id !== id));
   const add = (kind) => setRounds(rs => [...rs, kind === "debt"

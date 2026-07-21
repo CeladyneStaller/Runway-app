@@ -9,9 +9,11 @@ import { Payroll } from "./Payroll";
 import { Projects } from "./Projects";
 import { I } from "./chrome/icons";
 
-export function CashFlow({ lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [] }) {
+export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [] }) {
   const { START_Y, START_M } = useStart();
-  const [tab, setTab] = useState("net");
+  const TAB_KEYS = ["net", "revenue", "costs"];
+  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "net";
+  const setTab = (t) => setRouteTab(t);
   const upd = (id, patch) => setLines(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l));
   const del = (id) => setLines(ls => ls.filter(l => l.id !== id));
   const add = (kind) => setLines(ls => [...ls, {

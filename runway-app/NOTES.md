@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 274 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 290 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -313,7 +313,28 @@ the runway finite (lower cash, don't raise it).
 ## Next
 
 - Labor prioritization (leave-one-out Δzero-date per 100h) — usefulness scales with pipeline concentration
-- Routing for the ~29 addressable views (pure polish; matters at product scale)
+
+## Routing (DONE — hash-based, NOT React Router, behind a hook)
+
+Chose the hash (`#view/tab`) over React Router deliberately: the hash is client-only (never sent to a
+server), so it works from a file / any static host with zero config — matching this local-first app.
+React Router's clean paths would REQUIRE a server configured to serve the app for every path, which we
+don't have; adding it now would break refresh on file:// for cosmetics. Behind `useHashRoute` so the
+swap to React Router (when the backend + clean paths arrive) is a hook-internals change, NOT a 9-view
+rewrite — views call route/navigate, never window.location.
+- `src/state/hashroute.js` — pure `parseHash`/`formatHash` (#view/tab <-> {view,tab}, unknown view/tab
+  falls back to default, never blank), `useHashRoute` hook (owns route, listens for hashchange so
+  back/forward + manual edits work; tab change REPLACES history, view change PUSHES). Tests:
+  `test/engine/hashroute.test.js` + `test/views/routing.test.jsx`.
+- App's `view` comes from the hook; the 6 tabbed views take `routeTab`/`setRouteTab` and derive their
+  tab from it (validated against an EARLY inline TAB_KEYS list — see the trap below).
+TRAP HIT (again): validating tab against `TABS` failed with "Cannot access 'tab' before initialization"
+— 3 views use `tab` BEFORE the (late) TABS definition. Build was GREEN; only vitest caught the TDZ.
+Fixed by an early TAB_KEYS array. And my hardcoded TAB_KEYS drifted from real TABS (fulfil not
+fulfillment, goals not rounds) — cross-checked against the actual TABS to fix. Lesson restated: run
+vitest, not just build; TDZ + duplicate-const only show in the test transform.
+
+## Routing note
 ## QuickBooks import — a 4-piece build (COMPLETE)
 
 The full import turns "coded spend ledger" into a dimensioned general-ledger actuals system with grant
