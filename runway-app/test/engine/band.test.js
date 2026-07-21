@@ -2,7 +2,7 @@
 // properties: floor <= expected <= ceiling (ordering), the expected curve matches the base projection,
 // burn variance is measured (0 when too little history), and financing stays orthogonal.
 import { describe, it, expect } from "vitest";
-import { confidenceBand, burnVariance } from "../../src/engine";
+import { confidenceBand, burnVariance, buildModelFromDoc, buildProjection, anchorToActuals } from "../../src/engine";
 import { demoDoc } from "../../src/state/document";
 
 function withToggles(d) { d.settings.toggles = { committed: true, expected: true, speculative: false, financing: false }; return d; }
@@ -59,5 +59,22 @@ describe("cost variance actually widens the band", () => {
     const bScatter = confidenceBand(scattered);
     // scattered burn -> higher CV -> floor costs scaled up more -> floor zero is earlier (or equal if both null)
     expect(bScatter.burnCV).toBeGreaterThan(bFlat.burnCV);
+  });
+});
+
+describe("the band centers on the main line (regression: band was offset ~$114k)", () => {
+  it("the anchored expected curve coincides with the anchored base projection at every month", () => {
+    const doc = withToggles(demoDoc());
+    const model = buildModelFromDoc(doc);
+    const T = { committed: true, expected: true, speculative: false, financing: false };
+    // the App anchors the main line to recorded cash; the band curves must be anchored the same way
+    const cashActuals = { 0: { cash: 560000 }, 1: { cash: 467000 }, 2: { cash: 343000 }, 3: { cash: 216000 }, 4: { cash: 108000 } };
+    const mainLine = anchorToActuals(buildProjection(model, T), cashActuals, true);
+    const bandExpected = anchorToActuals(confidenceBand(doc).expected.rows, cashActuals, true);
+    expect(bandExpected.length).toBe(mainLine.length);
+    for (let m = 0; m < mainLine.length; m++) {
+      expect(bandExpected[m].start).toBeCloseTo(mainLine[m].start, 4);
+      expect(bandExpected[m].end).toBeCloseTo(mainLine[m].end, 4);
+    }
   });
 });

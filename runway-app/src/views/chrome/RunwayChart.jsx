@@ -58,7 +58,10 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
 
   // Confidence band polygon: fill between the ceiling (top) and floor (bottom) curves. Ceiling forward
   // then floor backward = a closed area. Drawn behind everything so the expected line sits on top.
-  const bandPts = (rws) => (rws || []).map((r, idx) => ({ t: idx, b: r.end }));
+  // Sample the band through the SAME clip(traceOf()) path as the main line so the two use identical
+  // month sampling (start-of-month at t=m, plus the final end point) and the identical horizontal clip
+  // to tMax — otherwise the band is shifted a month and sprays past where the line stops.
+  const bandPts = (rws) => (rws && rws.length ? clip(traceOf(rws)) : []);
   const bandArea = (() => {
     if (!band) return null;
     const top = bandPts(band.ceiling.rows).map(p => `${x(p.t).toFixed(1)} ${y(cb(p.b)).toFixed(1)}`);
@@ -108,8 +111,8 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
       {bandArea && (
         <>
           <path d={bandArea} fill="var(--signal-2)" opacity="0.10" stroke="none"/>
-          <path d={line(bandPts(band.floor.rows))} fill="none" stroke="var(--signal-2)" strokeWidth="1" strokeDasharray="3 3" opacity="0.35"/>
-          <path d={line(bandPts(band.ceiling.rows))} fill="none" stroke="var(--signal-2)" strokeWidth="1" strokeDasharray="3 3" opacity="0.35"/>
+          <path data-band="floor" d={line(bandPts(band.floor.rows))} fill="none" stroke="var(--signal-2)" strokeWidth="1" strokeDasharray="3 3" opacity="0.35"/>
+          <path data-band="ceiling" d={line(bandPts(band.ceiling.rows))} fill="none" stroke="var(--signal-2)" strokeWidth="1" strokeDasharray="3 3" opacity="0.35"/>
         </>
       )}
 
@@ -160,7 +163,7 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
 
       {/* area + active trace */}
       <path d={areaPath} fill="url(#fill)"/>
-      {above.length > 1 && <path d={line(above)} fill="none" stroke="var(--signal-2)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>}
+      {above.length > 1 && <path data-trace="main" d={line(above)} fill="none" stroke="var(--signal-2)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>}
       {below && below.length > 1 && <path d={line(below)} fill="none" stroke="var(--danger)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>}
 
       {/* milestone gates */}

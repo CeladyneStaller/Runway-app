@@ -170,7 +170,20 @@ function RunwayApp({ doc, setDoc }) {
   const rowsBase = useMemo(() => buildProjection({ cashOnHand: cash, horizon: HORIZON, lineItems: [...lines, ...employeeLines, ...baselineLines] }, toggles), [lines, employeeLines, baselineLines, toggles, cash]);
   const zero = useMemo(() => zeroInfo(rows, startY, startM), [rows, startY, startM]);
   const [showBand, setShowBand] = useState(true);
-  const band = useMemo(() => confidenceBand(doc), [doc]);
+  const band = useMemo(() => {
+    const b = confidenceBand(doc);
+    if (!b) return b;
+    // anchor every band curve to recorded cash exactly as the main line is anchored (line `rows` above),
+    // so the band starts from the same real-cash baseline and its expected curve lands on the line
+    // instead of sitting ~$18k off wherever the un-anchored projection happened to be.
+    const anchor = (rs) => anchorToActuals(rs, cashActuals, anchorActuals);
+    return {
+      ...b,
+      floor: { ...b.floor, rows: anchor(b.floor.rows) },
+      expected: { ...b.expected, rows: anchor(b.expected.rows) },
+      ceiling: { ...b.ceiling, rows: anchor(b.ceiling.rows) },
+    };
+  }, [doc, cashActuals, anchorActuals]);
   const zeroUp = useMemo(() => zeroInfo(rowsUp, startY, startM), [rowsUp, startY, startM]);
   const zeroConf = useMemo(() => zeroInfo(rowsConf, startY, startM), [rowsConf, startY, startM]);
   const zeroBase = useMemo(() => zeroInfo(rowsBase, startY, startM), [rowsBase, startY, startM]);

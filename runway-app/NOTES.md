@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 317 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 320 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -353,6 +353,22 @@ RAW monthly totals (trimming only the single most extreme). Financing stays orth
 curves, not part of the band). UI: shaded region between floor/ceiling on RunwayChart + range in the
 hero + a toggle + an ALWAYS-ON honesty caption ("reflects which revenue lands, widened by ±N% spend
 variance — not statistical probability") + a wide-band callout. Tests `test/views/band.test.jsx`.
+
+**Band ALIGNMENT (fixed — the band must be sampled AND anchored exactly like the main line, or it
+visually drifts).** Two independent offsets had the shaded region not centering on the projection:
+(1) the chart sampled the band with `{t: idx, b: r.end}` while the main line uses `clip(traceOf())` =
+`{t: m, b: r.start}` + a final end point + a clip to `tMax` — so the band was a month ahead and sprayed
+past where the line stopped (with HORIZON now 36 this overran to ~2.6x the plot width — x≈2525 vs a right edge of 954 — the shaded region literally shooting off the right side; it was already unclipped before the horizon bump, which just made it dramatic). Fixed: `bandPts = clip(traceOf(rws))`, the same call the line uses, so the band stops exactly at the right edge. A dedicated guard asserts NO rendered path exceeds `W - R` (`test/views/band.test.jsx`), so any future horizon change or new chart element that loses its clip is caught. (2) the
+main line `rows` is `anchorToActuals(…, cashActuals, anchorActuals)` (anchored to recorded cash) but the
+band curves came straight from `buildProjection`, un-anchored — so with the demo's deliberate ~$18k cash
+drift the band sat up to ~$114k off the line. Fixed: App anchors all three band curves (floor/expected/
+ceiling) with the same `anchorToActuals` before passing them to the chart. Together these put the
+expected curve exactly on the line (verified: 0 difference at every month). NOTE the band is correctly
+ZERO-WIDTH over recorded actuals (no uncertainty about cash you've already recorded — floor = ceiling =
+line there) and opens up only after the actuals end. `data-band="floor|ceiling"` and `data-trace="main"`
+hooks exist on the paths so the render test can assert the line sits within the band; that test fails on
+either old bug (verified by reverting) and is in `test/views/band.test.jsx`, with the data-level
+coincidence guard in `test/engine/band.test.js`.
 
 ## Labor prioritization (DONE — leave-one-out, net + cost-only)
 
