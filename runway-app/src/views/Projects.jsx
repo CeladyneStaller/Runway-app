@@ -8,6 +8,7 @@ import { buildProjection, lineSpan } from "../engine/projection";
 import { blankGrant, blankInternal, compileProject } from "../engine/projects";
 import { projectSummary } from "../engine/summary";
 import { ProjectChart } from "./chrome/ProjectChart";
+import { CostSharePanel } from "./chrome/CostSharePanel";
 import { codedActuals, effectiveActuals } from "../engine/coding";
 import { PHASES, laborLine, poDevNeeded } from "../engine/sales";
 import { HORIZON, clampM, monthLabel, nMon, uid } from "../engine/time";
@@ -234,6 +235,7 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP }) 
         </table>
         <button className="addbtn ghost" style={{ marginTop: 12 }} onClick={addLine}>{I.plus} Add cost line</button>
       </div>
+      {!prospective && <CostShareWrap p={p} />}
       {!prospective && <ProjectChartWrap p={p} />}
       {!prospective && <ActualsOverride p={p} />}
 
@@ -285,6 +287,7 @@ export function GrantCard({ p, setP, setGrant, setType, delP, employees = [] }) 
         <GrantBudget p={p} g={g} R={R} setGrant={setGrant} employees={employees} />
       </div>
 
+      {!prospective && <CostShareWrap p={p} />}
       {!prospective && <ProjectChartWrap p={p} />}
       {!prospective && <ActualsOverride p={p} />}
     </div>
@@ -486,6 +489,7 @@ export function FulfillmentCard({ p, po, setP, setPById, delP, employees = [] })
         </div>
       </div>
 
+      {!prospective && <CostShareWrap p={p} />}
       {!prospective && <ProjectChartWrap p={p} />}
       {!prospective && <ActualsOverride p={p} />}
     </div>
@@ -841,6 +845,11 @@ export function GrantBudget({ p, g, R, setGrant, employees = [] }) {
 function ProjectChartWrap({ p }) {
   const { hist, codeMap, customerMap } = useActualsCtx();
   return <ProjectChart project={p} hist={hist} maps={{ codeMap, customerMap }} />;
+}
+
+function CostShareWrap({ p }) {
+  const { hist, codeMap, customerMap } = useActualsCtx();
+  return <CostSharePanel project={p} hist={hist} maps={{ codeMap, customerMap }} />;
 }
 
 function ActualsOverride({ p }) {

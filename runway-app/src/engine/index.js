@@ -8,6 +8,7 @@
 export * from "./capital.js";
 export * from "./coding.js";
 export * from "./grant.js";
+export * from "./costshare.js";
 export * from "./history.js";
 export * from "./importer.js";
 export * from "./money.js";

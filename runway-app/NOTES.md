@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 247 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 257 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -270,10 +270,28 @@ override (Projects → expand → Recorded spend) handles redistribution. Direct
 `p.actuals` was retired in favour of coding. Cost-share reconciliation (does the grant's match actually get spent?) also
 still wants doing, and now has the data shape to do it against.
 
+## Cost-share reconciliation (DONE — closed the Piece-1 unfinished business)
+
+`src/engine/costshare.js` (`costShareReconciliation`), tested in `test/engine/costshare.test.js`. "Did
+the grant's required match get spent?" — answered by PURE DERIVATION, zero new user input:
+- REQUIRED side = grant budget × costSharePct, already computed per period + per category by
+  `computeGrant` (`per[i].costShare`, `per[i].personnel * cs`, etc).
+- RECORDED side = ledger cost lines coded to the grant (Piece 2 resolution), split by period (explicit
+  `period` field, else the month's period) and category (`category` field, Piece 1).
+- TIER-1 inference for the one thing the ledger can't know — which recorded spend is the non-federal
+  match: assume the same costSharePct of recorded grant spend counts (labelled as an estimate). TIER-3
+  category breakdown falls out of the `category` on each line. (Tier-2 optional per-line match flag was
+  deliberately NOT built — the user chose fully-derived, zero-friction.)
+- Returns null for non-grants / 0% match, so the UI self-hides. Overall + per-period + per-category.
+UI: `CostSharePanel.jsx` in the expanded grant card (via `CostShareWrap`, parallel to ProjectChartWrap;
+pulls hist/maps from ActualsCtx). Renders nothing for projects without a match. Tests
+`test/views/costshare.test.jsx`. This capital-C Closes the "category/period captured but unused" debt
+from Piece 1.
+
 ## Next
 
 - `useReducer` migration → then scenarios (a scenario is a replayable action list; same refactor)
-## QuickBooks import — a 4-piece build (in progress)
+## QuickBooks import — a 4-piece build (COMPLETE)
 
 The full import turns "coded spend ledger" into a dimensioned general-ledger actuals system with grant
 reconciliation. Four pieces, in dependency order; the importer is LAST because three-quarters of the
