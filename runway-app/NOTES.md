@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 324 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 326 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -95,6 +95,17 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   The dashboard toggle shows the count of instruments financing governs (distinct `instId`s in
   `roundLines`; the demo's closed SAFE contributes none since its cash is already in hand). Tests
   `test/views/financing.test.jsx`.
+- **The upside/speculative ghost line (`rowsUp`) must react to the financing toggle.** `rowsUp` is built
+  from `allOn = { committed:true, expected:true, speculative:true, financing: toggles.financing }`, so it
+  is meant to track financing — but its memo `modelRowsUp` was keyed on `[model]` alone, and `model`
+  does NOT change when financing toggles (the fundraise lines always live in the model; the toggle gates
+  them at projection time). So the speculative line was frozen at its first-render financing value. Fixed
+  by keying the memo on `[model, toggles.financing]`; the rest of the chain (`rowsUp`→`zeroUp`→`upsideGap`
+  →`showUpside`) flows from that reference and needed no change. SEMANTICS to remember: with financing on
+  and speculative off, the raise appears in the speculative line but NOT the main line WHEN the raise is
+  speculative-tier (the demo's planning-status Series A is — so it needs both gates). A committed/term-
+  sheet raise is expected-tier and would lift both lines. `data-trace="upside"` hook + a stateful-harness
+  regression test (toggling financing must move the line) guard it; verified by reverting.
 
 - **`HORIZON` is 36 months (was 18).** Extended cleanly because the constant is well-factored: every
   usage is a `horizon = HORIZON` default, a `HORIZON + 1` array length, a `Math.min(HORIZON, …)` cap, or

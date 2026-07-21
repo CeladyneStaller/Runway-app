@@ -156,7 +156,7 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
       {/* upside ghost line */}
       {showUpside && (
         <>
-          <path d={line(ptsUp)} fill="none" stroke="var(--caution)" strokeWidth="2" strokeDasharray="5 5" opacity="0.85"/>
+          <path data-trace="upside" d={line(ptsUp)} fill="none" stroke="var(--caution)" strokeWidth="2" strokeDasharray="5 5" opacity="0.85"/>
           {zeroUp && zeroUp.t <= tMax && (!zero || zeroUp.t > zero.t + 0.02) && <circle cx={x(zeroUp.t)} cy={y0} r="4" fill="none" stroke="var(--caution)" strokeWidth="2"/>}
         </>
       )}

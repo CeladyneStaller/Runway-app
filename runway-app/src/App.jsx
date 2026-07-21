@@ -162,7 +162,7 @@ function RunwayApp({ doc, setDoc }) {
   const model = useMemo(() => ({ cashOnHand: cash, horizon: HORIZON, lineItems: allLines }), [cash, allLines]);
 
   const modelRows = useMemo(() => buildProjection(model, toggles), [model, toggles]);
-  const modelRowsUp = useMemo(() => buildProjection(model, allOn), [model]);
+  const modelRowsUp = useMemo(() => buildProjection(model, allOn), [model, toggles.financing]);
   const rows = useMemo(() => anchorToActuals(modelRows, cashActuals, anchorActuals), [modelRows, cashActuals, anchorActuals]);
   const rowsUp = useMemo(() => anchorToActuals(modelRowsUp, cashActuals, anchorActuals), [modelRowsUp, cashActuals, anchorActuals]);
   // "confident" case: the same plan with speculative revenue stripped out — the floor under the headline date
