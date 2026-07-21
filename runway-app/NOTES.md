@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 320 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 324 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -80,6 +80,21 @@ updated_at)`, and this file becomes `fetch("/api/doc")`. Nothing else changes.
 Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`. Add it when a user exists.
 
 ## Things this codebase knows
+
+- **Financing is a SEPARATE axis from the revenue tiers, and both switches now live on the dashboard.**
+  A round/instrument's lines are all tagged `financing: true` and `buildProjection` skips them unless
+  `toggles.financing` is on (projection.js: "Financing is orthogonal to confidence so a $6M raise cannot
+  drown a $480k quote in one trace"), gated a SECOND time by the instrument's own tier (`INST_CONF`:
+  planning/raising → speculative, committed/term-sheet → expected, closed → already in cash). So a future
+  (planning/raising) round needs BOTH `financing` AND `speculative` on. The financing switch was
+  originally only in the Investment tab (the "Financing is its own switch" callout); it's now ALSO on the
+  dashboard's Revenue confidence panel — but rendered as a DISTINCT control BELOW the three tiers
+  (`.fin-toggle`, separated by a top border, `--signal-2` blue dot/switch instead of the tiers' green),
+  NOT as a fourth `.tier`, so the orthogonality stays legible. Both controls call
+  `setToggles(t => ({ ...t, financing: !t.financing }))` on the same field, so they're inherently synced.
+  The dashboard toggle shows the count of instruments financing governs (distinct `instId`s in
+  `roundLines`; the demo's closed SAFE contributes none since its cash is already in hand). Tests
+  `test/views/financing.test.jsx`.
 
 - **`HORIZON` is 36 months (was 18).** Extended cleanly because the constant is well-factored: every
   usage is a `horizon = HORIZON` default, a `HORIZON + 1` array length, a `Math.min(HORIZON, …)` cap, or

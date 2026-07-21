@@ -136,6 +136,7 @@ function RunwayApp({ doc, setDoc }) {
 
   const salesLines = useMemo(() => pos.flatMap(po => compilePO(po).map(l => ({ ...l, poId: po.id, poRef: `${po.customer} · ${po.po}` }))), [pos]);
   const roundLines = useMemo(() => rounds.flatMap(x => compileInstrument(x, rounds)), [rounds]);
+  const finInstCount = useMemo(() => new Set(roundLines.map(l => l.instId).filter(Boolean)).size, [roundLines]);
   // Per-project recorded revenue, from the coded ledger. Piece 3: these REPLACE projected revenue for
   // each project's past (up to its last recorded month); the forward forecast is untouched.
   const revActuals = useMemo(() => {
@@ -438,6 +439,23 @@ function RunwayApp({ doc, setDoc }) {
                         </button>
                       );
                     })}
+                  </div>
+                  <div className="fin-row">
+                    <button className={"fin-toggle" + (toggles.financing ? " on" : "")} onClick={() => setToggles(t => ({ ...t, financing: !t.financing }))}>
+                      <span className="fin-name"><span className="fin-dot" />Financing</span>
+                      <span className="fin-mid">
+                        {finInstCount > 0
+                          ? <>{finInstCount} instrument{finInstCount !== 1 ? "s" : ""} · {toggles.financing ? "included" : "not shown"}</>
+                          : "No rounds or debt yet"}
+                      </span>
+                      <span className={"sw fin" + (toggles.financing ? " on" : "")} />
+                    </button>
+                    <div className="fin-note">
+                      A separate axis from the revenue tiers — fundraising and debt, shown assuming your rounds close.
+                      {finInstCount > 0
+                        ? (toggles.financing ? <> It's in the runway above.</> : <> Turn it on to see the runway with your raise.</>)
+                        : <> Add a round or facility in the Investment tab.</>}
+                    </div>
                   </div>
                 </div>
               </div>
