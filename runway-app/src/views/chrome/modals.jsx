@@ -180,10 +180,14 @@ export function GrantIOModal({ p, g, R, setGrant, onClose }) {
   const readWb = (file, cb) => sheets().then(([XLSX]) => { const reader = new FileReader(); reader.onload = (e) => { try { cb(XLSX.read(e.target.result, { type: "array" })); } catch (err) { setErr(String(err.message || err)); } }; reader.readAsArrayBuffer(file); });
   const onBudget = (e) => { const f = e.target.files[0]; if (!f) return; readWb(f, async (wb) => {
     const { importWorkbook } = await import("../../engine/sf424a");
-    const { periods, categories, costSharePct } = importWorkbook(wb);
+    const { periods, categories, costSharePct, funder, reimburseTiming } = importWorkbook(wb);
     if (!periods.length) { setMsg({ ok: false, text: "No SF-424A budget tabs found in that workbook." }); return; }
     const nItems = Object.values(categories).reduce((a, c) => a + (Array.isArray(c) ? c.length : (c.rates ? c.rates.length : 0)), 0);
-    setGrant(p.id, { reimburseTiming: billing, periods, categories, costSharePct });
+    // prefer terms recovered from the workbook (present when it came from our own export); otherwise the
+    // UI billing selector. funder only set if the sheet carried it.
+    const patch = { reimburseTiming: reimburseTiming || billing, periods, categories, costSharePct };
+    if (funder) patch.funder = funder;
+    setGrant(p.id, patch);
     setMsg({ ok: true, text: `Imported ${periods.length} budget period${periods.length !== 1 ? "s" : ""} and ${nItems} line item${nItems !== 1 ? "s" : ""} from the SF-424A tabs, reimbursed ${TIMING_LABEL[billing].toLowerCase()}.` });
   }); e.target.value = ""; };
   const onSchedule = (e) => { const f = e.target.files[0]; if (!f) return; readWb(f, async (wb) => {

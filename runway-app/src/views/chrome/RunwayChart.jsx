@@ -4,7 +4,7 @@ import { money } from "../../engine/money";
 import { dateShort, monthLabel } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
 
-export function RunwayChart({ rows, rowsUp, rowsOp, cash, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
+export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
   const { START_Y, START_M } = useStart();
   const W = 980, H = 400, L = 66, R = 26, T = 22, B = 40;
 
@@ -55,6 +55,17 @@ export function RunwayChart({ rows, rowsUp, rowsOp, cash, milestones, projectEnd
   const cb = (b) => Math.max(balMin, Math.min(balMax, b)); // clamp balance into visible range
 
   const line = (P) => P.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(cb(p.b)).toFixed(1)}`).join(" ");
+
+  // Confidence band polygon: fill between the ceiling (top) and floor (bottom) curves. Ceiling forward
+  // then floor backward = a closed area. Drawn behind everything so the expected line sits on top.
+  const bandPts = (rws) => (rws || []).map((r, idx) => ({ t: idx, b: r.end }));
+  const bandArea = (() => {
+    if (!band) return null;
+    const top = bandPts(band.ceiling.rows).map(p => `${x(p.t).toFixed(1)} ${y(cb(p.b)).toFixed(1)}`);
+    const bot = bandPts(band.floor.rows).map(p => `${x(p.t).toFixed(1)} ${y(cb(p.b)).toFixed(1)}`).reverse();
+    if (top.length < 2) return null;
+    return `M${top.join(" L")} L${bot.join(" L")} Z`;
+  })();
   const actualPath = actualPts.length > 1 ? actualPts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(cb(p.b)).toFixed(1)}`).join(" ") : "";
 
   // split active trace at zero crossing for colour
@@ -82,7 +93,8 @@ export function RunwayChart({ rows, rowsUp, rowsOp, cash, milestones, projectEnd
   if (!yTicks.some(v => Math.abs(v) < 1)) yTicks.push(0);
   if (BRK) yTicks.push(balMax);
   const xTicks = [];
-  for (let t = 0; t <= tMax; t += 2) xTicks.push(t);
+  const tickEvery = tMax > 24 ? 6 : tMax > 14 ? 3 : 2;   // keep labels readable as the window widens toward 36mo
+  for (let t = 0; t <= tMax; t += tickEvery) xTicks.push(t);
 
   return (
     <svg className="svgc" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img"
@@ -93,6 +105,13 @@ export function RunwayChart({ rows, rowsUp, rowsOp, cash, milestones, projectEnd
           <stop offset="1" stopColor="var(--signal-2)" stopOpacity="0.02"/>
         </linearGradient>
       </defs>
+      {bandArea && (
+        <>
+          <path d={bandArea} fill="var(--signal-2)" opacity="0.10" stroke="none"/>
+          <path d={line(bandPts(band.floor.rows))} fill="none" stroke="var(--signal-2)" strokeWidth="1" strokeDasharray="3 3" opacity="0.35"/>
+          <path d={line(bandPts(band.ceiling.rows))} fill="none" stroke="var(--signal-2)" strokeWidth="1" strokeDasharray="3 3" opacity="0.35"/>
+        </>
+      )}
 
       {/* danger band below waterline */}
       <rect x={L} y={y0} width={W - L - R} height={H - B - y0} fill="var(--danger)" opacity="0.07"/>

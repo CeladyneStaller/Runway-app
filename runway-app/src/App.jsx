@@ -8,6 +8,7 @@ import { money, moneyFull } from "./engine/money";
 import { compileEmployee, empCostAt, empSalaryMoAt } from "./engine/payroll";
 import { resolveFringeRate } from "./engine/fringe";
 import { buildModelFromDoc } from "./engine/buildmodel";
+import { confidenceBand } from "./engine/band";
 import { useHashRoute } from "./state/hashroute";
 import { Scenarios } from "./views/Scenarios";
 import { anchorToActuals, balanceAtDate, buildProjection, tagRevenue, zeroInfo } from "./engine/projection";
@@ -168,6 +169,8 @@ function RunwayApp({ doc, setDoc }) {
   const rowsConf = useMemo(() => anchorToActuals(modelRowsConf, cashActuals, anchorActuals), [modelRowsConf, cashActuals, anchorActuals]);
   const rowsBase = useMemo(() => buildProjection({ cashOnHand: cash, horizon: HORIZON, lineItems: [...lines, ...employeeLines, ...baselineLines] }, toggles), [lines, employeeLines, baselineLines, toggles, cash]);
   const zero = useMemo(() => zeroInfo(rows, startY, startM), [rows, startY, startM]);
+  const [showBand, setShowBand] = useState(true);
+  const band = useMemo(() => confidenceBand(doc), [doc]);
   const zeroUp = useMemo(() => zeroInfo(rowsUp, startY, startM), [rowsUp, startY, startM]);
   const zeroConf = useMemo(() => zeroInfo(rowsConf, startY, startM), [rowsConf, startY, startM]);
   const zeroBase = useMemo(() => zeroInfo(rowsBase, startY, startM), [rowsBase, startY, startM]);
@@ -298,7 +301,7 @@ function RunwayApp({ doc, setDoc }) {
             </div>
             <div className="statuspill">
               <span>Runway</span>
-              <b className="num" style={specInRunway ? { color: "var(--caution)" } : null}>{zero ? zero.months.toFixed(1) + " mo" : "18+ mo"}</b>
+              <b className="num" style={specInRunway ? { color: "var(--caution)" } : null}>{zero ? zero.months.toFixed(1) + " mo" : `${HORIZON}+ mo`}</b>
               <em className="num">{zero ? dateShort(zero.date) : "positive"}</em>
               {specInRunway && (
                 <span className="specflag" title={zeroConf ? `Includes speculative revenue — without it, zero on ${dateShort(zeroConf.date)}.` : "Includes speculative revenue."}>
@@ -314,7 +317,14 @@ function RunwayApp({ doc, setDoc }) {
               <div className="stats">
                 <div className="stat hero">
                   <div className="lab">Runway remaining</div>
-                  <div className="big">{zero ? `${zero.months.toFixed(1)} mo` : "18+ mo"}</div>
+                  <div className="big">{zero ? `${zero.months.toFixed(1)} mo` : `${HORIZON}+ mo`}</div>
+                  {showBand && band && (band.floor.zero != null || band.ceiling.zero != null) && (
+                    <div className="meta band-range">
+                      {band.floor.zeroNull ? `${HORIZON}+` : band.floor.zero.toFixed(1)}
+                      <span className="band-dash">–</span>
+                      {band.ceiling.zeroNull ? `${HORIZON}+` : band.ceiling.zero.toFixed(1)} mo range
+                    </div>
+                  )}
                   <div className="meta">{zero ? `zero on ${dateShort(zero.date)}` : "cash-flow positive"}</div>
                   {showConf && <div className="meta conf">confident to {dateShort(zeroConf.date)}{sameAsConf ? " — speculative lands too late to move it" : ""}</div>}
                 </div>
@@ -358,7 +368,7 @@ function RunwayApp({ doc, setDoc }) {
                        : <> <b>Speculative</b> revenue adds up to <span className="num">{money(upsideGap)}</span>, but it lands after that date — it doesn't extend the runway.</>)}
                      {projWeeks > 0 && <> Your active projects draw about <b className="num">{projWeeks} weeks</b> off that runway.</>}
                     </>
-                  : <>This plan stays above the waterline for the full 18-month horizon. Net cash flow turns positive as recurring revenue outgrows burn.</>}
+                  : <>This plan stays above the waterline for the full {HORIZON}-month horizon. Net cash flow turns positive as recurring revenue outgrows burn.</>}
               </div>
 
               {/* CHART */}
@@ -375,7 +385,7 @@ function RunwayApp({ doc, setDoc }) {
                     <span><i style={{ borderColor: "var(--danger)", borderTopStyle: "dashed" }} />waterline</span>
                   </div>
                 </div>
-                <RunwayChart rows={rows} rowsUp={rowsUp} rowsOp={rowsNoRaise} cash={model.cashOnHand} milestones={msWithBal}
+                <RunwayChart rows={rows} rowsUp={rowsUp} rowsOp={rowsNoRaise} band={showBand ? band : null} cash={model.cashOnHand} milestones={msWithBal}
                              projectEnd={null} showUpside={showUpside} zero={zero} zeroUp={zeroUp} actuals={actualsCash} />
               </div>
 
@@ -383,7 +393,21 @@ function RunwayApp({ doc, setDoc }) {
               <div className="panel" style={{ marginBottom: 0 }}>
                 <div className="panel-h">
                   <div><h3>Revenue confidence</h3><p>Toggle tiers to see runway with and without money you're not sure about.</p></div>
+                  <button className={"addbtn ghost" + (showBand ? " on" : "")} onClick={() => setShowBand(b => !b)}>{showBand ? "Hide" : "Show"} range band</button>
                 </div>
+                {showBand && band && (band.floor.zero != null || band.ceiling.zero != null) && (
+                  <div className="band-caption">
+                    <div className="band-caption-line">
+                      Runway range <b className="num">{band.floor.zeroNull ? `${HORIZON}+` : band.floor.zero.toFixed(1)}</b>–<b className="num">{band.ceiling.zeroNull ? `${HORIZON}+` : band.ceiling.zero.toFixed(1)} mo</b>.
+                      {band.wide
+                        ? <span className="band-warn"> Your runway depends heavily on uncertain revenue.</span>
+                        : <span className="band-ok"> Your runway is fairly robust to revenue assumptions.</span>}
+                    </div>
+                    <div className="band-caption-note">
+                      Range reflects which uncertain revenue lands (the tiers below){band.burnCV > 0.01 ? <>, widened by your historical spend variance (±{Math.round(band.burnCV * 100)}%)</> : null} — not statistical probability.
+                    </div>
+                  </div>
+                )}
                 <div style={{ padding: 16 }}>
                   <div className="tiers">
                     {[["committed", "var(--signal)", "Signed, in the bank, or contractually certain."],

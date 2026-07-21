@@ -89,14 +89,15 @@ describe("F3 — fulfilment labour carries employer burden", () => {
 
 describe("F8 — money past the horizon falls off; it does not slide back", () => {
   it("clampM and floorM are not interchangeable", () => {
-    expect(clampM(21)).toBe(HORIZON);   // for select values and array indices
-    expect(floorM(21)).toBe(21);        // for placing money in time
+    const beyond = HORIZON + 3;             // a month past the horizon edge, whatever the horizon is
+    expect(clampM(beyond)).toBe(HORIZON);   // caps at the horizon — for select values and array indices
+    expect(floorM(beyond)).toBe(beyond);    // keeps the real value — for placing money in time
     expect(clampM(-5)).toBe(0);
     expect(floorM(-5)).toBe(0);
   });
-  it("net-90 on a month-18 delivery is paid in month 21, and flagged", () => {
-    const po = { deliveryMonth: 18, termsDays: 90 };
-    expect(poPaidMonth(po)).toBe(21);
+  it("net-90 on a delivery at the horizon edge is paid 3 months later, past the horizon, and flagged", () => {
+    const po = { deliveryMonth: HORIZON, termsDays: 90 };
+    expect(poPaidMonth(po)).toBe(HORIZON + 3);
     expect(poBeyondHorizon(po)).toBe(true);
   });
   it("no seeded order is paid past the horizon", () => {

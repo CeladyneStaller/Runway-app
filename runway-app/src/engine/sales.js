@@ -22,9 +22,9 @@ export const poDeposit = (po) => (po.amount || 0) * (po.depositPct || 0);
 // clampM does two jobs: floor at 0, and ceiling at HORIZON. The floor is right — nothing in the model
 // happens before the projection starts. The ceiling is right for select values and array indices, and
 // WRONG for placing money in time: buildProjection already ignores a month past the horizon, so a
-// ceiling here doesn't drop the money, it DRAGS IT BACKWARDS onto the last visible month. Delivery in
-// month 18 on net-90 terms is paid in month 21; clamped, that revenue lands three months early at full
-// value, right at the edge of the chart where it flatters the ending balance.
+// ceiling here doesn't drop the money, it DRAGS IT BACKWARDS onto the last visible month. A delivery
+// at the horizon edge on net-90 terms is paid three months later; clamped, that revenue would land
+// three months early at full value, right at the edge of the chart where it flatters the ending balance.
 export const poPaidMonth = (po) => floorM((po.deliveryMonth || 0) + poLag(po));
 
 export const poBeyondHorizon = (po) => poPaidMonth(po) > HORIZON;

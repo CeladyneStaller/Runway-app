@@ -10,7 +10,7 @@ export const monthLong = (y, m, idx = 0) => new Date(y, m + idx, 1).toLocaleStri
 
 export const dateStamp = (y, m, idx = 0) => new Date(y, m + idx, 1).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
-export const HORIZON = 18;
+export const HORIZON = 36;
 
 export const uid = () => Math.random().toString(36).slice(2, 8);
 

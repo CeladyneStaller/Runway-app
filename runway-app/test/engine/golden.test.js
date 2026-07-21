@@ -46,3 +46,19 @@ describe("projection invariants", () => {
     expect(tagged[0].rev).toBe(9999);   // this is why tagRevenue exists
   });
 });
+
+describe("the 36-month horizon reveals what an 18-month window would hide", () => {
+  it("a crossing past month 18 is detected, not treated as cash-positive", () => {
+    // a recurring burn that outlives an 18-month window: 560k of cash at 20k/mo lasts ~28 months.
+    const model = { cashOnHand: 560000, horizon: HORIZON,
+      lineItems: [{ kind: "cost", cadence: "recurring", amount: 20000, start: 0 }] };
+    const z = zeroInfo(buildProjection(model, { committed: true, expected: true, speculative: false, financing: false }));
+    // with the old 18-month horizon this returned null ("18+/cash-positive"); at 36 months it is
+    // correctly a finite crossing well past month 18 (560k / 20k ≈ 28 months).
+    expect(z).not.toBeNull();
+    expect(z.months).toBeGreaterThan(18);
+    expect(z.months).toBeLessThan(30);
+  });
+
+  it("HORIZON is 36", () => { expect(HORIZON).toBe(36); });
+});

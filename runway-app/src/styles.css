@@ -615,3 +615,14 @@
 .lp-bar{height:100%;border-radius:3px}
 .lp-mo{font-family:var(--fb);font-size:9.5px;color:var(--muted-2);font-style:normal;margin-left:2px}
 .lp-note{font-family:var(--fb);font-size:11px;color:var(--muted-2);line-height:1.55;margin-top:14px;padding-top:12px;border-top:1px solid var(--line-2)}
+
+/* ---- confidence band ---- */
+.band-range{font-family:var(--fm);font-size:11.5px;color:var(--muted);margin-top:2px}
+.band-dash{margin:0 3px;color:var(--muted-2)}
+.band-caption{padding:12px 16px;border-top:1px solid var(--line-2)}
+.band-caption-line{font-family:var(--fb);font-size:13px;color:var(--ink-2);line-height:1.5}
+.band-caption-line b{font-family:var(--fm)}
+.band-warn{color:var(--caution);font-weight:500}
+.band-ok{color:var(--signal-ink)}
+.band-caption-note{font-family:var(--fb);font-size:11px;color:var(--muted-2);margin-top:5px;line-height:1.5}
+.addbtn.ghost.on{border-color:var(--signal);color:var(--signal-ink)}

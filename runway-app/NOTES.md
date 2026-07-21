@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 300 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 317 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -81,9 +81,21 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
 
 ## Things this codebase knows
 
+- **`HORIZON` is 36 months (was 18).** Extended cleanly because the constant is well-factored: every
+  usage is a `horizon = HORIZON` default, a `HORIZON + 1` array length, a `Math.min(HORIZON, …)` cap, or
+  a `<= HORIZON` loop — all auto-follow. The golden held (5.6 and 10.9 are finite and inside both windows;
+  the financing scenario stays null because it's genuinely cash-flow-positive across 36 months, not just
+  un-crossed within 18). Two things needed hand-fixing: (1) hardcoded `"18+ mo"` / `"18-month"` display
+  strings in `App.jsx` — now derived from `HORIZON` (`${HORIZON}+ mo`) so they won't re-break; (2) the F8
+  boundary tests in `identities.test.js`, which pinned 18 as the horizon edge — now parameterized against
+  `HORIZON` (`HORIZON + 3`, `deliveryMonth: HORIZON`). The chart's `tMax` is DYNAMIC (a bit past the last
+  event, floor 12, capped by `rows.length`), NOT `HORIZON` — so a cash-positive company still shows ~12
+  months and the extension only widens the view when there's a late crossing/milestone to show; tick
+  spacing is adaptive (2/3/6 mo) so the wider window stays readable. New golden guards: `HORIZON === 36`
+  and "a crossing past month 18 is detected, not treated as cash-positive" (the whole point of extending).
 - **`clampM` vs `floorM` are not interchangeable.** `clampM` is for select values and array indices.
   `floorM` is for placing money in time. Using `clampM` for placement drags out-of-horizon money onto
-  month 18 and inflates the ending balance. That was F8, and it lived in two places.
+  the last visible month and inflates the ending balance. That was F8, and it lived in two places.
 - **Fringe has two correct conventions.** Grants bill fringe as its own SF-424A category, so
   `empHourlyAt` is salary-only and right. Fulfilment margin has no such convention and needs
   `empCostAt` — loaded. That was F3.
@@ -101,8 +113,12 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   class. `.addbtn` is solid (ink/white) with a `.ghost` variant; `.rvbtn` has a real base plus `.go`
   (signal) and `.no` (danger) intents — it previously had NO base style, only modifiers that never
   existed in CSS. Guarded by `test/views/buttons.test.jsx`. A bare `<button>` still gets the reset.
-- **`sf424a.js` still clamps imported months.** Unreachable from the UI (the picker offers 0–18) but
-  real for a workbook with a month-24 milestone. Open F8 residual.
+- **`sf424a.js` month-clamp — CLOSED (Gap-4).** `parseScheduleAoa` used `clampM` for a milestone
+  payment's month, which capped a month-24 payment at 18, sliding a real payment onto the last visible
+  month and inflating it. Swapped to `floorM` — keeps the real month (24 stays 24) so `buildProjection`
+  (which iterates 0..HORIZON) lets it fall off the horizon, matching the `capital.js` pattern for
+  payment placement. `clampM` is still imported and used elsewhere in the file for select-values.
+  Tested: a month-24 payment stays 24, a month-2 kickoff stays 2 (`test/engine/sf424a.test.js`).
 - **The demo's `cashActuals` drift ~$18.2k from the model on purpose** — it demonstrates the drift
   callout. Don't "fix" it.
 - **The `.addbtn` solid style is dead** and nobody has decided between all-ghost and restoring
@@ -211,11 +227,19 @@ hazard: a barrel file makes a heavy dependency look free.
 
 ## Known gap
 
-**`exportBudget` and `importWorkbook` are not inverses.** You cannot export a budget, edit it in Excel
-and read it back — export writes a submission-ready SF-424A for a program officer, import reads the DOE
-template. `test/engine/sf424a.test.js` asserts this as a passing test (`does not round-trip its own export`)
-that flips the day the two formats converge. Related: an import yields only `{periods, categories,
-costSharePct}` — billing terms, funder and payment lag aren't in an SF-424A, so they stay at defaults.
+**`exportBudget` and `importWorkbook` are not inverses — BY DESIGN, not a gap.** Export writes a
+submission-ready SF-424A for a program officer (Section A/B headers, justification formatting); import
+reads the DOE justification *template*. Different artifacts, different audiences (outbound-to-funder vs
+inbound-from-template), like "render an invoice PDF" vs "parse a vendor invoice". Forcing a round-trip
+would degrade both. The export is so intentionally non-importable that `importWorkbook` bails on a
+re-read of its own export entirely — confirmed while closing the sub-gap below. `test/engine/sf424a.test.js`
+keeps `does not round-trip its own export` as a passing guard that flips the day the formats converge.
+CLOSED sub-gap (Gap-4): the export WRITES "Funder" and "Billing" rows into the Cost Categories sheet,
+but import used to ignore them (returned only `{periods, categories, costSharePct}`). `importWorkbook`
+now also recovers `funder` and `reimburseTiming` (reversing `TIMING_LABEL`) WHEN THOSE ROWS ARE PRESENT
+— a template-only import still returns the original shape with those keys absent, so nothing is invented.
+`modals.jsx` prefers recovered terms over the UI billing selector. Tested by injecting the rows into the
+importable `celadyne.xlsx` fixture and re-importing.
 
 *(closed — spend history is editable under **Spend history → Burn**. Months are ordered oldest → newest
 and **position is the date**: labels derive from the projection start rather than being typed, so they
@@ -265,10 +289,9 @@ which has **three** states, not two:
 - **on-budget** — at or under plan. No actuals => no tag; a tag invented from no data is worse than none.
 
 `src/engine/summary.js` is the pure core (`projectSummary`, `budgetTag`), fully tested in
-`test/engine/summary.test.js`. What's NOT done: an actuals *editor*. Coded ledger spend fills project actuals automatically, and the per-project
+`test/engine/summary.test.js`. Coded ledger spend fills project actuals automatically, and the per-project
 override (Projects → expand → Recorded spend) handles redistribution. Direct hand-entry of raw
-`p.actuals` was retired in favour of coding. Cost-share reconciliation (does the grant's match actually get spent?) also
-still wants doing, and now has the data shape to do it against.
+`p.actuals` was retired in favour of coding. Gap-4 CLOSED the one real hole here: a project with NO coded spend had no way to record actuals at all (the empty state just told you to code ledger lines). The override editor now shows a "+ Add a month" affordance in BOTH the empty and populated states, seeding an `actualsOverride` entry (`nextMonth()` picks the first unused month 0..HORIZON) — this extends the override mechanism, it does NOT resurrect the retired parallel `p.actuals` field. Tested in `test/views/override.test.jsx` (an empty-state project can record a month).
 
 ## Cost-share reconciliation (DONE — closed the Piece-1 unfinished business)
 
@@ -311,6 +334,25 @@ WATCH: zeroInfo returns {months:null} for cash-positive OR past-horizon — a di
 the runway finite (lower cash, don't raise it).
 
 ## Next
+
+## Confidence bands (DONE — tier bracket + measured burn-variance, NOT Monte Carlo)
+
+`src/engine/band.js` (`confidenceBand`, `burnVariance`), tested `test/engine/band.test.js`. The runway
+becomes a RANGE, from two HONEST sources of width:
+- REVENUE range from the confidence tiers (which already exist): floor = committed only, expected =
+  committed+expected (the base/golden case), ceiling = +speculative. No invented probabilities.
+- COST range from MEASURED historical burn variance (the user's "derive uncertainty from real forecast
+  error" idea, applied where data exists): coefficient of variation of raw monthly burn widens the
+  floor (costs ×1+cv) and narrows the ceiling (×1−cv).
+Deliberately NOT Monte Carlo: needs per-line probabilities the model doesn't have, and there's NO
+stored history of past REVENUE forecasts to measure revenue error against (only cost, via burnStats).
+The honest sequel would be a "projection journal" storing snapshots over time -> real intervals later.
+DESIGN BUG the tests caught: `burnVariance` first computed CV from burnStats' FLAG-FILTERED months —
+but flagging exists to EXCLUDE outliers, which erases the very scatter we're measuring. Fixed to use
+RAW monthly totals (trimming only the single most extreme). Financing stays orthogonal (shifts all
+curves, not part of the band). UI: shaded region between floor/ceiling on RunwayChart + range in the
+hero + a toggle + an ALWAYS-ON honesty caption ("reflects which revenue lands, widened by ±N% spend
+variance — not statistical probability") + a wide-band callout. Tests `test/views/band.test.jsx`.
 
 ## Labor prioritization (DONE — leave-one-out, net + cost-only)
 

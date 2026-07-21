@@ -18,6 +18,7 @@ export * from "./projection.js";
 export * from "./scenario.js";
 export * from "./buildmodel.js";
 export * from "./labor.js";
+export * from "./band.js";
 export * from "./revenue.js";
 export * from "./projects.js";
 export * from "./projectchart.js";

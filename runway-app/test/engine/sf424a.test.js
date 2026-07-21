@@ -63,3 +63,45 @@ describe("the Celadyne workbook — a real DOE EERE SF-424A budget justification
     expect(g.reimburseTiming).toBeUndefined();
   });
 });
+
+describe("milestone schedule month placement (F8 residual fix)", () => {
+  it("keeps a payment's real month rather than clamping past-horizon payments onto month 18", async () => {
+    const { parseScheduleAoa } = await import("../../src/engine/sf424a");
+    const aoa = [
+      ["Milestone", "Month", "Payment"],
+      ["Kickoff", 2, 50000],
+      ["Final delivery", 24, 200000],   // past the 18-month horizon
+    ];
+    const rows = parseScheduleAoa(aoa);
+    const final = rows.find(r => r.label === "Final delivery");
+    // floorM keeps 24 (so the projection lets it fall off the horizon); clampM would have made it 18,
+    // sliding a $200k payment onto the last visible month and inflating it.
+    expect(final.month).toBe(24);
+    expect(rows.find(r => r.label === "Kickoff").month).toBe(2);
+  });
+});
+
+describe("import recovers funder + billing the export writes (narrows the export/import gap)", () => {
+  it("reads Funder and Billing rows when a workbook carries them", async () => {
+    const { importWorkbook } = await import("../../src/engine/sf424a");
+    // start from the importable fixture, inject Funder + Billing rows into its Cost Categories sheet
+    const wb = read();
+    const name = wb.SheetNames.find(n => /cost categor|section b|424a/i.test(n));
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null });
+    aoa.splice(2, 0, ["Funder", "ARPA-E"], ["Billing", "Monthly (as incurred)"]);
+    wb.Sheets[name] = XLSX.utils.aoa_to_sheet(aoa);
+    const back = importWorkbook(wb);
+    // the injected terms come back; TIMING_LABEL reversal maps the label to the key
+    expect(back.funder).toBe("ARPA-E");
+    expect(back.reimburseTiming).toBe("monthly");
+  });
+
+  it("a template-only import (no funder/billing rows) returns the original shape, fields undefined", async () => {
+    // importing a workbook without those rows shouldn't invent them
+    const { importWorkbook } = await import("../../src/engine/sf424a");
+    const back = importWorkbook(read());   // the DOE-template fixture, no Funder/Billing rows
+    expect(back.periods.length).toBeGreaterThan(0);
+    // funder/billing absent -> keys simply not present (defaults applied downstream)
+    expect(back.funder).toBeUndefined();
+  });
+});

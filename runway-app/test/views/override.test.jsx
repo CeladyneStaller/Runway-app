@@ -70,3 +70,24 @@ describe("actuals override", () => {
     expect(api.get().projects.find(p => p.name === "Mobile app launch").actualsOverride).toBeUndefined();
   });
 });
+
+describe("add a month with no coded spend (Gap-4: standalone actuals entry)", () => {
+  it("a project with no coded spend can still record a month by hand", () => {
+    // give a project zero coded spend by clearing the codeMap/customerMap so nothing routes to it,
+    // then the empty-state '+ Add a month' should seed an actualsOverride entry.
+    let d = demoDoc();
+    // wipe mappings so NO ledger line codes to any project -> every project is in the empty state
+    d = { ...d, codeMap: {}, customerMap: {} };
+    const { container } = render(<RunwayApp doc={d} setDoc={(v) => { d = typeof v === "function" ? v(d) : v; }} />);
+    fireEvent.click([...container.querySelectorAll("button")].find(b => /Projects/.test(b.textContent)));
+    const expandAll = [...container.querySelectorAll(".linkbtn")].find(b => /Expand all/.test(b.textContent));
+    if (expandAll) fireEvent.click(expandAll);
+    // find an empty-state note with an Add a month button
+    const addBtn = [...container.querySelectorAll("button")].find(b => /Add a month/.test(b.textContent));
+    expect(addBtn).toBeTruthy();
+    fireEvent.click(addBtn);
+    // clicking it should have seeded an actualsOverride on some project
+    const seeded = d.projects.find(p => p.actualsOverride && Object.keys(p.actualsOverride).length > 0);
+    expect(seeded).toBeTruthy();
+  });
+});

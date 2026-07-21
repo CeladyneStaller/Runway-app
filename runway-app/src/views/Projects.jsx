@@ -870,8 +870,23 @@ function ActualsOverride({ p }) {
   const clearAll = () => setProjects(ps => ps.map(x => x.id === p.id ? { ...x, actualsOverride: undefined } : x));
 
   const codedTotal = Object.values(coded).reduce((a, v) => a + v, 0);
+
+  // Add a month directly, even with no coded spend — seeds an actualsOverride entry. This extends the
+  // existing override mechanism (per-month values) rather than reintroducing the retired parallel
+  // p.actuals field; the coded ledger remains the source of truth where it exists.
+  const nextMonth = () => {
+    const used = new Set(months);
+    for (let m = 0; m <= HORIZON; m++) if (!used.has(m)) return m;
+    return 0;
+  };
+  const addMonth = () => setProjects(ps => ps.map(x => x.id === p.id
+    ? { ...x, actualsOverride: { ...(x.actualsOverride || {}), [nextMonth()]: 0 } } : x));
+
   if (months.length === 0) return (
-    <div className="ovnote">No coded spend for this project yet. Code ledger lines to it under <b>Spend history → Ledger</b> and it appears here, month by month.</div>
+    <div className="ovnote">
+      <div>No coded spend for this project yet. Code ledger lines to it under <b>Spend history → Ledger</b>, or record a month by hand:</div>
+      <button className="addbtn ghost" style={{ marginTop: 8 }} onClick={addMonth}>+ Add a month</button>
+    </div>
   );
 
   return (
@@ -908,6 +923,7 @@ function ActualsOverride({ p }) {
           </tr>
         </tbody>
       </table>
+      <button className="linkbtn" style={{ marginTop: 6 }} onClick={addMonth}>+ Add a month</button>
       {eff.flagged && (
         <div className="ovflag">
           Your override totals <b className="num">{moneyFull(eff.effTotal)}</b> against <b className="num">{moneyFull(codedTotal)}</b> coded — a difference of <b className="num">{moneyFull(Math.abs(eff.delta))}</b>. That's not redistribution, it's a changed total. Fine if you mean it (spend your books haven't coded yet), but the project now disagrees with the ledger.

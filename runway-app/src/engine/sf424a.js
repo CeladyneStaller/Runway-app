@@ -2,7 +2,7 @@
 import * as XLSX from "xlsx";
 import { TIMING_LABEL } from "./grant";
 import { tripCost } from "./history";
-import { HORIZON, clampM, uid } from "./time";
+import { HORIZON, clampM, floorM, uid } from "./time";
 
 // ---- SF-424A multi-tab budget: xlsx export / import matching the DOE justification template (3 budget periods) ----
 export function exportBudget(p, g, R) {
@@ -130,7 +130,26 @@ export function importWorkbook(wb) {
   };
   let costSharePct = 0; if (summary) { const ci = summary.findIndex(r => _norm(r?.[0]).includes("cost-share %")); if (ci >= 0) costSharePct = (+summary[ci][1] || 0) / 100; }
   if (!costSharePct) { const cs = sheet("cost share"); if (cs) for (const r of cs) { if (_norm((r || []).join(" ")).includes("cost share percentage")) { const v = (r || []).find(x => typeof x === "number" && x > 0 && x <= 1); if (v) { costSharePct = v; break; } } } }
-  return { periods, categories, costSharePct };
+  // Recover the funder and billing terms the export writes into the Cost Categories sheet (the "Funder"
+  // and "Billing" rows). These aren't part of the DOE template proper — so a template-only import won't
+  // have them and they stay undefined — but when the workbook DID come from our own export, reading them
+  // back narrows the gap between export and import instead of silently dropping to defaults.
+  let funder, reimburseTiming;
+  if (summary) {
+    const fi = summary.findIndex(r => _norm(r?.[0]) === "funder");
+    if (fi >= 0 && summary[fi][1]) funder = String(summary[fi][1]);
+    const bi = summary.findIndex(r => _norm(r?.[0]) === "billing");
+    if (bi >= 0 && summary[bi][1]) {
+      const label = String(summary[bi][1]);
+      const match = Object.entries(TIMING_LABEL).find(([, v]) => v === label);
+      if (match) reimburseTiming = match[0];
+    }
+  }
+  // only include recovered fields when present, so a template import returns the same shape as before
+  const extra = {};
+  if (funder) extra.funder = funder;
+  if (reimburseTiming) extra.reimburseTiming = reimburseTiming;
+  return { periods, categories, costSharePct, ...extra };
 }
 
 export function parseScheduleAoa(aoa) {
@@ -138,7 +157,7 @@ export function parseScheduleAoa(aoa) {
   const out = [];
   for (let i = h + 1; h >= 0 && i < aoa.length; i++) {
     const r = aoa[i]; if (!r || _norm(r[0]) === "") continue;
-    out.push({ id: uid(), label: String(r[0]), month: clampM(+r[1] || 0), payment: +r[2] || 0 });
+    out.push({ id: uid(), label: String(r[0]), month: floorM(+r[1] || 0), payment: +r[2] || 0 });
   }
   return out;
 }
