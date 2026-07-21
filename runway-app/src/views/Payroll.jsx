@@ -4,16 +4,17 @@ import { money, moneyFull } from "../engine/money";
 import { itemizedFringeRate, itemizedIsEmpty } from "../engine/fringe";
 import { HRS_YR, empCostAt, empMonthlyOf, empSalaryAt, empSalaryMoAt, empTitleAt } from "../engine/payroll";
 import { teamLoad } from "../engine/projects";
+import { LaborPriority } from "./chrome/LaborPriority";
 import { HORIZON, clampM, monthLabel, uid } from "../engine/time";
 import { useStart } from "../state/StartCtx";
 import { MOPTS } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { PayrollActionModal } from "./chrome/modals";
 
-export function Payroll({ routeTab, setRouteTab = () => {}, employees, setEmployees, fringePct = 0, setFringePct, fringeConfig = {}, setFringe = () => {}, derivedBurn = 0, companyOpexNow = 0, rProjects = [], toggles }) {
+export function Payroll({ routeTab, setRouteTab = () => {}, baseDoc, employees, setEmployees, fringePct = 0, setFringePct, fringeConfig = {}, setFringe = () => {}, derivedBurn = 0, companyOpexNow = 0, rProjects = [], toggles }) {
   const { START_Y, START_M } = useStart();
   const [modal, setModal] = useState(null); // { empId, action }
-  const TAB_KEYS = ["total", "employees", "fringe", "alloc"];
+  const TAB_KEYS = ["total", "employees", "fringe", "alloc", "priority"];
   const tab = TAB_KEYS.includes(routeTab) ? routeTab : "total";
   const setTab = (t) => setRouteTab(t);
 
@@ -107,7 +108,7 @@ export function Payroll({ routeTab, setRouteTab = () => {}, employees, setEmploy
     const load = useMemo(() => teamLoad(rProjects, toggles), [rProjects, toggles]);
   const peakOf = (id) => { const ms = Object.values(load[id]?.months || {}); return ms.length ? Math.max(...ms) : 0; };
   const overCount = employees.filter(e => peakOf(e.id) > HRS_YR / 12).length;
-  const TABS = [["total", "Total"], ["employees", "Employees"], ["fringe", "Fringe"], ["alloc", "Allocation"]];
+  const TABS = [["total", "Total"], ["employees", "Employees"], ["fringe", "Fringe"], ["alloc", "Allocation"], ["priority", "Prioritization"]];
   return (
     <>
       <div className="subtabs">
@@ -231,6 +232,8 @@ export function Payroll({ routeTab, setRouteTab = () => {}, employees, setEmploy
         </table>
       </div>
       )}
+
+      {tab === "priority" && <LaborPriority baseDoc={baseDoc} />}
 
       {tab === "alloc" && (<>
         <div className="stats">

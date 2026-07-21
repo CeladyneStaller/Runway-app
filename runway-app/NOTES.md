@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 290 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 300 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -312,7 +312,22 @@ the runway finite (lower cash, don't raise it).
 
 ## Next
 
-- Labor prioritization (leave-one-out Δzero-date per 100h) — usefulness scales with pipeline concentration
+## Labor prioritization (DONE — leave-one-out, net + cost-only)
+
+`src/engine/labor.js` (`laborPriorities`), tested in `test/engine/labor.test.js`. For each employee,
+remove them and recompute the runway zero-date (leave-one-out), in two modes:
+- NET: also strips their project labor lines + grant personnel rows, so the revenue/work they enable
+  goes too — their HONEST runway impact. A well-reimbursed grant hire can cost ~0 net.
+- COST-ONLY: removes just their salary; project work falls back to nominal rate. The gap net→cost-only
+  = what they bring in (`broughtIn`).
+Ranked by net Δ zero-date (positive = removing them extends runway = they're a net cost). Per-100-
+grant-hours column shown only where the employee has grant-allocated hours (demo budgets grant labor by
+ROLE with no employeeId, so per100h is null for all demo staff — correct, not a bug). Reuses
+buildModelFromDoc from the scenarios work. Memoized in the UI (N rebuilds). UI: a Prioritization tab in
+Payroll (`LaborPriority.jsx`), routable at #pay/priority. Tests `test/views/labor.test.jsx`.
+REAL BUG the tests caught: `zeroInfo` returns bare `null` (NOT `{months:null}`) when the runway never
+goes negative — my zeroMonths did `zeroInfo(rows).months` and crashed. Fixed to `z ? z.months : null`.
+Two other failures were fixture assumptions (demo grant labor isn't employee-linked), not engine bugs.
 
 ## Routing (DONE — hash-based, NOT React Router, behind a hook)
 

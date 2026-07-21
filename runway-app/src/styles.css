@@ -604,3 +604,14 @@
 .scn-inwrap{display:flex;align-items:center;gap:5px}
 .scn-inwrap .inp{width:110px}
 .scn-inwrap em{font-family:var(--fb);font-size:11px;color:var(--muted-2);font-style:normal}
+
+/* ---- labor prioritization ---- */
+.lp-base{font-family:var(--fb);font-size:12px;color:var(--muted)}
+.lp-base b{font-family:var(--fm);color:var(--ink);margin-left:6px}
+.lp-empty{font-family:var(--fb);font-size:13px;color:var(--muted);padding:24px;text-align:center}
+.lp-tbl th.lp-r,.lp-tbl td.lp-r{text-align:right}
+.lp-delta{display:flex;align-items:center;gap:10px;justify-content:flex-end}
+.lp-barwrap{width:80px;height:6px;background:var(--paper);border-radius:3px;overflow:hidden}
+.lp-bar{height:100%;border-radius:3px}
+.lp-mo{font-family:var(--fb);font-size:9.5px;color:var(--muted-2);font-style:normal;margin-left:2px}
+.lp-note{font-family:var(--fb);font-size:11px;color:var(--muted-2);line-height:1.55;margin-top:14px;padding-top:12px;border-top:1px solid var(--line-2)}
