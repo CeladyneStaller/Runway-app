@@ -42,3 +42,12 @@ describe("a mapped export becomes usable ledger data", () => {
     expect(history[1].lines[0]).toMatchObject({ amount: 50000, kind: "revenue" });
   });
 });
+
+describe("frictionless import: inline mapping + tolerant profiles", () => {
+  it("tolerant profile match survives an added column", async () => {
+    const { matchProfile } = await import("../../src/engine");
+    const saved = { name: "QB", headers: ["Date", "Customer", "Amount"], columns: { date: "Date", customer: "Customer", amount: "Amount" } };
+    // real-world: QuickBooks export gains a "Split" column between runs
+    expect(matchProfile([saved], ["Date", "Customer", "Amount", "Split"])).toBe(saved);
+  });
+});

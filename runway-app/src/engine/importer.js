@@ -189,3 +189,26 @@ export const codesInRows = (rows) => {
   }
   return seen;
 };
+
+// ---- tolerant profile matching ----
+// A saved import profile shouldn't stop matching just because QuickBooks added, removed, or reordered a
+// column between exports. Instead of requiring an identical header list, we score each profile by
+// whether the columns it actually MAPS still exist in the new file. Reordering and extra columns are
+// irrelevant; only the mapped ones must be present. Returns the best match or null.
+export function matchProfile(profiles, headers) {
+  const H = new Set((headers || []).map(h => String(h).trim()));
+  let best = null, bestScore = -1;
+  for (const p of profiles || []) {
+    const mapped = Object.values(p.columns || {}).filter(Boolean).map(c => String(c).trim());
+    if (mapped.length === 0) continue;
+    const present = mapped.filter(c => H.has(c)).length;
+    // require EVERY mapped column to still exist — a profile missing a column it needs isn't a match,
+    // because applying it would silently drop that field. Among fully-satisfied profiles, prefer the
+    // one matching the most columns (the most specific), then the exact header-set match as a tiebreak.
+    if (present !== mapped.length) continue;
+    const exact = (p.headers || []).map(h => String(h).trim()).join("|") === (headers || []).map(h => String(h).trim()).join("|");
+    const score = present * 10 + (exact ? 1 : 0);
+    if (score > bestScore) { best = p; bestScore = score; }
+  }
+  return best;
+}

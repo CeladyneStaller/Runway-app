@@ -542,3 +542,9 @@
 .frg-inwrap em{font-family:var(--fb);font-size:11px;color:var(--muted-2);font-style:normal}
 .frg-manual{padding:18px 4px 4px;display:flex;flex-direction:column;gap:8px}
 .frg-hint{font-family:var(--fb);font-size:11.5px;color:var(--muted);margin:2px 0 0;line-height:1.5}
+
+/* ---- import: inline mapping ---- */
+.imp-maprows{margin-top:4px}
+.imp-maprow{display:flex;align-items:center;gap:8px;padding:5px 0}
+.imp-mapname{font-family:var(--fm);font-size:12px;font-weight:600;color:var(--ink);min-width:120px}
+.imp-maprow .sel{flex:1;max-width:280px}

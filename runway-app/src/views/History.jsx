@@ -403,6 +403,7 @@ export function History({ hist, setHist, codeMap, setCodeMap, customerMap = {}, 
       {importing && (
         <ImportModal
           startY={START_Y} startM={START_M} hist={hist} profiles={importProfiles}
+          projects={projects} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} setCustomerMap={setCustomerMap}
           onCommit={(history) => setHist(history)}
           onSaveProfile={(prof) => setImportProfiles(ps => {
             const others = (ps || []).filter(p => p.name !== prof.name);

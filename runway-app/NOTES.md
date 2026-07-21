@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 242 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 247 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -349,6 +349,19 @@ work is the actuals model underneath it.
   tab. Engine tests `test/engine/fringe.test.js`, UI `test/views/fringe.test.jsx`. NOTE: the fringe UI
   test needed a STATEFUL harness (a wrapper with useState) because the inner RunwayApp is controlled —
   a setDoc that just mutates a local var doesn't re-render.
+
+- **Frictionless import (step toward the eventual QB API).** Two upgrades, both keeping the API-ready
+  shape (the API will emit the same ImportRow[] the file path does): (1) TOLERANT profile matching
+  (`matchProfile` in importer.js) — a saved profile matches if every column it MAPS still exists, so an
+  added/reordered column between exports doesn't force a re-map; prefers the most specific satisfied
+  profile. (2) INLINE code/customer mapping in the import preview — new codes/customers in the file get
+  dropdowns BEFORE commit, so you don't hunt them in panels afterward. ImportModal now takes
+  projects/codeMap/customerMap + setters. Tests: profile.test.js (tolerant match), import.test.jsx.
+  ARCHITECTURE NOTE for the future QB API: it's Option C (hosted, backend holds the OAuth client secret
+  — can't live in the browser). The app owner confirmed the destination is a real product w/ backend,
+  but chose to make import frictionless FIRST (no backend yet). When the API lands it's a new SOURCE
+  feeding the existing applyProfile->mergeImport pipeline, not a new pipeline. storage.js stays the
+  2-function seam for that day.
 
 ## Plot against reality (per-project charts)
 

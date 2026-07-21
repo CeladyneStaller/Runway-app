@@ -95,3 +95,29 @@ describe("applyProfile -> mergeImport, the full paper trail", () => {
     expect(history[0].lines[0].customer).toBe("Acme");
   });
 });
+
+describe("tolerant profile matching", () => {
+  it("matches when all mapped columns are present, even with extra/reordered columns", async () => {
+    const { matchProfile } = await import("../../src/engine");
+    const profile = { name: "QB", headers: ["Date", "Customer", "Amount"], columns: { date: "Date", customer: "Customer", amount: "Amount" } };
+    // new file added a "Memo" column and reordered — profile still matches
+    expect(matchProfile([profile], ["Customer", "Amount", "Date", "Memo"])).toBe(profile);
+  });
+  it("does NOT match when a mapped column is missing", async () => {
+    const { matchProfile } = await import("../../src/engine");
+    const profile = { name: "QB", headers: ["Date", "Customer", "Amount"], columns: { date: "Date", customer: "Customer", amount: "Amount" } };
+    // "Amount" renamed to "Total" — profile can't apply, so no match
+    expect(matchProfile([profile], ["Date", "Customer", "Total"])).toBeNull();
+  });
+  it("prefers the most specific profile when several satisfy", async () => {
+    const { matchProfile } = await import("../../src/engine");
+    const simple = { name: "simple", headers: ["Date", "Amount"], columns: { date: "Date", amount: "Amount" } };
+    const rich = { name: "rich", headers: ["Date", "Amount", "Customer"], columns: { date: "Date", amount: "Amount", customer: "Customer" } };
+    // both satisfy, rich maps more columns -> wins
+    expect(matchProfile([simple, rich], ["Date", "Amount", "Customer"]).name).toBe("rich");
+  });
+  it("returns null when nothing matches", async () => {
+    const { matchProfile } = await import("../../src/engine");
+    expect(matchProfile([], ["Date"])).toBeNull();
+  });
+});

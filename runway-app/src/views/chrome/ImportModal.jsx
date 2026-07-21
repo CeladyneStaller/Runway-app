@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { fileToGrid, applyProfile, mergeImport } from "../../engine/importer";
-import { unresolvedLines } from "../../engine/coding";
+import { fileToGrid, applyProfile, mergeImport, matchProfile, codesInRows } from "../../engine/importer";
 import { moneyFull } from "../../engine/money";
 import { I } from "./icons";
 
@@ -23,7 +22,7 @@ const AMOUNT_MODES = [
 // Guess a column for a field by fuzzy header match, so the dropdowns start pre-filled sensibly.
 const guess = (headers, needles) => headers.find(h => needles.some(n => h.toLowerCase().includes(n))) || "";
 
-export function ImportModal({ startY, startM, hist, profiles = [], onCommit, onSaveProfile, onClose }) {
+export function ImportModal({ startY, startM, hist, profiles = [], projects = [], codeMap = {}, setCodeMap, customerMap = {}, setCustomerMap, onCommit, onSaveProfile, onClose }) {
   const [grid, setGrid] = useState(null);
   const [fileName, setFileName] = useState("");
   const [err, setErr] = useState(null);
@@ -40,7 +39,7 @@ export function ImportModal({ startY, startM, hist, profiles = [], onCommit, onS
       if (!g.headers.length) { setErr("No columns found in that file."); return; }
       setGrid(g);
       // pre-fill from a saved profile whose headers match, else guess
-      const match = profiles.find(p => (p.headers || []).join("|") === g.headers.join("|"));
+      const match = matchProfile(profiles, g.headers);
       if (match) {
         setColumns(match.columns); setDateFormat(match.dateFormat); setAmountMode(match.amountMode);
         setProfileName(match.name);
@@ -60,9 +59,13 @@ export function ImportModal({ startY, startM, hist, profiles = [], onCommit, onS
   const preview = useMemo(() => {
     if (!grid) return null;
     const { history, report } = mergeImport(hist, rows, startY, startM);
-    const unresolved = unresolvedLines(history, { codeMap: {}, customerMap: {} }).length;
-    return { report, unresolved, sampleMerged: history };
-  }, [grid, rows, hist, startY, startM]);
+    // codes/customers in THIS import that aren't mapped yet — offered inline below, before commit
+    const codes = [...new Set(rows.map(r => (r.code || "").trim()).filter(Boolean))];
+    const custs = [...new Set(rows.map(r => (r.customer || "").trim()).filter(Boolean))];
+    const newCodes = codes.filter(c => !(codeMap && codeMap[c]));
+    const newCusts = custs.filter(c => !(customerMap && customerMap[c]));
+    return { report, newCodes, newCusts };
+  }, [grid, rows, hist, startY, startM, codeMap, customerMap]);
 
   const canCommit = grid && columns.date && columns.amount && preview?.report.imported > 0;
   const commit = () => {
@@ -140,7 +143,31 @@ export function ImportModal({ startY, startM, hist, profiles = [], onCommit, onS
                       <b>{preview.report.imported}</b> rows import
                       {preview.report.beforeStart > 0 && <> · <span className="warn">{preview.report.beforeStart} before your start date</span></>}
                       {(preview.report.badDate + preview.report.badAmount) > 0 && <> · {preview.report.badDate + preview.report.badAmount} skipped (no date/amount)</>}
-                      {preview.unresolved > 0 && <> · <span className="warn">{preview.unresolved} will need a project mapping</span></>}
+                    </div>
+                  )}
+                  {preview && (preview.newCusts.length > 0 || preview.newCodes.length > 0) && (
+                    <div className="imp-maprows">
+                      <div className="imp-section" style={{ marginTop: 14 }}>Map new {preview.newCusts.length > 0 ? "customers" : "codes"} <em style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--muted)" }}>— optional; unmapped spend stays in the company baseline</em></div>
+                      {preview.newCusts.map(c => (
+                        <div className="imp-maprow" key={"cu-" + c}>
+                          <span className="imp-mapname">{c}</span><span className="cm-arrow">→</span>
+                          <select className="sel" value={customerMap[c] || ""} onChange={e => setCustomerMap && e.target.value && setCustomerMap(m => ({ ...m, [c]: e.target.value }))}>
+                            <option value="">Leave unmapped</option>
+                            <option value="overhead">Overhead (baseline)</option>
+                            {projects.filter(p => !p.stage || p.stage !== "prospective").map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                      {preview.newCodes.map(c => (
+                        <div className="imp-maprow" key={"co-" + c}>
+                          <span className="imp-mapname">{c}</span><span className="cm-arrow">→</span>
+                          <select className="sel" value={codeMap[c] || ""} onChange={e => setCodeMap && e.target.value && setCodeMap(m => ({ ...m, [c]: e.target.value }))}>
+                            <option value="">Leave unmapped</option>
+                            <option value="overhead">Overhead (baseline)</option>
+                            {projects.filter(p => !p.stage || p.stage !== "prospective").map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                        </div>
+                      ))}
                     </div>
                   )}
                   <label className="imp-save">
