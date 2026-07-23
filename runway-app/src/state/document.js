@@ -1,7 +1,7 @@
 // The unit of persistence AND the unit of ownership. One document = one company's model.
 // Today: a single document in IndexedDB. Later: the same object, one row per owner, no shape change.
 // The engine never sees this — it takes plain arrays. That seam is what keeps multi-user cheap.
-import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST } from "../seed";
+import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
 export const SCHEMA_VERSION = 3;
@@ -32,6 +32,9 @@ export const emptyDoc = () => {
     lines: [], employees: [], projects: [], milestones: [], pos: [], rounds: [],
     history: [],   // measured months of real spend. NOT the demo's — see engine/history.js.
     cashActuals: {}, flagOverrides: {},
+    // Projection journal: append-only forecast snapshots. New field, so it arrives on existing
+    // documents through the emptyDoc spread in migrate() without a schema bump.
+    journal: [],
     codeMap: {},       // { code -> projectId | "overhead" }, built as you code spend
     customerMap: {},   // { customerName -> projectId }, for imports keyed on QuickBooks customer
     categoryMap: {},   // { importedCategoryLabel -> object-class key }, for grant reconciliation
@@ -56,14 +59,23 @@ export const demoDoc = () => ({
   milestones: SEED_MILESTONES,
   pos: SEED_POS_LINKED,
   rounds: SEED_ROUNDS,
+  journal: SEED_JOURNAL,
   history: HIST,
   // codes in the seeded ledger -> the demo's projects (matched by name, since ids are per-load)
   codeMap: (() => {
     const byName = (n) => ([...SEED_PROJECTS, ...SEED_FULFIL].find(p => p.name === n) || {}).id;
     return { "5000": byName("Catalyst scale-up"), "5100": byName("Mobile app launch"), "6000": OVERHEAD, "9000": OVERHEAD };
   })(),
-  cashActuals: { 0: { cash: 560000, rev: 15000 }, 1: { cash: 467000 }, 2: { cash: 343000 },
-                 3: { cash: 216000 }, 4: { cash: 108000 } },
+  cashActuals: {
+    // Recorded start-of-month cash. A gentle drift ~$3k/month behind plan
+    // (model: 560,000 / 470,525 / 349,866 / 225,851 / 119,817) — slightly over budget, not off a cliff.
+    // NOTE the field is `revenue`, not `rev`: the History cash tab reads `r.revenue`.
+    0: { cash: 560000, revenue: 15000, additional: 0, grants: {} },
+    1: { cash: 467000, revenue: 15000, additional: 0, grants: {} },
+    2: { cash: 343000, revenue: 16000, additional: 0, grants: {} },
+    3: { cash: 216000, revenue: 17000, additional: 0, grants: {} },
+    4: { cash: 108000, revenue: 18000, additional: 0, grants: {} },
+  },
 });
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.

@@ -17,7 +17,13 @@ import { applyRevenueActuals } from "./revenue.js";
 import { codedRevenue } from "./coding.js";
 import { burnStats } from "./history.js";
 
-export function buildModelFromDoc(doc, horizon = HORIZON) {
+// The full assembly, returning the model AND the intermediate pieces the UI needs (payroll lines for
+// the Payroll view, resolved projects for the Projects view, the burn figures for Spend history, and
+// so on). App used to recompute every one of these inline, giving the app two parallel assemblies of
+// the same thing pinned together by a single golden assertion. They were verified identical across 272
+// document x toggle combinations before being merged — but "identical today" is not a guarantee, and
+// the band-alignment bug already showed what divergence costs.
+export function buildModelParts(doc, horizon = HORIZON) {
   const employees = doc.employees || [];
   const projects = doc.projects || [];
   const pos = doc.pos || [];
@@ -67,7 +73,19 @@ export function buildModelFromDoc(doc, horizon = HORIZON) {
   const poProject = Object.fromEntries(pos.filter(p => p.projectId).map(p => [p.id, p.projectId]));
 
   const rawLines = tagRevenue([...lines, ...employeeLines, ...projectLines, ...salesLines, ...roundLines, ...baselineLines]);
-  const { lineItems } = applyRevenueActuals(rawLines, revActuals, toggles, { poProject });
+  const { lineItems, variances } = applyRevenueActuals(rawLines, revActuals, toggles, { poProject });
 
-  return { cashOnHand: doc.cash || 0, horizon, lineItems };
+  return {
+    model: { cashOnHand: doc.cash || 0, horizon, lineItems },
+    // intermediates, so the UI can render the pieces without rebuilding them from scratch
+    avgSalary, fringePct,
+    employeeLines, rProjects, projectLines, salesLines, roundLines, baselineLines,
+    payrollNow, companyOpexNow, itemizedOpex, derivedBurn, baselineOpex,
+    revenueVariances: variances,
+  };
+}
+
+// The model alone — what scenarios, bands and labor prioritization consume.
+export function buildModelFromDoc(doc, horizon = HORIZON) {
+  return buildModelParts(doc, horizon).model;
 }

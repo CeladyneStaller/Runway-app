@@ -1,23 +1,17 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { load, save } from "./state/storage";
 import { demoDoc, toJSON, fromJSON } from "./state/document";
-import { compileInstrument, roundMS } from "./engine/capital";
-import { burnStats } from "./engine/history";
+import { roundMS } from "./engine/capital";
 import { money, moneyFull } from "./engine/money";
-import { compileEmployee, empCostAt, empSalaryMoAt } from "./engine/payroll";
-import { resolveFringeRate } from "./engine/fringe";
-import { buildModelFromDoc } from "./engine/buildmodel";
+import { buildModelFromDoc, buildModelParts } from "./engine/buildmodel";
 import { confidenceBand } from "./engine/band";
+import { makeSnapshot, dueForSnapshot, appendSnapshot, worthSnapshotting } from "./engine/journal";
 import { useHashRoute } from "./state/hashroute";
 import { Scenarios } from "./views/Scenarios";
-import { anchorToActuals, balanceAtDate, buildProjection, tagRevenue, zeroInfo } from "./engine/projection";
-import { compileProject, resolveProjectRates, syncFulfilStage } from "./engine/projects";
-import { applyRevenueActuals } from "./engine/revenue";
-import { codedRevenue } from "./engine/coding";
-import { blankFulfillment, compilePO, devLines, poDevNeeded, poNeedsReview } from "./engine/sales";
+import { anchorToActuals, balanceAtDate, buildProjection, zeroInfo } from "./engine/projection";
+import { blankFulfillment, devLines, poDevNeeded, poNeedsReview } from "./engine/sales";
 import { HORIZON, dateLong, dateShort, dateStamp, monthLong, uid } from "./engine/time";
-import { SEED_ROUNDS } from "./seed";
 import { StartCtx } from "./state/StartCtx";
 import { CashFlow } from "./views/CashFlow";
 import { History } from "./views/History";
@@ -38,9 +32,11 @@ function RunwayApp({ doc, setDoc }) {
   const setCash = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.cash) : v; return { ...d, cash: nv }; });
 
   const hist = doc.history;
-  const codeMap = doc.codeMap || {};
+  // memoised so dependents get a stable reference the linter can verify; emptyDoc always defines
+  // these and migrate() spreads it, so the fallback is belt-and-braces rather than a live path.
+  const codeMap = useMemo(() => doc.codeMap || {}, [doc.codeMap]);
   const setCodeMap = (v) => setDoc(d => ({ ...d, codeMap: typeof v === "function" ? v(d.codeMap || {}) : v }));
-  const customerMap = doc.customerMap || {};
+  const customerMap = useMemo(() => doc.customerMap || {}, [doc.customerMap]);
   const setCustomerMap = (v) => setDoc(d => ({ ...d, customerMap: typeof v === "function" ? v(d.customerMap || {}) : v }));
   const importProfiles = doc.importProfiles || [];
   const setImportProfiles = (v) => setDoc(d => ({ ...d, importProfiles: typeof v === "function" ? v(d.importProfiles || []) : v }));
@@ -65,31 +61,40 @@ function RunwayApp({ doc, setDoc }) {
   const setMethod = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.method) : v; return { ...d, settings: { ...d.settings, method: nv } }; });
   const applyBaseline = doc.settings.applyBaseline;
   const setApplyBaseline = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.applyBaseline) : v; return { ...d, settings: { ...d.settings, applyBaseline: nv } }; });
-  const [cashActuals, setCashActuals] = useState({
-    // Recorded start-of-month cash. Seeded as a gentle drift ~$3k/month behind plan
-    // (model: 560,000 / 470,525 / 349,866 / 225,851 / 119,817) — tracking slightly over budget, not off a cliff.
-    0: { cash: 560000, revenue: 15000, additional: 0, grants: {} },
-    1: { cash: 467000, revenue: 15000, additional: 0, grants: {} },
-    2: { cash: 343000, revenue: 16000, additional: 0, grants: {} },
-    3: { cash: 216000, revenue: 17000, additional: 0, grants: {} },
-    4: { cash: 108000, revenue: 18000, additional: 0, grants: {} },
-  }); // recorded granular actuals (start-of-month) for model validation
+  // Recorded start-of-month cash. THIS IS A DOCUMENT FIELD, like every other piece of state here.
+  // It used to be local useState seeded with the demo's numbers, which meant (a) nothing a user
+  // recorded survived a reload and (b) a brand-new user saw the demo company's balances AND had their
+  // forecast anchored to them — a $100k/$25k-per-month user was shown 8.3 months instead of 4.0.
+  const cashActuals = doc.cashActuals;
+  const setCashActuals = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.cashActuals) : v; return { ...d, cashActuals: nv }; });
   const anchorActuals = doc.settings.anchorActuals;
   const setAnchorActuals = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.anchorActuals) : v; return { ...d, settings: { ...d.settings, anchorActuals: nv } }; });
   const fringeConfig = doc.settings.fringe || {};
   const setFringe = (patch) => setDoc(d => ({ ...d, settings: { ...d.settings, fringe: { ...(d.settings.fringe || {}), ...(typeof patch === "function" ? patch(d.settings.fringe || {}) : patch) } } }));
-  // average annual salary across the current team — needed to express $/person insurance as a rate
-  const avgSalary = employees.length
-    ? (employees.reduce((a, e) => a + empSalaryMoAt(e, 0), 0) / employees.length) * 12
-    : 0;
-  const fringePct = resolveFringeRate(fringeConfig, avgSalary, doc.settings.fringePct ?? 0.30);
+  // ONE model assembly, shared with scenarios, confidence bands and labor prioritisation. App used to
+  // rebuild every piece of this inline — two parallel assemblies pinned together by a single golden
+  // assertion. Verified identical across 272 document x toggle combinations before merging.
+  // Depends on `doc` wholesale rather than hand-listing the fields it reads. Listing fields would skip
+  // recomputes on unrelated edits, but it is exactly the unverifiable pattern that caused three stale-memo
+  // bugs — and the saving is imaginary: measured at 0.9ms for a document with 472 line items (60 staff,
+  // 40 projects, 120 POs, 36 months of history), well under a React render.
+  const parts = useMemo(() => buildModelParts(doc), [doc]);
+  const { avgSalary, fringePct, employeeLines, rProjects, projectLines, salesLines, roundLines,
+          baselineLines, payrollNow, companyOpexNow, itemizedOpex, derivedBurn, baselineOpex,
+          revenueVariances } = parts;
   const setFringePct = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.fringePct) : v; return { ...d, settings: { ...d.settings, fringePct: nv } }; });
   const rounds = doc.rounds;
   const setRounds = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.rounds) : v; return { ...d, rounds: nv }; });
   const pos = doc.pos;
   const setPos = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.pos) : v; return { ...d, pos: nv }; });
 
-  const allOn = { committed: true, expected: true, speculative: true, financing: toggles.financing };
+  // Memoised so dependents can depend on the OBJECT rather than hand-naming the field inside it. A
+  // plain object here is rebuilt every render, which forces every consumer to list `toggles.financing`
+  // by hand — correct if you get it right, unverifiable by the linter either way, and that gap is
+  // precisely where the stale upside/confident-line bugs lived.
+  const allOn = useMemo(
+    () => ({ committed: true, expected: true, speculative: true, financing: toggles.financing }),
+    [toggles.financing]);
   // A PO and its fulfillment project are created together — you cannot book revenue without the cost.
   const addPO = (draft) => {
     const po = { id: uid(), devDecision: null, projectId: null, targets: [], ...draft };
@@ -115,61 +120,49 @@ function RunwayApp({ doc, setDoc }) {
     }));
   };
 
-  // payroll (from headcount) + internal project costs + grant costs/payments all flow into the master projection
-  const employeeLines = useMemo(() => employees.flatMap(e => compileEmployee(e, fringePct)), [employees, fringePct]);
-  const rProjects = useMemo(() => syncFulfilStage(resolveProjectRates(projects, employees, fringePct), pos), [projects, employees, fringePct, pos]);
-  const projectLines = useMemo(() =>
-    rProjects.flatMap(p => {
-      if (p.stage === "prospective" && !p.include) return []; // proposals (grant or internal) excluded until modeled
-      return compileProject(p).map(l => ({ ...l, projectId: p.id, projectName: p.name }));
-    }), [rProjects]);
-
-  // Spend-history-derived burn -> fallback "other operating costs" baseline anchoring forward opex to the historical run-rate
-  const payrollNow = useMemo(() => employees.reduce((a, e) => a + empCostAt(e, 0, fringePct), 0), [employees, fringePct]);
-  const companyOpexNow = useMemo(() => lines.filter(l => l.kind === "cost" && l.cadence === "recurring" && (l.start || 0) <= 0 && (l.end == null || l.end >= 0)).reduce((a, l) => a + (l.amount || 0), 0), [lines]);
-  const itemizedOpex = companyOpexNow + payrollNow; // sum of expected recurring spend from line items
-  const derivedBurn = useMemo(() => burnStats(hist, itemizedOpex, flagOverrides, method).applied, [hist, itemizedOpex, flagOverrides, method]); // measured comprehensive run-rate
-  const baselineOpex = applyBaseline ? Math.max(0, derivedBurn - itemizedOpex) : 0;
-  const baselineLines = useMemo(() => baselineOpex > 0.5
-    ? [{ label: "Other operating costs (baseline)", cadence: "recurring", kind: "cost", amount: baselineOpex, start: 0, end: null, growthPct: 0, isBaseline: true }]
-    : [], [baselineOpex]);
-
-  const salesLines = useMemo(() => pos.flatMap(po => compilePO(po).map(l => ({ ...l, poId: po.id, poRef: `${po.customer} · ${po.po}` }))), [pos]);
-  const roundLines = useMemo(() => rounds.flatMap(x => compileInstrument(x, rounds)), [rounds]);
+  // finInstCount is a UI concern (how many instruments the financing switch governs), not part of the
+  // model, so it stays here — derived from the shared assembly's roundLines rather than a second copy.
   const finInstCount = useMemo(() => new Set(roundLines.map(l => l.instId).filter(Boolean)).size, [roundLines]);
-  // Per-project recorded revenue, from the coded ledger. Piece 3: these REPLACE projected revenue for
-  // each project's past (up to its last recorded month); the forward forecast is untouched.
-  const revActuals = useMemo(() => {
-    const maps = { codeMap, customerMap };
-    const out = {};
-    for (const p of rProjects) {
-      const r = codedRevenue(p.id, hist, maps);
-      if (Object.keys(r).length) out[p.id] = r;
-    }
-    return out;
-  }, [rProjects, hist, codeMap, customerMap]);
-  const poProject = useMemo(() => Object.fromEntries(pos.filter(p => p.projectId).map(p => [p.id, p.projectId])), [pos]);
-
-  const rawLines = useMemo(() => tagRevenue([...lines, ...employeeLines, ...projectLines, ...salesLines, ...roundLines, ...baselineLines]), [lines, employeeLines, projectLines, salesLines, roundLines, baselineLines]);
-  const revReplace = useMemo(() => applyRevenueActuals(rawLines, revActuals, toggles, { poProject }),
-    [rawLines, revActuals, toggles, poProject]);
-  const allLines = revReplace.lineItems;
-  const revenueVariances = revReplace.variances;
+  const allLines = parts.model.lineItems;
 
   // Memoised so dependents can depend on IT rather than on its ingredients. Rebuilt every render,
   // it would defeat every memo below; listed by hand, its ingredients drift out of sync (that is how
   // `hist` went missing above). One object, one dependency, verifiable by the linter.
-  const model = useMemo(() => ({ cashOnHand: cash, horizon: HORIZON, lineItems: allLines }), [cash, allLines]);
+  const model = parts.model;
 
   const modelRows = useMemo(() => buildProjection(model, toggles), [model, toggles]);
-  const modelRowsUp = useMemo(() => buildProjection(model, allOn), [model, toggles.financing]);
+  const modelRowsUp = useMemo(() => buildProjection(model, allOn), [model, allOn]);
   const rows = useMemo(() => anchorToActuals(modelRows, cashActuals, anchorActuals), [modelRows, cashActuals, anchorActuals]);
   const rowsUp = useMemo(() => anchorToActuals(modelRowsUp, cashActuals, anchorActuals), [modelRowsUp, cashActuals, anchorActuals]);
   // "confident" case: the same plan with speculative revenue stripped out — the floor under the headline date
-  const modelRowsConf = useMemo(() => buildProjection(model, { ...toggles, speculative: false }), [model, toggles.committed, toggles.expected]);
+  // Spreads ALL of `toggles`, so it must depend on all of them that can vary. It listed only committed
+  // and expected, which froze the "confident to <date>" floor whenever financing was toggled. Same
+  // defect as modelRowsUp above, and the same one that lost `hist` from a dep array long before that.
+  // The "confident" case: the same plan with speculative revenue stripped out. Memoised for the same
+  // reason as allOn — depending on the object is checkable; hand-listing the fields it spreads is not,
+  // and omitting one (financing) is exactly how this line went stale.
+  const confToggles = useMemo(() => ({ ...toggles, speculative: false }), [toggles]);
+  const modelRowsConf = useMemo(() => buildProjection(model, confToggles), [model, confToggles]);
   const rowsConf = useMemo(() => anchorToActuals(modelRowsConf, cashActuals, anchorActuals), [modelRowsConf, cashActuals, anchorActuals]);
   const rowsBase = useMemo(() => buildProjection({ cashOnHand: cash, horizon: HORIZON, lineItems: [...lines, ...employeeLines, ...baselineLines] }, toggles), [lines, employeeLines, baselineLines, toggles, cash]);
   const zero = useMemo(() => zeroInfo(rows, startY, startM), [rows, startY, startM]);
+
+  // PROJECTION JOURNAL — record what the forecast said, weekly, so it can later be checked against what
+  // actually happened. Nothing here computes statistics; this is the recorder, and the value only
+  // accrues once it has been running. Which is exactly why it takes the first snapshot immediately.
+  const takeSnapshot = useCallback((auto = true) => setDoc(d => {
+    if (!worthSnapshotting({ cash: d.cash, rows })) return d;      // never record an empty document
+    const snap = makeSnapshot({ rows, toggles, cash: d.cash, startY, startM, now: new Date(), auto });
+    return { ...d, journal: appendSnapshot(d.journal, snap) };
+  }), [setDoc, rows, toggles, startY, startM]);
+  useEffect(() => {
+    // Self-limiting: the moment a snapshot lands, dueForSnapshot goes false for another week, so the
+    // doc change this triggers cannot feed back into another snapshot. That guard is what makes it safe
+    // to depend on takeSnapshot honestly rather than suppressing the dependency check.
+    if (!dueForSnapshot(doc.journal, new Date())) return;
+    if (!worthSnapshotting({ cash, rows })) return;
+    takeSnapshot(true);
+  }, [doc.journal, rows, cash, takeSnapshot]);
   const [showBand, setShowBand] = useState(true);
   const band = useMemo(() => {
     const b = confidenceBand(doc);
@@ -192,8 +185,9 @@ function RunwayApp({ doc, setDoc }) {
   const projWeeks = (zeroModel && zeroBase) ? Math.round((zeroBase.months - zeroModel.months) * 4.345) : 0;
   // What the runway looks like if this round never lands. That, not the post-raise number, is the deadline.
   // A covenant only exists if you take the money, so it must be judged against the world where you did.
-  const rowsFin = useMemo(() => anchorToActuals(buildProjection(model, { ...toggles, financing: true }), cashActuals, anchorActuals), [allLines, toggles, cash, cashActuals, anchorActuals]);
-  const rowsNoRaise = useMemo(() => anchorToActuals(buildProjection({ ...model, lineItems: allLines.filter(l => !l.instId) }, toggles), cashActuals, anchorActuals), [allLines, toggles, cash, cashActuals, anchorActuals]);
+  const finToggles = useMemo(() => ({ ...toggles, financing: true }), [toggles]);
+  const rowsFin = useMemo(() => anchorToActuals(buildProjection(model, finToggles), cashActuals, anchorActuals), [model, finToggles, cashActuals, anchorActuals]);
+  const rowsNoRaise = useMemo(() => anchorToActuals(buildProjection({ ...model, lineItems: allLines.filter(l => !l.instId) }, toggles), cashActuals, anchorActuals), [model, allLines, toggles, cashActuals, anchorActuals]);
   const zeroNoRaise = useMemo(() => zeroInfo(rowsNoRaise, startY, startM), [rowsNoRaise, startY, startM]);
   const modelStarts = useMemo(() => modelRows.map(r => r.start), [modelRows]); // PURE model start-of-month balance, for the actual-vs-model comparison
   const actualsCash = useMemo(() => Object.fromEntries(Object.entries(cashActuals).map(([m, o]) => [m, o.cash])), [cashActuals]); // cash-only map for the chart
@@ -467,7 +461,7 @@ function RunwayApp({ doc, setDoc }) {
           {view === "proj" && <Projects routeTab={routeTab} setRouteTab={setTab} projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment routeTab={routeTab} setRouteTab={setTab} rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
-          {view === "hist" && <History routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
+          {view === "hist" && <History journal={doc.journal} takeSnapshot={takeSnapshot} currentCurve={modelStarts} routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
           {view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios} />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
         </main>

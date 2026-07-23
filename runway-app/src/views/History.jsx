@@ -10,8 +10,9 @@ import { I } from "./chrome/icons";
 import { ImportModal } from "./chrome/ImportModal";
 import { CodeMapModal } from "./chrome/CodeMapModal";
 import { CashActualModal } from "./chrome/modals";
+import { JournalPanel } from "./chrome/JournalPanel";
 
-export function History({ routeTab, setRouteTab = () => {}, hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+export function History({ journal = [], takeSnapshot = () => {}, currentCurve = [], routeTab, setRouteTab = () => {}, hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
   // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
   // disagree with the projection start.
@@ -47,10 +48,10 @@ export function History({ routeTab, setRouteTab = () => {}, hist, setHist, codeM
 
   const [importing, setImporting] = useState(false);
   const [codesOpen, setCodesOpen] = useState(false);
-  const TAB_KEYS = ["summary", "burn", "ledger", "cash"];
+  const TAB_KEYS = ["summary", "burn", "ledger", "cash", "forecasts"];
   const tab = TAB_KEYS.includes(routeTab) ? routeTab : "summary";
   const setTab = (t) => setRouteTab(t);
-  const TABS = [["summary", "Summary"], ["burn", "Burn"], ["ledger", "Ledger"], ["cash", "Cash on hand"]];
+  const TABS = [["summary", "Summary"], ["burn", "Burn"], ["ledger", "Ledger"], ["cash", "Cash on hand"], ["forecasts", "Forecasts"]];
   const driftCallout = latest && (
     <div className="callout" style={{ margin: "0 16px 16px", borderLeftColor: latest.varc >= 0 ? "var(--signal)" : "var(--danger)" }}>
       As of <b>{monthLabel(START_Y, START_M, latest.m)}</b>, actual cash is <b className="num">{latest.varc >= 0 ? "+" : "−"}{moneyFull(Math.abs(latest.varc))}</b> ({latest.pct}% {latest.varc >= 0 ? "above" : "below"}) versus the model — {latest.varc >= 0 ? "you’re burning slower than planned." : "you’re burning faster than planned."}
@@ -386,6 +387,11 @@ export function History({ routeTab, setRouteTab = () => {}, hist, setHist, codeM
         {driftCallout}
       </div>
       </>)}
+
+      {tab === "forecasts" && (
+        <JournalPanel journal={journal} currentCurve={currentCurve} cashActuals={cashActuals}
+                      startY={START_Y} startM={START_M} onSnapshot={() => takeSnapshot(false)} />
+      )}
 
       {actualModal && (
         <CashActualModal

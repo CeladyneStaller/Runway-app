@@ -172,3 +172,26 @@ export const STAFFING = [[2, 3, 3], [3], [2, 2]]; // SEED_EMPLOYEES index per la
 SEED_FULFIL.forEach((f, i) => f.lines.filter(l => l.isLabor).forEach((l, j) => {
   const idx = STAFFING[i]?.[j]; if (idx != null) l.employeeId = SEED_EMPLOYEES[idx].id;
 }));
+
+// Demo forecast history — four weekly snapshots through July 2026, showing a forecast tightening as
+// real spend landed (6.5 months predicted a month ago, 5.7 by last week). Fabricated exactly like the
+// rest of this demo company; a REAL document starts with an empty journal and fills it week by week.
+// Deliberately in demoDoc only, never emptyDoc — recorded-cash leakage was a bug once already.
+const demoSnap = (id, takenAt, zeroAt) => {
+  const start = 560000;
+  const per = start / zeroAt;                                   // roughly linear burn to the target crossing
+  const curve = Array.from({ length: 37 }, (_, m) => Math.round(start - per * m));
+  return {
+    id, takenAt, atMonth: 0, auto: true,
+    toggles: { committed: true, expected: true, speculative: false, financing: false },
+    cash: start, curve, end: curve[curve.length - 1],
+    zeroMonths: +zeroAt.toFixed(3),
+  };
+};
+
+export const SEED_JOURNAL = [
+  demoSnap("jr-1", "2026-07-01T15:00:00.000Z", 6.5),
+  demoSnap("jr-2", "2026-07-08T15:00:00.000Z", 6.2),
+  demoSnap("jr-3", "2026-07-15T15:00:00.000Z", 5.9),
+  demoSnap("jr-4", "2026-07-22T15:00:00.000Z", 5.7),
+];

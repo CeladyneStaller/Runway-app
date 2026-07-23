@@ -1,24 +1,79 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "import"],
-  "env": { "browser": true, "es2022": true },
-  "ignorePatterns": ["dist", "node_modules", "*.reference"],
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "*.reference"
+  ],
   "rules": {
-    "no-restricted-globals": ["error", "CSS", "name", "status", "length", "event", "origin", "top",
-      "parent", "history", "location", "screen", "close", "closed", "open", "focus", "blur", "print",
-      "stop", "find", "scroll", "self", "external", "frames"],
-    "react/no-unescaped-entities": "off"
+    "no-restricted-globals": [
+      "error",
+      "CSS",
+      "name",
+      "status",
+      "length",
+      "event",
+      "origin",
+      "top",
+      "parent",
+      "history",
+      "location",
+      "screen",
+      "close",
+      "closed",
+      "open",
+      "focus",
+      "blur",
+      "print",
+      "stop",
+      "find",
+      "scroll",
+      "self",
+      "external",
+      "frames"
+    ],
+    "react/no-unescaped-entities": "off",
+    "react-hooks/exhaustive-deps": "error"
   },
   "overrides": [
     {
-      "files": ["src/engine/**/*.js"],
+      "files": [
+        "src/engine/**/*.js"
+      ],
       "rules": {
-        "no-restricted-imports": ["error", {
-          "paths": [{ "name": "react", "message": "The engine must never import React." }],
-          "patterns": ["**/views/**", "**/state/**", "**/seed*"]
-        }]
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "message": "The engine must never import React."
+              }
+            ],
+            "patterns": [
+              "**/views/**",
+              "**/state/**",
+              "**/seed*"
+            ]
+          }
+        ]
       }
     },
-    { "files": ["test/**"], "rules": { "no-restricted-globals": "off" } }
+    {
+      "files": [
+        "test/**"
+      ],
+      "rules": {
+        "no-restricted-globals": "off"
+      }
+    }
   ]
 }

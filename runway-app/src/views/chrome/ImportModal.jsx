@@ -54,8 +54,9 @@ export function ImportModal({ startY, startM, hist, profiles = [], projects = []
     } catch (e) { setErr("Couldn't read that file: " + (e.message || e)); }
   };
 
-  const profile = { columns, dateFormat, amountMode };
-  const rows = useMemo(() => grid ? applyProfile(grid, profile) : [], [grid, columns, dateFormat, amountMode]);
+  // memoised so the memo below can depend on the OBJECT rather than hand-listing what's inside it
+  const profile = useMemo(() => ({ columns, dateFormat, amountMode }), [columns, dateFormat, amountMode]);
+  const rows = useMemo(() => grid ? applyProfile(grid, profile) : [], [grid, profile]);
   const preview = useMemo(() => {
     if (!grid) return null;
     const { history, report } = mergeImport(hist, rows, startY, startM);

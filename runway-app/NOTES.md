@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 326 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 392 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -119,6 +119,57 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   months and the extension only widens the view when there's a late crossing/milestone to show; tick
   spacing is adaptive (2/3/6 mo) so the wider window stays readable. New golden guards: `HORIZON === 36`
   and "a crossing past month 18 is detected, not treated as cash-positive" (the whole point of extending).
+- **ONE model assembly. App no longer rebuilds the projection model inline.** `buildModelParts(doc)` in
+  `engine/buildmodel.js` is now the single assembly — fringe resolution, payroll lines, project rate
+  resolution + fulfilment sync, baseline burn, sales/round lines, revenue-actuals replacement — returning
+  `{model, ...intermediates}` so the UI gets `employeeLines`, `rProjects`, `itemizedOpex`, `baselineOpex`,
+  `revenueVariances` etc. without a second copy. `buildModelFromDoc` is a thin wrapper over it, so
+  scenarios/bands/labor are unchanged. App is 41 lines shorter and contains ZERO assembly logic.
+  AUDITED BEFORE MERGING, which is the point: App was temporarily instrumented to expose its `allLines`,
+  and both assemblies were compared across **272 combinations** (17 document shapes x 16 toggle sets,
+  including prospective-project include/exclude, quadrupled history, flagged months, committed-status
+  rounds, zero cash, manual fringe, baseline off). ZERO drift. Three cosmetic divergences were found by
+  reading and confirmed harmless: App set `isBaseline` and `poRef`, both written and never read anywhere;
+  and App's `avgSalary` used `empSalaryMoAt(e,0)` where the engine used `empCostAt(e,0,0)`, which is
+  *defined as* `empSalaryMoAt(e,m) * (1+0)` — identical. The memo is keyed on `[doc]` wholesale, NOT on a
+  hand-listed field set: field lists skip recomputes on unrelated edits but are exactly the unverifiable
+  pattern behind three stale-memo bugs, and the saving is imaginary — MEASURED at 0.9ms for a document
+  with 472 line items (60 staff, 40 projects, 120 POs, 36 months of history), well under a React render.
+  Guarded permanently by `test/views/onemodel.test.jsx`, which asserts the rendered hero runway equals the
+  engine's computation across 31 document x toggle combinations, through the public surface (no
+  instrumentation). Verified it bites: making App's assembly silently disagree on baseline burn fails 4.
+- **Hand-maintained hook dependency arrays are now MACHINE-CHECKED — `react-hooks/exhaustive-deps` is an
+  ERROR, not a warning.** This bug class bit three times: `hist` vanished from a dep array during the
+  extraction; `modelRowsUp` (the speculative ghost line) was keyed on `[model]` while reading
+  `allOn.financing`, freezing the upside line whenever financing toggled; `modelRowsConf` (the
+  "confident to <date>" floor) spread all of `toggles` but declared only committed+expected, freezing
+  the floor on a financing toggle — invisible with the demo's planning-stage raise, but a signed term
+  sheet changes the true answer from 5.56 months to "no crossing". The rule was ON the whole time and
+  caught all three — as WARNINGS, buried in a 67-warning noise floor, which is the same as not catching
+  them. ROOT CAUSE: memos consumed objects rebuilt every render (`allOn`, `{...toggles, speculative:
+  false}`, `{columns, dateFormat, amountMode}`), so the only way to memoise was to hand-name the fields
+  inside them — semantically correct if you get it right, and UNVERIFIABLE by the linter either way. FIX
+  was structural, not per-bug: memoise the object (`allOn`, `confToggles`, `finToggles`, `profile`,
+  `codeMap`, `customerMap`) and depend on the object. Dependents then say `[model, allOn]`, which a
+  linter can check. `rowsFin`/`rowsNoRaise` likewise now depend on `model` instead of re-listing its
+  ingredients. All 16 exhaustive-deps warnings are gone — fixed, not suppressed; there are ZERO
+  `eslint-disable` comments in App.jsx, including in the journal's snapshot effect (its `dueForSnapshot`
+  guard is what makes an honest `takeSnapshot` dependency safe). VERIFIED the guard bites: reintroducing
+  the original `modelRowsUp` bug produces a lint ERROR. If a future memo reads an object it does not
+  declare, the build tells you instead of the user finding it.
+- **Recorded cash (`cashActuals`) is a DOCUMENT field — it was local `useState` and that was three bugs
+  at once.** It was the only piece of state in App that broke the `const x = doc.x; setX -> setDoc`
+  pattern: local `useState` seeded with the demo company's balances. Consequences, all verified before
+  fixing: (a) nothing a user recorded survived a reload, because `setCashActuals` never touched the doc;
+  (b) a brand-new user SAW the demo's $560,000/$467,000 in History -> Cash; (c) worst, `anchorActuals`
+  defaults ON and anchoring shifts the whole forward curve to continue from the last recorded cash, so a
+  fresh user with $100k burning $25k/mo was shown **8.32 months instead of 4.0**. This is the same class
+  of bug NOTES already records for `history` ("a 1.3-month runway computed from a company they had never
+  heard of") — it recurred in a different field and was missed. The demo values moved into `demoDoc`
+  (note the field is `revenue`, NOT `rev` — the History cash tab reads `r.revenue`, and demoDoc had `rev`,
+  which would have silently zeroed demo revenue on the switch). Only `.cash` is read by `anchorToActuals`,
+  and it was identical across all three sources, so the golden was never at risk. Guarded by
+  `test/views/cashactuals.test.jsx`.
 - **`clampM` vs `floorM` are not interchangeable.** `clampM` is for select values and array indices.
   `floorM` is for placing money in time. Using `clampM` for placement drags out-of-horizon money onto
   the last visible month and inflates the ending balance. That was F8, and it lived in two places.
@@ -395,6 +446,50 @@ line there) and opens up only after the actuals end. `data-band="floor|ceiling"`
 hooks exist on the paths so the render test can assert the line sits within the band; that test fails on
 either old bug (verified by reverting) and is in `test/views/band.test.jsx`, with the data-level
 coincidence guard in `test/engine/band.test.js`.
+
+## Projection journal (Phase 1 DONE — the recorder; Phases 2-3 deferred until there is data)
+
+`src/engine/journal.js`, `src/views/chrome/JournalPanel.jsx`, UI at **Spend history -> Forecasts**
+(routable `#hist/forecasts`). Tests `test/engine/journal.test.js` + `test/views/journal.test.jsx`.
+
+WHY: the confidence band brackets the runway from the TIERS plus measured burn variance, but the app had
+never stored what it predicted, so it could not say how good its own forecasts are. The journal records
+that. It is the prerequisite for a genuinely statistical band, and — arguably more valuable — for
+measuring BIAS ("you consistently land 12% below your three-month forecast"), which no band width can
+express. Nothing here computes statistics: with a handful of snapshots any figure would be false
+precision, the same trap that kept Monte Carlo out of the band. Phase 1 starts the clock.
+
+CADENCE IS WEEKLY, deliberately (user's call, and it is the right one). More observations per lead time,
+and — the real reason — it keeps PLAN CHANGE separable from FORECAST ERROR. A snapshot pair seven days
+apart cannot differ because a quarter of reality unfolded; if the curve jumps that fast, the plan moved.
+Nobody plans and hires inside a week. Monthly snapshots would smear the two into one indistinguishable
+jump. `planDelta(a, b)` returns `{maxAbs, days}` and is what makes that legible; the Snapshots table
+shows it as "moved by".
+
+HONEST FRAMING, stated in the UI: a gap between an old forecast and recorded cash is **plan versus
+reality**, not pure forecast error, and no arithmetic separates them after the fact. We name it rather
+than pretend.
+
+DIGEST, not a document copy: `{id, takenAt, atMonth, auto, toggles, cash, curve, end, zeroMonths}`.
+Curve is ANCHORED start-of-month balances (what the user actually SAW), rounded to whole dollars.
+Storing the whole doc would be huge AND wrong — replaying an old doc through today's engine measures the
+engine, not the forecast. `toggles` rides along because a forecast made with speculative on is not
+comparable to one made with it off, which Phase 2 depends on. `atMonth` is what makes LEAD TIME
+recoverable, and lead time is why this pays off in months not years: 1-month-ahead error is measurable
+after ~3 months, while 12-month-ahead error needs a year.
+
+TRAPS HANDLED: `worthSnapshotting` refuses to record an empty document (zeroes would poison the
+statistics later). The auto-snapshot effect is SELF-LIMITING — appending flips `dueForSnapshot` false for
+a week, so the doc change it triggers cannot feed back into another snapshot (verified: no render loop).
+`JOURNAL_CAP` 600 (weekly for a decade) bounds a field that is serialised on every save. `journal: []`
+lands on existing documents through the `emptyDoc` spread in `migrate()` — NO schema bump. The demo
+seeds four weekly snapshots (`SEED_JOURNAL` in seed.js) so the feature is visible immediately; it is in
+`demoDoc` ONLY, never `emptyDoc` — fabricated demo history leaking into real documents is exactly the
+bug fixed above.
+
+PHASE 2 (needs ~3 months of data): error by LEAD TIME, plus bias. PHASE 3 (~12 months): replace the
+band's heuristic width with empirical quantiles, hard-gated on sample size per lead time and falling
+back to today's tier-bracket band — saying so — when N is too small.
 
 ## Labor prioritization (DONE — leave-one-out, net + cost-only)
 

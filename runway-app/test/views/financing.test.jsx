@@ -75,3 +75,31 @@ describe("financing feeds the speculative line (regression: stale memo froze it)
     expect(container.querySelector('[data-trace="upside"]')).toBeNull();
   });
 });
+
+describe("the confident-line floor also reacts to financing (same stale-memo class)", () => {
+  function harness(initial) {
+    function H() {
+      const [d, setD] = useState(initial);
+      return <RunwayApp doc={d} setDoc={(v) => setD(p => (typeof v === "function" ? v(p) : v))} />;
+    }
+    return render(<H />);
+  }
+
+  it("toggling financing moves the 'confident to <date>' floor when the raise is expected-tier", () => {
+    const d = demoDoc();
+    // a signed term sheet is expected-tier (INST_CONF: committed -> expected), so it reaches a
+    // speculative-free line. With the demo's default planning-stage raise the bug is invisible.
+    d.rounds = d.rounds.map(r => ({ ...r, status: "committed" }));
+    d.settings.toggles = { committed: true, expected: true, speculative: true, financing: false };
+    const { container } = harness(d);
+
+    const confText = () => container.querySelector(".meta.conf")?.textContent?.trim() ?? null;
+    const before = confText();
+    expect(before).toBeTruthy();                     // the floor is shown while speculative is on
+
+    fireEvent.click(container.querySelector(".fin-toggle"));   // financing on
+
+    // with the raise included, the speculative-free floor genuinely changes; a stale memo held it fixed
+    expect(confText()).not.toBe(before);
+  });
+});
