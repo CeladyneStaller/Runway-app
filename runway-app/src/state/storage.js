@@ -13,10 +13,34 @@
 //    when that reaches storage — debounced, coalesced, skipping no-op writes, with the pending document
 //    held so a failure can be retried rather than lost.
 
-import { get, set } from "idb-keyval";
 import { emptyDoc, migrate } from "./document";
+import { createLocalBackend } from "./backends/local.js";
+import { createSupabaseBackend } from "./backends/supabase.js";
+import { ERR_CONFLICT, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
 
-const KEY = "runway:doc";
+// WHICH BACKEND. Local is the default and stays the fallback for the whole hosted build: the app must
+// remain fully functional with sync switched off. Hosting is opt-in and requires all three of a URL, an
+// anon key, and an auth provider — a half-configured hosted backend must never silently degrade into
+// "there is no document", because that is the input to the clobber this file exists to prevent.
+let _backend = null;
+
+export function setBackend(b) {
+  _backend = b;
+  _lastWritten = null;          // a different store may hold something different
+}
+export function useLocalBackend() { setBackend(createLocalBackend()); }
+export function useHostedBackend(cfg) { setBackend(createSupabaseBackend(cfg)); }
+export function backendName() { return backend().name; }
+
+function backend() {
+  if (!_backend) _backend = createLocalBackend();
+  return _backend;
+}
+
+/** Is a hosted backend configured in this build? Opt-in: absent config means local. */
+export function syncConfigured(env = import.meta.env) {
+  return !!(env?.VITE_SYNC_ENABLED === "true" && env?.VITE_SUPABASE_URL && env?.VITE_SUPABASE_ANON_KEY);
+}
 
 // ok     — the document loaded. Includes a legitimately new, empty document.
 // stale  — a document exists but this build is too old to read it. Do not save; tell the user to reload.
@@ -33,36 +57,41 @@ export const MAX_UNSAVED_MS = 30000;
 const RETRY_MS = [400, 1500, 4000];
 
 export async function load() {
-  let raw;
+  let found;
   try {
-    raw = await get(KEY);
+    found = await backend().read();
   } catch (e) {
-    // Storage unreachable. Hand back something renderable, but flag it so the caller refuses to save:
-    // the real document is probably still on disk and a save now would overwrite it.
+    // Could not reach the store. Hand back something renderable, but flag it so the caller refuses to
+    // save: the real document is almost certainly still there, and a save now would overwrite it.
+    if (kindOf(e) === ERR_STALE_CLIENT) {
+      return { state: LOAD_STALE, doc: emptyDoc(), error: e };
+    }
     console.error("Storage unavailable", e);
     return { state: LOAD_FAILED, doc: emptyDoc(), error: e };
   }
 
-  if (!raw) return { state: LOAD_OK, doc: emptyDoc(), isNew: true };
+  if (!found) return { state: LOAD_OK, doc: emptyDoc(), isNew: true };
 
   try {
-    const doc = migrate(raw);
+    const doc = migrate(found.raw);
     _lastWritten = serialise(doc);      // loaded == saved; don't rewrite it unchanged
-    return { state: LOAD_OK, doc };
+    return { state: LOAD_OK, doc, meta: found.meta };
   } catch (e) {
     // Never destroy a document you can't read. Park a copy, and refuse to save over the original.
     console.error("Could not read the stored document; the original has been kept", e);
-    try { await set(`${KEY}:unreadable:${Date.now()}`, raw); } catch { /* nothing further to try */ }
+    await backend().park(found.raw);
     return { state: LOAD_STALE, doc: emptyDoc(), error: e };
   }
 }
 
 // ---------------------------------------------------------------- write path --
 
-// saved   — nothing pending, the last write succeeded
-// unsaved — changes are pending (in the debounce window, or queued behind a write)
-// saving  — a write is in flight
-// error   — the last write failed; the changes are still held and will be retried
+// saved    — nothing pending, the last write succeeded
+// unsaved  — changes are pending (in the debounce window, or queued behind a write)
+// saving   — a write is in flight
+// error    — the last write failed; the changes are still held and will be retried
+// conflict — the document moved elsewhere; retrying would overwrite it, so we stop and ask
+// stale    — this build is older than the stored document; it must reload, not write
 let _status = { state: "saved", at: null, error: null };
 const _subs = new Set();
 
@@ -72,6 +101,10 @@ let _timer = null;
 let _deadline = null;       // hard flush time, so a stream of edits can't starve the write
 let _inFlight = false;
 let _attempt = 0;
+// Set when a write fails in a way that must NOT be retried (conflict, stale build, forbidden). Without
+// it the "something arrived mid-write" reschedule below fires anyway and quietly retries the very write
+// we just refused — which for a conflict means overwriting the other device after all.
+let _halted = false;
 
 const serialise = (doc) => JSON.stringify(doc);
 
@@ -90,6 +123,10 @@ export function subscribe(fn) {
 
 /** The document changed. This schedules a write; it does not perform one. */
 export function save(doc) {
+  if (_halted) {                       // hold everything until the halt is resolved; keep the newest edit
+    _pending = doc;
+    return;
+  }
   const body = serialise(doc);
   if (body === _lastWritten && !_pending) {
     // A no-op write is not free over a network, and it makes "saved at" lie about when work happened.
@@ -116,38 +153,58 @@ export async function flush() {
   emit({ state: "saving" });
 
   try {
-    await set(KEY, { ...doc, updatedAt: new Date().toISOString() });
+    await backend().write(doc);
     _lastWritten = body;
     _attempt = 0;
     _deadline = null;
+    _halted = false;
     // Only clear the pending slot if nothing newer arrived while this write was in flight.
     if (_pending === doc) { _pending = null; emit({ state: "saved", error: null }); }
     else { emit({ state: "unsaved" }); }
   } catch (e) {
     // Hold the document. Losing an edit because a write blipped is the failure this whole file exists
-    // to prevent.
+    // to prevent — and some failures must NOT be retried, because retrying is how you overwrite
+    // somebody else's work or push a document this build no longer understands.
     console.error("Could not save", e);
-    emit({ state: "error", error: e });
-    const delay = RETRY_MS[Math.min(_attempt, RETRY_MS.length - 1)];
-    _attempt += 1;
-    if (_attempt <= RETRY_MS.length) _timer = setTimeout(() => { _timer = null; flush(); }, delay);
+    const kind = kindOf(e);
+    if (kind === ERR_CONFLICT)     { emit({ state: "conflict", error: e }); }
+    else if (kind === ERR_STALE_CLIENT) { emit({ state: "stale", error: e }); }
+    else { emit({ state: "error", error: e }); }
+
+    if (isRetryable(e)) {
+      const delay = RETRY_MS[Math.min(_attempt, RETRY_MS.length - 1)];
+      _attempt += 1;
+      if (_attempt <= RETRY_MS.length) _timer = setTimeout(() => { _timer = null; flush(); }, delay);
+    } else {
+      _halted = true;   // stop. The document is still held; resolving is a decision, not a retry.
+    }
   } finally {
     _inFlight = false;
   }
 
   // something arrived mid-write, or a retry is due
-  if (_pending != null && _timer == null && _attempt === 0) {
+  if (_pending != null && _timer == null && _attempt === 0 && !_halted) {
     _timer = setTimeout(() => { _timer = null; flush(); }, SAVE_DEBOUNCE_MS);
   }
   return _status;
 }
 
 export const hasUnsavedWork = () => _pending != null;
+export const isHalted = () => _halted;
+
+/** Clear a halt after the user has decided what to do (kept their version, or reloaded the other one).
+ *  Deliberately explicit: a halt is a question, and it should not un-ask itself. */
+export function resumeAfterHalt() {
+  _halted = false;
+  _attempt = 0;
+  if (_pending != null) { emit({ state: "unsaved", error: null }); flush(); }
+  else emit({ state: "saved", error: null });
+}
 
 /** Test seam: forget module-level write state between cases. */
 export function _resetWriteState() {
   if (_timer) clearTimeout(_timer);
   _timer = null; _pending = null; _lastWritten = null; _deadline = null;
-  _inFlight = false; _attempt = 0;
+  _inFlight = false; _attempt = 0; _halted = false;
   _status = { state: "saved", at: null, error: null };
 }

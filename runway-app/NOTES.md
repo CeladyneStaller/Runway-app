@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 411 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 431 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -119,6 +119,27 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   months and the extension only widens the view when there's a late crossing/milestone to show; tick
   spacing is adaptive (2/3/6 mo) so the wider window stays readable. New golden guards: `HORIZON === 36`
   and "a crossing past month 18 is detected, not treated as cash-positive" (the whole point of extending).
+- **Backends are pluggable; the hosted one talks PostgREST over `fetch`, with NO SDK.** `state/backends/`
+  holds `local.js` (idb-keyval), `supabase.js`, and `errors.js`. A backend is two methods —
+  `read() -> {raw, meta} | null` and `write(raw)` — with null meaning "no document yet", which is NOT an
+  error. `storage.js` keeps all the cadence, status and LOAD_* mapping and no longer knows where the
+  document lives. Sync is OPT-IN via `syncConfigured()`: it needs all three of `VITE_SYNC_ENABLED="true"`,
+  a URL and an anon key, because a half-configured hosted backend degrading into "there is no document"
+  is the input to the clobber bug. No SDK because the document layer needs exactly two calls, so `fetch`
+  keeps it dependency-free and bundle-free for local users; AUTH (magic links, OAuth redirects, refresh
+  rotation) is genuinely hard and stays behind an injected `auth` interface that
+  `@supabase/supabase-js` implements in the shell. Every write goes through the `save_document` RPC, never
+  a bare PATCH — this file *cannot* issue a blind write.
+- **Error classification is by KIND, never `instanceof`.** A test caught this: `instanceof BackendError`
+  returns false across module registries (and would across a bundle chunk or a structured-clone
+  boundary), which silently reclassified a CONFLICT as retryable — i.e. retried the write we had just
+  refused, overwriting the other device after all. `kindOf(e)` duck-types on `.kind`.
+- **Non-retryable failures HALT, and a halt does not un-ask itself.** Retry a dropped connection, never a
+  conflict / stale-client / forbidden. A real bug surfaced here: the "something arrived mid-write"
+  reschedule at the end of `flush()` re-fired regardless, quietly retrying a refused write through the
+  back door. Fixed with a `_halted` flag; `save()` during a halt keeps the NEWEST edit but schedules
+  nothing, and `resumeAfterHalt()` is explicit and writes that newest version. Tests
+  `test/state/retrypolicy.test.js` + `test/state/supabase-backend.test.js`.
 - **WRITE CADENCE LIVES IN `storage.js`, not the caller.** App used to own a 400ms `setTimeout` around
   `save()`. That is fine while writes are local and instant and wrong the moment they cross a network,
   where you need coalescing, no-op suppression and retry — none of which App should know about. `save(doc)`

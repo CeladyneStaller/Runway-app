@@ -479,7 +479,8 @@ function RunwayApp({ doc, setDoc }) {
 function SyncPill() {
   const [s, setS] = useState(status());
   useEffect(() => subscribe(setS), []);
-  const label = { saved: "Saved", saving: "Saving\u2026", unsaved: "Unsaved changes", error: "Couldn't save" }[s.state];
+  const label = { saved: "Saved", saving: "Saving\u2026", unsaved: "Unsaved changes", error: "Couldn't save",
+                  conflict: "Changed elsewhere", stale: "Reload needed" }[s.state];
   if (!label) return null;
   const title = s.state === "error"
     ? `${String(s.error?.message || s.error || "Write failed")} \u2014 your work is still on screen; export it if this persists.`

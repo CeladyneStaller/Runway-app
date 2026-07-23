@@ -657,3 +657,5 @@
 .syncpill.unsaved i{background:var(--caution)}
 .syncpill.error{border-color:var(--danger);color:var(--danger)}
 .syncpill.error i{background:var(--danger)}
+.syncpill.conflict,.syncpill.stale{border-color:var(--caution);color:var(--caution)}
+.syncpill.conflict i,.syncpill.stale i{background:var(--caution)}
