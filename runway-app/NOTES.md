@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 392 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 400 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -119,6 +119,22 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   months and the extension only widens the view when there's a late crossing/milestone to show; tick
   spacing is adaptive (2/3/6 mo) so the wider window stays readable. New golden guards: `HORIZON === 36`
   and "a crossing past month 18 is detected, not treated as cash-positive" (the whole point of extending).
+- **`load()` returns a STATE, and nothing may be saved that did not come from a successful load.**
+  This closed a LIVE data-loss bug, verified by test before fixing: a transient IndexedDB read failure
+  made `load()` hand back `emptyDoc()`, and the 400ms debounced save wrote it straight over the real
+  document. App's `.catch` was worse still — it set `demoDoc()`, so a read blip could overwrite someone's
+  model with the demo company. `storage.js` now returns `{ state, doc }` with `LOAD_OK` / `LOAD_STALE`
+  (document written by a newer build; the original is parked) / `LOAD_FAILED` (storage unreachable).
+  "There is no document yet" is LOAD_OK with `isNew` — a first-time user must be able to save; "I could
+  not read it" must never take the same path. App gates the save effect on `loadState === LOAD_OK` and,
+  on anything else, renders an explicit error screen with a Reload button INSTEAD of an editable company,
+  because an editable empty company is precisely what gets saved over the real one. This is a prerequisite
+  for the hosted build (§2.3 of BACKEND-PLAN.md) where the same failure is routine — offline start, 500,
+  expired session — but it was worth fixing on its own. Tests: `test/state/saveguard.test.js` (including
+  one that reproduces the destruction without the guard) and `test/views/loadfail.test.jsx`.
+  NOTE the build trap bit again: the error screen referenced `LOAD_STALE` without importing it, `vite
+  build` was GREEN, the whole suite was green, and only a test that actually RENDERS the failure branch
+  caught it. Build success still proves nothing.
 - **ONE model assembly. App no longer rebuilds the projection model inline.** `buildModelParts(doc)` in
   `engine/buildmodel.js` is now the single assembly — fringe resolution, payroll lines, project rate
   resolution + fulfilment sync, baseline burn, sales/round lines, revenue-actuals replacement — returning

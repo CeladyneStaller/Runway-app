@@ -1,7 +1,7 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { load, save } from "./state/storage";
-import { demoDoc, toJSON, fromJSON } from "./state/document";
+import { load, save, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
+import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
 import { roundMS } from "./engine/capital";
 import { money, moneyFull } from "./engine/money";
 import { buildModelFromDoc, buildModelParts } from "./engine/buildmodel";
@@ -473,25 +473,49 @@ function RunwayApp({ doc, setDoc }) {
 
 
 /** Owns the document: loads it once, saves it debounced, and never renders an empty company at
- *  someone whose company is not empty. */
+ *  someone whose company is not empty.
+ *
+ *  THE SAVE GUARD. `save()` runs only when the in-memory document descends from a SUCCESSFUL load.
+ *  Without that rule, a failed read hands back an empty document and the debounced save writes it
+ *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
+ *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
+ *  read the document" must never take the same code path. */
 export default function App() {
   const [doc, setDoc] = useState(null);
+  const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
   const [err, setErr] = useState(null);
 
-  useEffect(() => { load().then(setDoc).catch(e => { setErr(e); setDoc(demoDoc()); }); }, []);
   useEffect(() => {
-    if (!doc) return;
+    load().then(r => { setLoadState(r.state); setDoc(r.doc); if (r.error) setErr(r.error); })
+          .catch(e => { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); });
+  }, []);
+
+  useEffect(() => {
+    if (!doc || loadState !== LOAD_OK) return;   // ← the guard: never save what we didn't successfully load
     const t = setTimeout(() => save(doc).catch(e => setErr(e)), 400);   // this app recomputes on every
     return () => clearTimeout(t);                                        // keystroke; don't write per key
-  }, [doc]);
+  }, [doc, loadState]);
 
   if (!doc) return <div className="rw"><div className="splash">Loading your model…</div></div>;
-  return <>
-    {err && <div className="rw"><div className="callout" style={{ borderLeftColor: "var(--danger)" }}>
-      Could not reach local storage: {String(err.message || err)}. Your work is still on screen — export it before closing this tab.
-    </div></div>}
-    <RunwayApp doc={doc} setDoc={setDoc} />
-  </>;
+
+  // Could not read the stored document. Show why, and do NOT hand over an editable company that would
+  // overwrite it — the original is still there, and a copy has been parked.
+  if (loadState !== LOAD_OK) return (
+    <div className="rw"><div className="splash" style={{ maxWidth: 560, textAlign: "left" }}>
+      <h2 style={{ marginTop: 0 }}>
+        {loadState === LOAD_STALE ? "This model needs a newer version of the app" : "Couldn't open your model"}
+      </h2>
+      <p>{loadState === LOAD_STALE
+        ? "It was last saved by a newer build than the one running here. Reload to pick up the current version — your model has not been changed."
+        : "Your saved model couldn't be read just now. It has not been changed or deleted."}</p>
+      {err && <p style={{ fontFamily: "var(--fm)", fontSize: 12, color: "var(--muted)" }}>{String(err.message || err)}</p>}
+      <p><b>Nothing has been overwritten.</b> Editing is disabled here on purpose, so that an empty
+        model can't be saved over your real one.</p>
+      <button className="addbtn" onClick={() => window.location.reload()}>Reload</button>
+    </div></div>
+  );
+
+  return <RunwayApp doc={doc} setDoc={setDoc} />;
 }
 
 export { RunwayApp, demoDoc, toJSON, fromJSON };
