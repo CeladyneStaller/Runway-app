@@ -2,7 +2,7 @@
 // could exercise it. fake-indexeddb fixes that, which turns two lines of test noise into a real test.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { clear, get, keys, set } from "idb-keyval";
-import { load, save, LOAD_OK, LOAD_STALE } from "../../src/state/storage";
+import { load, save, flush, LOAD_OK, LOAD_STALE } from "../../src/state/storage";
 import { emptyDoc, demoDoc, SCHEMA_VERSION } from "../../src/state/document";
 
 beforeEach(() => clear());
@@ -18,7 +18,7 @@ describe("storage", () => {
 
   it("round-trips a real model", async () => {
     const doc = demoDoc();
-    await save(doc);
+    save(doc); await flush();
     const { state, doc: back } = await load();
     expect(state).toBe(LOAD_OK);
     expect(back.cash).toBe(560000);
@@ -29,7 +29,7 @@ describe("storage", () => {
 
   it("stamps updatedAt on every save", async () => {
     const before = new Date().toISOString();
-    await save(emptyDoc());
+    save(emptyDoc()); await flush();
     expect((await load()).doc.updatedAt >= before).toBe(true);
   });
 

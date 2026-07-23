@@ -20,11 +20,11 @@ describe("the save guard", () => {
   beforeEach(() => { store.clear(); failGet = false; vi.resetModules(); });
 
   it("a failed read is reported as failed, not as an empty document", async () => {
-    const { load, save, LOAD_FAILED } = await import("../../src/state/storage");
+    const { load, save, flush, LOAD_FAILED } = await import("../../src/state/storage");
     const { demoDoc } = await import("../../src/state/document");
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await save(demoDoc());
+    save(demoDoc()); await flush();
     failGet = true;
     const r = await load();
 
@@ -40,18 +40,18 @@ describe("the save guard", () => {
   });
 
   it("the real document survives a read failure — nothing is written over it", async () => {
-    const { load, save, LOAD_OK } = await import("../../src/state/storage");
+    const { load, save, flush, LOAD_OK } = await import("../../src/state/storage");
     const { demoDoc } = await import("../../src/state/document");
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await save(demoDoc());
+    save(demoDoc()); await flush();
     const before = store.get("runway:doc");
     expect(before.employees.length).toBeGreaterThan(0);
 
     failGet = true;
     const r = await load();
     // App's rule: only LOAD_OK may be saved. Simulate the guard honouring it.
-    if (r.state === LOAD_OK) await save(r.doc);
+    if (r.state === LOAD_OK) { save(r.doc); await flush(); }
 
     const after = store.get("runway:doc");
     expect(after.employees.length).toBe(before.employees.length);   // untouched
@@ -60,14 +60,14 @@ describe("the save guard", () => {
   });
 
   it("without the guard the same sequence destroys the document — proving the guard is what saves it", async () => {
-    const { load, save } = await import("../../src/state/storage");
+    const { load, save, flush } = await import("../../src/state/storage");
     const { demoDoc } = await import("../../src/state/document");
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await save(demoDoc());
+    save(demoDoc()); await flush();
     failGet = true;
     const r = await load();
-    await save(r.doc);            // the OLD behaviour: save whatever load handed back
+    save(r.doc); await flush();   // the OLD behaviour: save whatever load handed back
 
     expect(store.get("runway:doc").employees.length).toBe(0);   // destroyed, as it was in production
     spy.mockRestore();

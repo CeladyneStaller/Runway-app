@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 400 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 411 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -119,6 +119,23 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   months and the extension only widens the view when there's a late crossing/milestone to show; tick
   spacing is adaptive (2/3/6 mo) so the wider window stays readable. New golden guards: `HORIZON === 36`
   and "a crossing past month 18 is detected, not treated as cash-positive" (the whole point of extending).
+- **WRITE CADENCE LIVES IN `storage.js`, not the caller.** App used to own a 400ms `setTimeout` around
+  `save()`. That is fine while writes are local and instant and wrong the moment they cross a network,
+  where you need coalescing, no-op suppression and retry — none of which App should know about. `save(doc)`
+  now SCHEDULES (it does not write); `flush()` forces a write; `status()`/`subscribe()` expose state.
+  Behaviours pinned by `test/state/writecadence.test.js`: a burst of 25 edits produces ONE write and the
+  LATEST value lands; re-saving an unchanged document writes nothing (a no-op push is not free over a
+  network, and it makes "saved at" lie); two writes never run concurrently; a failed write KEEPS the
+  pending document and retries rather than dropping it; an edit arriving mid-write is not lost.
+  `SAVE_DEBOUNCE_MS` is 400 locally and becomes ~2500 when the backend lands; `MAX_UNSAVED_MS` (30s) stops
+  a continuous stream of edits from starving the write forever. `_resetWriteState()` is the test seam for
+  module-level state. NOTE the contract change: `save()` no longer returns a promise you can await for
+  durability — tests must `save(x); await flush();`. One existing test had been passing on TIMING alone.
+- **Unsaved state is visible (`SyncPill`).** Saved / Saving / Unsaved changes / Couldn't save, always
+  shown rather than a toast: "is my work safe" should be answerable by looking, not by remembering
+  whether something flashed. Flush on `visibilitychange -> hidden` (the one that fires reliably on
+  mobile) and `beforeunload` (desktop backstop, and the only place a browser allows an unsaved warning).
+  Tests `test/views/syncpill.test.jsx`.
 - **`load()` returns a STATE, and nothing may be saved that did not come from a successful load.**
   This closed a LIVE data-loss bug, verified by test before fixing: a transient IndexedDB read failure
   made `load()` hand back `emptyDoc()`, and the 400ms debounced save wrote it straight over the real

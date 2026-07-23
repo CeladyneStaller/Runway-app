@@ -1,6 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { load, save, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
+import { load, save, flush, status, subscribe, hasUnsavedWork, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
 import { roundMS } from "./engine/capital";
 import { money, moneyFull } from "./engine/money";
@@ -303,7 +303,7 @@ function RunwayApp({ doc, setDoc }) {
         <main className="main">
           <div className="topbar">
             <div>
-              <span className="eyebrow">Startup runway</span>
+              <span className="eyebrow">Startup runway</span><SyncPill />
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
               <p className="sub">Northwind Labs · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
@@ -472,6 +472,21 @@ function RunwayApp({ doc, setDoc }) {
 }
 
 
+/** Whether your work is actually somewhere other than this browser tab. The app had no concept of
+ *  unsaved state, which is survivable when writes are local and instant, and is not once they cross a
+ *  network. Deliberately always visible rather than a toast: the question "is my work safe" should be
+ *  answerable by looking, not by remembering whether something flashed. */
+function SyncPill() {
+  const [s, setS] = useState(status());
+  useEffect(() => subscribe(setS), []);
+  const label = { saved: "Saved", saving: "Saving\u2026", unsaved: "Unsaved changes", error: "Couldn't save" }[s.state];
+  if (!label) return null;
+  const title = s.state === "error"
+    ? `${String(s.error?.message || s.error || "Write failed")} \u2014 your work is still on screen; export it if this persists.`
+    : s.at ? `Last change ${s.at.toLocaleTimeString()}` : undefined;
+  return <span className={"syncpill " + s.state} title={title} data-sync={s.state}><i />{label}</span>;
+}
+
 /** Owns the document: loads it once, saves it debounced, and never renders an empty company at
  *  someone whose company is not empty.
  *
@@ -492,9 +507,27 @@ export default function App() {
 
   useEffect(() => {
     if (!doc || loadState !== LOAD_OK) return;   // ← the guard: never save what we didn't successfully load
-    const t = setTimeout(() => save(doc).catch(e => setErr(e)), 400);   // this app recomputes on every
-    return () => clearTimeout(t);                                        // keystroke; don't write per key
+    save(doc);   // storage owns the cadence: debounce, coalescing, no-op skipping, retry
   }, [doc, loadState]);
+
+  // Getting the last edit out before the tab goes away. `visibilitychange` is the one that actually
+  // fires reliably on mobile; `beforeunload` is the desktop backstop and the only place a browser will
+  // let us warn about unsaved work at all.
+  useEffect(() => {
+    const onHide = () => { if (window.document.visibilityState === "hidden") flush(); };
+    const onLeave = (e) => {
+      if (!hasUnsavedWork()) return;
+      flush();
+      e.preventDefault();
+      e.returnValue = "";   // browsers show their own generic wording; ours lives in the indicator
+    };
+    window.document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("beforeunload", onLeave);
+    return () => {
+      window.document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("beforeunload", onLeave);
+    };
+  }, []);
 
   if (!doc) return <div className="rw"><div className="splash">Loading your model…</div></div>;
 
