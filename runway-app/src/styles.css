@@ -726,3 +726,6 @@
 .acct-badge{font-family:var(--fm);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--signal-ink);background:var(--paper);border-radius:999px;padding:2px 7px}
 .acct-ok{font-family:var(--fb);font-size:12.5px;color:var(--signal-ink);margin:10px 0 0}
 button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--fm);font-size:10.5px}
+.empty-go{width:100%;justify-content:center;margin-top:4px}
+.empty-or{display:flex;align-items:center;gap:10px;margin:14px 0 12px;color:var(--muted-2);font-family:var(--fb);font-size:11px}
+.empty-or::before,.empty-or::after{content:"";flex:1;height:1px;background:var(--line-2)}

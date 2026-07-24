@@ -254,27 +254,38 @@ function RunwayApp({ doc, setDoc, onOpenAccount }) {
     r.readAsText(file);
   };
   const isEmpty = !doc.employees.length && !doc.lines.length && !doc.projects.length && !doc.cash;
+  // The empty screen used to be escapable ONLY by entering cash, loading the demo, or importing — and
+  // nothing said that typing a number was a way through. Someone who wanted to start by listing their
+  // team, or who simply did not know their balance yet, had no door at all.
+  const [startedBlank, setStartedBlank] = useState(false);
 
-  if (isEmpty) return (
+  if (isEmpty && !startedBlank) return (
     <StartCtx.Provider value={startCtx}>
       <div className="rw">
         <div className="empty-shell">
           <span className="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M3 17 9 9l4 3 8-9" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
           <h1>Nothing in the model yet</h1>
-          <p>Runway starts with what you have and what you spend. Put your cash on hand in, then add
-             the people and the costs — the projection appears as soon as there's something to project.</p>
+          <p>Runway starts with what you have and what you spend. Put your cash on hand in below, or
+             go straight in and add the people and costs first — the projection appears as soon as
+             there's something to project.</p>
           <div className="empty-cash">
             <label>Cash on hand</label>
             <input className="inp" type="number" value={doc.cash} onChange={e => setCash(+e.target.value)} autoFocus />
           </div>
+          <button className="rvbtn go empty-go" onClick={() => setStartedBlank(true)}>
+            Start from scratch
+          </button>
+          <div className="empty-or"><span>or</span></div>
           <div className="empty-acts">
-            <button className="rvbtn go" onClick={() => setDoc(demoDoc())}>Load the demo company</button>
+            <button className="addbtn ghost" onClick={() => setDoc(demoDoc())}>Explore the demo company</button>
             <label className="addbtn ghost" style={{ cursor: "pointer" }}>Import a model
               <input type="file" accept="application/json,.json" style={{ display: "none" }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
             </label>
           </div>
-          <p className="empty-foot">Your model lives in this browser and in whatever JSON you export. No account, no server, no network.</p>
+          <p className="empty-foot">{syncConfigured()
+            ? "Saved to your account as you go, and available on any device you sign in to. You can export it as JSON at any time."
+            : "Your model lives in this browser and in whatever JSON you export. No account, no server, no network."}</p>
         </div>
       </div>
     </StartCtx.Provider>

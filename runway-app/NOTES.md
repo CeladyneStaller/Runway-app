@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 516 passing + 8 skipped isolation probes · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 522 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -187,6 +187,15 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   collapsed the client's old two-call "select memberships, else bootstrap" into ONE call whose
   create-if-missing path is atomic rather than racing two devices signing in at once.
   `alter default privileges` keeps future tables on the same posture without a follow-up migration.
+- **The empty-model screen has a "start from scratch" door.** `isEmpty` clears as soon as cash is
+  non-zero, so typing a balance always WAS a way through — but nothing said so, and the only two
+  buttons were the demo and an import. Someone who wanted to list their team first, or who did not yet
+  know their balance, had no path at all. A `startedBlank` flag now overrides `isEmpty` without inventing
+  any data (cash stays 0, no rows added). Demo demoted from primary (`rvbtn go`) to a secondary
+  "Explore the demo company" — in a real second company, seeding someone else's fictional numbers is
+  the LAST thing you want as the default action.
+  Also fixed: the footer promised "No account, no server, no network", which stopped being true the
+  moment hosted sync shipped. It now reads from `syncConfigured()`. Tests `test/views/emptystart.test.jsx`.
 - **`src/main.jsx` ships LIVE, not commented out — and a half-started hosted build now refuses to open.**
   This caused a real production failure: the archive shipped `main.jsx` with the bootstrap commented,
   so every extraction silently reverted the person who had enabled it. With Supabase settings present but
