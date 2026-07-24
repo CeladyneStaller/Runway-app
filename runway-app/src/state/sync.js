@@ -6,7 +6,7 @@
 import { createSupabaseAuth } from "./auth.js";
 import { createAccountApi } from "./account.js";
 import { createSession } from "./session.js";
-import { syncConfigured, useHostedBackend, useLocalBackend } from "./storage.js";
+import { syncConfigured, activateHostedBackend, activateLocalBackend } from "./storage.js";
 
 // The live session provider and company resolver, registered once at start-up so the UI can reach them
 // without threading them through every component. Null in local mode, which is how the app knows not to
@@ -26,7 +26,7 @@ export function enableHostedSync({ authClient, getSession, env = import.meta.env
   if (!syncConfigured(env)) {
     // Not an error. Local-first is the fallback for the whole hosted build, and a half-configured
     // hosted backend must never quietly stand in for a working one.
-    useLocalBackend();
+    activateLocalBackend();
     _session = null; _auth = null; _account = null;
     return { enabled: false, reason: "sync not configured" };
   }
@@ -35,7 +35,7 @@ export function enableHostedSync({ authClient, getSession, env = import.meta.env
   const session = authClient ? createSession(authClient) : null;
   const readSession = session ? () => session.current() : getSession;
   if (typeof readSession !== "function") {
-    useLocalBackend();
+    activateLocalBackend();
     _session = null; _auth = null; _account = null;
     return { enabled: false, reason: "no authClient or getSession() supplied" };
   }
@@ -43,7 +43,7 @@ export function enableHostedSync({ authClient, getSession, env = import.meta.env
   const url = env.VITE_SUPABASE_URL;
   const anonKey = env.VITE_SUPABASE_ANON_KEY;
   const auth = createSupabaseAuth({ url, anonKey, getSession: readSession, fetchImpl, activeCompany });
-  useHostedBackend({ url, anonKey, auth, fetchImpl });
+  activateHostedBackend({ url, anonKey, auth, fetchImpl });
 
   _session = session;
   _auth = auth;

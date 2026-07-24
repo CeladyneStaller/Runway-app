@@ -18,7 +18,7 @@ import { SetPassword } from "./SetPassword";
 const CREATE = "create";
 const SIGNIN = "signin";
 
-export function SignIn({ session }) {
+export function SignIn({ session, onDemo }) {
   const [mode, setMode] = useState(CREATE);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -182,6 +182,13 @@ export function SignIn({ session }) {
           ? "Already have an account? Switch to Sign in above."
           : "New here? Switch to Create account above — there's no separate sign-up step."}
       </p>
+
+      {onDemo && (
+        <div className="signin-demo">
+          <button className="linkbtn" onClick={onDemo}>Look around with sample data first</button>
+          <div className="signin-fine">No account needed. Nothing you do there is saved.</div>
+        </div>
+      )}
     </div></div>
   );
 }

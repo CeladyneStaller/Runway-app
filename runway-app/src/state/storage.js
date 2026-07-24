@@ -17,6 +17,7 @@ import { emptyDoc, migrate } from "./document";
 import { createLocalBackend, adoptionDismissed, dismissAdoption,
          readActiveCompany, writeActiveCompany } from "./backends/local.js";
 import { createSupabaseBackend } from "./backends/supabase.js";
+import { createDemoBackend, clearDemo, demoInProgress } from "./backends/demo.js";
 import { ERR_CONFLICT, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
 
 // WHICH BACKEND. Local is the default and stays the fallback for the whole hosted build: the app must
@@ -29,8 +30,18 @@ export function setBackend(b) {
   _backend = b;
   _lastWritten = null;          // a different store may hold something different
 }
-export function useLocalBackend() { setBackend(createLocalBackend()); }
-export function useHostedBackend(cfg) { setBackend(createSupabaseBackend(cfg)); }
+// NOT hooks, despite living beside React code — these are plain selectors, and naming them use* would
+// invite a reader to think an activateDemoBackend() call inside a useState initialiser was a rules-of-hooks
+// violation.
+export function activateLocalBackend() { setBackend(createLocalBackend()); }
+
+/** Enter demo mode: a working model that reaches neither the database nor this browser's real storage.
+ *  The backend seam is what makes this small — cadence, status, conflicts and the journal all carry on
+ *  working, and the only thing that changes is where a write goes, which is nowhere durable. */
+export function activateDemoBackend(seed) { setBackend(createDemoBackend(seed)); }
+export { clearDemo, demoInProgress };
+export const isDemo = () => backend().name === "demo";
+export function activateHostedBackend(cfg) { setBackend(createSupabaseBackend(cfg)); }
 export function backendName() { return backend().name; }
 
 function backend() {

@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 535 passing + 8 skipped isolation probes · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 544 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -187,6 +187,28 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   collapsed the client's old two-call "select memberships, else bootstrap" into ONE call whose
   create-if-missing path is atomic rather than racing two devices signing in at once.
   `alter default privileges` keeps future tables on the same posture without a follow-up migration.
+- **DEMO MODE (`state/backends/demo.js`) — a working model that reaches nothing.** For customer
+  acquisition: a prospect opens `#demo` or "Look around with sample data first" on the sign-in screen,
+  gets the full app with the demo company, and NOTHING is written to the database or kept past the tab.
+  The pluggable backend is what made this small: cadence, status, conflicts, scenarios and the journal
+  all carry on working, and the only thing that changes is that a write goes nowhere durable.
+  IT FIXED A LIVE BUG. Signed in, "Explore the demo company" was `setDoc(demoDoc())` — which the save
+  effect wrote straight into the person's REAL account: a fictional company persisted forever, exactly
+  the database clutter this change was asked to prevent. It now routes to demo mode.
+  sessionStorage, NOT IndexedDB, and deliberately: a demo written to IndexedDB looks exactly like a real
+  locally-built model, and the adoption flow would later offer to upload a fictional company into
+  somebody's account. Using a store the app never reads for real documents makes that collision
+  impossible rather than merely unlikely. Memory fallback when sessionStorage throws (Safari private
+  mode) — a demo that resets on refresh is a nuisance, one that refuses to open is a lost customer.
+  DEMO BYPASSES AUTH ENTIRELY, which is the point: requiring an account before you can see the product
+  defeats a sales demo. The backend is installed in a `useState` INITIALISER, not an effect — DocumentHost
+  calls `load()` the moment it mounts, and an effect runs after that, so the first read would hit the real
+  backend and show "Couldn't open your model" to a prospect. An always-visible amber pill says
+  "Demo · nothing is saved" with a way out. Tests `test/views/demo.test.jsx`, mostly negative assertions
+  about what it must not touch.
+- **`useLocalBackend` / `useHostedBackend` / `useDemoBackend` were RENAMED to `activate*`.** They are not
+  hooks, and the use* convention invited a reader to see `activateDemoBackend()` inside a `useState`
+  initialiser and assume a rules-of-hooks violation.
 - **Account deletion: the Edge Function does ONE privileged thing.** `supabase/functions/delete-account`
   exists because removing an `auth.users` row needs the service key, which cannot live in a browser.
   Everything else — which companies are yours, what cascades — stays in `delete_my_data()` (migration

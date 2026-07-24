@@ -1,7 +1,8 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
-         adoptionDismissed, dismissAdoption, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
+         adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
+         LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { getSessionProvider, getAccountApi } from "./state/sync";
 import { SignIn } from "./views/SignIn";
 import { SetPassword } from "./views/SetPassword";
@@ -31,7 +32,7 @@ import { Sales } from "./views/Sales";
 import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 
-function RunwayApp({ doc, setDoc, onOpenAccount }) {
+function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -277,7 +278,13 @@ function RunwayApp({ doc, setDoc, onOpenAccount }) {
           </button>
           <div className="empty-or"><span>or</span></div>
           <div className="empty-acts">
-            <button className="addbtn ghost" onClick={() => setDoc(demoDoc())}>Explore the demo company</button>
+            <button className="addbtn ghost" onClick={() => {
+              // Signed in, this used to write a fictional company straight into the person's REAL
+              // account — the projection saved, the journal started, the row sitting in the database
+              // forever. Route it to demo mode instead, where nothing is kept.
+              if (syncConfigured()) { window.location.hash = "#demo"; window.location.reload(); }
+              else setDoc(demoDoc());
+            }}>Explore the demo company</button>
             <label className="addbtn ghost" style={{ cursor: "pointer" }}>Import a model
               <input type="file" accept="application/json,.json" style={{ display: "none" }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
@@ -322,7 +329,8 @@ function RunwayApp({ doc, setDoc, onOpenAccount }) {
         <main className="main">
           <div className="topbar">
             <div>
-              <span className="eyebrow">Startup runway</span><SyncPill /><SessionPill onOpenAccount={onOpenAccount} />
+              <span className="eyebrow">Startup runway</span>
+              {demo ? <DemoPill onLeave={onLeaveDemo} /> : <><SyncPill /><SessionPill onOpenAccount={onOpenAccount} /></>}
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
               <p className="sub">Northwind Labs · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
@@ -491,6 +499,18 @@ function RunwayApp({ doc, setDoc, onOpenAccount }) {
 }
 
 
+/** Says, permanently and unmissably, that none of this is being kept — and offers the way out of that.
+ *  A demo that looks identical to the real thing is how somebody spends twenty minutes building a model
+ *  they are about to lose. */
+function DemoPill({ onLeave }) {
+  return (
+    <span className="demopill">
+      <i />Demo · nothing is saved
+      <button className="linkbtn" onClick={onLeave}>Leave demo</button>
+    </span>
+  );
+}
+
 /** Whether your work is actually somewhere other than this browser tab. The app had no concept of
  *  unsaved state, which is survivable when writes are local and instant, and is not once they cross a
  *  network. Deliberately always visible rather than a toast: the question "is my work safe" should be
@@ -515,7 +535,7 @@ function SyncPill() {
  *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
-function DocumentHost() {
+function DocumentHost({ demo = false, onLeaveDemo }) {
   const [doc, setDoc] = useState(null);
   const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
   const [conflict, setConflict] = useState(false);
@@ -532,13 +552,17 @@ function DocumentHost() {
       // Only when the ACCOUNT IS EMPTY. If the server already holds a document, offering to replace it
       // with whatever is in this browser is not a migration, it is a conflict — and a conflict does not
       // get a cheerful blue button.
+      if (demo) return;   // a demo has nothing to migrate, and nothing it touches is real
       if (r.state !== LOAD_OK || !r.isNew || !getSessionProvider()) return;
       if (await adoptionDismissed()) return;
       const local = await peekLocal();
       if (alive && hasSubstance(local)) setStrandedLocal(local);
     }).catch(e => { if (alive) { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); } });
     return () => { alive = false; };
-  }, []);
+    // `demo` is a prop that is constant for the life of this component (entering or leaving demo mode
+    // reloads the page), so declaring it cannot cause a re-load — but declaring it is still right:
+    // the effect reads it, and an undeclared read is how three stale-memo bugs got in.
+  }, [demo]);
 
   useEffect(() => {
     if (!doc || loadState !== LOAD_OK) return;   // ← the guard: never save what we didn't successfully load
@@ -600,7 +624,8 @@ function DocumentHost() {
   );
 
   return <>
-    <RunwayApp doc={doc} setDoc={setDoc} onOpenAccount={() => setShowAccount(true)} />
+    <RunwayApp doc={doc} setDoc={setDoc} demo={demo} onLeaveDemo={onLeaveDemo}
+               onOpenAccount={demo ? null : () => setShowAccount(true)} />
     {conflict && <ConflictDialog onAdopt={setDoc} onDone={() => setConflict(false)} />}
     {!conflict && strandedLocal && (
       <AdoptLocalDialog
@@ -630,6 +655,23 @@ export default function App() {
   // when the config is complete. Re-deriving it from env here would be a second source of truth for the
   // same fact, and the two can disagree.
   const gated = !!session;
+  // DEMO MODE BYPASSES AUTH ENTIRELY. The whole point is showing the app to somebody who has not signed
+  // up, so requiring an account first would defeat it. Survives a refresh within the tab, dies with it.
+  const [demo, setDemo] = useState(() => {
+    const wanted = (typeof window !== "undefined" && window.location.hash.startsWith("#demo")) || demoInProgress();
+    // Installed HERE rather than in an effect: DocumentHost calls load() as soon as it mounts, and an
+    // effect runs after that — so the first read would go to the real backend and fail, showing
+    // "Couldn't open your model" at somebody you were trying to sell to. A useState initialiser runs
+    // during render, before any child exists.
+    if (wanted) activateDemoBackend(demoDoc());
+    return wanted;
+  });
+
+  const enterDemo = () => {
+    activateDemoBackend(demoDoc());
+    window.location.hash = "#demo";
+    setDemo(true);
+  };
   // ENV SAYS HOSTED BUT NOTHING REGISTERED. That combination is a misconfiguration, never a mode: it
   // means enableHostedSync() was not called (most often because the bootstrap in src/main.jsx is
   // commented out), and the app has silently fallen back to local-first — handing out access with no
@@ -655,6 +697,8 @@ export default function App() {
     });
     return () => { alive = false; off(); };
   }, [gated, session]);
+
+  if (demo) return <DocumentHost demo onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />;
 
   if (misconfigured) return (
     <div className="rw"><div className="splash" style={{ maxWidth: 560, textAlign: "left" }}>
@@ -687,7 +731,7 @@ export default function App() {
   if (gated && user === undefined) {
     return <div className="rw"><div className="splash">Checking your session\u2026</div></div>;
   }
-  if (gated && user === null) return <SignIn session={session} />;
+  if (gated && user === null) return <SignIn session={session} onDemo={enterDemo} />;
   return <DocumentHost />;
 }
 
