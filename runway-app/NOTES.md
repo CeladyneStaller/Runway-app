@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 522 passing + 8 skipped isolation probes · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 535 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -187,6 +187,40 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   collapsed the client's old two-call "select memberships, else bootstrap" into ONE call whose
   create-if-missing path is atomic rather than racing two devices signing in at once.
   `alter default privileges` keeps future tables on the same posture without a follow-up migration.
+- **Account deletion: the Edge Function does ONE privileged thing.** `supabase/functions/delete-account`
+  exists because removing an `auth.users` row needs the service key, which cannot live in a browser.
+  Everything else — which companies are yours, what cascades — stays in `delete_my_data()` (migration
+  004) running as the CALLER, beside the policies that already define ownership. The dangerous credential
+  is therefore used for exactly one narrow act instead of a server function deciding on its own which
+  rows belong to whom.
+  FOUR THINGS THE FUNCTION GETS RIGHT, in order of how much damage the alternative does:
+  (1) the user is identified from the JWT and NEVER from the request body — a body-supplied user id would
+  let any authenticated caller delete anybody, and there is no user id in the request at all;
+  (2) data is deleted BEFORE the auth row, because the reverse order leaves someone unable to sign in
+  with data nobody can reach if step two fails;
+  (3) CORS echoes a known origin or sends no header — `*` would let any page call this with a stolen
+  token;
+  (4) `auth_delete_failed` is reported honestly rather than as success, because the data really is gone
+  and the person needs to know their sign-in is not.
+  SHARED COMPANIES SURVIVE: only companies where you are the SOLE owner are deleted; where someone else
+  owns it too you simply stop being a member. Closing your account must not destroy another person's
+  data. Confirmation is the typed phrase "delete my account". Tests in `test/views/account.test.jsx`
+  cover the honest-failure paths, including "not deployed yet".
+- **Deleting a company: `abandonCompany()` deliberately does NOT flush.** It is the exact opposite of
+  `switchCompany()`, and the asymmetry is the point. Pending work belongs to a company that is about to
+  stop existing, so writing it first only pushes data into a row being deleted a moment later — and on a
+  slow connection the write could land AFTER the delete and resurrect a document with no company.
+  Dropping it is correct; the dialog is responsible for having offered an export before you get there.
+  When the deleted company was the ACTIVE one, the app moves to another; when it was the LAST one, the
+  selection is cleared and `current_company()` creates a fresh one, so nobody is left pointing at
+  nothing. Owner-only (enforced in the RPC, and the button is hidden otherwise).
+  Confirmation is the company name TYPED OUT, not an "are you sure" — re-typing is the one gesture that
+  cannot be done on autopilot. The copy is careful about scope: it removes the company, model and every
+  version, and it does NOT remove your sign-in, because deleting an `auth.users` row needs the service
+  key and therefore an Edge Function that does not exist yet. Saying "account deleted" would be a lie,
+  and a lie about deletion is the worst kind. Tests in `test/views/account.test.jsx`.
+  TEST NOTE: the storage-level cases are HEADLESS. Rendering `<App />` re-populates the write buffer via
+  its save effect the moment a document appears, which races every assertion about what is pending.
 - **The empty-model screen has a "start from scratch" door.** `isEmpty` clears as soon as cash is
   non-zero, so typing a balance always WAS a way through — but nothing said so, and the only two
   buttons were the demo and an import. Someone who wanted to list their team first, or who did not yet

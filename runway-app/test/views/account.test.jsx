@@ -30,7 +30,7 @@ function fakeAuthClient(session) {
   };
 }
 
-let App, S, sync, server, rpcLog, companies, profileRow;
+let App, S, sync, server, rpcLog, companies, profileRow, deleteAccountResult;
 
 const fetchImpl = async (url, init) => {
   const body = init?.body ? JSON.parse(init.body) : {};
@@ -50,14 +50,25 @@ const fetchImpl = async (url, init) => {
   }
   if (url.includes("rpc/mark_password_set")) { rpcLog.push(["mark_password"]); return json("2026-07-23T00:00:00Z"); }
   if (url.includes("rpc/set_last_company")) { rpcLog.push(["last", body.p_company_id]); return json(null); }
-  if (url.includes("rpc/current_company")) return json("co-1");
+  if (url.includes("rpc/delete_company")) {
+    companies = companies.filter(c => c.id !== body.p_company_id);
+    delete server[body.p_company_id];
+    rpcLog.push(["delete", body.p_company_id]);
+    return json(null);
+  }
+  if (url.includes("functions/v1/delete-account")) {
+    rpcLog.push(["delete_account"]);
+    if (deleteAccountResult) return deleteAccountResult;
+    return json({ ok: true, companies_deleted: 1 });
+  }
+  if (url.includes("rpc/current_company")) return json(companies[0]?.id || "co-fresh");
   return json([]);
 };
 
 beforeEach(async () => {
   vi.resetModules();
   idb.clear();
-  rpcLog = [];
+  rpcLog = []; deleteAccountResult = null;
   server = {};                        // company id -> document
   companies = [{ id: "co-1", name: "Celadyne Energy", role: "owner", has_document: true }];
   profileRow = { password_set_at: null, last_company_id: "co-1" };
@@ -234,5 +245,185 @@ describe("switching companies", () => {
     expect(r.isNew).toBe(true);
     expect(r.doc.cash).toBe(0);
     expect(r.doc.employees).toHaveLength(0);
+  });
+});
+
+
+describe("deleting a company", () => {
+  const twoCompanies = () => {
+    companies = [
+      { id: "co-1", name: "Celadyne Energy", role: "owner", has_document: true },
+      { id: "co-2", name: "Northwind Labs", role: "owner", has_document: false },
+    ];
+  };
+
+  it("requires the name to be typed before the button works", async () => {
+    twoCompanies();
+    const { container } = await start();
+    await openAccount(container);
+    await waitFor(() => expect(container.textContent).toMatch(/Northwind Labs/));
+    fireEvent.click([...container.querySelectorAll("button")].filter(b => /^Delete$/.test(b.textContent))[1]);
+    await waitFor(() => expect(container.textContent).toMatch(/Delete Northwind Labs/));
+
+    const go = btn(container, /Delete permanently/);
+    expect(go.disabled).toBe(true);
+    fireEvent.change(container.querySelector("#del-name"), { target: { value: "Northwind" } });
+    expect(btn(container, /Delete permanently/).disabled).toBe(true);      // partial is not enough
+    fireEvent.change(container.querySelector("#del-name"), { target: { value: "Northwind Labs" } });
+    expect(btn(container, /Delete permanently/).disabled).toBe(false);
+  });
+
+  it("deletes a company you are not currently in, without moving you", async () => {
+    twoCompanies();
+    const { container, auth } = await start();
+    await openAccount(container);
+    await waitFor(() => expect(container.textContent).toMatch(/Northwind Labs/));
+    fireEvent.click([...container.querySelectorAll("button")].filter(b => /^Delete$/.test(b.textContent))[1]);
+    await waitFor(() => expect(container.querySelector("#del-name")).toBeTruthy());
+    fireEvent.change(container.querySelector("#del-name"), { target: { value: "Northwind Labs" } });
+    fireEvent.click(btn(container, /Delete permanently/));
+    await waitFor(() => expect(rpcLog.some(r => r[0] === "delete")).toBe(true));
+    expect(auth.activeCompany()).not.toBe("co-2");
+    await waitFor(() => expect(container.textContent).not.toMatch(/Northwind Labs/));
+  });
+
+  it("warns that unsaved work is discarded when deleting the company you are in", async () => {
+    twoCompanies();
+    const { container } = await start();
+    await openAccount(container);
+    fireEvent.click([...container.querySelectorAll("button")].filter(b => /^Delete$/.test(b.textContent))[0]);
+    await waitFor(() => expect(container.textContent).toMatch(/Delete Celadyne Energy/));
+    expect(container.textContent).toMatch(/discarded rather than written first/i);
+    expect(container.textContent).toMatch(/Export it first/i);
+  });
+
+  it("says a fresh company will be made when it is the last one", async () => {
+    const { container } = await start();
+    await openAccount(container);
+    fireEvent.click(btn(container, /^Delete$/));
+    await waitFor(() => expect(container.textContent).toMatch(/last company/i));
+    expect(container.textContent).toMatch(/new empty one will be created/i);
+  });
+
+  it("is honest that your sign-in survives", async () => {
+    const { container } = await start();
+    await openAccount(container);
+    fireEvent.click(btn(container, /^Delete$/));
+    await waitFor(() => expect(container.textContent).toMatch(/Stays:/));
+    expect(container.textContent).toMatch(/your sign-in/i);
+  });
+});
+
+describe("abandoning a company at the storage layer", () => {
+  // No <App /> here: its save effect re-populates the write buffer the moment the document renders,
+  // which would race every assertion about what is pending.
+  const headless = async () => {
+    const { createSupabaseAuth } = await import("../../src/state/auth.js");
+    const auth = createSupabaseAuth({
+      url: "https://p.supabase.co", anonKey: "anon",
+      getSession: async () => ({ access_token: "jwt" }),
+      fetchImpl,
+    });
+    S.setBackend({
+      name: "fake",
+      async read() { const id = await auth.getCompanyId(); return server[id] ? { raw: server[id], meta: {} } : null; },
+      async write(raw) { const id = await auth.getCompanyId(); server[id] = raw; return { meta: {} }; },
+      async park() {},
+    });
+    return auth;
+  };
+
+  it("does NOT flush pending work into a company that is being removed", async () => {
+    const auth = await headless();
+    server["co-1"] = { schemaVersion: 3, cash: 111 };
+    S.save({ schemaVersion: 3, cash: 999 });
+    expect(S.hasUnsavedWork()).toBe(true);
+
+    await S.abandonCompany(auth, "co-2");
+
+    expect(server["co-1"].cash).toBe(111);        // the pending 999 was dropped, not written
+    expect(S.hasUnsavedWork()).toBe(false);
+  });
+
+  it("with nothing left, forgets the device's choice and re-resolves a company", async () => {
+    const auth = await headless();
+    await auth.getCompanyId();                     // resolve one first
+    companies = [];                                // everything deleted
+    await S.abandonCompany(auth, null);
+    // The DEVICE preference is cleared; what the app then resolves comes from current_company(), which
+    // creates a fresh company rather than leaving the account pointing at nothing.
+    expect(await S.readActiveCompany()).toBeFalsy();
+    expect(await auth.getCompanyId()).toBe("co-fresh");
+  });
+});
+
+
+describe("deleting the account", () => {
+  const openDelete = async (container) => {
+    await openAccount(container);
+    await waitFor(() => expect(container.textContent).toMatch(/Delete your account/));
+    fireEvent.click([...container.querySelectorAll("button")].find(b => /^Delete$/.test(b.textContent)
+      && b.closest(".acct-row")?.textContent?.includes("sign-in")));
+  };
+
+  it("says what goes and what stays before asking", async () => {
+    const { container } = await start();
+    await openDelete(container);
+    await waitFor(() => expect(container.textContent).toMatch(/your sign-in/i));
+    expect(container.textContent).toMatch(/Cannot be undone/i);
+    expect(container.textContent).toMatch(/last moment you can take a copy/i);
+  });
+
+  it("promises NOT to destroy a company shared with someone else", async () => {
+    companies = [
+      { id: "co-1", name: "Celadyne", role: "owner", has_document: true },
+      { id: "co-2", name: "Shared Co", role: "editor", has_document: true },
+    ];
+    const { container } = await start();
+    await openDelete(container);
+    await waitFor(() => expect(container.textContent).toMatch(/Stays:/));
+    expect(container.textContent).toMatch(/share with someone else/i);
+  });
+
+  it("needs the phrase typed exactly", async () => {
+    const { container } = await start();
+    await openDelete(container);
+    await waitFor(() => expect(container.querySelector("#del-acct")).toBeTruthy());
+    expect(btn(container, /Delete my account/).disabled).toBe(true);
+    fireEvent.change(container.querySelector("#del-acct"), { target: { value: "delete" } });
+    expect(btn(container, /Delete my account/).disabled).toBe(true);
+    fireEvent.change(container.querySelector("#del-acct"), { target: { value: "delete my account" } });
+    expect(btn(container, /Delete my account/).disabled).toBe(false);
+  });
+
+  it("calls the Edge Function, sending no user id at all", async () => {
+    const { container } = await start();
+    await openDelete(container);
+    await waitFor(() => expect(container.querySelector("#del-acct")).toBeTruthy());
+    fireEvent.change(container.querySelector("#del-acct"), { target: { value: "delete my account" } });
+    fireEvent.click(btn(container, /Delete my account/));
+    await waitFor(() => expect(rpcLog.some(r => r[0] === "delete_account")).toBe(true));
+  });
+
+  it("is honest when the data went but the sign-in survived", async () => {
+    deleteAccountResult = { ok: false, status: 500, json: async () => ({ error: "auth_delete_failed" }) };
+    const { container } = await start();
+    await openDelete(container);
+    await waitFor(() => expect(container.querySelector("#del-acct")).toBeTruthy());
+    fireEvent.change(container.querySelector("#del-acct"), { target: { value: "delete my account" } });
+    fireEvent.click(btn(container, /Delete my account/));
+    await waitFor(() => expect(container.textContent).toMatch(/sign-in could not be removed/i));
+    expect(container.textContent).toMatch(/Contact support/i);
+  });
+
+  it("says nothing changed when the function is not deployed", async () => {
+    deleteAccountResult = { ok: false, status: 500, json: async () => ({ error: "not_configured" }) };
+    const { container } = await start();
+    await openDelete(container);
+    await waitFor(() => expect(container.querySelector("#del-acct")).toBeTruthy());
+    fireEvent.change(container.querySelector("#del-acct"), { target: { value: "delete my account" } });
+    fireEvent.click(btn(container, /Delete my account/));
+    await waitFor(() => expect(container.textContent).toMatch(/isn't set up on this deployment/i));
+    expect(container.textContent).toMatch(/Nothing has been changed/i);
   });
 });

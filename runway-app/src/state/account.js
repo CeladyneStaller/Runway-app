@@ -77,5 +77,39 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
     async markPasswordSet() {
       return rpc("mark_password_set");
     },
+
+    /** Delete the account: every sole-owned company, plus the sign-in itself.
+     *
+     *  Goes through the delete-account Edge Function rather than an RPC because removing an
+     *  `auth.users` row needs the service key, which cannot exist in a browser. The function identifies
+     *  the caller from this token alone — no user id is sent, because a body-supplied id would let any
+     *  authenticated caller delete anybody. */
+    async deleteAccount() {
+      let res;
+      try {
+        res = await doFetch(`${base}/functions/v1/delete-account`, {
+          method: "POST", headers: await headers(), body: "{}",
+        });
+      } catch (e) {
+        throw new BackendError(ERR_UNREACHABLE, "Could not reach the server", e);
+      }
+      let payload = null;
+      try { payload = await res.json(); } catch { /* non-JSON */ }
+      if (!res.ok) {
+        // The function reports this specifically: the data is gone but the sign-in survived. Saying
+        // "deleted" here would be false, and a false claim about deletion is the worst kind.
+        if (payload?.error === "auth_delete_failed") {
+          throw new BackendError(ERR_UNREACHABLE,
+            "Your data was deleted, but your sign-in could not be removed. Contact support to finish it.");
+        }
+        if (payload?.error === "not_configured") {
+          throw new BackendError(ERR_UNREACHABLE,
+            "Account deletion isn't set up on this deployment yet. Nothing has been changed.");
+        }
+        const kind = res.status === 401 || res.status === 403 ? ERR_FORBIDDEN : ERR_UNREACHABLE;
+        throw new BackendError(kind, payload?.detail || payload?.error || `HTTP ${res.status}`);
+      }
+      return payload || { ok: true };
+    },
   };
 }

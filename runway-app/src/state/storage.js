@@ -265,6 +265,32 @@ export async function switchCompany(auth, companyId) {
 // A local stand-in so this module needn't import the error class just to refuse politely.
 class BackendErrorLike extends Error {}
 
+/** Leave a company that is being deleted, and load whatever comes next.
+ *
+ *  The opposite of switchCompany on purpose: it does NOT flush. Pending work belongs to a company that
+ *  is about to stop existing, so writing it first would only push data into a row we are deleting a
+ *  moment later — and on a slow connection it could land AFTER the delete and resurrect a document with
+ *  no company. Dropping it is the correct answer, and the caller is responsible for having offered an
+ *  export before getting here.
+ *
+ *  `nextCompanyId` of null means "there are none left": the selection is cleared and current_company()
+ *  creates a fresh one, so a person is never left with an account pointing at nothing. */
+export async function abandonCompany(auth, nextCompanyId) {
+  if (_timer) { clearTimeout(_timer); _timer = null; }
+  _pending = null; _lastWritten = null; _deadline = null; _attempt = 0; _halted = false;
+
+  if (nextCompanyId) {
+    auth.setActiveCompany(nextCompanyId);
+    await writeActiveCompany(nextCompanyId);
+  } else {
+    auth.clearSelection();
+    await writeActiveCompany(null);
+  }
+
+  emit({ state: "saved", error: null });
+  return load();
+}
+
 /** Settle a conflict.
  *
  *  "mine"   — keep this device's work. Re-reads first so the write carries the CURRENT version and

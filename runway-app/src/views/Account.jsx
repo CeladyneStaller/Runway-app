@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { getAccountApi, getAuthAdapter, getSessionProvider } from "../state/sync";
-import { switchCompany, flush } from "../state/storage";
+import { switchCompany, abandonCompany, flush } from "../state/storage";
 import { passwordRules, passwordScore } from "../engine/password";
 import { toJSON } from "../state/document";
+import { DeleteCompany } from "./chrome/DeleteCompany";
 
 // Account-level settings, as distinct from the model. Reached from the email in the top bar rather than
 // the main nav — it is about you, not about your runway.
@@ -78,13 +79,14 @@ function PasswordSection({ account, session, hasPassword, email, onChanged }) {
   );
 }
 
-function CompaniesSection({ account, companies, activeId, onReload, onSwitched, doc }) {
+function CompaniesSection({ account, companies, activeId, onReload, onSwitched, onDeleted, doc }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [renameTo, setRenameTo] = useState("");
+  const [deleting, setDeleting] = useState(null);
 
   const create = async () => {
     setError(null); setBusy(true);
@@ -128,6 +130,9 @@ function CompaniesSection({ account, companies, activeId, onReload, onSwitched, 
                   <button className="linkbtn" disabled={busy} onClick={() => onSwitched(c.id)}>Switch to</button>
                 )}
                 <button className="linkbtn" onClick={() => { setRenaming(c.id); setRenameTo(c.name); }}>Rename</button>
+                {c.role === "owner" && (
+                  <button className="linkbtn danger" onClick={() => setDeleting(c)}>Delete</button>
+                )}
               </div>
             </>
           )}
@@ -151,6 +156,95 @@ function CompaniesSection({ account, companies, activeId, onReload, onSwitched, 
       ) : (
         <button className="addbtn ghost signin-go" onClick={() => setAdding(true)}>Add company</button>
       )}
+
+      {deleting && (
+        <DeleteCompany
+          company={deleting}
+          isActive={deleting.id === activeId}
+          isLast={companies.length === 1}
+          doc={doc}
+          onCancel={() => setDeleting(null)}
+          onConfirm={async () => { await onDeleted(deleting); setDeleting(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteAccount({ account, session, companies, doc }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const soleOwned = companies.filter(c => c.role === "owner");
+  const shared = companies.length - soleOwned.length;
+  const matches = typed.trim().toLowerCase() === "delete my account";
+
+  const exportModel = () => {
+    const blob = new Blob([toJSON(doc)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `runway-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const go = async () => {
+    setError(null); setBusy(true);
+    try {
+      await account.deleteAccount();
+      await session.signOut();       // the token is dead anyway; this clears it locally too
+      window.location.reload();
+    } catch (e) {
+      setError(e?.message || "Could not delete the account.");
+      setBusy(false);
+    }
+  };
+
+  if (!open) return (
+    <div className="acct-row">
+      <div>
+        <div className="acct-row-t" style={{ color: "var(--danger)" }}>Delete your account</div>
+        <div className="acct-row-s">Your companies, your models, and your sign-in</div>
+      </div>
+      <button className="linkbtn danger" onClick={() => setOpen(true)}>Delete</button>
+    </div>
+  );
+
+  return (
+    <div className="del-account">
+      <div className="del-facts">
+        <div><b>Goes:</b> your sign-in, and {soleOwned.length === 1 ? "your company" : `all ${soleOwned.length} companies you own`} — every
+          model, spend history and forecast journal in them.</div>
+        {shared > 0 && (
+          <div><b>Stays:</b> {shared === 1 ? "one company" : `${shared} companies`} you share with someone else.
+            You'll simply stop being a member — closing your account shouldn't destroy their data.</div>
+        )}
+        <div><b>Cannot be undone.</b> There is no restore for this.</div>
+      </div>
+
+      <div className="cf-fine" style={{ borderLeft: "3px solid var(--caution)", paddingLeft: 10, margin: "12px 0" }}>
+        This is the last moment you can take a copy.{" "}
+        <button className="linkbtn" onClick={exportModel}>Export your model</button>
+      </div>
+
+      <label className="signin-label" htmlFor="del-acct">Type <b className="num">delete my account</b> to confirm</label>
+      <input id="del-acct" className="signin-input" value={typed} autoComplete="off"
+             onChange={(e) => setTyped(e.target.value)}
+             onKeyDown={(e) => { if (e.key === "Enter" && matches && !busy) go(); }} />
+
+      {error && <div className="signin-error" role="alert">{error}</div>}
+
+      <div className="cf-actions" style={{ marginTop: 12 }}>
+        <button className="addbtn danger" disabled={!matches || busy} onClick={go}>
+          {busy ? "Deleting…" : "Delete my account"}
+        </button>
+        <button className="addbtn ghost" disabled={busy} onClick={() => { setOpen(false); setTyped(""); setError(null); }}>
+          Keep my account
+        </button>
+      </div>
     </div>
   );
 }
@@ -187,6 +281,24 @@ export function Account({ doc, onSwitched, onClose }) {
     URL.revokeObjectURL(url);
   };
 
+  const doDelete = async (company) => {
+    const remaining = companies.filter(c => c.id !== company.id);
+    const next = remaining[0]?.id || null;
+
+    await account.deleteCompany(company.id);
+
+    if (company.id === activeId) {
+      // abandonCompany deliberately does NOT flush: pending work belongs to the company we just removed,
+      // and on a slow connection a flush could land after the delete and leave a document with no company.
+      const r = await abandonCompany(auth, next);
+      try { if (next) await account.setLastCompany(next); } catch { /* device choice already saved */ }
+      await reload();
+      onSwitched?.(r);
+    } else {
+      await reload();
+    }
+  };
+
   const doSwitch = async (id) => {
     const r = await switchCompany(auth, id);
     try { await account.setLastCompany(id); } catch { /* device choice already saved */ }
@@ -216,7 +328,7 @@ export function Account({ doc, onSwitched, onClose }) {
 
       <CompaniesSection
         account={account} companies={companies} activeId={activeId}
-        onReload={reload} onSwitched={doSwitch} doc={doc}
+        onReload={reload} onSwitched={doSwitch} onDeleted={doDelete} doc={doc}
       />
 
       <div className="acct-card">
@@ -235,6 +347,7 @@ export function Account({ doc, onSwitched, onClose }) {
           </div>
           <button className="linkbtn" onClick={async () => { await flush(); await session.signOut(); }}>Sign out</button>
         </div>
+        <DeleteAccount account={account} session={session} companies={companies} doc={doc} />
       </div>
     </div>
   );
