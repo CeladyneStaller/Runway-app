@@ -46,3 +46,29 @@ describe("enableHostedSync", () => {
     expect(S.backendName()).toBe("local");
   });
 });
+
+describe("the diagnostic names what is missing", () => {
+  it("distinguishes an unset flag from a wrong one, and warns about build-time inlining", async () => {
+    const { syncConfigReport } = await import("../../src/state/storage.js");
+    const unset = syncConfigReport({ VITE_SUPABASE_URL: "u", VITE_SUPABASE_ANON_KEY: "k" });
+    expect(unset.ok).toBe(false);
+    expect(unset.missing.join(" ")).toMatch(/BUILD time/);        // the trap you cannot see from outside
+
+    const wrong = syncConfigReport({ VITE_SYNC_ENABLED: "false", VITE_SUPABASE_URL: "u", VITE_SUPABASE_ANON_KEY: "k" });
+    expect(wrong.missing.join(" ")).toMatch(/got "false"/);       // says what it actually got
+  });
+
+  it("names each empty value separately, not one vague failure", async () => {
+    const { syncConfigReport } = await import("../../src/state/storage.js");
+    const r = syncConfigReport({ VITE_SYNC_ENABLED: "true" });
+    expect(r.missing).toHaveLength(2);
+    expect(r.missing.join(" ")).toMatch(/VITE_SUPABASE_URL/);
+    expect(r.missing.join(" ")).toMatch(/VITE_SUPABASE_ANON_KEY/);
+  });
+
+  it("reports ok when all three are present", async () => {
+    const { syncConfigReport } = await import("../../src/state/storage.js");
+    expect(syncConfigReport(full).ok).toBe(true);
+    expect(syncConfigReport(full).missing).toEqual([]);
+  });
+});

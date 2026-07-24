@@ -39,7 +39,23 @@ function backend() {
 
 /** Is a hosted backend configured in this build? Opt-in: absent config means local. */
 export function syncConfigured(env = import.meta.env) {
-  return !!(env?.VITE_SYNC_ENABLED === "true" && env?.VITE_SUPABASE_URL && env?.VITE_SUPABASE_ANON_KEY);
+  return syncConfigReport(env).ok;
+}
+
+/** WHICH of the three requirements is missing. "Not configured" is a useless thing to tell someone who
+ *  believes they configured it — three separate things gate this, and two of them fail silently in ways
+ *  that look identical from the outside. */
+export function syncConfigReport(env = import.meta.env) {
+  const missing = [];
+  const flag = env?.VITE_SYNC_ENABLED;
+  if (flag !== "true") {
+    missing.push(flag === undefined
+      ? 'VITE_SYNC_ENABLED is not set (note: Vite inlines VITE_* at BUILD time — after editing .env you must rebuild, not just restart)'
+      : `VITE_SYNC_ENABLED must be exactly "true", got ${JSON.stringify(flag)}`);
+  }
+  if (!env?.VITE_SUPABASE_URL) missing.push("VITE_SUPABASE_URL is empty or unset");
+  if (!env?.VITE_SUPABASE_ANON_KEY) missing.push("VITE_SUPABASE_ANON_KEY is empty or unset");
+  return { ok: missing.length === 0, missing };
 }
 
 // ok     — the document loaded. Includes a legitimately new, empty document.

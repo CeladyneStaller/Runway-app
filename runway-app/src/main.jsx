@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import App from "./App.jsx";
-import { syncConfigured } from "./state/storage.js";
+import { syncConfigured, syncConfigReport } from "./state/storage.js";
 
 // ---------------------------------------------------------------- hosted sync --
 // The ONE place @supabase/supabase-js is used. Everything else — the auth adapter, the backend, the
@@ -35,8 +35,10 @@ import { syncConfigured } from "./state/storage.js";
 // work: the SDK hands back a fresh token near expiry, with no refresh logic anywhere in this repo.
 
 if (!syncConfigured()) {
-  // Visible in the console rather than silent, so "why is my data not syncing" has an answer.
-  console.info("[runway] hosted sync not configured — running local-first against IndexedDB");
+  // Say WHICH requirement is missing. "Not configured" is useless to someone who believes they
+  // configured it, and the build-time inlining trap in particular is invisible from the outside.
+  console.info("[runway] hosted sync off — running local-first against IndexedDB. Missing:\n  - "
+    + syncConfigReport().missing.join("\n  - "));
 }
 
 createRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);
