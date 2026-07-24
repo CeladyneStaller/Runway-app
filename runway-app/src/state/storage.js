@@ -14,7 +14,7 @@
 //    held so a failure can be retried rather than lost.
 
 import { emptyDoc, migrate } from "./document";
-import { createLocalBackend } from "./backends/local.js";
+import { createLocalBackend, adoptionDismissed, dismissAdoption } from "./backends/local.js";
 import { createSupabaseBackend } from "./backends/supabase.js";
 import { ERR_CONFLICT, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
 
@@ -86,7 +86,16 @@ export async function load() {
     return { state: LOAD_FAILED, doc: emptyDoc(), error: e };
   }
 
-  if (!found) return { state: LOAD_OK, doc: emptyDoc(), isNew: true };
+  if (!found) {
+    // A brand-new, untouched document must not be written back. Treating it as already-saved means the
+    // debounced save sees no change and stays quiet — otherwise signing in silently creates an empty
+    // document row, which (a) is noise and (b) makes the account no longer "new", permanently
+    // suppressing the offer to adopt a model left in this browser. Nothing is persisted until the user
+    // actually does something.
+    const fresh = emptyDoc();
+    _lastWritten = serialise(fresh);
+    return { state: LOAD_OK, doc: fresh, isNew: true };
+  }
 
   try {
     const doc = migrate(found.raw);
@@ -207,6 +216,57 @@ export async function flush() {
 
 export const hasUnsavedWork = () => _pending != null;
 export const isHalted = () => _halted;
+export const pendingDoc = () => _pending;
+
+/** The document sitting in THIS BROWSER, regardless of which backend is active. Signing in switches
+ *  reads to the server, which makes a locally-built model invisible — not lost, but invisible, which is
+ *  worse in some ways because nothing tells you it is still there. This is how the app finds it in order
+ *  to offer it back. It never deletes anything. */
+export async function peekLocal() {
+  try {
+    const found = await createLocalBackend().read();
+    if (!found) return null;
+    return migrate(found.raw);
+  } catch {
+    return null;
+  }
+}
+
+export { adoptionDismissed, dismissAdoption };
+
+/** The server's current document, without adopting it. Used to show a conflict as a comparison rather
+ *  than as an alarming sentence — nobody can choose between two versions they cannot see. */
+export async function peekRemote() {
+  const found = await backend().read();
+  if (!found) return null;
+  try { return migrate(found.raw); } catch { return null; }
+}
+
+/** Settle a conflict.
+ *
+ *  "mine"   — keep this device's work. Re-reads first so the write carries the CURRENT version and
+ *             therefore passes the precondition; the server's copy is not lost, save_document files it
+ *             into document_versions before overwriting.
+ *  "theirs" — take the server's copy. Returns it so the caller can adopt it. The local edit is dropped,
+ *             which is why the UI must offer an export before calling this.
+ *
+ *  Deliberately explicit and deliberately not automatic: a conflict is a question about intent, and
+ *  guessing is how you silently destroy the version somebody cared about. */
+export async function resolveConflict(choice) {
+  const server = await backend().read();          // also refreshes the version the next write will carry
+
+  if (choice === "theirs") {
+    _pending = null; _halted = false; _attempt = 0; _deadline = null;
+    const doc = server ? migrate(server.raw) : emptyDoc();
+    _lastWritten = serialise(doc);                // adopted == saved; don't immediately rewrite it
+    emit({ state: "saved", error: null });
+    return { adopted: doc };
+  }
+
+  _halted = false; _attempt = 0;
+  await flush();
+  return { adopted: null };
+}
 
 /** Clear a halt after the user has decided what to do (kept their version, or reloaded the other one).
  *  Deliberately explicit: a halt is a question, and it should not un-ask itself. */

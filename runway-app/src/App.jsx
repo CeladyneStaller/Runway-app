@@ -1,8 +1,12 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
+import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
+         adoptionDismissed, dismissAdoption, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { getSessionProvider } from "./state/sync";
 import { SignIn } from "./views/SignIn";
+import { ConflictDialog } from "./views/chrome/ConflictDialog";
+import { AdoptLocalDialog } from "./views/chrome/AdoptLocalDialog";
+import { hasSubstance } from "./views/chrome/docsummary";
 import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
 import { roundMS } from "./engine/capital";
 import { money, moneyFull } from "./engine/money";
@@ -501,17 +505,34 @@ function SyncPill() {
 function DocumentHost() {
   const [doc, setDoc] = useState(null);
   const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
+  const [conflict, setConflict] = useState(false);
+  const [strandedLocal, setStrandedLocal] = useState(null);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
-    load().then(r => { setLoadState(r.state); setDoc(r.doc); if (r.error) setErr(r.error); })
-          .catch(e => { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); });
+    let alive = true;
+    load().then(async r => {
+      if (!alive) return;
+      setLoadState(r.state); setDoc(r.doc); if (r.error) setErr(r.error);
+
+      // Only when the ACCOUNT IS EMPTY. If the server already holds a document, offering to replace it
+      // with whatever is in this browser is not a migration, it is a conflict — and a conflict does not
+      // get a cheerful blue button.
+      if (r.state !== LOAD_OK || !r.isNew || !getSessionProvider()) return;
+      if (await adoptionDismissed()) return;
+      const local = await peekLocal();
+      if (alive && hasSubstance(local)) setStrandedLocal(local);
+    }).catch(e => { if (alive) { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); } });
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
     if (!doc || loadState !== LOAD_OK) return;   // ← the guard: never save what we didn't successfully load
     save(doc);   // storage owns the cadence: debounce, coalescing, no-op skipping, retry
   }, [doc, loadState]);
+
+  // A conflict is a question, so it gets asked once and stays asked until answered.
+  useEffect(() => subscribe(st => setConflict(st.state === "conflict")), []);
 
   // Getting the last edit out before the tab goes away. `visibilitychange` is the one that actually
   // fires reliably on mobile; `beforeunload` is the desktop backstop and the only place a browser will
@@ -551,7 +572,22 @@ function DocumentHost() {
     </div></div>
   );
 
-  return <RunwayApp doc={doc} setDoc={setDoc} />;
+  return <>
+    <RunwayApp doc={doc} setDoc={setDoc} />
+    {conflict && <ConflictDialog onAdopt={setDoc} onDone={() => setConflict(false)} />}
+    {!conflict && strandedLocal && (
+      <AdoptLocalDialog
+        localDoc={strandedLocal}
+        onUpload={async (local) => {
+          setDoc(local);          // adopt it locally...
+          save(local);            // ...and push it to the account
+          await flush();
+          setStrandedLocal(null);
+        }}
+        onDismiss={async () => { await dismissAdoption(); setStrandedLocal(null); }}
+      />
+    )}
+  </>;
 }
 
 export { RunwayApp, demoDoc, toJSON, fromJSON };

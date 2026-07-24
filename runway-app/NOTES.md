@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 461 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 487 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -129,6 +129,51 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   misconfigured env threw past the guard and blanked the page — defeating the "half-configured must never
   stand in for working" property the guard exists to provide. A guard placed after the thing that can
   throw is not a guard.
+- **An untouched brand-new document is never written back.** `load()` on an empty account sets
+  `_lastWritten` to the fresh `emptyDoc()`, so the debounced save sees no change and stays quiet.
+  Without that, signing in silently created an empty document row 400ms later, which made the account no
+  longer `isNew` — permanently suppressing the offer to adopt a model left in this browser after a single
+  reload. Found via a FLAKY TEST: the assertion waited on write COUNT, which was already non-zero from
+  that spurious write. Lesson worth keeping — wait on CONTENT, not on counts; a count can be satisfied by
+  a write you did not mean.
+- **Cross-tenant isolation is verified against a REAL project, not a fake.** `test/security/tenant-isolation.test.js`,
+  run via `npm run test:isolation`, SKIPPED unless `SUPABASE_TEST_URL` + anon key + two test accounts are
+  in the environment (so `npm test` stays offline). Everything else in this repo tests intent; this asks
+  Postgres whether it actually refuses. Probes: B cannot read A's document (RLS denial is ZERO ROWS, not
+  an error — an empty array is the pass), B cannot WRITE to A's company even with a valid session
+  (`can_edit` inside the definer function must refuse), A's document is unchanged after that attempt,
+  `memberships` is unreadable by anyone (no grant, by design), and an anonymous caller gets nothing.
+  Needs email/password sign-in enabled — magic links are passwordless and cannot be scripted.
+- **The suite now exceeds a 250s sandbox command timeout as a whole** (55 files, ~495 tests). It passes in
+  halves — `npx vitest run test/engine test/state` then `test/views test/security`. Not a failure, an
+  environment limit; a real machine runs it in one go.
+- **Adopting a model stranded in the browser.** Signing in switches reads to the server, which makes a
+  locally-built document INVISIBLE — not deleted, but invisible, and nothing else in the app would ever
+  mention it again. `peekLocal()` reads this browser's copy regardless of which backend is active, and
+  `views/chrome/AdoptLocalDialog.jsx` offers it back with the same headline summary the conflict dialog
+  uses (shared via `chrome/docsummary.js` — two drifting copies of "what does this document contain"
+  would be a bug waiting to happen).
+  OFFERED ONLY WHEN THE ACCOUNT IS EMPTY (`load()`'s `isNew`). If the server already holds a document,
+  offering to replace it with whatever is in this browser is not a migration, it is a conflict — and a
+  conflict does not get a cheerful blue button. Also skipped for an empty shell (`hasSubstance`) and in
+  local mode. NEITHER answer deletes anything: upload leaves the browser copy exactly where it was,
+  declining is remembered in IndexedDB (`runway:adoption-dismissed`; asking once is help, asking every
+  load is nagging), and a failed upload keeps the offer open with the local copy intact. JSON export is
+  offered inside the dialog as the third way out. Tests `test/views/adopt.test.jsx`, mostly about when
+  NOT to offer.
+- **Conflicts are RESOLVED, not just detected.** The storage layer halts on a version-precondition
+  failure and holds this device's work, but until now the sync pill said "Changed elsewhere" and there
+  was no way out — a dead end. `resolveConflict("mine"|"theirs")` settles it, and both answers are
+  non-destructive: "mine" RE-READS FIRST so the retry carries the current version and actually lands
+  (the server's copy is filed into `document_versions` by `save_document` before being overwritten);
+  "theirs" returns the server document for the caller to adopt and sets `_lastWritten` to it, so the app
+  reporting the adopted document does NOT immediately write it straight back. A failed resolve stays
+  halted with the work still held.
+  `views/chrome/ConflictDialog.jsx` shows the two versions side by side — runway, cash, headcount, line
+  count, last saved — with only the differing rows highlighted. "There is a conflict, pick one" is
+  unanswerable; four numbers people recognise make it a real choice. The destructive option ("use the
+  other version") offers a JSON export of this device's edits first. Tests
+  `test/views/conflict.test.jsx`, including that adopting does not trigger a rewrite.
 - **RLS and GRANTs are TWO INDEPENDENT GATES, and 001 only did one.** Migration 001 enabled row-level
   security and wrote policies but granted the `authenticated` role nothing, so every query died with
   `permission denied for table memberships` (403) and the policies were never even evaluated. The two

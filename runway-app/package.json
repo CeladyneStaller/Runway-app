@@ -11,7 +11,9 @@
     "test:ui": "vitest --ui",
     "test:watch": "vitest",
     "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "lint:fix": "oxlint --fix",
+    "verify:isolation": "node scripts/verify-isolation.mjs",
+    "test:isolation": "vitest run test/security/tenant-isolation.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

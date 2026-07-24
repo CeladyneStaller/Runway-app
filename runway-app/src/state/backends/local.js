@@ -8,6 +8,17 @@
 import { get, set } from "idb-keyval";
 
 const KEY = "runway:doc";
+const DISMISSED = "runway:adoption-dismissed";
+
+// Whether the user has already said no to uploading the model left in this browser. Kept in IndexedDB
+// alongside the document rather than localStorage, which this app does not use. Asking once is help;
+// asking every load is nagging.
+export async function adoptionDismissed() {
+  try { return (await get(DISMISSED)) === true; } catch { return false; }
+}
+export async function dismissAdoption() {
+  try { await set(DISMISSED, true); } catch { /* not worth failing a session over */ }
+}
 
 export function createLocalBackend() {
   return {
