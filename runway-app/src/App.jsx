@@ -2,9 +2,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
          adoptionDismissed, dismissAdoption, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
-import { getSessionProvider } from "./state/sync";
+import { getSessionProvider, getAccountApi } from "./state/sync";
 import { SignIn } from "./views/SignIn";
 import { SetPassword } from "./views/SetPassword";
+import { Account } from "./views/Account";
 import { ConflictDialog } from "./views/chrome/ConflictDialog";
 import { AdoptLocalDialog } from "./views/chrome/AdoptLocalDialog";
 import { hasSubstance } from "./views/chrome/docsummary";
@@ -30,7 +31,7 @@ import { Sales } from "./views/Sales";
 import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 
-function RunwayApp({ doc, setDoc }) {
+function RunwayApp({ doc, setDoc, onOpenAccount }) {
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -310,7 +311,7 @@ function RunwayApp({ doc, setDoc }) {
         <main className="main">
           <div className="topbar">
             <div>
-              <span className="eyebrow">Startup runway</span><SyncPill /><SessionPill />
+              <span className="eyebrow">Startup runway</span><SyncPill /><SessionPill onOpenAccount={onOpenAccount} />
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
               <p className="sub">Northwind Labs · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
@@ -508,6 +509,7 @@ function DocumentHost() {
   const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
   const [conflict, setConflict] = useState(false);
   const [strandedLocal, setStrandedLocal] = useState(null);
+  const [showAccount, setShowAccount] = useState(false);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
@@ -573,8 +575,21 @@ function DocumentHost() {
     </div></div>
   );
 
+  if (showAccount) return (
+    <Account
+      doc={doc}
+      onClose={() => setShowAccount(false)}
+      onSwitched={(r) => {
+        // switchCompany() already flushed and reset the write buffer; adopt whatever it loaded
+        if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); }
+        setStrandedLocal(null);   // a freshly created company is `isNew` by definition; offering to
+        setShowAccount(false);    // fill it with a stale browser model would be actively wrong
+      }}
+    />
+  );
+
   return <>
-    <RunwayApp doc={doc} setDoc={setDoc} />
+    <RunwayApp doc={doc} setDoc={setDoc} onOpenAccount={() => setShowAccount(true)} />
     {conflict && <ConflictDialog onAdopt={setDoc} onDone={() => setConflict(false)} />}
     {!conflict && strandedLocal && (
       <AdoptLocalDialog
@@ -604,6 +619,12 @@ export default function App() {
   // when the config is complete. Re-deriving it from env here would be a second source of truth for the
   // same fact, and the two can disagree.
   const gated = !!session;
+  // ENV SAYS HOSTED BUT NOTHING REGISTERED. That combination is a misconfiguration, never a mode: it
+  // means enableHostedSync() was not called (most often because the bootstrap in src/main.jsx is
+  // commented out), and the app has silently fallen back to local-first — handing out access with no
+  // sign-in and writing to this browser instead of the account. Falling back QUIETLY is the dangerous
+  // part: everything looks like it works, and nothing is where the user thinks it is.
+  const misconfigured = syncConfigured() && !session;
   // undefined = still checking (the SDK reads a stored session asynchronously); null = signed out.
   const [user, setUser] = useState(gated ? undefined : null);
   // Arriving from a reset link LOOKS like an ordinary sign-in — Supabase hands you a session. Sending
@@ -623,6 +644,19 @@ export default function App() {
     });
     return () => { alive = false; off(); };
   }, [gated, session]);
+
+  if (misconfigured) return (
+    <div className="rw"><div className="splash" style={{ maxWidth: 560, textAlign: "left" }}>
+      <h2 style={{ marginTop: 0 }}>Sync is configured but never started</h2>
+      <p>This build has Supabase settings, so it should be asking you to sign in — but nothing registered
+        a session provider, which means <code>enableHostedSync()</code> was never called.</p>
+      <p>Almost always this is the bootstrap block in <code>src/main.jsx</code> being commented out.
+        Uncomment it, rebuild, and reload.</p>
+      <p><b>Nothing has been lost.</b> The app is refusing to open rather than quietly running against
+        this browser's storage, which would put your work somewhere other than your account.</p>
+      <button className="addbtn" onClick={() => window.location.reload()}>Reload</button>
+    </div></div>
+  );
 
   if (gated && recovering) return (
     <SetPassword
@@ -648,7 +682,7 @@ export default function App() {
 
 /** Who you are signed in as, and the way out. Reads the registered provider directly rather than being
  *  threaded through the app, and renders nothing at all in local mode. */
-function SessionPill() {
+function SessionPill({ onOpenAccount }) {
   const session = getSessionProvider();
   const [user, setUser] = useState(null);
   useEffect(() => {
@@ -661,7 +695,9 @@ function SessionPill() {
   const email = user?.user?.email || user?.email;
   return (
     <span className="sessionpill">
-      {email && <span className="sessionpill-who" title={email}>{email}</span>}
+      {email && (onOpenAccount
+        ? <button className="linkbtn sessionpill-who" title={email} onClick={onOpenAccount}>{email}</button>
+        : <span className="sessionpill-who" title={email}>{email}</span>)}
       <button className="linkbtn" onClick={async () => {
         // flush first: signing out with unsaved work in the buffer would drop it silently
         await flush();

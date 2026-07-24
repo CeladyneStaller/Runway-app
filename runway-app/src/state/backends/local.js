@@ -9,6 +9,7 @@ import { get, set } from "idb-keyval";
 
 const KEY = "runway:doc";
 const DISMISSED = "runway:adoption-dismissed";
+const ACTIVE_COMPANY = "runway:active-company";
 
 // Whether the user has already said no to uploading the model left in this browser. Kept in IndexedDB
 // alongside the document rather than localStorage, which this app does not use. Asking once is help;
@@ -18,6 +19,14 @@ export async function adoptionDismissed() {
 }
 export async function dismissAdoption() {
   try { await set(DISMISSED, true); } catch { /* not worth failing a session over */ }
+}
+
+// Which company THIS DEVICE is looking at. Per-device on purpose: a view preference, not data.
+export async function readActiveCompany() {
+  try { return (await get(ACTIVE_COMPANY)) || null; } catch { return null; }
+}
+export async function writeActiveCompany(id) {
+  try { await set(ACTIVE_COMPANY, id || null); } catch { /* the server remembers too */ }
 }
 
 export function createLocalBackend() {

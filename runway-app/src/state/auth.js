@@ -15,13 +15,18 @@
 
 import { BackendError, ERR_FORBIDDEN, ERR_UNREACHABLE } from "./backends/errors.js";
 
-export function createSupabaseAuth({ url, anonKey, getSession, fetchImpl, companyId: fixedCompanyId }) {
+export function createSupabaseAuth({ url, anonKey, getSession, fetchImpl, companyId: fixedCompanyId, activeCompany }) {
   if (!url || !anonKey) throw new Error("Auth adapter needs a url and an anon key");
   if (typeof getSession !== "function") throw new Error("Auth adapter needs a getSession() function");
 
   const doFetch = fetchImpl || ((...a) => globalThis.fetch(...a));
   const base = String(url).replace(/\/+$/, "");
   let cachedCompanyId = fixedCompanyId || null;
+  // Which company this device is looking at. A view preference, not data — working on one company on a
+  // laptop while looking at another on a phone is a feature. Supplied by the caller so the storage layer
+  // owns where it is persisted.
+  let selected = null;
+  try { selected = activeCompany || null; } catch { selected = null; }
 
   async function getAccessToken() {
     let session;
@@ -61,6 +66,7 @@ export function createSupabaseAuth({ url, anonKey, getSession, fetchImpl, compan
   }
 
   async function getCompanyId() {
+    if (selected) return selected;
     if (cachedCompanyId) return cachedCompanyId;
 
     // ONE call. current_company() resolves the caller's company and creates one atomically if this is a
@@ -82,7 +88,19 @@ export function createSupabaseAuth({ url, anonKey, getSession, fetchImpl, compan
   return {
     getAccessToken,
     getCompanyId,
+
+    /** Point this device at a different company. Returns nothing: the CALLER is responsible for
+     *  flushing pending writes and reloading, because a write in flight belongs to the company you were
+     *  in and landing it afterwards files your numbers against the wrong one. */
+    setActiveCompany(id) { selected = id || null; cachedCompanyId = null; },
+    activeCompany() { return selected || cachedCompanyId; },
+
+    /** A company that was deleted, or access revoked, would otherwise wedge this device permanently:
+     *  every read fails, and the stored id keeps pointing at it. Clearing the selection lets
+     *  current_company() re-resolve. */
+    clearSelection() { selected = null; cachedCompanyId = null; },
+
     /** Forget the resolved company — call on sign-out, or the next user inherits the last one's document. */
-    reset() { cachedCompanyId = fixedCompanyId || null; },
+    reset() { cachedCompanyId = fixedCompanyId || null; selected = null; },
   };
 }

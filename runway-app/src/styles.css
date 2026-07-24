@@ -711,3 +711,18 @@
 .pw-rules li.ok{color:var(--ink-2)}
 .pw-rules li.ok span{color:var(--signal)}
 .pw-cancel{display:block;margin:10px auto 0}
+
+/* ---- account page ---- */
+.acct-page{max-width:560px;margin:0 auto;padding:28px 20px 60px}
+.acct-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:18px}
+.acct-head h2{margin:4px 0 0;font-family:var(--fd);font-size:20px;letter-spacing:-.02em;color:var(--ink-txt);word-break:break-all}
+.acct-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+.acct-card h3{margin:0;font-family:var(--fd);font-size:15px;letter-spacing:-.01em;color:var(--ink-txt)}
+.acct-card>p{font-family:var(--fb);font-size:12.5px;color:var(--muted);line-height:1.55;margin:5px 0 12px}
+.acct-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line-2)}
+.acct-row-t{font-family:var(--fb);font-size:13px;color:var(--ink-txt);display:flex;align-items:center;gap:7px}
+.acct-row-s{font-family:var(--fm);font-size:10.5px;color:var(--muted-2);margin-top:2px}
+.acct-row-a{display:flex;gap:12px;white-space:nowrap}
+.acct-badge{font-family:var(--fm);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--signal-ink);background:var(--paper);border-radius:999px;padding:2px 7px}
+.acct-ok{font-family:var(--fb);font-size:12.5px;color:var(--signal-ink);margin:10px 0 0}
+button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--fm);font-size:10.5px}

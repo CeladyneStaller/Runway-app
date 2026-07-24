@@ -4,6 +4,7 @@
 // The ONLY thing the caller supplies that this repo cannot build itself is `getSession` — a one-line
 // wrapper around @supabase/supabase-js. Everything else here is dependency-free and tested.
 import { createSupabaseAuth } from "./auth.js";
+import { createAccountApi } from "./account.js";
 import { createSession } from "./session.js";
 import { syncConfigured, useHostedBackend, useLocalBackend } from "./storage.js";
 
@@ -12,19 +13,21 @@ import { syncConfigured, useHostedBackend, useLocalBackend } from "./storage.js"
 // ask anyone to sign in.
 let _session = null;
 let _auth = null;
+let _account = null;
 export const getSessionProvider = () => _session;
 export const getAuthAdapter = () => _auth;
+export const getAccountApi = () => _account;
 
 /**
  * @param getSession  () => Promise<{ access_token } | null>  — from the Supabase SDK
  * @returns { enabled, reason?, auth? }
  */
-export function enableHostedSync({ authClient, getSession, env = import.meta.env, fetchImpl } = {}) {
+export function enableHostedSync({ authClient, getSession, env = import.meta.env, fetchImpl, activeCompany } = {}) {
   if (!syncConfigured(env)) {
     // Not an error. Local-first is the fallback for the whole hosted build, and a half-configured
     // hosted backend must never quietly stand in for a working one.
     useLocalBackend();
-    _session = null; _auth = null;
+    _session = null; _auth = null; _account = null;
     return { enabled: false, reason: "sync not configured" };
   }
 
@@ -33,17 +36,18 @@ export function enableHostedSync({ authClient, getSession, env = import.meta.env
   const readSession = session ? () => session.current() : getSession;
   if (typeof readSession !== "function") {
     useLocalBackend();
-    _session = null; _auth = null;
+    _session = null; _auth = null; _account = null;
     return { enabled: false, reason: "no authClient or getSession() supplied" };
   }
 
   const url = env.VITE_SUPABASE_URL;
   const anonKey = env.VITE_SUPABASE_ANON_KEY;
-  const auth = createSupabaseAuth({ url, anonKey, getSession: readSession, fetchImpl });
+  const auth = createSupabaseAuth({ url, anonKey, getSession: readSession, fetchImpl, activeCompany });
   useHostedBackend({ url, anonKey, auth, fetchImpl });
 
   _session = session;
   _auth = auth;
+  _account = createAccountApi({ url, anonKey, auth, fetchImpl });
 
   // Signing out must clear the resolved company, or the next person to sign in on this browser inherits
   // the previous user's document. Wiring it here rather than in the button means it cannot be forgotten.
@@ -51,5 +55,5 @@ export function enableHostedSync({ authClient, getSession, env = import.meta.env
     session.onChange((s) => { if (!s) auth.reset(); });
   }
 
-  return { enabled: true, auth, session };
+  return { enabled: true, auth, session, account: _account };
 }

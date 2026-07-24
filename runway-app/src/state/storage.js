@@ -14,7 +14,8 @@
 //    held so a failure can be retried rather than lost.
 
 import { emptyDoc, migrate } from "./document";
-import { createLocalBackend, adoptionDismissed, dismissAdoption } from "./backends/local.js";
+import { createLocalBackend, adoptionDismissed, dismissAdoption,
+         readActiveCompany, writeActiveCompany } from "./backends/local.js";
 import { createSupabaseBackend } from "./backends/supabase.js";
 import { ERR_CONFLICT, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
 
@@ -232,7 +233,7 @@ export async function peekLocal() {
   }
 }
 
-export { adoptionDismissed, dismissAdoption };
+export { adoptionDismissed, dismissAdoption, readActiveCompany };
 
 /** The server's current document, without adopting it. Used to show a conflict as a comparison rather
  *  than as an alarming sentence — nobody can choose between two versions they cannot see. */
@@ -241,6 +242,28 @@ export async function peekRemote() {
   if (!found) return null;
   try { return migrate(found.raw); } catch { return null; }
 }
+
+/** Point the app at a different company and hand back its document.
+ *
+ *  FLUSHES FIRST, and that ordering is the whole point: a pending write belongs to the company you were
+ *  looking at, and landing it after the switch files your numbers against the wrong company. Then the
+ *  write state is reset — a different company holds a different document, so `_lastWritten` from the old
+ *  one would suppress the first save in the new one. */
+export async function switchCompany(auth, companyId) {
+  await flush();
+  if (hasUnsavedWork()) throw new BackendErrorLike("Couldn't save your current work, so nothing was switched.");
+
+  auth.setActiveCompany(companyId);
+  await writeActiveCompany(companyId);
+
+  _pending = null; _lastWritten = null; _deadline = null; _attempt = 0; _halted = false;
+  emit({ state: "saved", error: null });
+
+  return load();
+}
+
+// A local stand-in so this module needn't import the error class just to refuse politely.
+class BackendErrorLike extends Error {}
 
 /** Settle a conflict.
  *

@@ -168,3 +168,26 @@ describe("signing out", () => {
     expect(asked).toBe(1);
   });
 });
+
+describe("hosted config with no bootstrap", () => {
+  // The failure that let someone straight into the app with no sign-in: env said hosted, main.jsx's
+  // bootstrap was commented out, no session provider registered, and the gate had nothing to gate — so
+  // the app quietly ran local-first against this browser instead of the account.
+  it("refuses to open rather than silently running local", async () => {
+    const storage = await import("../../src/state/storage.js");
+    const spy = vi.spyOn(storage, "syncConfigured").mockReturnValue(true);
+    sync.enableHostedSync({ env: {} });          // nothing registered
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/Sync is configured but never started/i));
+    expect(container.textContent).toMatch(/main\.jsx/);
+    expect(container.textContent).toMatch(/Nothing has been lost/i);
+    spy.mockRestore();
+  });
+
+  it("stays a normal local app when the env does NOT claim hosted", async () => {
+    sync.enableHostedSync({ env: {} });
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).not.toMatch(/Checking your session/));
+    expect(container.textContent).not.toMatch(/Sync is configured but never started/i);
+  });
+});

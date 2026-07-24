@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 502 passing + 8 skipped isolation probes · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 516 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -187,6 +187,43 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   collapsed the client's old two-call "select memberships, else bootstrap" into ONE call whose
   create-if-missing path is atomic rather than racing two devices signing in at once.
   `alter default privileges` keeps future tables on the same posture without a follow-up migration.
+- **`src/main.jsx` ships LIVE, not commented out — and a half-started hosted build now refuses to open.**
+  This caused a real production failure: the archive shipped `main.jsx` with the bootstrap commented,
+  so every extraction silently reverted the person who had enabled it. With Supabase settings present but
+  `enableHostedSync()` never called, no session provider registers, `gated` is false, and the app FALLS
+  THROUGH TO LOCAL-FIRST — handing out access with NO SIGN-IN and writing to the browser instead of the
+  account. Everything looked like it worked; nothing was where the user thought it was.
+  TWO fixes, and both were needed. (1) `syncConfigured() && !getSessionProvider()` is now treated as a
+  MISCONFIGURATION, never a mode: App renders an explicit "sync is configured but never started" screen
+  naming `src/main.jsx`, rather than quietly running local. (2) The root cause — a SANDBOX STUB at
+  `node_modules/@supabase/supabase-js` (the real package is blocked by the npm policy here) lets the
+  build and suite compile the REAL bootstrap, so the archive can ship working code. The stub throws if
+  ever called, lives in `node_modules` (stripped from every archive), and is overwritten by a real
+  `npm install`. GENERAL LESSON: a template that must be hand-edited after every update WILL be reverted
+  by an update; ship the working thing and stub what you cannot install.
+- **Account page + multi-company (`003_profiles_companies.sql`, `views/Account.jsx`, `state/account.js`).**
+  Reached from the email in the top bar, not the main nav — it is about you, not your runway.
+  WHY IT EXISTS: a magic-link sign-in creates an account with NO password, and "reset your password" is a
+  strange door to walk through when you never had one. `profiles.password_set_at` is what lets the page
+  say something true instead of hedging — Supabase cannot tell you whether a user has a password,
+  because a magic-link user and a password user both have an `email` identity. The password itself never
+  goes near `mark_password_set()`; it only records that one now exists. Changing (as opposed to setting)
+  verifies the old password by attempting `signInWithPassword` first — no server support needed, and it
+  protects against a borrowed laptop. Skipped entirely when there is nothing to verify.
+  MULTI-COMPANY NEEDED NO SCHEMA CHANGE: `memberships` was always many-to-many. What was missing was
+  `list_companies` / `create_company` / `rename_company` and a notion of which company is ACTIVE. The
+  active company is per-device (IndexedDB `runway:active-company`) because it is a view preference, not
+  data; `set_last_company` also records it server-side as the fallback for a device that has never chosen.
+  `current_company()` now prefers the remembered one, then oldest-first, then creates the first company.
+  THE HAZARD, and the reason `switchCompany()` lives in storage.js rather than the view: it FLUSHES
+  FIRST. A pending write belongs to the company you were looking at, and landing it after the switch
+  files your numbers against the WRONG COMPANY. It then resets `_lastWritten` — a different company holds
+  a different document, so the old value would suppress the first save in the new one. Both pinned by
+  test. A newly created company is `isNew` by definition, so the adoption offer is suppressed on switch:
+  filling a brand-new company with a stale browser model would be actively wrong.
+  A TEST TRAP worth remembering: `waitFor(not /Checking your session/)` is satisfied by "Loading your
+  model", so eight UI assertions ran against a half-rendered tree. Wait for the thing you need, not for
+  a message you do not want.
 - **Auth is now three screens: landing (toggle), choose-a-password, reset.** Password is the PRIMARY
   path and magic link is SECONDARY — the reverse of what security alone suggests, because passwordless
   depends on email being deliverable and a project without SMTP has no working link flow at all. Lead
