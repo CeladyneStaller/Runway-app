@@ -26,7 +26,9 @@ import { syncConfigured, syncConfigReport } from "./state/storage.js";
 //
 // if (syncConfigured()) {
 //   const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
-//   enableHostedSync({ getSession: async () => (await supabase.auth.getSession()).data.session });
+//   // Pass supabase.auth itself, not just getSession: the app needs sign-in, sign-out and live auth
+//   // events too, and passing the whole object keeps the SDK confined to this one line.
+//   enableHostedSync({ authClient: supabase.auth });
 // } else {
 //   console.info("[runway] hosted sync not configured — running local-first against IndexedDB");
 // }

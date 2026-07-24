@@ -1,6 +1,8 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { load, save, flush, status, subscribe, hasUnsavedWork, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
+import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
+import { getSessionProvider } from "./state/sync";
+import { SignIn } from "./views/SignIn";
 import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
 import { roundMS } from "./engine/capital";
 import { money, moneyFull } from "./engine/money";
@@ -303,7 +305,7 @@ function RunwayApp({ doc, setDoc }) {
         <main className="main">
           <div className="topbar">
             <div>
-              <span className="eyebrow">Startup runway</span><SyncPill />
+              <span className="eyebrow">Startup runway</span><SyncPill /><SessionPill />
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
               <p className="sub">Northwind Labs · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
@@ -496,7 +498,7 @@ function SyncPill() {
  *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
-export default function App() {
+function DocumentHost() {
   const [doc, setDoc] = useState(null);
   const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
   const [err, setErr] = useState(null);
@@ -553,3 +555,57 @@ export default function App() {
 }
 
 export { RunwayApp, demoDoc, toJSON, fromJSON };
+
+/** THE AUTH GATE. In hosted mode there is nobody to be until someone signs in, so the document is not
+ *  even requested until there is a session — asking for it first is how you get a FORBIDDEN read that
+ *  looks, from the outside, exactly like a broken app.
+ *
+ *  In local mode this is a pass-through: the document lives in this browser and there is nobody to be. */
+export default function App() {
+  const session = getSessionProvider();
+  // The registered provider IS the signal that hosted mode is live — enableHostedSync only registers one
+  // when the config is complete. Re-deriving it from env here would be a second source of truth for the
+  // same fact, and the two can disagree.
+  const gated = !!session;
+  // undefined = still checking (the SDK reads a stored session asynchronously); null = signed out.
+  const [user, setUser] = useState(gated ? undefined : null);
+
+  useEffect(() => {
+    if (!gated) return;
+    let alive = true;
+    session.current().then(s => { if (alive) setUser(s); }).catch(() => { if (alive) setUser(null); });
+    const off = session.onChange(s => setUser(s));   // covers sign-in, sign-out AND token refresh
+    return () => { alive = false; off(); };
+  }, [gated, session]);
+
+  if (gated && user === undefined) {
+    return <div className="rw"><div className="splash">Checking your session\u2026</div></div>;
+  }
+  if (gated && user === null) return <SignIn session={session} />;
+  return <DocumentHost />;
+}
+
+/** Who you are signed in as, and the way out. Reads the registered provider directly rather than being
+ *  threaded through the app, and renders nothing at all in local mode. */
+function SessionPill() {
+  const session = getSessionProvider();
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    if (!session) return;
+    let alive = true;
+    session.current().then(s => { if (alive) setUser(s); });
+    return session.onChange(s => setUser(s));
+  }, [session]);
+  if (!session || !user) return null;
+  const email = user?.user?.email || user?.email;
+  return (
+    <span className="sessionpill">
+      {email && <span className="sessionpill-who" title={email}>{email}</span>}
+      <button className="linkbtn" onClick={async () => {
+        // flush first: signing out with unsaved work in the buffer would drop it silently
+        await flush();
+        await session.signOut();
+      }}>Sign out</button>
+    </span>
+  );
+}

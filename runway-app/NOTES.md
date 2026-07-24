@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 447 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 461 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -129,6 +129,24 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   misconfigured env threw past the guard and blanked the page — defeating the "half-configured must never
   stand in for working" property the guard exists to provide. A guard placed after the thing that can
   throw is not a guard.
+- **THE AUTH GATE: in hosted mode the document is not requested until there is a session.** Without it
+  the chain is `load()` -> `getAccessToken()` -> no session -> FORBIDDEN -> LOAD_FAILED -> "Couldn't open
+  your model", which from the user's side is indistinguishable from a broken app. `App` now checks for a
+  session first and renders `views/SignIn.jsx` (email magic link + Google) instead. In LOCAL mode this is
+  a pass-through — there is nobody to be, the document lives in this browser.
+  The gate is keyed on `getSessionProvider()` being registered, NOT on re-calling `syncConfigured()`:
+  `enableHostedSync` only registers a provider when the config is complete, so the provider IS the signal.
+  A test caught the alternative — re-deriving from `import.meta.env` gave two sources of truth for one
+  fact, and they disagreed. `state/session.js` normalises the SDK's inconsistent return shapes
+  (`{data:{session}}`, `{data:{subscription}}`, errors-as-values-not-throws) once, so the UI is written
+  against something predictable; the SDK is still injected, never imported, so all of this is tested with
+  a fake. SIGN-OUT resets the cached company via an `onChange` subscription wired inside
+  `enableHostedSync` rather than in the button — otherwise the next person to sign in on that browser
+  inherits the previous user's document, and a button is exactly the place that gets forgotten. Sign-out
+  also flushes first, or unsaved work in the buffer is dropped silently. Provider errors are surfaced
+  verbatim (e.g. "Email rate limit exceeded") rather than flattened into "something went wrong" — the
+  failure that matters is somebody staring at a screen that will not say what is wrong. Tests
+  `test/views/signin.test.jsx`, including the negative one: no document request before a session exists.
 - **Auth adapter: `state/auth.js`, and the SDK lives in exactly ONE place (`main.jsx`).** The hosted
   backend needs two things — `getAccessToken()` and `getCompanyId()`. The token needs a session, which
   needs the SDK; the company id is just another PostgREST query, which does not. So `createSupabaseAuth`
