@@ -129,6 +129,19 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   misconfigured env threw past the guard and blanked the page — defeating the "half-configured must never
   stand in for working" property the guard exists to provide. A guard placed after the thing that can
   throw is not a guard.
+- **RLS and GRANTs are TWO INDEPENDENT GATES, and 001 only did one.** Migration 001 enabled row-level
+  security and wrote policies but granted the `authenticated` role nothing, so every query died with
+  `permission denied for table memberships` (403) and the policies were never even evaluated. The two
+  fail DIFFERENTLY, which is how to tell them apart: an RLS denial returns ZERO ROWS, a missing GRANT
+  returns "permission denied for table". Fixed in `002_grants.sql`.
+  POSTURE, deliberately stricter than the usual "grant all, trust the policies": `authenticated` gets
+  SELECT and nothing else. There is NO insert/update/delete grant anywhere, so the only write path is
+  `save_document` (SECURITY DEFINER, checks membership itself) — meaning a client cannot write a document
+  without passing the version precondition, because it cannot write at all. And NO grant on `memberships`:
+  `current_company()` answers the only question a client ever had about it, as definer. That also
+  collapsed the client's old two-call "select memberships, else bootstrap" into ONE call whose
+  create-if-missing path is atomic rather than racing two devices signing in at once.
+  `alter default privileges` keeps future tables on the same posture without a follow-up migration.
 - **THE AUTH GATE: in hosted mode the document is not requested until there is a session.** Without it
   the chain is `load()` -> `getAccessToken()` -> no session -> FORBIDDEN -> LOAD_FAILED -> "Couldn't open
   your model", which from the user's side is indistinguishable from a broken app. `App` now checks for a

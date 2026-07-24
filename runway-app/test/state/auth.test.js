@@ -37,37 +37,31 @@ describe("access token", () => {
 });
 
 describe("company id", () => {
-  it("comes from the caller's own membership, and is cached", async () => {
+  it("comes from one RPC call, and is cached", async () => {
     let calls = 0;
-    const a = make(async () => { calls += 1; return ok([{ company_id: "co-7" }]); });
+    const a = make(async () => { calls += 1; return ok("co-7"); });
     expect(await a.getCompanyId()).toBe("co-7");
     expect(await a.getCompanyId()).toBe("co-7");
     expect(calls).toBe(1);
   });
 
-  it("resolves deterministically when a user belongs to several companies", async () => {
-    let seen;
-    const a = make(async (u) => { seen = u; return ok([{ company_id: "co-a" }]); });
+  it("never reads the memberships table — this schema grants no privilege on it", async () => {
+    const urls = [];
+    const a = make(async (u) => { urls.push(u); return ok("co-a"); });
     await a.getCompanyId();
-    expect(seen).toContain("order=created_at.asc");     // same company every load, not planner roulette
-    expect(seen).toContain("limit=1");
+    expect(urls.some(u => u.includes("/memberships"))).toBe(false);
+    expect(urls.some(u => u.includes("rpc/current_company"))).toBe(true);
   });
 
-  it("bootstraps a company for a brand-new account rather than showing an empty state", async () => {
-    const urls = [];
-    const a = make(async (u, i) => {
-      urls.push(u);
-      if (u.includes("/memberships")) return ok([]);        // no membership yet
-      if (u.includes("bootstrap_company")) return ok("co-new");
-      return ok(null);
-    });
+  it("a brand-new account is handled inside that same call, atomically", async () => {
+    // current_company() creates the company and membership as definer; the client sees only an id
+    const a = make(async () => ok("co-new"));
     expect(await a.getCompanyId()).toBe("co-new");
-    expect(urls.some(u => u.includes("bootstrap_company"))).toBe(true);
   });
 
   it("passes the anon key and the user's token", async () => {
     let init;
-    const a = make(async (u, i) => { init = i; return ok([{ company_id: "co-1" }]); });
+    const a = make(async (u, i) => { init = i; return ok("co-1"); });
     await a.getCompanyId();
     expect(init.headers.apikey).toBe("anon");
     expect(init.headers.Authorization).toBe("Bearer jwt-xyz");
@@ -81,7 +75,7 @@ describe("company id", () => {
 
   it("reset() forgets the company, so the next user does not inherit the last one's document", async () => {
     let n = 0;
-    const a = make(async () => ok([{ company_id: `co-${++n}` }]));
+    const a = make(async () => ok(`co-${++n}`));
     expect(await a.getCompanyId()).toBe("co-1");
     a.reset();
     expect(await a.getCompanyId()).toBe("co-2");

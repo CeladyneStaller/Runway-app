@@ -141,7 +141,7 @@ describe("signing out", () => {
     const client = fakeAuthClient({ session: { access_token: "jwt" } });
     const r = hosted(client, async (url) => ({
       ok: true, status: 200,
-      json: async () => (url.includes("/memberships") ? [{ company_id: "co-first" }] : []),
+      json: async () => (url.includes("current_company") ? "co-first" : []),
     }));
     expect(await r.auth.getCompanyId()).toBe("co-first");
     await client.signOut();                       // the onChange wiring must reset the cache
@@ -151,7 +151,7 @@ describe("signing out", () => {
     let asked = 0;
     const r2 = sync.enableHostedSync({
       authClient: client, env: full,
-      fetchImpl: async (url) => { if (url.includes("/memberships")) asked += 1; return { ok: true, status: 200, json: async () => [{ company_id: "co-second" }] }; },
+      fetchImpl: async (url) => { if (url.includes("current_company")) asked += 1; return { ok: true, status: 200, json: async () => "co-second" }; },
     });
     client._signIn({ access_token: "jwt2" });
     expect(await r2.auth.getCompanyId()).toBe("co-second");

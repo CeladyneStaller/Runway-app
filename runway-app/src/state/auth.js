@@ -63,28 +63,18 @@ export function createSupabaseAuth({ url, anonKey, getSession, fetchImpl, compan
   async function getCompanyId() {
     if (cachedCompanyId) return cachedCompanyId;
 
-    // RLS scopes this to the caller's own memberships, so no user filter is needed or trusted here.
-    // Ordered so a user who belongs to several companies resolves to the SAME one every load rather
-    // than whichever row the planner happened to return — a company switcher is a later phase, but
-    // silently hopping between documents would be a data-integrity bug now.
-    const rows = await call(`/rest/v1/memberships?select=company_id&order=created_at.asc&limit=1`,
-      { method: "GET", headers: await headers() });
-
-    if (Array.isArray(rows) && rows.length && rows[0].company_id) {
-      cachedCompanyId = rows[0].company_id;
-      return cachedCompanyId;
-    }
-
-    // A signed-in user with no membership is a brand-new account. bootstrap_company creates the company
-    // and the owner membership in one transaction, so there is never an account with nowhere to put a
-    // document.
-    const created = await call(`/rest/v1/rpc/bootstrap_company`, {
+    // ONE call. current_company() resolves the caller's company and creates one atomically if this is a
+    // brand-new account, all as SECURITY DEFINER — so the client needs no privilege on `memberships` at
+    // all, and the create-if-missing path cannot race against the same user signing in on two devices.
+    // (The earlier version read memberships directly, which needed a table grant this schema
+    // deliberately does not hand out.)
+    const out = await call(`/rest/v1/rpc/current_company`, {
       method: "POST",
       headers: await headers(),
-      body: JSON.stringify({ p_name: "My company" }),
+      body: "{}",
     });
-    const id = typeof created === "string" ? created : created?.[0] ?? created?.bootstrap_company;
-    if (!id) throw new BackendError(ERR_UNREACHABLE, "Could not create a company for this account");
+    const id = typeof out === "string" ? out : out?.[0] ?? out?.current_company;
+    if (!id) throw new BackendError(ERR_UNREACHABLE, "Could not resolve a company for this account");
     cachedCompanyId = id;
     return cachedCompanyId;
   }

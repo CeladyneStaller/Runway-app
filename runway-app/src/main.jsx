@@ -21,17 +21,17 @@ import { syncConfigured, syncConfigReport } from "./state/storage.js";
 // the whole app down to a blank page. A missing or misplaced .env is a CONFIGURATION mistake, not a
 // reason to lose the app — so it falls back to local, which is a supported mode, not a broken one.
 //
-import { createClient } from "@supabase/supabase-js";
-import { enableHostedSync } from "./state/sync.js";
+// import { createClient } from "@supabase/supabase-js";
+// import { enableHostedSync } from "./state/sync.js";
 //
-if (syncConfigured()) {
-   const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
-    //Pass supabase.auth itself, not just getSession: the app needs sign-in, sign-out and live auth
-    //events too, and passing the whole object keeps the SDK confined to this one line.
-   enableHostedSync({ authClient: supabase.auth });
- } else {
-   console.info("[runway] hosted sync not configured — running local-first against IndexedDB");
- }
+// if (syncConfigured()) {
+//   const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+//   // Pass supabase.auth itself, not just getSession: the app needs sign-in, sign-out and live auth
+//   // events too, and passing the whole object keeps the SDK confined to this one line.
+//   enableHostedSync({ authClient: supabase.auth });
+// } else {
+//   console.info("[runway] hosted sync not configured — running local-first against IndexedDB");
+// }
 //
 // `getSession()` is called on every request rather than cached, which is what makes refresh rotation
 // work: the SDK hands back a fresh token near expiry, with no refresh logic anywhere in this repo.
