@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 489 passing + 8 skipped isolation probes · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 502 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -187,6 +187,28 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   collapsed the client's old two-call "select memberships, else bootstrap" into ONE call whose
   create-if-missing path is atomic rather than racing two devices signing in at once.
   `alter default privileges` keeps future tables on the same posture without a follow-up migration.
+- **Auth is now three screens: landing (toggle), choose-a-password, reset.** Password is the PRIMARY
+  path and magic link is SECONDARY — the reverse of what security alone suggests, because passwordless
+  depends on email being deliverable and a project without SMTP has no working link flow at all. Lead
+  with what works; keep the better method visible for when it does.
+  LANDING: an explicit `Create account` / `Sign in` segmented toggle, defaulting to Create (the state a
+  first-time visitor is in). The old screen conflated the two and simply said "Sign in", so someone
+  without an account had no way to know it was for them.
+  `engine/password.js` holds the rules AS DATA (`passwordRules` -> `[{id,label,ok}]`), not as a score:
+  a strength meter says you failed without saying what to change; a checklist says what to do. The bar
+  in the UI counts the same list so the two can never disagree. Rules: >=10 chars, not in a common list,
+  does not contain the email stem (skipped when the stem is under 4 chars, or `al@x.com` bans "al" in
+  every password), and both entries match. These are a COURTESY, not enforcement — the real minimum
+  belongs in the Supabase project settings; client validation only stops a submit the server would reject.
+  `views/SetPassword.jsx` is ONE component for both creating and resetting — same rules, same confirm
+  field, one place to be wrong.
+  RECOVERY LANDING is the subtle one: Supabase hands you a real SESSION when you follow a reset link, so
+  it is indistinguishable from an ordinary sign-in unless you read the `PASSWORD_RECOVERY` event. Without
+  that, someone who came to change their password lands on the dashboard with no way to do it.
+  `session.onChange` now passes `(session, event)` for exactly this.
+  Sign-up reports `needsConfirmation` when no session comes back, and says so — with "Confirm email" on
+  and no SMTP, the account exists but cannot be used, and silence there looks exactly like a broken app.
+  Tests `test/views/password.test.jsx`.
 - **The sign-in screen IS the sign-up screen, and now says so.** Magic link and Google both create the
   account if there isn't one — that was always true and the screen never mentioned it, which is a worse
   failure than a missing feature: someone with no account reads "Sign in", concludes it is not for them,

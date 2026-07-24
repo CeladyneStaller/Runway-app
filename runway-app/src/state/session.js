@@ -24,9 +24,12 @@ export function createSession(authClient) {
       }
     },
 
-    /** Subscribe to sign-in / sign-out / token-refresh. Returns an unsubscribe function. */
+    /** Subscribe to sign-in / sign-out / token-refresh / password-recovery. The EVENT is passed as a
+     *  second argument because arriving from a reset link looks like an ordinary sign-in unless you
+     *  read it — and sending someone to their dashboard when they came to change their password is a
+     *  dead end they cannot get out of. Returns an unsubscribe function. */
     onChange(cb) {
-      const res = authClient.onAuthStateChange((_event, session) => cb(session ?? null));
+      const res = authClient.onAuthStateChange((event, session) => cb(session ?? null, event));
       const sub = res?.data?.subscription;
       return () => { try { sub?.unsubscribe?.(); } catch { /* already gone */ } };
     },
@@ -59,6 +62,57 @@ export function createSession(authClient) {
         return error ? { ok: false, message: error.message } : { ok: true };
       } catch (e) {
         return { ok: false, message: e?.message || "Could not start sign-in." };
+      }
+    },
+
+    /** Create an account with a password. Depending on the project's "Confirm email" setting this
+     *  either signs you straight in or sends a confirmation mail — the caller is told which, because
+     *  "nothing happened" is the worst possible outcome here. */
+    async signUpWithPassword(email, password, { redirectTo } = {}) {
+      try {
+        const { data, error } = await authClient.signUp({
+          email: String(email || "").trim(),
+          password,
+          options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
+        });
+        if (error) return { ok: false, message: error.message };
+        // A user with no session came back pending confirmation.
+        return { ok: true, needsConfirmation: !data?.session };
+      } catch (e) {
+        return { ok: false, message: e?.message || "Could not create the account." };
+      }
+    },
+
+    async signInWithPassword(email, password) {
+      try {
+        const { error } = await authClient.signInWithPassword({
+          email: String(email || "").trim(), password,
+        });
+        return error ? { ok: false, message: error.message } : { ok: true };
+      } catch (e) {
+        return { ok: false, message: e?.message || "Could not sign in." };
+      }
+    },
+
+    /** Send a reset link. Needs working email — without SMTP this is the one flow that cannot work. */
+    async sendPasswordReset(email, { redirectTo } = {}) {
+      const clean = String(email || "").trim();
+      if (!clean.includes("@")) return { ok: false, message: "Enter an email address." };
+      try {
+        const { error } = await authClient.resetPasswordForEmail(clean, redirectTo ? { redirectTo } : undefined);
+        return error ? { ok: false, message: error.message } : { ok: true };
+      } catch (e) {
+        return { ok: false, message: e?.message || "Could not send the reset link." };
+      }
+    },
+
+    /** Set a new password for the signed-in (or recovering) user. */
+    async updatePassword(password) {
+      try {
+        const { error } = await authClient.updateUser({ password });
+        return error ? { ok: false, message: error.message } : { ok: true };
+      } catch (e) {
+        return { ok: false, message: e?.message || "Could not set the password." };
       }
     },
 

@@ -4,6 +4,7 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
          adoptionDismissed, dismissAdoption, LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { getSessionProvider } from "./state/sync";
 import { SignIn } from "./views/SignIn";
+import { SetPassword } from "./views/SetPassword";
 import { ConflictDialog } from "./views/chrome/ConflictDialog";
 import { AdoptLocalDialog } from "./views/chrome/AdoptLocalDialog";
 import { hasSubstance } from "./views/chrome/docsummary";
@@ -605,15 +606,39 @@ export default function App() {
   const gated = !!session;
   // undefined = still checking (the SDK reads a stored session asynchronously); null = signed out.
   const [user, setUser] = useState(gated ? undefined : null);
+  // Arriving from a reset link LOOKS like an ordinary sign-in — Supabase hands you a session. Sending
+  // that person to the dashboard is a dead end: they came to change their password and there is now
+  // nothing on screen that lets them. The PASSWORD_RECOVERY event is the only thing that distinguishes it.
+  const [recovering, setRecovering] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwError, setPwError] = useState(null);
 
   useEffect(() => {
     if (!gated) return;
     let alive = true;
     session.current().then(s => { if (alive) setUser(s); }).catch(() => { if (alive) setUser(null); });
-    const off = session.onChange(s => setUser(s));   // covers sign-in, sign-out AND token refresh
+    const off = session.onChange((s, event) => {
+      if (event === "PASSWORD_RECOVERY") setRecovering(true);
+      setUser(s);
+    });
     return () => { alive = false; off(); };
   }, [gated, session]);
 
+  if (gated && recovering) return (
+    <SetPassword
+      mode="reset"
+      email={user?.user?.email || ""}
+      busy={pwBusy}
+      error={pwError}
+      onSubmit={async (pw) => {
+        setPwError(null); setPwBusy(true);
+        const r = await session.updatePassword(pw);
+        setPwBusy(false);
+        if (r.ok) setRecovering(false);          // the recovery session becomes an ordinary one
+        else setPwError(r.message);
+      }}
+    />
+  );
   if (gated && user === undefined) {
     return <div className="rw"><div className="splash">Checking your session\u2026</div></div>;
   }
