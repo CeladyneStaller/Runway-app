@@ -31,14 +31,17 @@ export function createSession(authClient) {
       return () => { try { sub?.unsubscribe?.(); } catch { /* already gone */ } };
     },
 
-    /** Email magic link. Resolves to { ok } or { ok: false, message }. */
+    /** Email magic link. This is BOTH sign-in and sign-up — the same link creates the account if there
+     *  isn't one. `shouldCreateUser` is stated explicitly rather than left to the SDK default: account
+     *  creation is the behaviour this product depends on, and depending on a default is how it silently
+     *  stops working one library version later. Resolves to { ok } or { ok: false, message }. */
     async signInWithEmail(email, { redirectTo } = {}) {
       const clean = String(email || "").trim();
       if (!clean || !clean.includes("@")) return { ok: false, message: "Enter an email address." };
       try {
         const { error } = await authClient.signInWithOtp({
           email: clean,
-          options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
+          options: { shouldCreateUser: true, ...(redirectTo ? { emailRedirectTo: redirectTo } : {}) },
         });
         return error ? { ok: false, message: error.message } : { ok: true };
       } catch (e) {

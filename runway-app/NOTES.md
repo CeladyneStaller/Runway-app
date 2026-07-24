@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 487 passing + 8 skipped isolation probes · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 489 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -187,6 +187,16 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   collapsed the client's old two-call "select memberships, else bootstrap" into ONE call whose
   create-if-missing path is atomic rather than racing two devices signing in at once.
   `alter default privileges` keeps future tables on the same posture without a follow-up migration.
+- **The sign-in screen IS the sign-up screen, and now says so.** Magic link and Google both create the
+  account if there isn't one — that was always true and the screen never mentioned it, which is a worse
+  failure than a missing feature: someone with no account reads "Sign in", concludes it is not for them,
+  and leaves. A screen that works but looks like it does not is indistinguishable from one that does not
+  work. Heading is now "Sign in or create an account", the sent-link confirmation says it sets up the
+  account, and there is an explicit "First time here?" line. `shouldCreateUser: true` is now passed
+  EXPLICITLY rather than relying on the SDK default — account creation is the behaviour this product
+  depends on, and depending on a default is how it silently stops working one library version later.
+  A "signups disabled" provider error also gets a plain-language explanation pointing at the Supabase
+  setting, since that message explains nothing to the person reading it.
 - **THE AUTH GATE: in hosted mode the document is not requested until there is a session.** Without it
   the chain is `load()` -> `getAccessToken()` -> no session -> FORBIDDEN -> LOAD_FAILED -> "Couldn't open
   your model", which from the user's side is indistinguishable from a broken app. `App` now checks for a

@@ -55,6 +55,15 @@ describe("the auth gate", () => {
     expect(container.textContent).toMatch(/follows you between devices/i);
   });
 
+  it("says plainly that this is ALSO how you create an account", async () => {
+    // the screen worked for new users all along and never said so, which is the same as not working
+    hosted(fakeAuthClient({ session: null }));
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/create an account/i));
+    expect(container.textContent).toMatch(/opening it creates one/i);
+    expect(container.textContent).toMatch(/First time here/i);
+  });
+
   it("does NOT request the document before there is a session", async () => {
     const client = fakeAuthClient({ session: null });
     hosted(client, async (url) => { if (url.includes("/documents")) loads += 1; return { ok: true, status: 200, json: async () => [] }; });
@@ -69,7 +78,7 @@ describe("the auth gate", () => {
     const { container } = render(<App />);
     // it must get PAST the gate and into the document host, not merely fail to show the gate
     await waitFor(() => expect(container.textContent).toMatch(/Loading your model|Runway|Couldn't open/));
-    expect(container.textContent).not.toMatch(/Email me a sign-in link/);
+    expect(container.textContent).not.toMatch(/Email me a link/);
   });
 
   it("signing in live swaps the screen without a reload", async () => {
@@ -95,16 +104,19 @@ describe("signing in", () => {
   it("sends a magic link and confirms where it went", async () => {
     const { container, client } = await screen();
     fireEvent.change(container.querySelector("#signin-email"), { target: { value: "corey@example.com" } });
-    fireEvent.click(btn(container, /Email me a sign-in link/));
+    fireEvent.click(btn(container, /Email me a link/));
     await waitFor(() => expect(container.textContent).toMatch(/Check your email/));
     expect(client.calls.otp[0].email).toBe("corey@example.com");
     expect(container.textContent).toMatch(/corey@example\.com/);
+    // creation is requested EXPLICITLY, not left to whatever the SDK defaults to this version
+    expect(client.calls.otp[0].options.shouldCreateUser).toBe(true);
+    expect(container.textContent).toMatch(/sets up your account/i);
   });
 
   it("refuses an obviously bad address without calling out", async () => {
     const { container, client } = await screen();
     fireEvent.change(container.querySelector("#signin-email"), { target: { value: "nope" } });
-    fireEvent.click(btn(container, /Email me a sign-in link/));
+    fireEvent.click(btn(container, /Email me a link/));
     await waitFor(() => expect(container.textContent).toMatch(/Enter an email address/));
     expect(client.calls.otp).toHaveLength(0);
   });
@@ -124,6 +136,18 @@ describe("signing in", () => {
     expect(client.calls.oauth[0].provider).toBe("google");
   });
 
+  it("explains a 'signups disabled' error, which otherwise means nothing to the reader", async () => {
+    const client = fakeAuthClient({ session: null });
+    client.signInWithOtp = async () => ({ error: { message: "Signups not allowed for otp" } });
+    hosted(client);
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/Sign in/));
+    fireEvent.change(container.querySelector("#signin-email"), { target: { value: "a@b.com" } });
+    fireEvent.click(btn(container, /Email me a link/));
+    await waitFor(() => expect(container.textContent).toMatch(/New accounts are turned off/i));
+    expect(container.textContent).toMatch(/Authentication/);
+  });
+
   it("shows the provider's own error rather than flattening it to 'something went wrong'", async () => {
     const client = fakeAuthClient({ session: null });
     client.signInWithOtp = async () => ({ error: { message: "Email rate limit exceeded" } });
@@ -131,7 +155,7 @@ describe("signing in", () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Sign in/));
     fireEvent.change(container.querySelector("#signin-email"), { target: { value: "a@b.com" } });
-    fireEvent.click(btn(container, /Email me a sign-in link/));
+    fireEvent.click(btn(container, /Email me a link/));
     await waitFor(() => expect(container.textContent).toMatch(/Email rate limit exceeded/));
   });
 });
