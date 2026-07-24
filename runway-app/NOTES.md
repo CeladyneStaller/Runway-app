@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 431 · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 447 · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -119,6 +119,22 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   months and the extension only widens the view when there's a late crossing/milestone to show; tick
   spacing is adaptive (2/3/6 mo) so the wider window stays readable. New golden guards: `HORIZON === 36`
   and "a crossing past month 18 is detected, not treated as cash-positive" (the whole point of extending).
+- **Auth adapter: `state/auth.js`, and the SDK lives in exactly ONE place (`main.jsx`).** The hosted
+  backend needs two things — `getAccessToken()` and `getCompanyId()`. The token needs a session, which
+  needs the SDK; the company id is just another PostgREST query, which does not. So `createSupabaseAuth`
+  takes an injected `getSession` function rather than importing @supabase/supabase-js, which makes the
+  entire auth path testable with no network and no package installed. `getSession()` is called on EVERY
+  request rather than cached — that is precisely what makes refresh rotation work, with zero refresh
+  logic in this repo. A missing session is FORBIDDEN (not retryable: retrying a signed-out user forever
+  helps nobody); a session lookup that throws is UNREACHABLE (retryable). `getCompanyId()` reads the
+  caller's own membership under RLS, ordered `created_at.asc limit 1` so a user in several companies
+  resolves to the SAME document every load rather than whichever row the planner returned — a switcher
+  is a later phase, but silently hopping between documents would be a data bug now. A signed-in user
+  with no membership gets `bootstrap_company` called, so there is never an account with nowhere to put a
+  document. `reset()` on sign-out, or the next user inherits the last one's company.
+  `state/sync.js` composes auth + backend in one `enableHostedSync()` call and FALLS BACK TO LOCAL —
+  saying why — if the flag, url, key or getSession is missing. Half-configured must never stand in for
+  working. Tests `test/state/auth.test.js` + `test/state/sync.test.js`.
 - **Backends are pluggable; the hosted one talks PostgREST over `fetch`, with NO SDK.** `state/backends/`
   holds `local.js` (idb-keyval), `supabase.js`, and `errors.js`. A backend is two methods —
   `read() -> {raw, meta} | null` and `write(raw)` — with null meaning "no document yet", which is NOT an
