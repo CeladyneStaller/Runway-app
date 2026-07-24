@@ -119,6 +119,16 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   months and the extension only widens the view when there's a late crossing/milestone to show; tick
   spacing is adaptive (2/3/6 mo) so the wider window stays readable. New golden guards: `HORIZON === 36`
   and "a crossing past month 18 is detected, not treated as cash-positive" (the whole point of extending).
+- **`.env.example` is a TEMPLATE Vite never reads.** Putting real values there gives
+  `import.meta.env.VITE_SUPABASE_URL === undefined`, `createClient()` throws "supabaseUrl is required",
+  and because that runs before render the whole app is a BLANK PAGE. Values go in `.env` (gitignored;
+  `.env.example` stays tracked and blank via `!.env.example`). The original `.gitignore` had `*.local`,
+  which covers `.env.local` but NOT `.env` — real keys would have been committed.
+- **Guard `createClient()` with `syncConfigured()`, not just `enableHostedSync()`.** The fallback-to-local
+  logic lives inside `enableHostedSync`, but the SDK client was being constructed BEFORE that call, so a
+  misconfigured env threw past the guard and blanked the page — defeating the "half-configured must never
+  stand in for working" property the guard exists to provide. A guard placed after the thing that can
+  throw is not a guard.
 - **Auth adapter: `state/auth.js`, and the SDK lives in exactly ONE place (`main.jsx`).** The hosted
   backend needs two things — `getAccessToken()` and `getCompanyId()`. The token needs a session, which
   needs the SDK; the company id is just another PostgREST query, which does not. So `createSupabaseAuth`
