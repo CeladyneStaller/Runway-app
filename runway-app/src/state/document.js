@@ -30,6 +30,9 @@ export const emptyDoc = () => {
     startY: now.getFullYear(), startM: now.getMonth(),
     cash: 0,
     lines: [], employees: [], projects: [], milestones: [], pos: [], rounds: [],
+    // Subscription products. A new field, so it reaches existing documents through the emptyDoc
+    // spread in migrate() without a schema bump — same route `journal` took.
+    saas: [],
     history: [],   // measured months of real spend. NOT the demo's — see engine/history.js.
     cashActuals: {}, flagOverrides: {},
     // Projection journal: append-only forecast snapshots. New field, so it arrives on existing
@@ -48,7 +51,9 @@ export const emptyDoc = () => {
  *  deleted around someone else's example. */
 export const demoDoc = () => ({
   ...emptyDoc(),
-  name: "Demo company",
+  // HARDCODED on purpose, and the only name in the app that is. Every other document takes its name
+  // from the account's company; a demo has no account, so there is nothing to take one from.
+  name: "Demo Company",
   startY: 2026, startM: 6,
   cash: 560000,
   lines: SEED_LINES,

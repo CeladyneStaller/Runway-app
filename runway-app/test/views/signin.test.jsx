@@ -45,6 +45,15 @@ beforeEach(async () => {
 const hosted = (client, fetchImpl) =>
   sync.enableHostedSync({ authClient: client, env: full, fetchImpl: fetchImpl || (async () => ({ ok: true, status: 200, json: async () => [] })) });
 
+// The sign-in FORM is no longer the first screen — a landing fork sits in front of it, so that somebody
+// who has not decided yet is not asked to authenticate first. These helpers walk through it.
+const pick = (c, re) => [...c.querySelectorAll("button")].find(b => re.test(b.textContent));
+const toForm = async (c, which = /Get started/) => {
+  await waitFor(() => expect(c.textContent).toMatch(/Know your runway/));
+  fireEvent.click(pick(c, which));
+  await waitFor(() => expect(c.textContent).toMatch(/follows you between devices/i));
+};
+
 describe("the auth gate", () => {
   it("in LOCAL mode there is nobody to be — the app renders straight away", async () => {
     sync.enableHostedSync({ env: {} });                     // not configured -> local
@@ -53,16 +62,20 @@ describe("the auth gate", () => {
     expect(container.textContent).not.toMatch(/Sign in/);
   });
 
-  it("in HOSTED mode with no session, it asks you to sign in", async () => {
+  it("in HOSTED mode with no session, it offers the landing fork rather than a bare form", async () => {
     hosted(fakeAuthClient({ session: null }));
     const { container } = render(<App />);
-    await waitFor(() => expect(container.textContent).toMatch(/Sign in/));
+    await waitFor(() => expect(container.textContent).toMatch(/Know your runway/));
+    expect(container.textContent).toMatch(/Open the demo/i);
+    expect(container.textContent).toMatch(/Set up your company/i);
+    await toForm(container, /Sign in/);
     expect(container.textContent).toMatch(/follows you between devices/i);
   });
 
   it("offers both modes explicitly, defaulting to creating an account", async () => {
     hosted(fakeAuthClient({ session: null }));
     const { container } = render(<App />);
+    await toForm(container);
     await waitFor(() => expect(container.textContent).toMatch(/Create account/i));
     expect(container.textContent).toMatch(/Sign in/i);
     // the default position is the one a first-time visitor is in
@@ -101,7 +114,7 @@ describe("signing in", () => {
     const client = fakeAuthClient({ session: null });
     hosted(client);
     const r = render(<App />);
-    await waitFor(() => expect(r.container.textContent).toMatch(/Sign in/));
+    await toForm(r.container, /Sign in/);
     return { ...r, client };
   };
   const btn = (c, re) => [...c.querySelectorAll("button")].find(b => re.test(b.textContent));
@@ -139,7 +152,7 @@ describe("signing in", () => {
     client.signInWithOtp = async () => ({ error: { message: "Email rate limit exceeded" } });
     hosted(client);
     const { container } = render(<App />);
-    await waitFor(() => expect(container.textContent).toMatch(/Sign in/));
+    await toForm(container, /Sign in/);
     fireEvent.change(container.querySelector("#signin-email"), { target: { value: "a@b.com" } });
     fireEvent.click(btn(container, /Email me a link instead/));
     await waitFor(() => expect(container.textContent).toMatch(/Email rate limit exceeded/));

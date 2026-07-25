@@ -78,7 +78,10 @@ describe("creating an account", () => {
     const client = fakeAuthClient();
     hosted(client);
     const r = render(<App />);
+    // A landing fork now sits in front of the form; "Get started" is the create-account door.
     await waitFor(() => expect(r.container.textContent).toMatch(/Know your runway/));
+    fireEvent.click([...r.container.querySelectorAll("button")].find(b => /Get started/.test(b.textContent)));
+    await waitFor(() => expect(r.container.textContent).toMatch(/follows you between devices/i));
     return { ...r, client };
   };
 
@@ -122,6 +125,8 @@ describe("creating an account", () => {
     hosted(client);
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Know your runway/));
+    fireEvent.click(btn(container, /Get started/));
+    await waitFor(() => expect(container.textContent).toMatch(/follows you between devices/i));
     fireEvent.change(container.querySelector("#signin-email"), { target: { value: "corey@acme.com" } });
     fireEvent.click(btn(container, /^Continue$/));
     await waitFor(() => expect(container.querySelector("#pw-new")).toBeTruthy());

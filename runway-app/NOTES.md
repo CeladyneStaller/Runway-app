@@ -737,6 +737,237 @@ hooks exist on the paths so the render test can assert the line sits within the 
 either old bug (verified by reverting) and is in `test/views/band.test.jsx`, with the data-level
 coincidence guard in `test/engine/band.test.js`.
 
+## The hardcoded company name (fixed TWICE, and the second time is the lesson)
+
+`Northwind Labs` was hardcoded in the chrome — someone else's company name on every screen, for every
+user. It was found and fixed once in the rail foot, with a guard in `test/views/shell.test.jsx`. An
+IDENTICAL hardcode two elements away in the topbar subtitle survived that fix untouched and shipped.
+
+WHY IT SURVIVED: the guard asserted `foot.textContent` — scoped to the element that had been fixed. A
+test that pins the fix instead of the INVARIANT only protects the one line you were already looking at.
+The invariant here is "no chrome anywhere names a company the document doesn't", and it is now asserted
+against the whole rendered container, not a subtree. Both spots derive from `doc.name` (falling back to
+"Untitled model", matching the rail input's placeholder so the two agree).
+
+THE TWO NAMES ARE NOW RECONCILED (`test/views/companyname.test.jsx`). A model belongs to a company, so
+the company's name is the default for the model's — nobody should type "Acme" twice. `DocumentHost`
+resolves it from `listCompanies()` + `auth.activeCompany()` into `companyName`, best-effort (a name that
+fails to resolve is a missing default, not an error worth showing).
+
+**WHEN it seeds is the whole design.** Seeding on load would write a document to a brand-new account
+merely because somebody signed in — which stops the account being `isNew` and takes the adoption AND
+demo-promotion offers down with it (`adopt.test.jsx` has asserted that invariant since the backend
+landed). So the seed is gated on `hasSubstance(doc)`: it rides along with a write the user's own action
+already caused rather than causing one. Removing that gate fails the guard test — verified by reversion.
+
+Two further restrictions, both about not touching real data:
+- Only documents that started this session EMPTY (`r.isNew`, tracked as `seedName`) are eligible. An
+  existing saved model called "Untitled" is a name somebody left alone, not an unfilled blank.
+- `isDefaultName()` ("" or "Untitled") is the only thing that may be overwritten. A chosen name wins.
+
+DISPLAY falls back in order — chosen name, then the company's, then "Untitled model" — so the subtitle
+shows something useful even in the cases the seed deliberately won't rewrite. The rail input keeps its
+RAW `doc.name` as `value` (a fallback there would make the field un-clearable) and takes the company
+name as its PLACEHOLDER instead.
+
+The demo's name is hardcoded to "Demo Company" in `document.js`, and is the only hardcoded name left in
+the app: a demo has no account, so there is nothing to take one from. A test asserts the demo never asks
+the account anything (its `fetchImpl` throws).
+
+## SaaS subscription revenue (Revenue tab)
+
+`src/engine/saas.js` + `src/views/chrome/SaasPanel.jsx`, edited under Cash flow -> Revenue. Tests
+`test/engine/saas.test.js` (17), `test/engine/saas-integration.test.js` (9), `test/views/saas.test.jsx` (9).
+
+**WHY IT ISN'T A RECURRING LINE WITH A GROWTH RATE.** A recurring line grows geometrically from one
+amount. A subscription book is a POPULATION: customers arrive, a share leave every month, and the ones
+who stay may pay more. Those forces produce a curve no single growth percentage reproduces — early on
+adds dominate and it looks linear, later churn scales with the base and it flattens toward a ceiling of
+adds/churn. That ceiling is the entire reason to model it separately. Pinned by an integration test that
+is worth reading: same adds, same price, same burn, and ONLY churn differing — at 20%/mo the book tops
+out at 50 customers = $25k/mo, never covers $50k of burn, and the company still dies; at 0% it escapes.
+`months(capped)` is finite, `months(uncapped)` is null.
+
+**EXPANDS INTO ORDINARY LINE ITEMS**, exactly as capital.js does for instruments and projects.js for
+projects — `compileSaas()` emits one `cadence: "onetime"` revenue line per month. Nothing downstream
+learns a new cadence, so buildProjection, scenarios, the confidence bands, SF-424A and the revenue-
+actuals replacement all keep working untouched. The alternative — a `cadence: "saas"` interpreted inside
+the projection loop — would have meant finding every switch on cadence in the codebase and hoping none
+were missed. A test asserts the model contains only "recurring" and "onetime".
+
+**Churn is applied BEFORE the month's adds**, so somebody who signs up in month m bills in month m.
+The other order churns a cohort that has not reached a renewal date yet. Reversing it fails 4 tests.
+
+**Field notes.** `saas: []` reaches existing documents through the `emptyDoc` spread in `migrate()` with
+no schema bump — the same route `journal` took. Blank/junk inputs coerce to 0, never NaN (a NaN in a
+line amount poisons every balance after it and the chart stops drawing). Confidence works like any
+revenue line and defaults to "expected" via `tagRevenue`. `saasCeiling()` returns NULL for zero churn
+(unbounded) and for zero adds (decay) — both real answers, neither a ceiling — and the panel names
+those two cases explicitly rather than showing a blank. The Revenue stat strip adds `saasNow` to
+recurring revenue, or a pure-subscription company reads as zero recurring revenue.
+
+## MRR reconciliation
+
+`src/engine/saas.js` (reconciliation half) + the `Reconcile` block in `SaasPanel.jsx`. Tests
+`test/engine/saas-reconcile.test.js` (17) and the recording block in `test/views/saas.test.jsx`.
+
+**Follows revenue.js's four pinned rules exactly**, deliberately — two subtly different reconciliation
+doctrines in one app would be worse than either alone. Past-only bounded by the book's last recorded
+month; TOTAL suppression inside that range (a gap is a recorded $0, not a month to guess at); always on,
+no toggle; flag the disagreement but still use the actual. Recorded months are tagged
+`confidence: "committed"` because they already happened — no confidence toggle may switch off money
+that is in the bank. All three of those are verified by reversion: filling gaps from the model fails 1
+test, dropping the committed tag fails 2.
+
+**WHY IT DOESN'T RIDE ON `applyRevenueActuals`.** Project revenue is reconciled from CODED HISTORY,
+because a grant payment arrives as a bank deposit that has to be attributed to something. MRR comes off
+a billing dashboard and the founder already knows it — so `saas[].actuals` is `{ month: amount }`
+entered directly against the book. Making somebody run a coding exercise to tell us a number they can
+read off a screen would be the wrong kind of rigour. Variances still join the SAME list
+(`revenueVariances`) so the "recorded revenue differs from projection" panel in Spend history -> Ledger
+stays one place to look; subscription variances carry `label` because they have no project to resolve
+a name from.
+
+**RE-BASING IS A BUTTON, NOT A CONSEQUENCE.** This is the one place subscriptions genuinely differ from
+grants: a grant paying short is one disappointing month, but billing short means the CUSTOMER COUNT is
+wrong and therefore every forward month is wrong too. `impliedCustomers()` backs out what the record
+implies (at the price the model assumes for THAT month, not month zero's). Acting on it changes the
+forecast, and the standing rule is that a discovered disagreement must not silently move the runway —
+so `rebaseFromActuals()` runs when somebody presses the button, having seen the gap. Making it
+automatic fails 4 tests. The re-base carries every assumption across unchanged — churn, add growth and
+price growth all continue on the same curve, with `newPerMonth` and `arpu` advanced to their
+month-`through` values — so the forward series is EXACTLY continuous when the record matched the model,
+and only moves when it didn't. Both directions are tested.
+
+## New-company onboarding (landing fork -> setup wizard)
+
+`src/views/Landing.jsx`, `src/views/Setup.jsx`, `src/state/setup.js`. Tests `test/engine/setup.test.js`
+(11, pure) + `test/views/onboarding.test.jsx` (11, flow).
+
+**What was wrong.** Two landing screens that didn't know about each other. `SignIn` was the first screen,
+so the cheapest way to understand the product — the demo — was a text link at the BOTTOM of a form,
+below a password input, a forgotten-password link, a magic-link button and a Google button: an undecided
+visitor was being asked to authenticate first. Then the empty shell offered the demo AND import a second
+time, to somebody who had already signed up — and its demo button did `hash="#demo"; reload()`, bouncing
+an authenticated user into unauthenticated demo mode. Meanwhile "create from scratch" meant an empty
+model and eight tabs to explore, prompted by a single cash field.
+
+**The shape now.** Landing = two real doors (demo / set up your company) with sign-in demoted to a line
+of text — not because returning users matter less, but because they know what they're looking for and
+new visitors don't. `SignIn` gains `initialMode` + `onBack`, so neither door is a trap. In LOCAL mode
+there is no landing screen and no account, so the empty shell keeps its demo button there and loses it
+only when `syncConfigured()`.
+
+**Account-first, so the wizard hangs off `isNew`.** Sign-up ends at "check your email", so the wizard
+can't follow it in the same sitting — it fires on the next successful load instead, the same hook that
+drives promotion and adoption. THREE offers can now claim an empty account and they are ordered by how
+explicit the signal is: kept-demo promotion, then a model stranded in IndexedDB, then the wizard. NOTE
+the restructure this forced: `adoptionDismissed()` used to `return` early, which would have swallowed
+the wizard for anyone who had ever declined an adoption.
+
+**Skipping must cost nothing.** An all-skipped wizard returns null and writes NO document, so the
+account stays as `isNew` as it was found and can be offered again — guarded by two tests asserting
+`uploaded` is empty after cancel and after skip-everything. "Not now" is remembered in sessionStorage,
+not a schema field: the account is genuinely still empty, so asking again on a later visit is help.
+
+**`src/state/setup.js` is pure and separately tested** — the answers->document mapping is where the rules
+are. It lives in state/ not engine/ because it builds a DOCUMENT and `src/engine/**` is forbidden from
+importing state (oxlint). Blank numeric fields become 0, never NaN: a NaN in `cash` propagates into
+every balance and the chart silently stops drawing. Junk enums are rejected rather than written through.
+Rounds default to `status: "planning"` -> INST_CONF speculative -> OFF in the base projection, because
+understating runway is the safe direction to be wrong in.
+
+**Salary is optional but warned about, not blocked.** Employees with names and titles alone produce no
+burn, and burn is what a runway IS — a wizard collecting three names and no salaries hands back a model
+that reads "cash-positive" forever, which is the exact document shape that white-screened Scenarios.
+Blocking would push people to omit the person entirely, which is worse: a person at zero is visible in
+the model and fixable, a person left out is invisible. So the wizard keeps them at 0 and says the burn
+is understated. The live runway readout is what makes this honest — the number visibly fails to move.
+
+**Adding a SECOND company from Account runs the same wizard**, triggered off `r.isNew` in `onSwitched`
+and deliberately NOT gated on the skip flag: they just asked for a company.
+
+## The Scenarios white screen — and why one deref took the whole app down
+
+Reported as "the Scenarios tab is broken and clicking it yields a blank white screen that cannot be
+escaped". Two separate faults, and the second is the more important one.
+
+**THE DEREF.** `zeroInfo(rows)` returns **`null`** — NOT `{ months: null }` — when the balance never
+crosses zero (cash-positive, or simply beyond the horizon). `engine/labor.js:63` says so in a comment.
+`Scenarios.jsx` was written believing the other thing and did `s.zero.months` in the legend and
+`z.months` in the table. Any model with cash and no burn crashed, which is EVERY brand-new account
+between entering cash and adding the first expense — a state the recent onboarding work makes more
+common, not less. Fixed with a local `monthsOf(z)` that collapses both never-crosses shapes into one
+nullable number, so no caller has to know the difference.
+
+WHY THE SUITE MISSED IT: `test/views/scenarios.test.jsx` uses `demoDoc()` throughout, which always has
+burn and therefore always has a finite zero date. The existing WATCH note in the scenarios section
+("a directional test must keep the runway finite") documents the habit that hid this — every scenarios
+test was carefully staying inside the one branch where the bug is invisible. Audited every other
+`zeroInfo` consumer while here: `docsummary.js` guards with `z ? … : …`, and App's `zeroConf` derefs are
+safe because `showConf = toggles.speculative && !!zeroConf`. The bug was confined to Scenarios.
+
+**THE UNESCAPABLE PART, which is structural.** React unmounts the entire tree on an uncaught render
+error, so one bad dereference produced a blank page with no rail, no nav and no way back — you could not
+click to another tab because there was no tab left. `ViewBoundary` (in App.jsx, exported for test) now
+wraps the VIEW AREA only, deliberately: the rail and topbar stay mounted, so recovery is real navigation
+rather than a prettier dead end. It is KEYED ON THE VIEW — without that, one crash leaves the boundary
+stuck in its error state for every view thereafter (guarded by a test; removing the key fails it). It
+does not swallow the error: `componentDidCatch` logs it, because a caught crash that leaves no trace is
+a bug nobody fixes. The card states the model is unharmed and prints the message for a bug report.
+
+Tests `test/views/crashsafety.test.jsx` (8), both fixes verified by reversion.
+
+## Demo mode (localStorage, a 12-hour wall clock, and ONE door to real)
+
+`src/state/backends/demo.js` + `src/views/chrome/PromoteDemoDialog.jsx`. Tests `test/views/demo.test.jsx`
+(23). Entry is `#demo` from the sign-in screen or the empty shell; auth is bypassed entirely, and
+`activateDemoBackend()` swaps the whole backend at the seam so nothing reaches Supabase or IndexedDB.
+
+**sessionStorage -> localStorage, and WHY the original reasoning survives.** The old comment justified
+sessionStorage on the grounds that demo data must never land where `peekLocal()` looks, or the adoption
+flow would offer to upload a fictional company into a real account. That reasoning is intact: real local
+models live in IndexedDB via idb-keyval, the demo lives in localStorage under `runway:demo`, and those
+are different stores. What forced the move was that sessionStorage DIES WITH THE TAB — which makes a
+twelve-hour window unreachable, and (the stronger reason) loses the demo across a sign-up round trip,
+since confirming an email frequently opens a different tab. The memory fallback also moved to MODULE
+scope: the helpers (`demoRemainingMs`, `demoInProgress`) are called by App without a backend instance in
+hand, so a per-instance fallback made them report "no demo" on exactly the browsers doing the fallback.
+
+**The clock is WALL CLOCK from first entry**, chosen over tracked-active-use: a window you can name
+("expires at 9pm") is one someone can plan around. The envelope is `{ startedAt, doc }`; `createDemoBackend`
+ADOPTS an existing `startedAt` rather than stamping a new one (else every refresh restarts the twelve
+hours) and `write()` carries the original forward (else every edit buys more time). Both are tested by
+reversion. Expiry is checked BEFORE `activateDemoBackend` in App's `useState` initialiser, because the
+backend reseeds over a closed window and would erase the one fact needed to explain what happened; the
+hash is NOT a usable signal there, since routing rewrites it to `#pay`/`#proj` on the first click. The
+DemoPill polls every 30s and, on expiry, marks/wipes/reloads ITSELF — self-contained precisely so there
+is no parent callback to declare in the effect's deps (exhaustive-deps is an error now).
+
+**Pill copy changed with the behaviour.** It used to say "nothing is saved", which was already slightly
+false (edits survived a refresh) and is now flatly false. It reads `Demo · resets in 4h 10m`.
+
+**Export and import are BOTH withheld in demo, for different reasons.** Import is the dangerous one and
+was a live data-loss path: a real model imported into the demo dies with the window. Export contradicts
+this app's own "your only backup" doctrine everywhere else, and the contradiction is deliberate — a demo
+is disposable by construction, so nothing here wants backing up, and the honest replacement is "keep
+this". A guard test asserts they are still present OUTSIDE demo mode, since withholding them globally
+would remove real users' only backup. NOTE both this and the expiry are PRODUCT SIGNALS, NOT ENFORCEMENT:
+"Leave demo" wipes and re-entry starts a fresh twelve hours, and the JSON is a devtools panel away. Real
+anti-freeloading needs server-side identity, which costs the Supabase load demo mode exists to avoid.
+
+**Promotion — a DELIBERATE REVERSAL of a previous design choice, flagged not quietly edited.** The load
+effect used to bail on demo outright ("a demo has nothing to migrate, and nothing it touches is real"),
+correct while demo data was strictly disposable. It no longer is. "Keep this model" calls
+`stashPromotion(doc)` — snapshotting AT THE MOMENT OF INTENT, not of arrival, because between the click
+and a confirmed email sits an unbounded wait that the demo's own window can close inside. The stash has
+its own 7-day life and `clearDemo()` deliberately does NOT touch it, since leaving the demo is exactly
+what somebody does on the way to creating the account. It is claimed by the first `isNew` account load,
+checked BEFORE stranded-local adoption (more recent, more explicit signal). The dialog ALWAYS offers both
+doors — "use this as my model" and "start clean" — because the demo starts as a FICTIONAL company and
+there is no reliable way to tell "spent an hour making it theirs" from "clicked around for ten minutes";
+the copy says plainly that the sample data comes along.
+
 ## Projection journal (Phase 1 DONE — the recorder; Phases 2-3 deferred until there is data)
 
 `src/engine/journal.js`, `src/views/chrome/JournalPanel.jsx`, UI at **Spend history -> Forecasts**

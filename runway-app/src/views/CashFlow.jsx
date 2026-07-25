@@ -8,8 +8,10 @@ import { useStart } from "../state/StartCtx";
 import { Payroll } from "./Payroll";
 import { Projects } from "./Projects";
 import { I } from "./chrome/icons";
+import { SaasPanel } from "./chrome/SaasPanel";
+import { saasSeries } from "../engine/saas";
 
-export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [] }) {
+export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [], saas = [], setSaas = () => {} }) {
   const { START_Y, START_M } = useStart();
   const TAB_KEYS = ["net", "revenue", "costs"];
   const tab = TAB_KEYS.includes(routeTab) ? routeTab : "net";
@@ -109,6 +111,11 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
     </div>
   );
 
+  // What the subscription books bill THIS month. Recurring revenue in the stat strip would otherwise
+  // read as zero for a pure-subscription company, since these expand to per-month one-time lines.
+  const saasNow = (saas || []).filter(x => x.include !== false)
+    .reduce((a, x) => a + (saasSeries(x).find(p => p.month === 0)?.mrr || 0), 0);
+
   const TABS = [["net", "Net cash flow"], ["revenue", "Revenue"], ["costs", "Costs"]];
   return (
     <>
@@ -157,11 +164,12 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
 
       {tab === "revenue" && (<>
         <div className="stats">
-          <div className="stat"><div className="accent" style={{ background: "var(--signal)" }} /><div className="lab">Recurring revenue</div><div className="big">{money(recRev)}</div><div className="meta">per month, all tiers</div></div>
+          <div className="stat"><div className="accent" style={{ background: "var(--signal)" }} /><div className="lab">Recurring revenue</div><div className="big">{money(recRev + saasNow)}</div><div className="meta">per month, all tiers{saasNow > 0 ? " · incl. subscriptions" : ""}</div></div>
           <div className="stat"><div className="lab">One-time revenue</div><div className="big">{money(oneSum("revenue"))}</div><div className="meta">across the horizon</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--signal-2)" }} /><div className="lab">Grant payments</div><div className="big">{money(grantTotal)}</div><div className="meta">from Projects, {grantIn.length} payment{grantIn.length !== 1 ? "s" : ""}</div></div>
         </div>
         {editPanel("revenue")}
+        <SaasPanel saas={saas} setSaas={setSaas} />
         {roTable("Grant payments", "Awarded reimbursements and milestone payments already counted in your runway.",
           grantIn.map(l => ({ label: l.label || "Payment", src: l.projectName, amount: l.cadence === "recurring" ? l.amount : l.amount, per: l.cadence === "recurring", when: timing(l) })), "Projects")}
       </>)}

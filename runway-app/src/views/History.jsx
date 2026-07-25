@@ -247,10 +247,11 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
             <div className="panel" style={{ marginBottom: 16, borderColor: "var(--caution)" }}>
               <div className="panel-h"><div><h3>Recorded revenue differs from projection</h3><p>Where your books recorded a different amount than the model projected, the recorded number is used — this just flags the gap so a surprise doesn't hide inside the runway. Future months are unaffected.</p></div>
                 <span className="chip warn">{revenueVariances.length}</span></div>
-              <table className="tbl"><thead><tr><th>Project</th><th>Month</th><th style={{ textAlign: "right" }}>Projected</th><th style={{ textAlign: "right" }}>Recorded</th><th style={{ textAlign: "right" }}>Difference</th></tr></thead>
+              <table className="tbl"><thead><tr><th>Source</th><th>Month</th><th style={{ textAlign: "right" }}>Projected</th><th style={{ textAlign: "right" }}>Recorded</th><th style={{ textAlign: "right" }}>Difference</th></tr></thead>
                 <tbody>{revenueVariances.map((v, i) => (
                   <tr key={i}>
-                    <td style={{ fontSize: 12.5 }}>{projects.find(p => p.id === v.projectId)?.name || "—"}</td>
+                    {/* `label` is carried by variances with no project to resolve — subscription books. */}
+                    <td style={{ fontSize: 12.5 }}>{v.label || projects.find(p => p.id === v.projectId)?.name || "—"}</td>
                     <td className="num" style={{ fontSize: 12 }}>{hlabel(v.month)}</td>
                     <td className="amt num" style={{ color: "var(--muted)" }}>{moneyFull(v.projected)}</td>
                     <td className="amt num">{moneyFull(v.actual)}</td>

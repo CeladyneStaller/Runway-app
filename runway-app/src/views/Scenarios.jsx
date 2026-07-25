@@ -149,7 +149,15 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios }) {
     return out;
   }, [baseDoc, activeIds, scenarios, buildModel]);
 
-  const baseZero = series[0]?.zero;
+  // zeroInfo returns NULL — not `{ months: null }` — when the balance never crosses zero, which happens
+  // whenever the plan is cash-positive or simply outlives the horizon. `engine/labor.js` says so in a
+  // comment; this view was written believing the other thing and dereferenced `.months` on it, which is
+  // a white screen for anybody whose model has cash and no burn yet. That is not an exotic state: it is
+  // EVERY brand-new account between entering cash and adding the first expense.
+  //
+  // Collapse both "never crosses" shapes into one nullable number so no caller has to know the difference.
+  const monthsOf = (z) => (z && z.months != null ? z.months : null);
+  const baseMonths = monthsOf(series[0]?.zero);
 
   // chart geometry
   const W = 720, H = 260, PADL = 60, PADR = 16, PADT = 16, PADB = 30;
@@ -183,16 +191,19 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios }) {
           ))}
         </svg>
         <div className="scn-legend">
-          {series.map((s, i) => (
-            <span key={i}><i className="scn-sw" style={{ background: s.color }} />{s.name}
-              <b className="num">{s.zero.months == null ? "cash-positive" : `${s.zero.months.toFixed(1)} mo`}</b>
-              {i > 0 && s.zero.months != null && baseZero?.months != null && (
-                <em className={"scn-delta" + (s.zero.months >= baseZero.months ? " up" : " down")}>
-                  {s.zero.months >= baseZero.months ? "+" : ""}{(s.zero.months - baseZero.months).toFixed(1)} mo
-                </em>
-              )}
-            </span>
-          ))}
+          {series.map((s, i) => {
+            const m = monthsOf(s.zero);
+            return (
+              <span key={i}><i className="scn-sw" style={{ background: s.color }} />{s.name}
+                <b className="num">{m == null ? "cash-positive" : `${m.toFixed(1)} mo`}</b>
+                {i > 0 && m != null && baseMonths != null && (
+                  <em className={"scn-delta" + (m >= baseMonths ? " up" : " down")}>
+                    {m >= baseMonths ? "+" : ""}{(m - baseMonths).toFixed(1)} mo
+                  </em>
+                )}
+              </span>
+            );
+          })}
         </div>
       </div>
 
@@ -207,13 +218,13 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios }) {
             <tbody>{scenarios.map(scn => {
               const applied = applyScenario(baseDoc, scn);
               const rows = buildProjection(buildModel(applied), applied.settings.toggles);
-              const z = zeroInfo(rows);
+              const zm = monthsOf(zeroInfo(rows));
               return (
                 <tr key={scn.id}>
                   <td><input type="checkbox" checked={activeIds.includes(scn.id)} onChange={() => toggleActive(scn.id)} /></td>
                   <td style={{ fontWeight: 600 }}>{scn.name}</td>
                   <td style={{ fontSize: 12, color: "var(--muted)" }}>{scn.patches.length === 0 ? "—" : scn.patches.length + " change" + (scn.patches.length > 1 ? "s" : "")}</td>
-                  <td className="num" style={{ fontSize: 12.5 }}>{z.months == null ? "cash+" : z.months.toFixed(1) + " mo"}</td>
+                  <td className="num" style={{ fontSize: 12.5 }}>{zm == null ? "cash+" : zm.toFixed(1) + " mo"}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     <button className="linkbtn" onClick={() => setEditing(scn.id)}>Edit</button>
                     <button className="iconbtn" onClick={() => remove(scn.id)} aria-label={`Delete ${scn.name}`}>{I.trash}</button>

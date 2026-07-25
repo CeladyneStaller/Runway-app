@@ -12,6 +12,7 @@ import { resolveFringeRate } from "./fringe.js";
 import { compileProject, resolveProjectRates, syncFulfilStage } from "./projects.js";
 import { compilePO } from "./sales.js";
 import { compileInstrument } from "./capital.js";
+import { compileSaas, saasVariances } from "./saas.js";
 import { tagRevenue } from "./projection.js";
 import { applyRevenueActuals } from "./revenue.js";
 import { codedRevenue } from "./coding.js";
@@ -28,6 +29,7 @@ export function buildModelParts(doc, horizon = HORIZON) {
   const projects = doc.projects || [];
   const pos = doc.pos || [];
   const rounds = doc.rounds || [];
+  const saas = doc.saas || [];
   const lines = doc.lines || [];
   const hist = doc.history || [];
   const codeMap = doc.codeMap || {};
@@ -63,6 +65,8 @@ export function buildModelParts(doc, horizon = HORIZON) {
 
   const salesLines = pos.flatMap(po => compilePO(po).map(l => ({ ...l, poId: po.id })));
   const roundLines = rounds.flatMap(x => compileInstrument(x, rounds));
+  // Subscription books expand to ordinary revenue lines here, before anything downstream sees them.
+  const saasLines = saas.flatMap(x => compileSaas(x, horizon));
 
   // revenue replacement (Piece 3): recorded revenue replaces projected for each project's past
   const revActuals = {};
@@ -72,16 +76,20 @@ export function buildModelParts(doc, horizon = HORIZON) {
   }
   const poProject = Object.fromEntries(pos.filter(p => p.projectId).map(p => [p.id, p.projectId]));
 
-  const rawLines = tagRevenue([...lines, ...employeeLines, ...projectLines, ...salesLines, ...roundLines, ...baselineLines]);
+  const rawLines = tagRevenue([...lines, ...employeeLines, ...projectLines, ...salesLines, ...roundLines, ...saasLines, ...baselineLines]);
   const { lineItems, variances } = applyRevenueActuals(rawLines, revActuals, toggles, { poProject });
+  // Subscription variances join the project ones in a SINGLE list, so the "recorded revenue differs
+  // from projection" panel stays one place to look rather than two. They carry `label` because they
+  // have no project to resolve a name from.
+  const allVariances = [...variances, ...saas.flatMap(x => saasVariances(x, horizon))];
 
   return {
     model: { cashOnHand: doc.cash || 0, horizon, lineItems },
     // intermediates, so the UI can render the pieces without rebuilding them from scratch
     avgSalary, fringePct,
-    employeeLines, rProjects, projectLines, salesLines, roundLines, baselineLines,
+    employeeLines, rProjects, projectLines, salesLines, roundLines, saasLines, baselineLines,
     payrollNow, companyOpexNow, itemizedOpex, derivedBurn, baselineOpex,
-    revenueVariances: variances,
+    revenueVariances: allVariances,
   };
 }
 

@@ -18,8 +18,8 @@ import { SetPassword } from "./SetPassword";
 const CREATE = "create";
 const SIGNIN = "signin";
 
-export function SignIn({ session, onDemo }) {
-  const [mode, setMode] = useState(CREATE);
+export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
+  const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(null);
@@ -183,12 +183,18 @@ export function SignIn({ session, onDemo }) {
           : "New here? Switch to Create account above — there's no separate sign-up step."}
       </p>
 
-      {onDemo && (
-        <div className="signin-demo">
-          <button className="linkbtn" onClick={onDemo}>Look around with sample data first</button>
-          <div className="signin-fine">No account needed. Nothing you do there is saved.</div>
-        </div>
-      )}
+      {/* The demo used to be offered HERE, at the bottom of the form, which is the last place a
+          person who has not decided yet will look. It now sits on the landing screen as one of the two
+          doors, so this is just the way back to that fork. `onDemo` is kept as a fallback for any
+          caller that renders SignIn without a landing screen in front of it. */}
+      {onBack
+        ? <div className="signin-demo"><button className="linkbtn" onClick={onBack}>Back</button></div>
+        : onDemo && (
+          <div className="signin-demo">
+            <button className="linkbtn" onClick={onDemo}>Look around with sample data first</button>
+            <div className="signin-fine">No account needed. Nothing you do there is saved.</div>
+          </div>
+        )}
     </div></div>
   );
 }

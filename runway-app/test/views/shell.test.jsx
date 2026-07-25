@@ -57,6 +57,24 @@ describe("the rail foot", () => {
     expect(foot.textContent).toContain("April 2029");
     expect(foot.textContent).not.toContain("Northwind Labs");
   });
+
+  it("and so does the topbar subtitle — the SAME hardcode, missed once already", () => {
+    // The rail-foot fix above was correct and its test was scoped to `.railfoot`, so an identical
+    // hardcoded "Northwind Labs" two elements away in the topbar survived it untouched. The narrow
+    // assertion is what let it hide: a guard against a string appearing ANYWHERE has to look everywhere.
+    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Celadyne" }} setDoc={() => {}} />);
+    expect(container.querySelector(".sub").textContent).toMatch(/^Celadyne ·/);
+  });
+
+  it("no chrome anywhere names a company the document doesn't", () => {
+    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Celadyne" }} setDoc={() => {}} />);
+    expect(container.textContent).not.toContain("Northwind Labs");
+  });
+
+  it("falls back to a placeholder rather than a blank when the model is unnamed", () => {
+    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "" }} setDoc={() => {}} />);
+    expect(container.querySelector(".sub").textContent).toMatch(/^Untitled model ·/);
+  });
   it("keeps Export and Import in the rail, not floating in a horizontal bar", () => {
     // .docbar was `display:flex; margin-left:auto` inside a 200px sticky COLUMN — frozen, wherever.
     const { container } = render(<RunwayApp doc={demoDoc()} setDoc={() => {}} />);

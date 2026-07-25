@@ -2,13 +2,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
+         demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
+         markDemoReset, takeDemoReset,
          LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
-import { getSessionProvider, getAccountApi } from "./state/sync";
+import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
 import { SignIn } from "./views/SignIn";
 import { SetPassword } from "./views/SetPassword";
 import { Account } from "./views/Account";
 import { ConflictDialog } from "./views/chrome/ConflictDialog";
 import { AdoptLocalDialog } from "./views/chrome/AdoptLocalDialog";
+import { PromoteDemoDialog } from "./views/chrome/PromoteDemoDialog";
+import { Landing } from "./views/Landing";
+import { Setup } from "./views/Setup";
 import { hasSubstance } from "./views/chrome/docsummary";
 import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
 import { roundMS } from "./engine/capital";
@@ -32,7 +37,7 @@ import { Sales } from "./views/Sales";
 import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 
-function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
+function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKeepDemo = () => {}, companyName = null }) {
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -58,6 +63,8 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
   const setToggles = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.toggles) : v; return { ...d, settings: { ...d.settings, toggles: nv } }; });
   const lines = doc.lines;
   const setLines = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.lines) : v; return { ...d, lines: nv }; });
+  const saas = doc.saas || [];
+  const setSaas = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.saas || []) : v; return { ...d, saas: nv }; });
   const employees = doc.employees;
   const setEmployees = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.employees) : v; return { ...d, employees: nv }; });
   const projects = doc.projects;
@@ -278,13 +285,14 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
           </button>
           <div className="empty-or"><span>or</span></div>
           <div className="empty-acts">
-            <button className="addbtn ghost" onClick={() => {
-              // Signed in, this used to write a fictional company straight into the person's REAL
-              // account — the projection saved, the journal started, the row sitting in the database
-              // forever. Route it to demo mode instead, where nothing is kept.
-              if (syncConfigured()) { window.location.hash = "#demo"; window.location.reload(); }
-              else setDoc(demoDoc());
-            }}>Explore the demo company</button>
+            {/* HOSTED MODE NO LONGER OFFERS THE DEMO HERE. The landing screen owns that door, and
+                offering it again to somebody who has already signed up meant bouncing an authenticated
+                user into unauthenticated demo mode via a hash change and a page reload — nothing was
+                lost, but it is a strange thing to do to someone who just gave you an email address.
+                In LOCAL mode there is no landing screen and no account, so this stays the way in. */}
+            {!syncConfigured() && (
+              <button className="addbtn ghost" onClick={() => setDoc(demoDoc())}>Explore the demo company</button>
+            )}
             <label className="addbtn ghost" style={{ cursor: "pointer" }}>Import a model
               <input type="file" accept="application/json,.json" style={{ display: "none" }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
@@ -313,14 +321,33 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
           ))}
           <div className="railfoot">
             <input className="docname" value={doc.name} onChange={e => setDoc(d => ({ ...d, name: e.target.value }))}
-              aria-label="Model name" placeholder="Untitled model" />
+              aria-label="Model name" placeholder={companyName || "Untitled model"} />
             <div className="railmeta">Projection start · {monthLong(startY, startM)}<br />{HORIZON}-month horizon</div>
+            {/* EXPORT AND IMPORT ARE BOTH WITHHELD IN DEMO MODE, for different reasons.
+                Import is the dangerous one: it drops a REAL model into a store that wipes itself, so a
+                  person restoring their own JSON here would lose it to the twelve-hour reset. That is a
+                  data-loss path, not a product decision.
+                Export contradicts this app's own doctrine ("your only backup", said everywhere else) and
+                  the contradiction is deliberate: a demo is disposable by construction, so there is
+                  nothing here that wants backing up, and the honest replacement for "download it" is
+                  "keep it" — which is the button below. Note this is a SIGNAL, not enforcement; the JSON
+                  is a devtools panel away, and it is not pretending otherwise. */}
             <div className="docacts">
-              <button className="addbtn ghost" onClick={doExport} title="Download this model as JSON — your only backup">Export</button>
-              <label className="addbtn ghost" title="Replace this model with a JSON file">Import
-                <input type="file" accept="application/json,.json" style={{ display: "none" }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
-              </label>
+              {demo ? (
+                <>
+                  <button className="addbtn" onClick={() => onKeepDemo(doc)}
+                    title="Create an account and carry this model into it">Keep this model</button>
+                  <div className="docacts-fine">Create an account and this becomes your real model.</div>
+                </>
+              ) : (
+                <>
+                  <button className="addbtn ghost" onClick={doExport} title="Download this model as JSON — your only backup">Export</button>
+                  <label className="addbtn ghost" title="Replace this model with a JSON file">Import
+                    <input type="file" accept="application/json,.json" style={{ display: "none" }}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
+                  </label>
+                </>
+              )}
             </div>
           </div>
         </aside>
@@ -330,9 +357,9 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
           <div className="topbar">
             <div>
               <span className="eyebrow">Startup runway</span>
-              {demo ? <DemoPill onLeave={onLeaveDemo} /> : <><SyncPill /><SessionPill onOpenAccount={onOpenAccount} /></>}
+              {demo ? <DemoPill onLeave={onLeaveDemo} onKeep={() => onKeepDemo(doc)} /> : <><SyncPill /><SessionPill onOpenAccount={onOpenAccount} /></>}
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
-              <p className="sub">Northwind Labs · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
+              <p className="sub">{isDefaultName(doc.name) ? (companyName || "Untitled model") : doc.name} · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
             <div className="statuspill">
               <span>Runway</span>
@@ -346,6 +373,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
             </div>
           </div>
 
+          <ViewBoundary key={view + ":dash"} label="Dashboard" onLeave={() => setView("dash")}>
           {view === "dash" && (
             <>
               {/* STATS */}
@@ -483,7 +511,9 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
             </>
           )}
 
-          {view === "flow" && <CashFlow routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
+          </ViewBoundary>
+          <ViewBoundary key={view} label={NAV.find(n => n[0] === view)?.[1] || view} onLeave={() => setView("dash")}>
+          {view === "flow" && <CashFlow saas={saas} setSaas={setSaas} routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
           {view === "pay" && <Payroll routeTab={routeTab} setRouteTab={setTab} baseDoc={doc} employees={employees} setEmployees={setEmployees} fringeConfig={fringeConfig} setFringe={setFringe} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
           {view === "proj" && <Projects routeTab={routeTab} setRouteTab={setTab} projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
@@ -491,6 +521,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
           {view === "hist" && <History journal={doc.journal} takeSnapshot={takeSnapshot} currentCurve={modelStarts} routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
           {view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios} />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
+          </ViewBoundary>
         </main>
       </div>
     </div>
@@ -499,13 +530,82 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo }) {
 }
 
 
-/** Says, permanently and unmissably, that none of this is being kept — and offers the way out of that.
+/** A CRASH IN ONE VIEW MUST NOT TAKE THE APP WITH IT.
+ *
+ *  React unmounts the entire tree on an uncaught render error, so before this existed a single bad
+ *  dereference anywhere produced a blank white page with no rail, no nav and no way back — you could
+ *  not even reach another tab, because there was no longer a tab to click. That is the difference
+ *  between "one screen is broken" and "the product is gone", and it is worth a class component.
+ *
+ *  Scoped to the VIEW AREA, deliberately: the rail and topbar stay mounted and usable, so the recovery
+ *  is genuine navigation rather than a nicer-looking dead end. Keyed on the view so switching tabs
+ *  remounts it — without that, one crash would leave the boundary stuck in its error state forever.
+ *
+ *  It does NOT swallow the error: componentDidCatch logs it, because a caught crash that leaves no
+ *  trace is a bug that never gets fixed. */
+class ViewBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error("[runway] view crashed:", error, info?.componentStack); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="view">
+        <div className="crashcard" role="alert">
+          <h2>{this.props.label} couldn't be drawn</h2>
+          <p>Something in this screen hit an error while rendering. <b>Your model has not been changed</b>
+            {" "}— this is a display fault, and everything else still works.</p>
+          <p className="crash-detail">{String(this.state.error?.message || this.state.error)}</p>
+          <div className="cf-actions">
+            <button className="addbtn" onClick={this.props.onLeave}>Back to the dashboard</button>
+            <button className="addbtn ghost" onClick={() => window.location.reload()}>Reload the app</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+const fmtLeft = (ms) => {
+  const m = Math.max(0, Math.floor(ms / 60000));
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+};
+
+/** Says, permanently and unmissably, what is happening to this model — and offers both ways out of it.
  *  A demo that looks identical to the real thing is how somebody spends twenty minutes building a model
- *  they are about to lose. */
-function DemoPill({ onLeave }) {
+ *  they are about to lose.
+ *
+ *  THE COPY CHANGED WITH THE BEHAVIOUR. This used to read "nothing is saved", which was already a
+ *  little false (edits survived a refresh) and is now flatly false: edits ARE kept, in this browser,
+ *  for twelve hours. Saying otherwise would train people to distrust the one label whose whole job is
+ *  being trusted. What is true, and what it now says, is: kept here, not in an account, and going away
+ *  at a time you can see. */
+function DemoPill({ onLeave, onKeep }) {
+  const [left, setLeft] = useState(() => demoRemainingMs());
+
+  // Self-contained on purpose — no parent callback, so no dependency to declare and no memo to keep
+  // stable. The expiry action needs nothing from App: mark, wipe, reload, and the initialiser reseeds.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const ms = demoRemainingMs();
+      if (ms === null || ms <= 0) {
+        // The window closed with the tab still open. Reset in place rather than leaving somebody
+        // editing a document the next read will refuse to return.
+        markDemoReset();
+        clearDemo();
+        window.location.reload();
+        return;
+      }
+      setLeft(ms);
+    }, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const soon = left !== null && left <= 60 * 60 * 1000;
   return (
-    <span className="demopill">
-      <i />Demo · nothing is saved
+    <span className={"demopill" + (soon ? " soon" : "")}>
+      <i />Demo · {left === null ? "not saved to an account" : `resets in ${fmtLeft(left)}`}
+      <button className="linkbtn" onClick={onKeep}>Keep this</button>
       <button className="linkbtn" onClick={onLeave}>Leave demo</button>
     </span>
   );
@@ -527,6 +627,17 @@ function SyncPill() {
   return <span className={"syncpill " + s.state} title={title} data-sync={s.state}><i />{label}</span>;
 }
 
+// Skipping the wizard is "not now", not "never" — so it is remembered for the TAB and not the account.
+// A schema field would make a transient UI choice permanent, and the account is genuinely still empty,
+// so offering again on a later visit is help rather than nagging.
+const SETUP_SKIP = "runway:setup-skipped";
+const setupSkipped = () => { try { return !!globalThis.sessionStorage?.getItem(SETUP_SKIP); } catch { return false; } };
+const skipSetup = () => { try { globalThis.sessionStorage?.setItem(SETUP_SKIP, "1"); } catch { /* nothing to remember */ } };
+
+/** Names the app itself supplied, as opposed to one somebody typed. Only these may be overwritten by
+ *  the company's name — `emptyDoc()` ships "Untitled", and a cleared input leaves "". */
+const isDefaultName = (n) => !n || !String(n).trim() || String(n).trim() === "Untitled";
+
 /** Owns the document: loads it once, saves it debounced, and never renders an empty company at
  *  someone whose company is not empty.
  *
@@ -535,28 +646,83 @@ function SyncPill() {
  *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
-function DocumentHost({ demo = false, onLeaveDemo }) {
+function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   const [doc, setDoc] = useState(null);
   const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
   const [conflict, setConflict] = useState(false);
   const [strandedLocal, setStrandedLocal] = useState(null);
+  const [promoting, setPromoting] = useState(null);   // a demo somebody asked to carry into this account
+  const [wasReset, setWasReset] = useState(false);
+  const [setup, setSetup] = useState(false);
+  const [companyName, setCompanyName] = useState(null);
+  const [seedName, setSeedName] = useState(false);    // this document started this session empty
   const [showAccount, setShowAccount] = useState(false);
   const [err, setErr] = useState(null);
+
+  /** The account's name for the company being looked at. A model belongs to a company, so the company's
+   *  name is the right default for the model's — nobody should have to type "Acme" twice. Best-effort:
+   *  a name that fails to resolve is a missing default, not an error worth putting on screen. */
+  const loadCompanyName = useCallback(async () => {
+    const account = getAccountApi();
+    const auth = getAuthAdapter();
+    if (!account || !auth) return;
+    try {
+      const companies = await account.listCompanies();
+      const id = auth.activeCompany?.() || null;
+      const co = (companies || []).find(c => c.id === id) || (companies || [])[0] || null;
+      setCompanyName(co?.name || null);
+    } catch { /* no default available; the placeholder covers it */ }
+  }, []);
+
+  useEffect(() => { if (!demo) loadCompanyName(); }, [demo, loadCompanyName]);
+
+  // The "your demo reset" notice is ONE-SHOT, and StrictMode runs effects twice on the same instance —
+  // so the read-and-clear has to be guarded by something that survives between those two runs. A ref
+  // does; without it the second pass finds the flag already taken and clears the notice it just set.
+  const noticeTaken = React.useRef(false);
+  useEffect(() => {
+    if (noticeTaken.current) return;
+    noticeTaken.current = true;
+    if (takeDemoReset()) setWasReset(true);
+  }, []);
 
   useEffect(() => {
     let alive = true;
     load().then(async r => {
       if (!alive) return;
       setLoadState(r.state); setDoc(r.doc); if (r.error) setErr(r.error);
+      // Only a document that started EMPTY may take the company's name. An existing model with a name
+      // of "Untitled" is a name somebody left alone, not an unfilled blank, and rewriting it on load
+      // would be an unrequested write to real data.
+      setSeedName(!!r.isNew);
 
       // Only when the ACCOUNT IS EMPTY. If the server already holds a document, offering to replace it
       // with whatever is in this browser is not a migration, it is a conflict — and a conflict does not
       // get a cheerful blue button.
-      if (demo) return;   // a demo has nothing to migrate, and nothing it touches is real
+      // A demo in progress still has nothing to migrate INTO — there is no account yet. The reverse
+      // direction (a demo migrating into a new account) is handled below and only once signed in.
+      if (demo) return;
       if (r.state !== LOAD_OK || !r.isNew || !getSessionProvider()) return;
-      if (await adoptionDismissed()) return;
-      const local = await peekLocal();
-      if (alive && hasSubstance(local)) setStrandedLocal(local);
+
+      // DELIBERATE REVERSAL, flagged rather than quietly edited. This path used to bail on demo mode
+      // outright — "a demo has nothing to migrate, and nothing it touches is real" — and that was
+      // correct while demo data was strictly disposable. It no longer is: somebody can now ask, from
+      // inside the demo, to carry the model into an account they are about to create. The stash is
+      // written at the moment of that request, so what arrives here is an explicit intent, not a
+      // fictional company drifting into a real account by accident. Checked BEFORE the stranded-local
+      // adoption because it is the more recent and more explicit of the two signals.
+      const promo = pendingPromotion();
+      if (alive && promo) { setPromoting(promo); return; }
+
+      // NOTE the restructure: `adoptionDismissed()` used to `return` here, which would now swallow the
+      // wizard for anybody who had ever declined an adoption. Three offers can claim an empty account
+      // and they are checked in order of how explicit the signal is — an asked-for promotion, then a
+      // model stranded in this browser, then the generic offer to set one up.
+      if (!(await adoptionDismissed())) {
+        const local = await peekLocal();
+        if (alive && hasSubstance(local)) { setStrandedLocal(local); return; }
+      }
+      if (alive && !setupSkipped()) setSetup(true);
     }).catch(e => { if (alive) { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); } });
     return () => { alive = false; };
     // `demo` is a prop that is constant for the life of this component (entering or leaving demo mode
@@ -568,6 +734,18 @@ function DocumentHost({ demo = false, onLeaveDemo }) {
     if (!doc || loadState !== LOAD_OK) return;   // ← the guard: never save what we didn't successfully load
     save(doc);   // storage owns the cadence: debounce, coalescing, no-op skipping, retry
   }, [doc, loadState]);
+
+  // SEEDING THE MODEL'S NAME FROM THE COMPANY'S. Gated on `hasSubstance` and that is the load-bearing
+  // part: a brand-new account must not get a document written to it merely by signing in, or it stops
+  // being "new" and the adoption/promotion offers vanish with it. Waiting for substance means the seed
+  // rides along with a write the user's own action already caused, rather than causing one. Fires at
+  // most once per loaded document, and never over a name somebody chose.
+  useEffect(() => {
+    if (!seedName || demo || !doc || loadState !== LOAD_OK || !companyName) return;
+    if (!hasSubstance(doc)) return;
+    setSeedName(false);
+    setDoc(d => (isDefaultName(d.name) ? { ...d, name: companyName } : d));
+  }, [seedName, demo, doc, loadState, companyName]);
 
   // A conflict is a question, so it gets asked once and stays asked until answered.
   useEffect(() => subscribe(st => setConflict(st.state === "conflict")), []);
@@ -610,22 +788,80 @@ function DocumentHost({ demo = false, onLeaveDemo }) {
     </div></div>
   );
 
+  if (setup) return (
+    <Setup
+      initialName={companyName || ""}
+      onCancel={() => { skipSetup(); setSetup(false); }}
+      onImport={(file) => {
+        const r = new FileReader();
+        r.onload = () => {
+          try { setDoc(fromJSON(String(r.result))); skipSetup(); setSetup(false); }
+          catch (e) { alert("That file isn't a Runway document: " + e.message); }
+        };
+        r.readAsText(file);
+      }}
+      onDone={(built) => {
+        skipSetup();
+        setSetup(false);
+        // An all-skipped wizard hands back null and writes NOTHING, so the account stays as new as it
+        // was found and can be offered the wizard again. Only a document with something in it is set —
+        // and the ordinary save effect persists it, so there is one write path, not two.
+        if (built) setDoc(built);
+      }}
+    />
+  );
+
   if (showAccount) return (
     <Account
       doc={doc}
       onClose={() => setShowAccount(false)}
       onSwitched={(r) => {
         // switchCompany() already flushed and reset the write buffer; adopt whatever it loaded
-        if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); }
+        if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); setSeedName(!!r.isNew); }
+        // A company created from the Account page gets the SAME wizard, deliberately — the second
+        // company deserves the same start as the first, and "just a name box" was how the old flow
+        // dumped people into an empty model. Not gated on the skip flag: they just asked for this.
+        setSetup(!!r?.isNew);
         setStrandedLocal(null);   // a freshly created company is `isNew` by definition; offering to
-        setShowAccount(false);    // fill it with a stale browser model would be actively wrong
+        setPromoting(null);       // fill it with a stale browser model would be actively wrong
+        setShowAccount(false);
+        loadCompanyName();        // a different company answers to a different name
       }}
     />
   );
 
   return <>
-    <RunwayApp doc={doc} setDoc={setDoc} demo={demo} onLeaveDemo={onLeaveDemo}
+    <RunwayApp doc={doc} setDoc={setDoc} demo={demo} onLeaveDemo={onLeaveDemo} onKeepDemo={onKeepDemo}
+               companyName={companyName}
                onOpenAccount={demo ? null : () => setShowAccount(true)} />
+    {demo && wasReset && (
+      <div className="cf-backdrop" role="dialog" aria-modal="true" aria-label="Demo reset">
+        <div className="cf-card">
+          <h2>The demo reset</h2>
+          <p>A demo is kept in this browser for twelve hours and then cleared, so what you were looking
+            at has been replaced with a fresh sample company. Nothing was sent anywhere, and nothing of
+            yours was touched.</p>
+          <div className="cf-actions">
+            <button className="addbtn" onClick={() => setWasReset(false)}>Carry on</button>
+          </div>
+          <div className="cf-fine">To keep a model past the window, create an account — the demo can be
+            carried into it.</div>
+        </div>
+      </div>
+    )}
+    {promoting && (
+      <PromoteDemoDialog
+        demoDoc={promoting}
+        onPromote={async () => {
+          setDoc(promoting);      // adopt it locally...
+          save(promoting);        // ...and push it to the account
+          await flush();
+          clearPromotion();
+          setPromoting(null);
+        }}
+        onStartClean={() => { clearPromotion(); setPromoting(null); }}
+      />
+    )}
     {conflict && <ConflictDialog onAdopt={setDoc} onDone={() => setConflict(false)} />}
     {!conflict && strandedLocal && (
       <AdoptLocalDialog
@@ -642,7 +878,7 @@ function DocumentHost({ demo = false, onLeaveDemo }) {
   </>;
 }
 
-export { RunwayApp, demoDoc, toJSON, fromJSON };
+export { RunwayApp, ViewBoundary, demoDoc, toJSON, fromJSON };
 
 /** THE AUTH GATE. In hosted mode there is nobody to be until someone signs in, so the document is not
  *  even requested until there is a session — asking for it first is how you get a FORBIDDEN read that
@@ -658,7 +894,15 @@ export default function App() {
   // DEMO MODE BYPASSES AUTH ENTIRELY. The whole point is showing the app to somebody who has not signed
   // up, so requiring an account first would defeat it. Survives a refresh within the tab, dies with it.
   const [demo, setDemo] = useState(() => {
-    const wanted = (typeof window !== "undefined" && window.location.hash.startsWith("#demo")) || demoInProgress();
+    const hashed = typeof window !== "undefined" && window.location.hash.startsWith("#demo");
+    // EXPIRY IS CHECKED BEFORE ACTIVATION, because activateDemoBackend reseeds over a closed window and
+    // would erase the one fact needed to explain what happened. An expired envelope can only exist if
+    // this browser entered a demo and never left it properly ("Leave demo" wipes), so the right move is
+    // a fresh demo plus an explanation rather than a silent bounce to the sign-in screen — the hash is
+    // NOT a reliable signal here, since routing rewrites it to #pay/#proj the moment anyone clicks.
+    const expired = demoExpired();
+    if (expired) { markDemoReset(); clearDemo(); }
+    const wanted = hashed || demoInProgress() || expired;
     // Installed HERE rather than in an effect: DocumentHost calls load() as soon as it mounts, and an
     // effect runs after that — so the first read would go to the real backend and fail, showing
     // "Couldn't open your model" at somebody you were trying to sell to. A useState initialiser runs
@@ -680,6 +924,8 @@ export default function App() {
   const misconfigured = syncConfigured() && !session;
   // undefined = still checking (the SDK reads a stored session asynchronously); null = signed out.
   const [user, setUser] = useState(gated ? undefined : null);
+  // null = the landing fork; "create" / "signin" = which side of it they picked.
+  const [entry, setEntry] = useState(null);
   // Arriving from a reset link LOOKS like an ordinary sign-in — Supabase hands you a session. Sending
   // that person to the dashboard is a dead end: they came to change their password and there is now
   // nothing on screen that lets them. The PASSWORD_RECOVERY event is the only thing that distinguishes it.
@@ -698,7 +944,19 @@ export default function App() {
     return () => { alive = false; off(); };
   }, [gated, session]);
 
-  if (demo) return <DocumentHost demo onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />;
+  // KEEP THIS MODEL. Stash first, then wipe, then go to the sign-in screen so they can create the
+  // account this is destined for. The stash is what survives the round trip — including the email
+  // confirmation that may well open a different tab — and it is claimed on the far side by the first
+  // empty account that loads.
+  const keepDemo = (d) => {
+    stashPromotion(d);
+    clearDemo();
+    window.location.hash = "";
+    window.location.reload();
+  };
+
+  if (demo) return <DocumentHost demo onKeepDemo={keepDemo}
+    onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />;
 
   if (misconfigured) return (
     <div className="rw"><div className="splash" style={{ maxWidth: 560, textAlign: "left" }}>
@@ -731,7 +989,16 @@ export default function App() {
   if (gated && user === undefined) {
     return <div className="rw"><div className="splash">Checking your session\u2026</div></div>;
   }
-  if (gated && user === null) return <SignIn session={session} onDemo={enterDemo} />;
+  if (gated && user === null) {
+    // The landing screen is the DEFAULT, and SignIn is reached through it. Rendering the form first
+    // and hanging the demo off the bottom of it was the old arrangement, and it asked people to
+    // authenticate to a product they had not yet decided they wanted.
+    if (entry === null) return (
+      <Landing onDemo={enterDemo} onCreate={() => setEntry("create")} onSignIn={() => setEntry("signin")} />
+    );
+    return <SignIn session={session} onDemo={enterDemo} onBack={() => setEntry(null)}
+                   initialMode={entry === "signin" ? "signin" : "create"} />;
+  }
   return <DocumentHost />;
 }
 
