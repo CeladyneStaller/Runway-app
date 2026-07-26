@@ -774,6 +774,66 @@ The demo's name is hardcoded to "Demo Company" in `document.js`, and is the only
 the app: a demo has no account, so there is nothing to take one from. A test asserts the demo never asks
 the account anything (its `fetchImpl` throws).
 
+## WATCH: monthLabel argument order (a bug that shipped)
+
+`monthLabel(y, m, idx)` — YEAR, MONTH, INDEX. Every caller in the codebase passes
+`monthLabel(START_Y, START_M, m)`. `SaasPanel.jsx` was written with the index first and rendered
+"May 2" where it meant "Oct 26", in the MRR reconciliation rows and the "Starts …" line. Fixed, with a
+test that pins the LABEL TEXT.
+
+Worth remembering why it survived: the SaaS tests asserted the reconciliation rows existed, and their
+amounts, and their variances — but never what the month column SAID. A three-argument function whose
+arguments are all numbers will silently accept them in any order, and the only defence is asserting the
+rendered string.
+
+## Scenarios, rebuilt around the decision
+
+`src/engine/scenario.js` + `src/views/Scenarios.jsx`. Tests `test/engine/scenario2.test.js` (20),
+`test/views/scenarios.test.jsx` (20).
+
+**The diagnosis.** The tab answered "what would the curve look like": two runway numbers side by side
+with the subtraction left to the reader, a scenario summarised as "3 changes", and no way to act on the
+answer. What somebody is doing here is deciding whether to DO the thing.
+
+**APPLY TO PLAN** is the step that did not exist. You modelled a hiring freeze, decided to do it, and
+then re-entered every change by hand on the real tabs. `onApplyToPlan` hands the already-patched
+document to `setDoc`, so it saves, journals and undoes like any other edit rather than needing its own
+write path. Confirmed first, with a preview of what lands and what it does to the runway, and the
+scenario is KEPT afterwards so you can still compare against it. Unplugging it fails a test.
+
+**ATTRIBUTION IS LEAVE-ONE-OUT.** `scenarioImpact` re-runs the scenario with each change removed in
+turn; whichever removal moves the runway furthest is the one carrying it. Ranking by size would be
+wrong — a $200k line that lands after you are already dead moves nothing, and a small salary starting
+in month two moves a lot. Costs one extra projection per change. NOTE the guard test deliberately puts
+the trivial change FIRST, because ranking by patch order passed the original version of that test.
+
+**`score()` exists so attribution works past the horizon.** Every variant of a comfortably-funded
+scenario has `months: null`, which would leave the most interesting scenarios with no driver. Past the
+horizon, cash left over stands in for months survived. The units above HORIZON are fictional and the
+value is NEVER displayed — it exists only to sort.
+
+**`kind: "remove"`.** "Don't hire Sam" used to mean setting a start month past the horizon: a delay
+wearing a disguise, which read as a delay in the description and would break if the horizon moved.
+
+**Changes read as sentences.** `explainPatch` returns `{ text, was }` — "Sam Okafor starts Mar 27",
+"was Sep 26". It was "Sam: start -> 5", which is the document schema read aloud. Knowing the previous
+value is most of the point: "starts Mar 27" is a fact, "starts Mar 27, was Sep 26" is a decision.
+
+**Intent-first changes**, replacing the four-dropdown what/which/field/value chain that asked you to
+know the schema before you could ask a question. "Something else" keeps the full schema reachable —
+INCLUDING cash and the revenue toggles, which have no intent tile and would otherwise have been
+capability lost to a redesign. There is a test for exactly that.
+
+**Live runway while editing.** The old modal let you add changes blind, close it, and only then see
+what they did. And there is NO SAVE BUTTON: the old footer offered "Save scenario" / "Keep unsaved",
+but `upsert` already wrote straight through and nothing anywhere filtered on `saved`, so both did
+nothing. Also fixed while here: `upsert` used to move the edited scenario to the END of the list on
+every keystroke.
+
+**Also removed:** the dead `compareRows` (defined, never called) and `PATCHABLE_COLLECTIONS` (unused,
+and listed a `milestones` collection that `PATCH_SCHEMA` does not have). And `saas` is patchable at
+last — subscription revenue shipped without it, so churn doubling could not be asked at all.
+
 ## SaaS subscription revenue (Revenue tab)
 
 `src/engine/saas.js` + `src/views/chrome/SaasPanel.jsx`, edited under Cash flow -> Revenue. Tests
@@ -805,6 +865,39 @@ revenue line and defaults to "expected" via `tagRevenue`. `saasCeiling()` return
 (unbounded) and for zero adds (decay) — both real answers, neither a ceiling — and the panel names
 those two cases explicitly rather than showing a blank. The Revenue stat strip adds `saasNow` to
 recurring revenue, or a pure-subscription company reads as zero recurring revenue.
+
+## The test suite runs as TWO PROJECTS (node + jsdom)
+
+`vite.config.js` + `test/setup.js`. Guarded by `test/engine/testconfig.test.js` (5).
+
+**The problem, measured not assumed.** Everything ran under a global `environment: "jsdom"`, so all 67
+files spun up a fake browser and only 37 touched the DOM. The engine half made the waste plain: 288
+tests, 1.17s of actual testing against 13.33s of jsdom startup — eleven times their own runtime for a
+browser they never use. Full suite 308s wall, of which only 68s was running tests.
+
+**What was rejected, and why.** `pool=threads` was measured at ~20% on a slice of view files (15s ->
+12s) and NOT taken. Forks is Vitest's default because a separate process cannot leak into another one;
+threads share a process, and this suite is unusually sensitive to that — heavy `vi.resetModules()`,
+module-level singletons in `storage.js` and `demo.js`, `fake-indexeddb/auto` installing globals. 20% is
+not worth raising the odds of a confusing flake. The two compose, so it stays available later.
+
+**Result:** engine project 27s -> ~9s (environment cost 13.33s -> ~5ms), full suite 308s -> ~236s.
+
+**`test/setup.js` IS SHARED and guards its own DOM parts** on `typeof document` / `typeof
+HTMLAnchorElement`, rather than splitting into two setup files that would drift apart. The guards
+double as documentation of what is actually browser-specific.
+
+**THE UI PROJECT IS A CATCH-ALL AND MUST STAY ONE.** `include: test/**` with `exclude: test/engine/**`,
+not an explicit `test/{views,state,security}` list. A file matching NEITHER project is not reported as
+failing or skipped — it silently never runs, and the suite goes green while testing less than you think.
+node is the narrow opt-in; jsdom is everything else, so a new directory runs by default in the safe
+environment. `testconfig.test.js` asserts exactly this and fails if the include is narrowed (verified by
+reversion). It also scans `test/engine/**` for `@testing-library`/`document.`/`window.` so a rendering
+test dropped in the fast project fails with a clear message instead of a confusing missing-document
+error. That scan exempts itself — the patterns it looks for appear in its own source as regex literals.
+
+**Still on the table:** ~175s of the remaining 236s is still overhead, mostly because many view tests
+mount the whole app and pull in the entire module graph. That is the next lever and a much bigger job.
 
 ## MRR reconciliation
 
@@ -838,6 +931,37 @@ automatic fails 4 tests. The re-base carries every assumption across unchanged �
 price growth all continue on the same curve, with `newPerMonth` and `arpu` advanced to their
 month-`through` values — so the forward series is EXACTLY continuous when the record matched the model,
 and only moves when it didn't. Both directions are tested.
+
+## Emailed auth links: VITE_SITE_URL
+
+`src/state/siteurl.js`, used by `SignIn.jsx`. Tests `test/engine/siteurl.test.js` (9) + 2 in
+`test/views/signin.test.jsx`.
+
+**Reported as "the magic link sends me to a page that wants a Vercel login".** Nothing was broken: the
+email sent, the token was valid, the DESTINATION was wrong. `redirectTo` was `window.location.origin`,
+so a link came back to whatever host it was requested from — and a link asked for on a Vercel preview
+deployment (`runway-git-branch-you.vercel.app`) returns to that preview, which sits behind Vercel's
+Deployment Protection and answers with a Vercel login page.
+
+`VITE_SITE_URL` pins the canonical origin. Unset it falls back to the current origin, which is the
+RIGHT answer for local dev and preview builds — this only matters when a canonical domain exists and
+the app is also reachable at per-deployment URLs. Junk values are treated as unset rather than becoming
+a redirect target, and the value is normalised to a bare origin because an allow-list compares strings
+and `https://x.com/` is not `https://x.com`.
+
+**THE QUIET SECOND FAILURE, which is why the fix also SHOWS the destination.** Supabase keeps an
+allow-list of redirect URLs, and an `emailRedirectTo` that is not on it is NOT rejected — it is
+silently ignored and the link falls back to the project's Site URL, with no error anywhere. So a
+redirect can be well-formed, correctly sent, and still land somewhere else. Both failures share a
+shape: nothing errors, the link just points at the wrong host, and nothing in the product ever says
+which host that is. So every "check your email" screen now names it — "The link opens app.example.com"
+— and flags per-deployment hosts (`.vercel.app`, `.netlify.app`, `.pages.dev`, `.onrender.com`)
+explicitly, since those are the ones that end up behind a login wall.
+
+**TWO SETTINGS OUTSIDE THE CODE have to agree**, documented in `.env.example`: Supabase -> Auth -> URL
+Configuration -> Redirect URLs must contain the origin, and Site URL should be the same origin since
+that is what an unlisted redirect falls back to. Separately, Vercel -> Deployment Protection may be
+enabled on PRODUCTION too, in which case every emailed link hits the wall regardless of where it points.
 
 ## New-company onboarding (landing fork -> setup wizard)
 
@@ -884,8 +1008,28 @@ Blocking would push people to omit the person entirely, which is worse: a person
 the model and fixable, a person left out is invisible. So the wizard keeps them at 0 and says the burn
 is understated. The live runway readout is what makes this honest — the number visibly fails to move.
 
-**Adding a SECOND company from Account runs the same wizard**, triggered off `r.isNew` in `onSwitched`
-and deliberately NOT gated on the skip flag: they just asked for a company.
+**Adding a SECOND company from Account runs the same wizard — and now runs it FIRST.** "Add company"
+opens the wizard directly (`setSetup("company")`); there is no name box on the Account page any more.
+The old order asked for a name, created the company row, and THEN opened a wizard whose own first
+question was the name — so you typed it twice, and cancelling out left an ORPHAN EMPTY COMPANY in the
+database. Wizard-first means nothing is written until Done, so backing out creates nothing (guarded by
+a test asserting no `create` RPC after Cancel). In `mode: "company"` the name is required — Next is
+disabled and the skip link is hidden on step 0 — because it is the name the company gets created under.
+`onDone(built, typedName)` passes the name SEPARATELY, since an all-skipped wizard returns a null
+document and the name cannot ride inside it.
+
+**The runway readout distinguishes the two 'no zero date' cases** (`classifyRunway` in `state/setup.js`,
+tested in `test/engine/setup.test.js`). `zeroInfo` returns ONE null for two different situations, and
+the readout used to label both "cash-positive": revenue genuinely covering costs, versus burning
+steadily but outlasting the 36 months modelled. Telling a steady burner they are cash-flow positive
+because their pile is bigger than our window is a wrong answer that gets believed. Four states now:
+`runway` (a real date), `idle` (nothing burning yet), `positive` (net >= 0 in the final month), and
+`beyond` ("36+ mo"). A REAL ZERO DATE WINS over both null cases — dying at month 5 is the answer even
+if the model turns positive at month 30. Collapsing the two back together fails 2 tests.
+
+The rule is PURE and in `state/setup.js` rather than inline in the view specifically because
+`positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
+that cannot be exercised through the UI still deserves to be exercised somewhere.
 
 ## The Scenarios white screen — and why one deref took the whole app down
 

@@ -1,6 +1,6 @@
 // The answers -> document mapping. Pure, so it gets real tests rather than DOM pokes.
 import { describe, it, expect } from "vitest";
-import { docFromSetup, missingSalaries, setupHasSubstance, num } from "../../src/state/setup";
+import { docFromSetup, missingSalaries, setupHasSubstance, num, classifyRunway } from "../../src/state/setup";
 import { buildModelFromDoc } from "../../src/engine/buildmodel";
 import { buildProjection, zeroInfo } from "../../src/engine/projection";
 
@@ -90,5 +90,61 @@ describe("whether anything was said at all", () => {
     expect(setupHasSubstance({ cash: "1" })).toBe(true);
     expect(setupHasSubstance({ employees: [{ name: "A" }] })).toBe(true);
     expect(setupHasSubstance({ rounds: [{ name: "Seed" }] })).toBe(true);
+  });
+});
+
+describe("classifying how long the money lasts", () => {
+  // zeroInfo returns ONE null for two different situations. These are the four states worth telling
+  // apart, including the one the wizard's own inputs can't currently reach.
+  const rows = (list) => list.map((r, m) => ({ m, ...r }));
+
+  it("a real zero date is a real number of months", () => {
+    const doc = docFromSetup({ cash: "300000", employees: [{ name: "A", salary: "600000" }] });
+    const r = buildProjection(buildModelFromDoc(doc), doc.settings.toggles);
+    expect(classifyRunway(r)).toMatchObject({ kind: "runway" });
+    // Not pinned to 6: payroll carries a fringe percentage on top of salary, so the burn is higher
+    // than salary/12 and the exact figure belongs to the payroll tests, not this one.
+    expect(classifyRunway(r).months).toBeGreaterThan(0);
+    expect(classifyRunway(r).months).toBeLessThan(6);
+  });
+
+  it("nothing burning is 'idle', not a date", () => {
+    const doc = docFromSetup({ cash: "600000" });
+    expect(classifyRunway(buildProjection(buildModelFromDoc(doc), doc.settings.toggles)))
+      .toEqual({ kind: "idle" });
+  });
+
+  it("burning but outlasting the window is 'beyond' — NOT cash-flow positive", () => {
+    // The bug this exists for: a steady burner whose pile is simply bigger than 36 months was being
+    // told it was cash-flow positive.
+    const doc = docFromSetup({ cash: "50000000", employees: [{ name: "A", salary: "120000" }] });
+    expect(classifyRunway(buildProjection(buildModelFromDoc(doc), doc.settings.toggles)))
+      .toEqual({ kind: "beyond" });
+  });
+
+  it("revenue covering costs at the end is 'positive'", () => {
+    // Unreachable through the wizard today — it collects no recurring revenue — so it is exercised
+    // here directly rather than left as a rule nobody has ever run.
+    expect(classifyRunway(rows([
+      { start: 100, rev: 0, cost: 10, net: -10, end: 90 },
+      { start: 90, rev: 50, cost: 10, net: 40, end: 130 },
+    ]))).toEqual({ kind: "positive" });
+  });
+
+  it("net exactly zero counts as positive, not as burning", () => {
+    expect(classifyRunway(rows([{ start: 100, rev: 10, cost: 10, net: 0, end: 100 }])))
+      .toEqual({ kind: "positive" });
+  });
+
+  it("a zero date beats a positive ending — you don't reach month 30 if you die at month 5", () => {
+    expect(classifyRunway(rows([
+      { start: 10, rev: 0, cost: 20, net: -20, end: -10 },
+      { start: -10, rev: 99, cost: 1, net: 98, end: 88 },
+    ]))).toMatchObject({ kind: "runway" });
+  });
+
+  it("says nothing about nothing", () => {
+    expect(classifyRunway([])).toBeNull();
+    expect(classifyRunway(null)).toBeNull();
   });
 });

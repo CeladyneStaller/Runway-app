@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { docFromSetup, missingSalaries, setupHasSubstance, num } from "../state/setup";
+import { docFromSetup, missingSalaries, setupHasSubstance, num, classifyRunway } from "../state/setup";
 import { buildModelFromDoc } from "../engine/buildmodel";
-import { buildProjection, zeroInfo } from "../engine/projection";
+import { buildProjection } from "../engine/projection";
 import { moneyFull } from "../engine/money";
+import { HORIZON } from "../engine/time";
 
 // The setup wizard. Replaces "here is an empty model, go and find the eight tabs".
 //
@@ -34,7 +35,7 @@ function useRows(seed) {
   return [rows, set, remove];
 }
 
-export function Setup({ initialName = "", onDone, onCancel, onImport }) {
+export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "model" }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(initialName);
   const [cash, setCash] = useState("");
@@ -44,26 +45,42 @@ export function Setup({ initialName = "", onDone, onCancel, onImport }) {
 
   const answers = { name, cash, employees, projects, rounds };
 
-  // The live figure. zeroInfo returns NULL — not { months: null } — when the balance never crosses
-  // zero, which is exactly the state a half-filled wizard is in. Guarded, not dereferenced.
+  // The live figure.
+  //
+  // zeroInfo returns NULL — not { months: null } — when the balance never crosses zero, and that ONE
+  // null covers TWO completely different situations which this used to label identically as
+  // "cash-positive":
+  //   the money genuinely never runs out, because revenue covers costs; or
+  //   the money is running out, just not inside the 36 months we model.
+  // Telling somebody who is burning steadily that they are cash-flow positive, purely because their
+  // pile outlasts our window, is the kind of wrong answer that gets believed. So the sign of the net
+  // flow in the final modelled month decides which of the two it is.
+  //
+  // A REAL ZERO DATE STILL WINS over both. If the cash runs out at month 5, "cash-flow positive at
+  // month 30" is not the answer to give — you don't reach month 30.
   const runway = useMemo(() => {
     if (num(cash) <= 0) return null;
     try {
       const doc = docFromSetup(answers);
-      const z = zeroInfo(buildProjection(buildModelFromDoc(doc), doc.settings.toggles));
-      return z && z.months != null ? z.months : "positive";
+      return classifyRunway(buildProjection(buildModelFromDoc(doc), doc.settings.toggles));
     } catch { return null; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cash, employees, projects, rounds, name]);
 
   const noSalary = missingSalaries(answers);
+  // Creating a company from nothing needs a name to create it UNDER; setting up an existing one does
+  // not, because that company already has a name and this only defaults the model's.
+  const needsName = mode === "company" && step === 0 && !name.trim();
   const last = step === STEPS.length - 1;
 
-  const finish = () => onDone(setupHasSubstance(answers) ? docFromSetup(answers) : null);
+  // The NAME is passed separately and unconditionally. A wizard skipped from the first step still has
+  // to name the company it is about to create, and `docFromSetup` returns null when there is nothing
+  // else to record — so the name cannot ride inside the document.
+  const finish = () => onDone(setupHasSubstance(answers) ? docFromSetup(answers) : null, name.trim());
 
   return (
     <div className="rw"><div className="splash setup">
-      <span className="eyebrow">Set up your company</span>
+      <span className="eyebrow">{mode === "company" ? "New company" : "Set up your company"}</span>
 
       <div className="setup-rail" role="list">
         {STEPS.map((s, i) => (
@@ -168,12 +185,23 @@ export function Setup({ initialName = "", onDone, onCancel, onImport }) {
       <div className="setup-readout">
         <span>Runway so far</span>
         <b className="num">
-          {runway == null ? "—" : runway === "positive" ? "cash-positive" : `${runway.toFixed(1)} mo`}
+          {runway == null ? "—"
+            : runway.kind === "runway" ? `${runway.months.toFixed(1)} mo`
+            : runway.kind === "beyond" ? `${HORIZON}+ mo`
+            : "cash-flow positive"}
         </b>
       </div>
-      {num(cash) > 0 && runway === "positive" && (
+      {runway?.kind === "idle" && (
         <div className="setup-fine">Nothing is burning yet, so the cash never runs out. Add people or
           costs and this becomes a real date.</div>
+      )}
+      {runway?.kind === "positive" && (
+        <div className="setup-fine">Revenue covers costs by the end of the window, so the cash stops
+          going down rather than merely lasting a long time.</div>
+      )}
+      {runway?.kind === "beyond" && (
+        <div className="setup-fine">Still spending more than you bring in — but the cash outlasts the
+          {" "}{HORIZON} months modelled here, so there's no date to show yet.</div>
       )}
       {num(cash) > 0 && <div className="setup-fine">Starting from {moneyFull(num(cash))}.</div>}
 
@@ -182,10 +210,12 @@ export function Setup({ initialName = "", onDone, onCancel, onImport }) {
           {step === 0 ? "Cancel" : "Back"}
         </button>
         <div className="setup-nav-r">
-          <button className="linkbtn" onClick={() => (last ? finish() : setStep(step + 1))}>
-            {last ? "Finish without this" : "Skip this step"}
-          </button>
-          <button className="addbtn" onClick={() => (last ? finish() : setStep(step + 1))}>
+          {!(mode === "company" && step === 0) && (
+            <button className="linkbtn" onClick={() => (last ? finish() : setStep(step + 1))}>
+              {last ? "Finish without this" : "Skip this step"}
+            </button>
+          )}
+          <button className="addbtn" disabled={needsName} onClick={() => (last ? finish() : setStep(step + 1))}>
             {last ? "Done" : "Next"}
           </button>
         </div>

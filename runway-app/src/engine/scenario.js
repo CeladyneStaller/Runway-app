@@ -1,3 +1,8 @@
+import { moneyFull } from "./money.js";
+import { monthLabel, HORIZON } from "./time.js";
+import { buildModelFromDoc } from "./buildmodel.js";
+import { buildProjection, zeroInfo } from "./projection.js";
+
 // Scenarios (Architecture 1: overlay patches over a base document, no reducer).
 //
 // A scenario is a set of PATCHES applied to a deep copy of the base document; the existing, tested
@@ -23,14 +28,6 @@ export const emptyScenario = (name = "New scenario") => ({
 });
 
 // The collections a patch may target, and the human label for each — also what the UI offers.
-export const PATCHABLE_COLLECTIONS = [
-  ["employees", "Employee"],
-  ["projects", "Project"],
-  ["rounds", "Funding round"],
-  ["pos", "Purchase order"],
-  ["milestones", "Milestone"],
-];
-
 // Deep clone that's enough for our plain-data document (no functions, no cycles). structuredClone is
 // available in the runtime; fall back to JSON for older environments.
 const clone = (o) => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
@@ -57,6 +54,14 @@ export function applyPatch(doc, patch) {
     }
     return doc;
   }
+  // TAKING SOMETHING OUT ENTIRELY, which the field-patch model could not express. "Don't hire Sam" had
+  // to be written as a start month past the horizon — a workaround that reads as a delay, survives into
+  // the description, and quietly breaks if the horizon ever moves again.
+  if (patch.kind === "remove") {
+    const coll = doc[patch.collection];
+    if (Array.isArray(coll)) doc[patch.collection] = coll.filter(x => x.id !== patch.id);
+    return doc;
+  }
   return doc;
 }
 
@@ -68,18 +73,78 @@ export function applyScenario(baseDoc, scenario) {
   return d;
 }
 
-// A short human description of a patch, for chips/labels in the UI. Needs the base doc to name items.
-export function describePatch(patch, baseDoc) {
-  if (!patch) return "";
-  if (patch.kind === "field") return `${patch.path} → ${fmt(patch.value)}`;
-  if (patch.kind === "toggle") return `${patch.path} ${patch.value ? "on" : "off"}`;
-  if (patch.kind === "item") {
-    const coll = baseDoc?.[patch.collection] || [];
-    const item = coll.find(x => x.id === patch.id);
-    const name = item?.name || item?.title || item?.role || patch.id;
-    return `${name}: ${patch.field} → ${fmt(patch.value)}`;
+// WHAT A CHANGE ACTUALLY SAYS.
+//
+// This used to render "Sam: start -> 5", which is the document schema read aloud: a field name, an
+// arrow, and a raw month index. The scenario list then summarised a whole scenario as "3 changes",
+// so the one thing a reader wants — what is different, and from what — appeared nowhere at all.
+//
+// `explainPatch` returns { text, was } so the UI can set the old value quietly beside the new one.
+// Knowing the previous value is most of the point: "starts Mar 27" is a fact, "starts Mar 27, was
+// Sep 26" is a decision.
+export function explainPatch(patch, baseDoc, ctx = {}) {
+  if (!patch) return { text: "", was: null };
+  const fmtBy = (def, v) => formatValue(v, def, ctx);
+
+  if (patch.kind === "field") {
+    const def = TOP_LEVEL_FIELDS[patch.path];
+    return {
+      text: `${def?.label || patch.path} ${fmtBy(def, patch.value)}`,
+      was: baseDoc && patch.path in baseDoc ? fmtBy(def, baseDoc[patch.path]) : null,
+    };
   }
-  return "";
+
+  if (patch.kind === "toggle") {
+    const label = (TOGGLE_FIELDS.find(([v]) => v === patch.path) || [])[1] || patch.path;
+    const wasOn = baseDoc?.settings?.toggles?.[patch.path];
+    return {
+      text: `${label} ${patch.value ? "on" : "off"}`,
+      was: typeof wasOn === "boolean" ? (wasOn ? "on" : "off") : null,
+    };
+  }
+
+  const coll = baseDoc?.[patch.collection] || [];
+  const item = coll.find(x => x.id === patch.id);
+  const name = itemLabel(item) || patch.id;
+
+  if (patch.kind === "remove") return { text: `${name} removed`, was: null };
+
+  if (patch.kind === "item") {
+    const def = PATCH_SCHEMA[patch.collection]?.fields?.[patch.field];
+    const verb = def?.verb || (def?.label || patch.field).toLowerCase();
+    return {
+      text: `${name} ${verb} ${fmtBy(def, patch.value)}`,
+      was: item ? fmtBy(def, item[patch.field]) : null,
+    };
+  }
+  return { text: "", was: null };
+}
+
+/** The same thing as one string, for anywhere a single line is wanted. */
+export function describePatch(patch, baseDoc, ctx = {}) {
+  const e = explainPatch(patch, baseDoc, ctx);
+  return e.was != null && e.was !== e.text ? `${e.text}, was ${e.was}` : e.text;
+}
+
+/** Items are named by whichever field they happen to carry a name in. */
+export const itemLabel = (it) =>
+  it ? (it.name || it.title || it.role || it.customer || it.po || it.label || it.id) : null;
+
+/** Render a value the way its field type means it. A month is an INDEX, not a number anybody wants
+ *  to read — `ctx` carries the projection start so it can be shown as a date. */
+export function formatValue(v, def, ctx = {}) {
+  if (v == null || v === "") return "none";
+  if (!def) return fmt(v);
+  if (def.type === "money") return moneyFull(Number(v) || 0);
+  if (def.type === "percent") return `${Number(v) || 0}%/mo`;
+  if (def.type === "months") {
+    return ctx.START_Y != null ? monthLabel(ctx.START_Y, ctx.START_M, Number(v) || 0) : `month ${v}`;
+  }
+  if (def.type === "select") {
+    const opt = (def.options || []).find(o => String(o[0]) === String(v));
+    return opt ? String(opt[1]).toLowerCase() : fmt(v);
+  }
+  return fmt(v);
 }
 
 const fmt = (v) => typeof v === "boolean" ? (v ? "yes" : "no") : String(v);
@@ -93,16 +158,16 @@ export const PATCH_SCHEMA = {
   employees: {
     label: "Employee",
     fields: {
-      start: { label: "Start month", type: "months" },
-      end: { label: "End month", type: "months" },
-      amount: { label: "Salary", type: "money" },
+      start: { label: "Start month", type: "months", verb: "starts" },
+      end: { label: "End month", type: "months", verb: "ends" },
+      amount: { label: "Salary", type: "money", verb: "paid" },
     },
   },
   projects: {
     label: "Project",
     fields: {
       stage: { label: "Stage", type: "select", options: [["prospective", "Prospective"], ["awarded", "Awarded"], ["active", "Active"], ["complete", "Complete"]] },
-      budget: { label: "Budget", type: "money" },
+      budget: { label: "Budget", type: "money", verb: "budget" },
       include: { label: "Include in projection", type: "select", options: [[true, "Yes"], [false, "No"]] },
     },
   },
@@ -111,7 +176,21 @@ export const PATCH_SCHEMA = {
     fields: {
       amount: { label: "Amount", type: "money" },
       status: { label: "Status", type: "select", options: [["planning", "Planning"], ["raising", "Raising"], ["closed", "Closed"]] },
-      closeMonth: { label: "Close month", type: "months" },
+      closeMonth: { label: "Close month", type: "months", verb: "closes" },
+    },
+  },
+  // SUBSCRIPTIONS. Added late: SaaS revenue shipped without any of it being patchable, so the two
+  // most natural what-ifs a subscription business has — churn doubling, new business drying up —
+  // could not be asked at all.
+  saas: {
+    label: "Subscriptions",
+    fields: {
+      churnPct: { label: "Churn", type: "percent", verb: "churn" },
+      newPerMonth: { label: "New per month", type: "number", verb: "adds" },
+      arpu: { label: "Revenue each", type: "money", verb: "bills each" },
+      newGrowthPct: { label: "New business growth", type: "percent", verb: "new business growth" },
+      arpuGrowthPct: { label: "Price growth", type: "percent", verb: "price growth" },
+      include: { label: "Count it", type: "select", options: [[true, "Yes"], [false, "No"]], verb: "counted" },
     },
   },
   pos: {
@@ -132,3 +211,73 @@ export const TOGGLE_FIELDS = [
   ["speculative", "Speculative revenue"],
   ["financing", "Financing"],
 ];
+
+// ---- what a scenario actually does ------------------------------------------------------------------
+//
+// The tab used to show two runway numbers side by side and leave the subtraction to the reader, which
+// is the wrong way round: the DELTA is the thing being decided about, and the runway is context for it.
+
+/** Runway in months, or null when the balance never crosses zero inside the horizon. */
+const runwayOf = (doc) => {
+  const rows = buildProjection(buildModelFromDoc(doc), doc.settings?.toggles);
+  const z = zeroInfo(rows);
+  return { rows, months: z && z.months != null ? z.months : null };
+};
+
+/** A single number that orders outcomes from worse to better, and IS DEFINED EVEN WHEN THERE IS NO
+ *  ZERO DATE. Attribution has to rank alternatives, and a scenario comfortably past the horizon has
+ *  `months: null` for every variant — which would leave the most interesting scenarios with no driver
+ *  at all. Past the horizon, cash left over stands in for months survived. The units above HORIZON are
+ *  fictional and this value is NEVER displayed: it exists only to sort. */
+const score = (r) => (r.months != null ? r.months : HORIZON + (r.rows[r.rows.length - 1]?.end || 0) / 1e6);
+
+/** Average monthly net flow across the horizon — the burn, signed. */
+const netPerMonth = (rows) =>
+  rows.length ? rows.reduce((a, r) => a + (r.net || 0), 0) / rows.length : 0;
+
+/** What this scenario does to the plan, and WHICH CHANGE DID IT.
+ *
+ *  The driver is found by LEAVE-ONE-OUT: run the scenario again with each change taken out in turn,
+ *  and whichever removal moves the runway furthest is the one carrying the scenario. That is more
+ *  honest than ranking changes by size — a $200k line item that lands after you are already dead
+ *  moves nothing, and a small salary that starts in month two moves a lot. It costs one extra
+ *  projection per change, and scenarios have a handful.
+ *
+ *  `months: null` means no zero date inside the horizon, which is NOT the same as cash-flow positive —
+ *  `cashFlowPositive` tells the two apart so the UI never claims the wrong one. */
+export function scenarioImpact(baseDoc, scenario) {
+  const base = runwayOf(baseDoc);
+  const scn = runwayOf(applyScenario(baseDoc, scenario));
+  const patches = scenario?.patches || [];
+
+  let driver = null;
+  if (patches.length > 1) {
+    const here = score(scn);
+    for (let i = 0; i < patches.length; i++) {
+      const without = score(runwayOf(applyScenario(baseDoc, { patches: patches.filter((_, j) => j !== i) })));
+      const swing = Math.abs(without - here);
+      if (Number.isFinite(swing) && (!driver || swing > driver.swing)) driver = { patch: patches[i], swing };
+    }
+  } else if (patches.length === 1) {
+    driver = { patch: patches[0], swing: Math.abs(score(scn) - score(base)) };
+  }
+
+  const lastNet = scn.rows.length ? scn.rows[scn.rows.length - 1].net : 0;
+  return {
+    months: scn.months,
+    baseMonths: base.months,
+    delta: scn.months != null && base.months != null ? scn.months - base.months : null,
+    burnDelta: netPerMonth(scn.rows) - netPerMonth(base.rows),
+    cashFlowPositive: scn.months == null && lastNet >= 0,
+    driver: driver?.patch || null,
+  };
+}
+
+/** A copy somebody can edit without losing the original. Scenarios are nearly always variations on
+ *  each other, and re-entering five changes to try a sixth is how people stop using the feature. */
+export const duplicateScenario = (scn, name) => ({
+  ...scn,
+  id: newScenarioId(),
+  name: name || `${scn.name} copy`,
+  patches: (scn.patches || []).map(p => ({ ...p })),
+});

@@ -69,6 +69,10 @@ export function syncConfigReport(env = import.meta.env) {
   }
   if (!env?.VITE_SUPABASE_URL) missing.push("VITE_SUPABASE_URL is empty or unset");
   if (!env?.VITE_SUPABASE_ANON_KEY) missing.push("VITE_SUPABASE_ANON_KEY is empty or unset");
+  // VITE_SITE_URL is NOT required — omitting it falls back to the current origin, which is right in
+  // local dev and in preview builds. It matters only in the case that bit us: a canonical domain
+  // exists, the app is also reachable at per-deployment URLs, and an auth link asked for at one of
+  // those comes back to a host behind its own login wall.
   return { ok: missing.length === 0, missing };
 }
 

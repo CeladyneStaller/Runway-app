@@ -82,9 +82,12 @@ describe("multiple patches compose", () => {
 
 describe("describePatch", () => {
   it("names an item patch using the item's name", () => {
-    expect(describePatch({ kind: "item", collection: "employees", id: "e2", field: "start", value: 5 }, base())).toBe("Bob: start → 5");
+    // Was "Bob: start -> 5" — the document schema read aloud. It now names the item, says what it
+    // does, and carries the old value, because "starts month 5" is a fact and "starts month 5, was
+    // month 2" is a decision.
+    expect(describePatch({ kind: "item", collection: "employees", id: "e2", field: "start", value: 5 }, base())).toBe("Bob starts month 5, was month 2");
   });
   it("describes a toggle", () => {
-    expect(describePatch({ kind: "toggle", path: "speculative", value: true }, base())).toBe("speculative on");
+    expect(describePatch({ kind: "toggle", path: "speculative", value: true }, base())).toBe("Speculative revenue on, was off");
   });
 });

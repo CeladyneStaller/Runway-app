@@ -162,3 +162,15 @@ describe("the variance reaches the flag panel the rest of the app uses", () => {
     expect(container.textContent).toMatch(/Pro plan/);
   });
 });
+
+describe("month labels are real dates", () => {
+  it("names the actual month, not a transposed one", () => {
+    // `monthLabel(y, m, idx)` — this panel had the arguments in the wrong order and rendered
+    // "May 2" where it meant "Oct 26". The old tests asserted the ROWS existed but never their text,
+    // which is exactly how a label bug survives a green suite.
+    const doc = withCash({ startY: 2026, startM: 6, saas: [{ ...blankSaas(), start: 3, arpu: 100, startCustomers: 10, actuals: { 3: 900 } }] });
+    const c = openRevenue(doc);
+    expect(c.querySelector(".saas-rec-m").textContent).toBe("Oct 26");
+    expect(c.textContent).toMatch(/Starts Oct 26/);
+  });
+});

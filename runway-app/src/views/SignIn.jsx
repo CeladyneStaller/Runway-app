@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { siteOrigin, linkDestination } from "../state/siteurl";
 import { SetPassword } from "./SetPassword";
 
 // The landing screen for hosted mode. Local-first builds never reach it — there is nobody to be,
@@ -28,7 +29,11 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
   const [choosing, setChoosing] = useState(false);
   const [resetting, setResetting] = useState(false);
 
-  const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+  // NOT window.location.origin any more. That sent the link back to whatever host you asked from —
+  // so a link requested on a Vercel preview deployment returned to that preview, which sits behind
+  // Vercel's Deployment Protection and answers with a Vercel login page instead of this app.
+  const redirectTo = siteOrigin() || undefined;
+  const dest = linkDestination();
   const creating = mode === CREATE;
 
   const run = async (key, fn) => {
@@ -65,6 +70,12 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
       <h2>Check your email</h2>
       <p>We sent a link to <b>{notice.email}</b>. Opening it on this device signs you in — and sets up
         your account if this is your first time.</p>
+      {dest && (
+        <p className="signin-fine">The link opens <b>{dest.host}</b>.
+          {dest.ephemeral && <> That's a per-deployment preview address — if it asks you to log in to
+            something that isn't this app, that's the host's own access protection, not your account.
+            Set <code>VITE_SITE_URL</code> to the real domain to point links there instead.</>}</p>
+      )}
       <p className="signin-fine">No link after a minute? Check spam, then try again — a fresh link invalidates the old one.</p>
       <button className="addbtn ghost" onClick={() => setNotice(null)}>Back</button>
     </div></div>
@@ -75,6 +86,12 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
       <h2>Confirm your email</h2>
       <p>Your account is created. Open the link we sent to <b>{notice.email}</b> to activate it, then
         come back and sign in.</p>
+      {dest && (
+        <p className="signin-fine">The link opens <b>{dest.host}</b>.
+          {dest.ephemeral && <> That's a per-deployment preview address — if it asks you to log in to
+            something that isn't this app, that's the host's own access protection, not your account.
+            Set <code>VITE_SITE_URL</code> to the real domain to point links there instead.</>}</p>
+      )}
       <p className="signin-fine">Nothing arrived? An owner can turn off email confirmation in the
         project's authentication settings, or configure a mail provider.</p>
       <button className="addbtn ghost" onClick={() => { setNotice(null); setMode(SIGNIN); }}>Go to sign in</button>
@@ -85,6 +102,13 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
     <div className="rw"><div className="splash signin">
       <h2>Check your email</h2>
       <p>We sent a reset link to <b>{notice.email}</b>. Opening it lets you choose a new password.</p>
+      {dest && (
+        <p className="signin-fine">The link opens <b>{dest.host}</b>.
+          {dest.ephemeral && <> That's a per-deployment preview address — if it asks you to log in to
+            something that isn't this app, that's the host's own access protection, not your account.
+            Set <code>VITE_SITE_URL</code> to the real domain to point links there instead.</>}</p>
+      )}
+
       <button className="addbtn ghost" onClick={() => { setNotice(null); setResetting(false); }}>Back</button>
     </div></div>
   );

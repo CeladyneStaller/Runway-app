@@ -9,6 +9,7 @@
 // sees a document — it takes plain arrays — and that seam is worth more than the tidiness of having
 // every pure function in one folder.
 import { emptyDoc } from "./document";
+import { zeroInfo } from "../engine/projection";
 
 const uid = () => crypto.randomUUID();
 
@@ -86,3 +87,28 @@ export const setupHasSubstance = (answers = {}) =>
   || named(answers.employees).length > 0
   || named(answers.projects).length > 0
   || named(answers.rounds).length > 0;
+
+/** What a projection says about how long the money lasts, in the four states worth distinguishing.
+ *
+ *  `zeroInfo` returns ONE null for TWO completely different situations, and the setup wizard used to
+ *  label both of them "cash-positive": the money genuinely never runs out because revenue covers
+ *  costs, or the money is running out and simply outlasts the 36 months modelled. Telling somebody
+ *  who is burning steadily that they are cash-flow positive, purely because their pile is bigger than
+ *  our window, is the kind of wrong answer that gets believed. The sign of the net flow in the final
+ *  modelled month separates them.
+ *
+ *  A REAL ZERO DATE WINS over both. If the cash runs out at month 5, "cash-flow positive at month 30"
+ *  is not the answer — you do not reach month 30.
+ *
+ *  Pure and here rather than inline in the view, because "positive" is currently unreachable from the
+ *  wizard's own inputs (it collects no recurring revenue), and a rule that cannot be exercised through
+ *  the UI still deserves to be exercised somewhere. */
+export function classifyRunway(rows) {
+  if (!rows || rows.length === 0) return null;
+  const z = zeroInfo(rows);
+  if (z && z.months != null) return { kind: "runway", months: z.months };
+  const last = rows[rows.length - 1];
+  if (!last) return null;
+  if (last.cost <= 0) return { kind: "idle" };        // nothing modelled to burn it
+  return last.net >= 0 ? { kind: "positive" } : { kind: "beyond" };
+}

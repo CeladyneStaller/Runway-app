@@ -82,7 +82,7 @@ function Reconcile({ x, set, setSaas, START_Y, START_M }) {
         const delta = num(actuals[m]) - projected;
         return (
           <div className="saas-rec-row" key={m}>
-            <span className="saas-rec-m">{monthLabel(m, START_Y, START_M)}</span>
+            <span className="saas-rec-m">{monthLabel(START_Y, START_M, m)}</span>
             <input className="inp num" value={actuals[m] ?? ""} inputMode="decimal"
                    aria-label={`Recorded MRR for month ${m}`}
                    onChange={e => put(m, e.target.value)} />
@@ -201,7 +201,7 @@ export function SaasPanel({ saas = [], setSaas }) {
                   <div className="saas-note">Nothing new coming in, so this decays to nothing. That's a
                     real forecast if you've stopped selling; otherwise add new business.</div>
                 )}
-                <div className="saas-when">Starts {monthLabel(num(x.start), START_Y, START_M)}</div>
+                <div className="saas-when">Starts {monthLabel(START_Y, START_M, num(x.start))}</div>
               </div>
             </div>
 

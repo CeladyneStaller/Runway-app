@@ -34,7 +34,9 @@ describe("Scenarios opens for a runway that never ends", () => {
   it("cash but no burn — the exact model that showed a white screen", () => {
     const c = openView({ ...emptyDoc(), cash: 250000 }, "Scenarios");
     expect(c.textContent).toMatch(/Runway comparison/);
-    expect(c.textContent).toMatch(/cash-positive/);
+    // The label is now specific about WHICH kind of "no zero date" this is; it used to say
+    // "cash-positive" for a steady burner that merely outlasted the horizon.
+    expect(c.textContent).toMatch(/cash-flow positive/);
     expect(c.textContent).not.toMatch(/couldn't be drawn/);
   });
 
@@ -42,7 +44,7 @@ describe("Scenarios opens for a runway that never ends", () => {
     const doc = { ...emptyDoc(), cash: 250000, scenarios: [{ id: "s1", name: "Hire two", patches: [] }] };
     const c = openView(doc, "Scenarios");
     expect(c.textContent).toMatch(/Hire two/);
-    expect(c.textContent).toMatch(/cash\+/);
+    expect(c.textContent).toMatch(/cash-flow positive/);
   });
 
   it("still reports a finite runway when there IS burn", () => {

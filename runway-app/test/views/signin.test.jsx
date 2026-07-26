@@ -204,3 +204,33 @@ describe("hosted config with no bootstrap", () => {
     expect(container.textContent).not.toMatch(/Sync is configured but never started/i);
   });
 });
+
+describe("where an emailed link comes back to", () => {
+  // The reported bug: a magic link opened a Vercel login page. The email and token were both fine —
+  // the link pointed at the preview deployment it was requested from, and that host sits behind
+  // Vercel's Deployment Protection.
+  const sendLink = async (container) => {
+    fireEvent.change(container.querySelector("#signin-email"), { target: { value: "c@acme.com" } });
+    fireEvent.click(pick(container, /Email me a link/i));
+    await waitFor(() => expect(container.textContent).toMatch(/Check your email/));
+  };
+
+  it("names the host the link will open, so a wrong one is visible", async () => {
+    const client = fakeAuthClient({ session: null });
+    hosted(client);
+    const { container } = render(<App />);
+    await toForm(container, /Sign in/);
+    await sendLink(container);
+    expect(container.textContent).toMatch(new RegExp(window.location.host));
+  });
+
+  it("sends the redirect the app resolved, not an accident of the current page", async () => {
+    const client = fakeAuthClient({ session: null });
+    hosted(client);
+    const { container } = render(<App />);
+    await toForm(container, /Sign in/);
+    await sendLink(container);
+    expect(client.calls.otp).toHaveLength(1);
+    expect(client.calls.otp[0].options.emailRedirectTo).toBe(window.location.origin);
+  });
+});

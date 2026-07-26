@@ -79,24 +79,12 @@ function PasswordSection({ account, session, hasPassword, email, onChanged }) {
   );
 }
 
-function CompaniesSection({ account, companies, activeId, onReload, onSwitched, onDeleted, doc }) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
+function CompaniesSection({ account, companies, activeId, onReload, onSwitched, onDeleted, onNewCompany, doc }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [renameTo, setRenameTo] = useState("");
   const [deleting, setDeleting] = useState(null);
-
-  const create = async () => {
-    setError(null); setBusy(true);
-    try {
-      const id = await account.createCompany(name);
-      await onSwitched(id);            // switching flushes first — see storage.switchCompany
-      setAdding(false); setName("");
-    } catch (e) { setError(e?.message || "Could not create it."); }
-    setBusy(false);
-  };
 
   const rename = async (id) => {
     setError(null); setBusy(true);
@@ -141,21 +129,12 @@ function CompaniesSection({ account, companies, activeId, onReload, onSwitched, 
 
       {error && <div className="signin-error" role="alert">{error}</div>}
 
-      {adding ? (
-        <div style={{ marginTop: 12 }}>
-          <p className="signin-fine">Starts empty — no cash, no people, no history. You'll switch to it once it's made.</p>
-          <label className="signin-label" htmlFor="acct-newco">Name</label>
-          <input id="acct-newco" className="signin-input" value={name} placeholder="Northwind Labs"
-                 onChange={(e) => setName(e.target.value)}
-                 onKeyDown={(e) => { if (e.key === "Enter" && !busy) create(); }} />
-          <button className="addbtn signin-go" disabled={busy || !name.trim()} onClick={create}>
-            {busy ? "Creating…" : "Create and switch"}
-          </button>
-          <button className="linkbtn pw-cancel" onClick={() => { setAdding(false); setError(null); }}>Cancel</button>
-        </div>
-      ) : (
-        <button className="addbtn ghost signin-go" onClick={() => setAdding(true)}>Add company</button>
-      )}
+      {/* NO NAME BOX HERE ANY MORE. Asking for a name, creating the company, and THEN opening a wizard
+          whose own first question is the name meant typing it twice — and worse, the company row was
+          written before the wizard ran, so cancelling out of it left an empty orphan company behind.
+          The wizard now runs first and the company is created from what it collected, which means
+          backing out creates nothing at all. */}
+      <button className="addbtn ghost signin-go" onClick={onNewCompany}>Add company</button>
 
       {deleting && (
         <DeleteCompany
@@ -249,7 +228,7 @@ function DeleteAccount({ account, session, companies, doc }) {
   );
 }
 
-export function Account({ doc, onSwitched, onClose }) {
+export function Account({ doc, onSwitched, onClose, onNewCompany }) {
   const account = getAccountApi();
   const session = getSessionProvider();
   const auth = getAuthAdapter();
@@ -329,6 +308,7 @@ export function Account({ doc, onSwitched, onClose }) {
       <CompaniesSection
         account={account} companies={companies} activeId={activeId}
         onReload={reload} onSwitched={doSwitch} onDeleted={doDelete} doc={doc}
+        onNewCompany={onNewCompany}
       />
 
       <div className="acct-card">

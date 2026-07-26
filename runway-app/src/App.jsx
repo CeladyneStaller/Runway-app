@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
          demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
-         markDemoReset, takeDemoReset,
+         markDemoReset, takeDemoReset, switchCompany,
          LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
 import { SignIn } from "./views/SignIn";
@@ -519,7 +519,11 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
           {view === "sales" && <Sales routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment routeTab={routeTab} setRouteTab={setTab} rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
           {view === "hist" && <History journal={doc.journal} takeSnapshot={takeSnapshot} currentCurve={modelStarts} routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
-          {view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios} />}
+          {view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios}
+            // APPLYING A SCENARIO is the one action on that tab that edits the real model. The patched
+            // document arrives already built, and goes through the ordinary setDoc path — so it saves,
+            // journals and undoes exactly like any other edit, rather than needing its own write route.
+            onApplyToPlan={(next) => setDoc(next)} />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
           </ViewBoundary>
         </main>
@@ -653,7 +657,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   const [strandedLocal, setStrandedLocal] = useState(null);
   const [promoting, setPromoting] = useState(null);   // a demo somebody asked to carry into this account
   const [wasReset, setWasReset] = useState(false);
-  const [setup, setSetup] = useState(false);
+  const [setup, setSetup] = useState(null);   // null | "model" (empty account) | "company" (new one)
   const [companyName, setCompanyName] = useState(null);
   const [seedName, setSeedName] = useState(false);    // this document started this session empty
   const [showAccount, setShowAccount] = useState(false);
@@ -722,7 +726,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
         const local = await peekLocal();
         if (alive && hasSubstance(local)) { setStrandedLocal(local); return; }
       }
-      if (alive && !setupSkipped()) setSetup(true);
+      if (alive && !setupSkipped()) setSetup("model");
     }).catch(e => { if (alive) { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); } });
     return () => { alive = false; };
     // `demo` is a prop that is constant for the life of this component (entering or leaving demo mode
@@ -790,23 +794,41 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
 
   if (setup) return (
     <Setup
-      initialName={companyName || ""}
-      onCancel={() => { skipSetup(); setSetup(false); }}
+      mode={setup}
+      initialName={setup === "company" ? "" : (companyName || "")}
+      onCancel={() => { skipSetup(); setSetup(null); }}
       onImport={(file) => {
         const r = new FileReader();
         r.onload = () => {
-          try { setDoc(fromJSON(String(r.result))); skipSetup(); setSetup(false); }
+          try { setDoc(fromJSON(String(r.result))); skipSetup(); setSetup(null); }
           catch (e) { alert("That file isn't a Runway document: " + e.message); }
         };
         r.readAsText(file);
       }}
-      onDone={(built) => {
+      onDone={async (built, typedName) => {
+        if (setup === "company") {
+          // CREATE THE COMPANY FROM WHAT THE WIZARD COLLECTED, rather than before it ran. Nothing has
+          // been written until this moment, so backing out of the wizard leaves no orphan company —
+          // which the old "name box first, then create, then wizard" order could not avoid.
+          try {
+            const id = await getAccountApi().createCompany(typedName || "New company");
+            const r = await switchCompany(getAuthAdapter(), id);   // flushes the outgoing model first
+            if (r?.state === LOAD_OK) { setLoadState(r.state); setStrandedLocal(null); setPromoting(null); }
+            setSeedName(false);          // the wizard already named it; nothing left to seed
+            setDoc(built || r?.doc || null);
+            loadCompanyName();
+          } catch (e) {
+            setErr(e?.message || "Could not create the company.");
+            return;                      // stay in the wizard so the answers aren't lost
+          }
+        } else if (built) {
+          // An all-skipped wizard hands back null and writes NOTHING, so the account stays as new as
+          // it was found and can be offered the wizard again. Only a document with something in it is
+          // set — and the ordinary save effect persists it, so there is one write path, not two.
+          setDoc(built);
+        }
         skipSetup();
-        setSetup(false);
-        // An all-skipped wizard hands back null and writes NOTHING, so the account stays as new as it
-        // was found and can be offered the wizard again. Only a document with something in it is set —
-        // and the ordinary save effect persists it, so there is one write path, not two.
-        if (built) setDoc(built);
+        setSetup(null);
       }}
     />
   );
@@ -815,13 +837,15 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     <Account
       doc={doc}
       onClose={() => setShowAccount(false)}
+      // Adding a company opens the WIZARD, not a name box. Nothing is created until it finishes.
+      onNewCompany={() => { setShowAccount(false); setSetup("company"); }}
       onSwitched={(r) => {
         // switchCompany() already flushed and reset the write buffer; adopt whatever it loaded
         if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); setSeedName(!!r.isNew); }
         // A company created from the Account page gets the SAME wizard, deliberately — the second
         // company deserves the same start as the first, and "just a name box" was how the old flow
         // dumped people into an empty model. Not gated on the skip flag: they just asked for this.
-        setSetup(!!r?.isNew);
+        setSetup(r?.isNew ? "model" : null);
         setStrandedLocal(null);   // a freshly created company is `isNew` by definition; offering to
         setPromoting(null);       // fill it with a stale browser model would be actively wrong
         setShowAccount(false);

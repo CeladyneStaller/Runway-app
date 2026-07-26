@@ -183,14 +183,52 @@ describe("companies", () => {
     expect(container.textContent).toMatch(/empty/);        // no document yet
   });
 
-  it("adds one and switches to it", async () => {
+  it("opens the setup wizard rather than a name box", async () => {
+    // Asking for a name, creating the company, and THEN opening a wizard whose first question is the
+    // name meant typing it twice — and the company row existed before the wizard ran.
     const { container } = await start();
     await openAccount(container);
     fireEvent.click(btn(container, /^Add company$/));
-    await waitFor(() => expect(container.querySelector("#acct-newco")).toBeTruthy());
-    fireEvent.change(container.querySelector("#acct-newco"), { target: { value: "Northwind Labs" } });
-    fireEvent.click(btn(container, /Create and switch/));
-    await waitFor(() => expect(rpcLog.some(r => r[0] === "create")).toBe(true));
+    await waitFor(() => expect(container.textContent).toMatch(/New company/));
+    expect(container.querySelector("#su-name")).toBeTruthy();
+    expect(container.querySelector("#acct-newco")).toBeNull();
+  });
+
+  it("creates nothing until the wizard finishes", async () => {
+    // THE POINT of the reorder: backing out leaves no orphan company behind.
+    const { container } = await start();
+    await openAccount(container);
+    fireEvent.click(btn(container, /^Add company$/));
+    await waitFor(() => expect(container.querySelector("#su-name")).toBeTruthy());
+    fireEvent.click(btn(container, /^Cancel$/));
+    await new Promise(r => setTimeout(r, 200));
+    expect(rpcLog.some(r => r[0] === "create")).toBe(false);
+  });
+
+  it("will not move off the first step without a name to create it under", async () => {
+    const { container } = await start();
+    await openAccount(container);
+    fireEvent.click(btn(container, /^Add company$/));
+    await waitFor(() => expect(container.querySelector("#su-name")).toBeTruthy());
+    expect(btn(container, /^Next$/).disabled).toBe(true);
+    // and there is no way to skip past it either
+    expect(btn(container, /Skip this step/)).toBeFalsy();
+    fireEvent.change(container.querySelector("#su-name"), { target: { value: "Northwind Labs" } });
+    expect(btn(container, /^Next$/).disabled).toBe(false);
+  });
+
+  it("creates it with the name the wizard collected, then switches", async () => {
+    const { container } = await start();
+    await openAccount(container);
+    fireEvent.click(btn(container, /^Add company$/));
+    await waitFor(() => expect(container.querySelector("#su-name")).toBeTruthy());
+    fireEvent.change(container.querySelector("#su-name"), { target: { value: "Northwind Labs" } });
+    fireEvent.change(container.querySelector("#su-cash"), { target: { value: "250000" } });
+    fireEvent.click(btn(container, /^Next$/));
+    fireEvent.click(btn(container, /^Next$/));
+    fireEvent.click(btn(container, /^Next$/));
+    fireEvent.click(btn(container, /^Done$/));
+    await waitFor(() => expect(rpcLog.some(r => r[0] === "create" && r[1] === "Northwind Labs")).toBe(true));
   });
 
   it("renames one", async () => {

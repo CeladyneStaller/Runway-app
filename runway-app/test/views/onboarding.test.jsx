@@ -112,8 +112,9 @@ describe("the wizard", () => {
     expect(container.querySelector(".setup-readout b").textContent).toBe("—");
 
     fireEvent.change(container.querySelector("#su-cash"), { target: { value: "600000" } });
-    // Cash and no burn: honest about being cash-positive rather than inventing a date.
-    await waitFor(() => expect(container.querySelector(".setup-readout b").textContent).toMatch(/cash-positive/));
+    // Cash and nothing burning it: honest about that rather than inventing a date.
+    await waitFor(() => expect(container.querySelector(".setup-readout b").textContent).toMatch(/cash-flow positive/));
+    expect(container.textContent).toMatch(/Nothing is burning yet/);
 
     fireEvent.click(btn(container, /^Next$/));
     const rows = () => [...container.querySelectorAll(".setup-row")];
@@ -205,5 +206,52 @@ describe("the demo promotion still wins", () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Bring your demo into this account/));
     expect(container.textContent).not.toMatch(/The basics/);
+  });
+});
+
+describe("the runway readout tells the two 'no zero date' cases apart", () => {
+  // zeroInfo returns ONE null for two completely different situations, and the readout used to label
+  // both "cash-positive". Telling somebody who is burning steadily that they are cash-flow positive,
+  // purely because their pile outlasts our 36-month window, is a wrong answer that gets believed.
+  const fill = async (container, { cash, salary }) => {
+    await waitFor(() => expect(container.textContent).toMatch(/The basics/));
+    fireEvent.change(container.querySelector("#su-cash"), { target: { value: cash } });
+    fireEvent.click(btn(container, /^Next$/));
+    const row = container.querySelector(".setup-row");
+    fireEvent.change(row.querySelectorAll("input")[0], { target: { value: "Alex" } });
+    fireEvent.change(row.querySelectorAll("input")[2], { target: { value: salary } });
+  };
+  const readout = (c) => c.querySelector(".setup-readout b").textContent;
+
+  it("burning, and the cash runs out inside the window: a real date", async () => {
+    goHosted();
+    const { container } = render(<App />);
+    await fill(container, { cash: "300000", salary: "600000" });   // 50k/mo against 300k
+    await waitFor(() => expect(readout(container)).toMatch(/^\d+\.\d mo$/));
+  });
+
+  it("burning, but the cash outlasts the window: 36+ mo, NOT cash-flow positive", async () => {
+    goHosted();
+    const { container } = render(<App />);
+    await fill(container, { cash: "50000000", salary: "120000" });  // 10k/mo against 50m
+    await waitFor(() => expect(readout(container)).toBe("36+ mo"));
+    expect(readout(container)).not.toMatch(/positive/);
+    expect(container.textContent).toMatch(/Still spending more than you bring in/);
+  });
+
+  it("nothing burning at all: says so, rather than quoting a date", async () => {
+    goHosted();
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/The basics/));
+    fireEvent.change(container.querySelector("#su-cash"), { target: { value: "600000" } });
+    await waitFor(() => expect(readout(container)).toBe("cash-flow positive"));
+    expect(container.textContent).toMatch(/Nothing is burning yet/);
+  });
+
+  it("no cash entered yet: nothing to say", async () => {
+    goHosted();
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/The basics/));
+    expect(readout(container)).toBe("—");
   });
 });
