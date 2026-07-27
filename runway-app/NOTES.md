@@ -979,6 +979,32 @@ never used the product AND drag every average down. Both errors flatter in the w
 **"No zero date" is never averaged in as HORIZON.** That would cap the healthiest customers at 36 and
 understate exactly the companies doing best; they are counted separately as `companiesBeyondHorizon`.
 
+## Phase 1: billing UI (Account + unpaid bar)
+
+`BillingSection` in `Account.jsx`, `UnpaidBar` in `App.jsx`, plus `myPlan`/`checkout`/`billingPortal`
+on the account API. Tests `test/views/billing.test.jsx` (10).
+
+**THE BAR IS THE POINT, more than the plan cards.** Without it a refused save showed only a small
+"Couldn't save" pill, which reads as a fault — you retry, reload, and conclude the product is broken.
+It is not broken, it is asking to be paid, and that is a completely different sentence. Its absence is
+why an unpaid company looked like a broken app for most of a day during Phase 1 testing. `unpaid` is
+deliberately ABSENT from `SyncPill`'s labels, so a pill does not restate a billing state as a fault
+next to the bar explaining it.
+
+**Reads one `my_plan()` call.** Plan is a property of an ACCOUNT, not a company — assembling it from
+company rows is exactly the confusion 009 existed to remove, and the 012 breakage came from 008 having
+done it that way.
+
+**Every message says the model is safe and still exportable**, and a test asserts none of them contain
+"lost" or "deleted". It IS safe: the edit is held in memory by storage's halt, and export is never
+gated. That is also the commitment terms §5 makes.
+
+**Staff accounts see "exempt from billing" and NO plan cards.** Showing a price ladder to somebody who
+cannot be charged is noise, and showing "no plan" while they write freely reads as broken.
+
+**Connected is rendered as "Not available yet"** rather than a buy button, because automatic import
+does not exist. Selling it would be the one failure no refund fixes.
+
 ## Phase 1: Stripe (Edge Functions)
 
 `supabase/functions/{stripe-webhook,stripe-checkout,stripe-portal}` +

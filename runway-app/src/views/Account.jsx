@@ -5,6 +5,7 @@ import { passwordRules, passwordScore } from "../engine/password";
 import { toJSON } from "../state/document";
 import { DeleteCompany } from "./chrome/DeleteCompany";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
+import { PLANS, planSummary, unpaidMessage, TRIAL_DAYS } from "../state/plans";
 
 // Account-level settings, as distinct from the model. Reached from the email in the top bar rather than
 // the main nav — it is about you, not about your runway.
@@ -85,6 +86,90 @@ function PasswordSection({ account, session, hasPassword, email, onChanged }) {
  *  A VIEW PREFERENCE ONLY: nothing here changes a number, and hiding a tab hides it from the nav, not
  *  from the app. A hash pointing at a hidden view still opens it, because this is decluttering rather
  *  than access control and a broken bookmark would be the bigger surprise. */
+/** Plan, trial, and the way to pay.
+ *
+ *  Reads `my_plan()` — ONE call, so nothing has to be assembled from company rows. Plan is a property
+ *  of an account, not a company, and putting it on company rows is exactly the confusion migration
+ *  009 existed to remove. */
+export function BillingSection({ account, onError }) {
+  const [row, setRow] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    account?.myPlan?.().then(p => { if (alive) setRow(p); }).catch(() => {});
+    return () => { alive = false; };
+  }, [account]);
+
+  const s = planSummary(row);
+  const staff = row?.plan === "staff";
+
+  const go = async (fn, key) => {
+    setBusy(key);
+    try { window.location.href = await fn(); }
+    catch (e) { onError?.(e?.message || "Could not open billing."); setBusy(null); }
+  };
+
+  return (
+    <section className="acct-sec">
+      <h3>Billing</h3>
+
+      {staff ? (
+        <p className="signin-fine">This account is exempt from billing. Every company you own is
+          editable regardless of plan.</p>
+      ) : s.state === "trialing" ? (
+        <p className="signin-fine">
+          <b>{s.daysLeft} day{s.daysLeft === 1 ? "" : "s"} left</b> of your {TRIAL_DAYS}-day trial.
+          No card needed until you choose a plan — and your model stays exportable whatever you decide.
+        </p>
+      ) : s.state === "active" || s.state === "past_due" ? (
+        <p className="signin-fine">
+          You're on <b>{s.plan?.name}</b>, ${s.plan?.price}/month.
+          {s.lapsing
+            ? ` Cancelled — access continues until ${s.periodEnd?.toLocaleDateString()}.`
+            : s.periodEnd ? ` Renews ${s.periodEnd.toLocaleDateString()}.` : ""}
+          {s.state === "past_due" && " Your last payment didn't go through; update your card to avoid interruption."}
+        </p>
+      ) : (
+        // The message is shared with the save-refused banner so the two can never contradict.
+        <p className="signin-fine">{unpaidMessage(s)}</p>
+      )}
+
+      {!staff && (
+        <div className="plancards">
+          {PLANS.map(p => (
+            <div className={"plancard" + (s.plan?.id === p.id ? " on" : "")} key={p.id}>
+              <div className="plancard-h">
+                <b>{p.name}</b>
+                <span className="plancard-price">${p.price}<em>/mo</em></span>
+              </div>
+              <p>{p.blurb}</p>
+              <ul>{p.features.map((f, i) => <li key={i}>{f}</li>)}</ul>
+              {p.comingSoon ? (
+                <span className="plancard-soon">Not available yet</span>
+              ) : s.plan?.id === p.id ? (
+                <span className="plancard-soon">Your plan</span>
+              ) : (
+                <button className="addbtn plancard-go" disabled={!!busy}
+                        onClick={() => go(() => account.checkout(p.id), p.id)}>
+                  {busy === p.id ? "Opening…" : `Choose ${p.name}`}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(s.state === "active" || s.state === "past_due") && (
+        <button className="linkbtn" disabled={!!busy}
+                onClick={() => go(() => account.billingPortal(), "portal")}>
+          {busy === "portal" ? "Opening…" : "Manage billing, card and invoices"}
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function LayoutSection({ prefs, onChange }) {
   const hiddenViews = prefs?.views || [];
   const hiddenSubs = prefs?.subs || {};
@@ -398,6 +483,8 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
         hasPassword={!!profile?.password_set_at}
         onChanged={reload}
       />
+
+      <BillingSection account={account} onError={setErr} />
 
       <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />
 

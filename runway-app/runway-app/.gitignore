@@ -1,0 +1,10 @@
+node_modules
+dist
+.DS_Store
+*.local
+
+# Real environment values. .env.example is the committed TEMPLATE and must stay blank —
+# anything you paste there goes into version control.
+.env
+.env.*
+!.env.example

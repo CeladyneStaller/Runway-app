@@ -327,6 +327,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
     <TabPrefsProvider value={tabPrefs}>
     <StartCtx.Provider value={startCtx}>
     <div className="rw">
+      <UnpaidBar onOpenAccount={onOpenAccount} />
       <div className="shell">
         {/* NAV RAIL */}
         <aside className="rail">
@@ -648,9 +649,30 @@ function DemoPill({ onLeave, onKeep }) {
  *  unsaved state, which is survivable when writes are local and instant, and is not once they cross a
  *  network. Deliberately always visible rather than a toast: the question "is my work safe" should be
  *  answerable by looking, not by remembering whether something flashed. */
+/** SAYS WHY SAVING STOPPED, at the top of the app where it cannot be missed.
+ *
+ *  Without this a refused save shows only a small "Couldn't save" pill, which reads as a bug — you
+ *  retry, reload, and conclude the product is broken. It is not broken; it is asking to be paid, and
+ *  that is a completely different sentence. This bar is the difference between a paywall and an
+ *  outage, and its absence is why an unpaid company looked like a broken app for most of a day. */
+function UnpaidBar({ onOpenAccount }) {
+  const [s, setS] = useState(status());
+  useEffect(() => subscribe(setS), []);
+  if (s.state !== "unpaid") return null;
+  return (
+    <div className="unpaidbar" role="status">
+      <span><b>Changes aren't being saved.</b> This company isn't covered by your plan. Your model is
+        safe and you can still open and export it.</span>
+      {onOpenAccount && <button className="linkbtn" onClick={onOpenAccount}>Choose a plan</button>}
+    </div>
+  );
+}
+
 function SyncPill() {
   const [s, setS] = useState(status());
   useEffect(() => subscribe(setS), []);
+  // `unpaid` is deliberately absent: it has its own bar, and a small pill saying "Couldn't save"
+  // beside it would restate a billing state as a fault.
   const label = { saved: "Saved", saving: "Saving\u2026", unsaved: "Unsaved changes", error: "Couldn't save",
                   conflict: "Changed elsewhere", stale: "Reload needed" }[s.state];
   if (!label) return null;

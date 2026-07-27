@@ -69,6 +69,34 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       await rpc("set_stats_optout", { p_company_id: companyId, p_optout: !!optout });
     },
 
+    /** Plan, status and allowance for the signed-in account. One call, so the billing UI needs no
+     *  second round trip to work out what to show. */
+    async myPlan() {
+      const out = await rpc("my_plan", {});
+      return unwrapOne(out) || { plan: "none", status: "none", companies_allowed: 0 };
+    },
+
+    /** Start a hosted Checkout. Returns a URL to send the browser to — we never touch card fields,
+     *  which keeps this out of PCI scope entirely. */
+    async checkout(plan) {
+      const r = await doFetch(`${base}/functions/v1/stripe-checkout`, {
+        method: "POST", headers: await headers(), body: JSON.stringify({ plan }),
+      });
+      if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `checkout failed (${r.status})`);
+      return (await r.json()).url;
+    },
+
+    /** Open the Stripe Customer Portal: change plan, update card, cancel, download invoices.
+     *  None of it built by us, which is the point. */
+    async billingPortal() {
+      const r = await doFetch(`${base}/functions/v1/stripe-portal`, {
+        method: "POST", headers: await headers(),
+      });
+      if (r.status === 404) throw new BackendError(ERR_FORBIDDEN, "no_subscription");
+      if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `portal failed (${r.status})`);
+      return (await r.json()).url;
+    },
+
     async deleteCompany(companyId) {
       await rpc("delete_company", { p_company_id: companyId });
     },
