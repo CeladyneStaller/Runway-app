@@ -19,7 +19,24 @@ const WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 // Which Stripe price maps to which of our plans. Set as a JSON object in the function's secrets:
 //   {"price_1AAA":"solo","price_1BBB":"advisor","price_1CCC":"connected"}
 // Kept OUT of the code so adding an annual price is a config change, not a deploy.
-const PRICE_MAP: Record<string, string> = JSON.parse(Deno.env.get("STRIPE_PRICE_MAP") || "{}");
+// PARSED DEFENSIVELY, because this runs at MODULE SCOPE. A bare JSON.parse here throws before
+// Deno.serve is ever reached, so one malformed character in a secret kills the whole function with an
+// opaque WORKER_ERROR — no logs, no signature check, nothing to debug against. A bad map should cost
+// you correct plan names, not the endpoint.
+function readPriceMap(): Record<string, string> {
+  const raw = Deno.env.get("STRIPE_PRICE_MAP");
+  if (!raw) { console.warn("[stripe] STRIPE_PRICE_MAP unset — every plan will read as 'solo'"); return {}; }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    return parsed as Record<string, string>;
+  } catch (e) {
+    console.error("[stripe] STRIPE_PRICE_MAP is not valid JSON, ignoring it:", (e as Error).message);
+    console.error('[stripe] expected: {"price_123":"solo","price_456":"advisor"}');
+    return {};
+  }
+}
+const PRICE_MAP = readPriceMap();
 
 const sql = async (path: string, init: RequestInit = {}) =>
   fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -68,7 +85,11 @@ Deno.serve(async (req) => {
         }
 
         const priceId = obj.items?.data?.[0]?.price?.id;
-        const plan = PRICE_MAP[priceId] || "solo";
+        // An unrecognised price means a product created without updating the map, or an event from
+        // a price we do not sell. Falling back silently bills somebody as Solo and looks like it
+        // worked; say so instead.
+        const plan = PRICE_MAP[priceId];
+        if (!plan) console.error("[stripe] price not in STRIPE_PRICE_MAP, defaulting to solo:", priceId);
         const periodEnd = obj.current_period_end
           ? new Date(obj.current_period_end * 1000).toISOString() : null;
 
@@ -84,7 +105,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             p_user_id: userId,
             p_status: status,
-            p_plan: plan,
+            p_plan: plan || "solo",
             p_period_end: periodEnd,
             p_customer_id: obj.customer ?? null,
             p_sub_id: obj.id ?? null,

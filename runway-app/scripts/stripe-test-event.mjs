@@ -74,8 +74,12 @@ if (res.status === 200) {
   console.log(`  select company_entitled(id), name from companies;`);
 } else if (res.status === 401) {
   console.log("\n401 means verify_jwt is still ON. Redeploy with --no-verify-jwt.");
+} else if (res.status === 500 && /WORKER_ERROR/.test(await Promise.resolve(""))) {
 } else if (res.status === 500) {
-  console.log("\n500 means the signature VERIFIED and the handler ran — everything hard is working.");
+  console.log("\nIf the body says WORKER_ERROR, the function CRASHED AT LOAD — before any of our");
+  console.log("code ran, so this says nothing about the signature. Usual cause: a secret that is");
+  console.log("read at module scope is malformed (STRIPE_PRICE_MAP must be valid JSON).");
+  console.log("\nIf the body says handler_failed, the signature VERIFIED and the handler ran —");
   console.log("It failed at the database. Look at Supabase -> Edge Functions -> stripe-webhook -> Logs");
   console.log("for the real error. Usual causes: migration 009 not applied, or the user does not exist.");
 } else if (res.status === 400) {
