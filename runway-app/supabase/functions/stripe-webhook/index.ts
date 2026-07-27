@@ -75,26 +75,27 @@ Deno.serve(async (req) => {
         // `deleted` means gone now, whatever the object says.
         const status = event.type === "customer.subscription.deleted" ? "canceled" : obj.status;
 
-        const row = {
-          user_id: userId,
-          status,
-          plan,
-          current_period_end: periodEnd,
-          stripe_customer_id: obj.customer ?? null,
-          stripe_subscription_id: obj.id ?? null,
-          last_event_id: event.id,
-          last_event_at: new Date(event.created * 1000).toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        // UPSERT, then drop if stale. `merge-duplicates` makes a replay harmless, and the
-        // `last_event_at` guard in the query string makes an out-of-order delivery harmless too:
-        // an older event simply does not match and writes nothing.
-        const res = await sql(
-          `subscriptions?on_conflict=user_id&or=(last_event_at.is.null,last_event_at.lt.${row.last_event_at})`,
-          { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-            body: JSON.stringify(row) });
-        if (!res.ok) throw new Error(`upsert failed ${res.status}: ${await res.text()}`);
+        // APPLIED THROUGH AN RPC, not a table upsert. An earlier version put the staleness guard in
+        // a PostgREST `or=` filter on the insert — filters do not apply to INSERTs, so PostgREST
+        // rejected every event and the handler 500'd. Postgres's `on conflict do update ... where`
+        // is the right tool and does it atomically.
+        const res = await sql("rpc/apply_subscription_event", {
+          method: "POST",
+          body: JSON.stringify({
+            p_user_id: userId,
+            p_status: status,
+            p_plan: plan,
+            p_period_end: periodEnd,
+            p_customer_id: obj.customer ?? null,
+            p_sub_id: obj.id ?? null,
+            p_event_id: event.id,
+            p_event_at: new Date(event.created * 1000).toISOString(),
+          }),
+        });
+        if (!res.ok) throw new Error(`apply failed ${res.status}: ${await res.text()}`);
+        // `false` means the event was older than what we hold and was correctly ignored. Still a 200:
+        // returning an error would make Stripe retry a duplicate forever.
+        if ((await res.json()) === false) console.log("[stripe] ignored stale event", event.id);
         break;
       }
 
