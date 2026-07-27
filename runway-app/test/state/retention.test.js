@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 import { runRetentionChecks } from "../../scripts/retention-checks.mjs";
 
 /** A stand-in database whose save/prune behaviour is configurable, so each failure mode is reachable. */
-function fakeDb({ keep = Infinity, coalesceWindow = false } = {}) {
+function fakeDb({ keep = Infinity, coalesceWindow = false, snapshotEvery = 6 } = {}) {
   let versions = [];
   let v = 1;
   let body = null;
@@ -27,7 +27,7 @@ function fakeDb({ keep = Infinity, coalesceWindow = false } = {}) {
       if (name !== "save_document") return { ok: false, status: 404, body: null };
       sawBurst++;
       // coalescing: only snapshot every 6th save, standing in for a time window
-      if (!coalesceWindow || sawBurst % 6 === 1) {
+      if (!coalesceWindow || sawBurst % snapshotEvery === 1) {
         versions.push(v);
         if (versions.length > keep) versions = versions.slice(-keep);
       }
@@ -66,10 +66,28 @@ describe("the retention checker", () => {
   });
 
   it("FAILS when every save snapshots, even if the table is bounded", async () => {
-    // Bounded storage but unbounded WRITE volume: 20 KB written and deleted on every debounce.
+    // Bounded storage but unbounded WRITE volume: 20 KB written and deleted on every debounce. At
+    // the cap the row count cannot move, so this is caught by the version numbers being consecutive.
     const { pass, results } = await run(fakeDb({ keep: 20, coalesceWindow: false }));
     expect(pass).toBe(false);
     expect(results.find(r => r.name === "a burst of saves does not snapshot each time").pass).toBe(false);
+  });
+
+  it("PASSES a fresh project where coalescing produced ONE snapshot — the best possible outcome", async () => {
+    // THE BUG THIS EXISTS FOR. The first version demanded three snapshots to compare version numbers,
+    // so 40 saves collapsing to a single snapshot — coalescing working perfectly — was reported as a
+    // retention failure. Below the cap the ROW COUNT is the valid signal, not the version numbers.
+    const { pass, results } = await run(fakeDb({ keep: 20, coalesceWindow: true, snapshotEvery: 999 }));
+    const burst = results.find(r => r.name === "a burst of saves does not snapshot each time");
+    expect(burst.pass, burst.detail).toBe(true);
+    expect(pass).toBe(true);
+  });
+
+  it("FAILS a fresh project where every save snapshots — the count gives it away", async () => {
+    // Below the cap there is nothing to prune, so a broken coalesce shows up as ten new rows.
+    const { pass, results } = await run(fakeDb({ keep: 500, coalesceWindow: false }));
+    expect(results.find(r => r.name === "a burst of saves does not snapshot each time").pass).toBe(false);
+    expect(pass).toBe(false);
   });
 
   it("checks the live document survived the hammering", async () => {

@@ -1007,6 +1007,14 @@ cannot make 21 snapshots in a minute when coalescing is doing its job, so on a f
 keep-window assertion is near-vacuous. It reliably catches THE MIGRATION NOT BEING APPLIED, and bites
 properly on a project with real history. Stated in the checker and pinned by a test.
 
+**WATCH: WHICH SIGNAL IS VALID DEPENDS ON WHETHER THE TABLE IS AT ITS CAP.** The first version of the
+burst check demanded three snapshots to compare version numbers — so the first real run, on a fresh
+project where 42 saves collapsed to ONE snapshot, was reported as a retention failure. It failed on
+the best possible outcome. Below the cap the ROW COUNT is the valid signal (a burst adds one row or
+none); at the cap the count cannot move at all (ten inserted, ten pruned) so only the version numbers
+tell you anything. Both halves are load-bearing — reverting either reproduces a different real
+failure, verified.
+
 ### Error reporting (`src/state/errors.js`)
 
 A SEAM, not `@sentry/react`. Error SDKs capture generously by default — breadcrumbs, URLs, request

@@ -63,20 +63,31 @@ export async function runRetentionChecks({ client, user, companyId, keep = 20 })
   check("history stays inside the keep window", after !== null && after <= keep,
         `${after} rows, limit ${keep}`);
 
-  // COALESCING, measured by VERSION NUMBERS rather than row count.
+  // COALESCING. WHICH SIGNAL IS VALID DEPENDS ON WHETHER THE TABLE IS AT ITS CAP, and the first
+  // version of this check got that wrong in the most embarrassing direction: it demanded at least
+  // three snapshots to compare version numbers, so a project where coalescing worked PERFECTLY — 40
+  // saves producing one snapshot — failed for having too few rows to inspect. It failed on the best
+  // possible outcome.
   //
-  // Counting rows cannot detect this once retention has capped the table: snapshot-every-save plus
-  // prune-to-N holds the count flat at N, so a burst adds ten rows and deletes ten and the count
-  // never moves. The version numbers give it away instead — `documents.version` increments on every
-  // save, so snapshots taken on consecutive saves carry consecutive version numbers, and coalesced
-  // ones are sparse.
+  //   BELOW THE CAP, the row count is meaningful: a burst that adds one row or none has coalesced,
+  //     and a burst that adds ten has not.
+  //   AT THE CAP, the count cannot move at all — ten rows inserted and ten pruned leaves twenty —
+  //     so the VERSION NUMBERS are the only tell. `documents.version` increments on every save, so
+  //     snapshots taken on consecutive saves carry consecutive numbers and coalesced ones are sparse.
+  const pre = await countVersions();
   await hammer(client, token, companyId, 10, (i) => bodyOf(1000 + i));
+  const post = await countVersions();
+
   const top = await client.get(
     `/rest/v1/document_versions?select=version&order=version.desc&limit=5`, token);
   const vs = (Array.isArray(top.body) ? top.body : []).map(x => Number(x.version));
   const consecutive = vs.length >= 3 && vs.every((v, i) => i === 0 || vs[i - 1] - v === 1);
-  check("a burst of saves does not snapshot each time", vs.length >= 3 && !consecutive,
-        vs.length < 3 ? `only ${vs.length} snapshots to compare` : `newest versions ${vs.join(", ")}`);
+
+  const atCap = post >= keep;
+  check("a burst of saves does not snapshot each time",
+        atCap ? (vs.length >= 3 && !consecutive) : (post - pre <= 1),
+        atCap ? `at the ${keep}-row cap; newest versions ${vs.join(", ")}`
+              : `${pre} -> ${post} rows across 10 saves`);
 
   // The live document must still be correct after all that.
   const doc = await client.get(
