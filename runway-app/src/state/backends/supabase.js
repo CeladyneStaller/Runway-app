@@ -15,7 +15,7 @@
 // blind-write over a newer document, because this file cannot issue one.
 
 import {
-  BackendError, ERR_CONFLICT, ERR_FORBIDDEN, ERR_STALE_CLIENT, ERR_UNREACHABLE,
+  BackendError, ERR_CONFLICT, ERR_FORBIDDEN, ERR_PAYMENT_REQUIRED, ERR_STALE_CLIENT, ERR_UNREACHABLE,
 } from "./errors.js";
 
 // PostgREST surfaces a raised exception's SQLSTATE, which is how the RPC's three refusals are told
@@ -25,6 +25,10 @@ function classify(status, payload) {
   const msg = String(payload?.message || "");
   if (code === "P0002" || msg.includes("conflict")) return ERR_CONFLICT;
   if (code === "P0001" || msg.includes("stale_client")) return ERR_STALE_CLIENT;
+  // Checked BEFORE the 403 branch: PostgREST reports a raised exception as 400 with the SQLSTATE, but
+  // a gateway that drops the code would otherwise land this on forbidden and tell somebody they lack
+  // permission when what they lack is a subscription.
+  if (code === "P0003" || msg.includes("payment_required")) return ERR_PAYMENT_REQUIRED;
   if (code === "42501" || status === 401 || status === 403) return ERR_FORBIDDEN;
   return ERR_UNREACHABLE;
 }

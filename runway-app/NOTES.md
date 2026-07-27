@@ -979,6 +979,44 @@ never used the product AND drag every average down. Both errors flatter in the w
 **"No zero date" is never averaged in as HORIZON.** That would cap the healthiest customers at 36 and
 understate exactly the companies doing best; they are counted separately as `companiesBeyondHorizon`.
 
+## Phase 1: entitlement (`008_entitlement.sql`)
+
+Tests `test/state/entitlement.test.js` (6), classification guarded by reversion. The Stripe webhook,
+Checkout and the Account billing section are NOT built yet — this is the enforcement core only.
+
+**ENFORCED IN THE DATABASE, NEVER THE CLIENT.** This is a JavaScript app; anything gated in React is
+gated in name only. Every write already funnels through `save_document`, so there is exactly one place
+the check belongs.
+
+**READS ARE NEVER GATED.** An unpaid account can still open and EXPORT. That is a commitment the terms
+of service draft already makes — §5 — not a preference, and also self-interest: holding somebody's own
+financial data hostage over a lapsed card generates furious support and makes reactivation
+adversarial. Nothing in 008 touches select, pinned by a test.
+
+**THE POLICY IS ONE FUNCTION.** `company_entitled()` is the only thing that decides who may write;
+changing the commercial model should mean editing it and nothing else. Everything around it is
+mechanism.
+
+**The free tier is the OLDEST COMPANY YOU OWN**, computed rather than stored. An `is_free_slot` column
+has to be maintained, and every path that creates or deletes a company becomes a place to corrupt it.
+`order by created_at limit 1` cannot drift, needs no migration when the rule changes, and is
+explainable to a customer in five words.
+
+**Stripe statuses are stored VERBATIM and read generously.** A local enum would need updating whenever
+Stripe adds a status, and the failure mode of a missed one is granting or revoking access by accident.
+`past_due` still writes: a failing card is a dunning problem, not a reason to lock somebody out of
+their payroll mid-edit while Stripe retries for days.
+
+**`subscriptions` has NO insert/update/delete policy.** RLS denies by default, so an authenticated user
+cannot grant themselves a subscription even having found the table. Only the webhook, on the service
+role, writes it.
+
+**`ERR_PAYMENT_REQUIRED` is distinct from `ERR_FORBIDDEN`** (SQLSTATE P0003), and checked BEFORE the
+403 branch — a gateway that drops the code would otherwise land it on forbidden and tell somebody they
+lack permission when what they lack is a subscription. Storage emits a distinct `unpaid` state rather
+than a generic error, because "could not save" invites a retry and a conclusion that the product is
+broken. The edit stays held in memory by the existing halt, so nothing is lost by paying and retrying.
+
 ## Phase 0: version retention + error reporting
 
 ### `document_versions` is bounded now (`005_version_retention.sql`)

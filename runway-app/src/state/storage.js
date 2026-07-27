@@ -19,7 +19,7 @@ import { createLocalBackend, adoptionDismissed, dismissAdoption,
 import { createSupabaseBackend } from "./backends/supabase.js";
 import { createDemoBackend, clearDemo, demoInProgress, demoExpired, demoRemainingMs, DEMO_WINDOW_MS,
          stashPromotion, pendingPromotion, clearPromotion, markDemoReset, takeDemoReset } from "./backends/demo.js";
-import { ERR_CONFLICT, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
+import { ERR_CONFLICT, ERR_PAYMENT_REQUIRED, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
 
 // WHICH BACKEND. Local is the default and stays the fallback for the whole hosted build: the app must
 // remain fully functional with sync switched off. Hosting is opt-in and requires all three of a URL, an
@@ -212,6 +212,10 @@ export async function flush() {
     const kind = kindOf(e);
     if (kind === ERR_CONFLICT)     { emit({ state: "conflict", error: e }); }
     else if (kind === ERR_STALE_CLIENT) { emit({ state: "stale", error: e }); }
+    // A DISTINCT STATE, not a generic error. "Could not save" invites somebody to retry, reload, and
+    // conclude the product is broken; this one has an answer and the UI needs to be able to say it.
+    // The edit is still held in memory by the halt below, so nothing is lost by paying and retrying.
+    else if (kind === ERR_PAYMENT_REQUIRED) { emit({ state: "unpaid", error: e }); }
     else { emit({ state: "error", error: e }); }
 
     if (isRetryable(e)) {
