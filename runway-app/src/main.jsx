@@ -68,4 +68,17 @@ const sink = createSentrySink({ dsn: import.meta.env.VITE_SENTRY_DSN, release, e
       })
     : null);
 
-if (sink) initErrorReporting(sink, { release, environment });
+// SAY SOMETHING WHEN REPORTING IS OFF. This used to fail silently: a missing or malformed DSN
+// produced a sink of null, `reportError` logged to the console exactly as it always does, and there
+// was no way to tell "scrubbed and sent" from "scrubbed and dropped" without reading the context
+// object for absent keys. A setup step that looks identical whether or not it worked is a bad setup
+// step.
+if (sink) {
+  initErrorReporting(sink, { release, environment });
+} else if (import.meta.env.VITE_SENTRY_DSN) {
+  console.warn("[runway] VITE_SENTRY_DSN is set but could not be parsed — error reporting is OFF. "
+    + "Expected the form https://<key>@<host>/<numeric project id>");
+} else {
+  console.info("[runway] error reporting is OFF — no VITE_SENTRY_DSN in this build. "
+    + "Vite inlines VITE_ variables at build time, so setting one requires a rebuild.");
+}

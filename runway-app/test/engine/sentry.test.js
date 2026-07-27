@@ -26,6 +26,19 @@ describe("addressing the endpoint", () => {
     expect(parseDsn(DSN).url).toMatch(/sentry_key=abc123&sentry_version=7/);
   });
 
+  it("accepts every DSN shape Sentry issues, including regional and trailing-slash", () => {
+    // Getting this wrong looks exactly like "the variable was never set": a null sink, a scrubbed
+    // console line, and nothing sent. Worth pinning the shapes rather than discovering one at a time.
+    for (const d of [
+      "https://abc123@o42.ingest.sentry.io/4507",
+      "https://abc123@o4507123.ingest.us.sentry.io/4508123456789012",
+      "https://abc123@o4507123.ingest.de.sentry.io/4508123456789012",
+      "https://abc@sentry.example.com/2",
+      "https://abc123@o42.ingest.sentry.io/4507/",
+      "  https://abc123@o42.ingest.sentry.io/4507  ",
+    ]) expect(parseDsn(d), d).not.toBeNull();
+  });
+
   it("returns null for junk, so a typo disables reporting rather than throwing on every crash", () => {
     expect(parseDsn("not a dsn")).toBeNull();
     expect(parseDsn("https://sentry.io/nokey")).toBeNull();
