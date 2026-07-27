@@ -152,3 +152,17 @@ describe("not burning a month of quota in a minute", () => {
     vi.useRealTimers();
   });
 });
+
+describe("a failing send does not become an event", () => {
+  it("swallows its own rejection instead of feeding the global handler", async () => {
+    // Ad blockers block *.sentry.io outright. If that rejection escapes, the global handler catches
+    // it and hands it straight back here — a reporter reporting its own failure to report.
+    const s = createSentrySink({ dsn: DSN, fetchImpl: () => Promise.reject(new Error("blocked")) });
+    await expect(s(ev())).resolves.toBeUndefined();
+  });
+
+  it("survives a fetch that throws synchronously", async () => {
+    const s = createSentrySink({ dsn: DSN, fetchImpl: () => { throw new Error("nope"); } });
+    expect(() => s(ev())).toThrow();   // reportError's try/catch handles this one
+  });
+});

@@ -131,13 +131,18 @@ export function createSentrySink({ dsn, release, environment, fetchImpl, maxPerS
 
     sent += 1;
     const body = toEnvelope(toSentryEvent(event, { release, environment }), dsn);
-    // `keepalive` so a crash during unload still reports. Errors are swallowed by reportError, which
-    // must never throw — a failing reporter is a way of losing the thing being reported.
+    // `keepalive` so a crash during unload still reports.
+    //
+    // THE .catch IS LOAD-BEARING. `reportError` calls this inside a try/catch, which catches a
+    // synchronous throw and does nothing about a rejected PROMISE. An ad blocker, a CORS failure or
+    // an offline browser rejects this fetch, that rejection is unhandled, the global handler catches
+    // it, and it comes straight back here as a new event — a reporter reporting its own failure to
+    // report. The dedupe and session cap bound it, but the right answer is not to start.
     return post(parsed.url, {
       method: "POST",
       headers: { "Content-Type": "application/x-sentry-envelope" },
       body,
       keepalive: true,
-    });
+    }).catch(() => { /* a failed send must never become an event */ });
   };
 }
