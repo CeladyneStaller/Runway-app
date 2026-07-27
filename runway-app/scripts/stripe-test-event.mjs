@@ -21,6 +21,16 @@ const need = (k) => { const v = process.env[k]; if (!v) { console.error(`Missing
 const url = need("WEBHOOK_URL");
 const secret = need("STRIPE_WEBHOOK_SECRET");
 const userId = need("TEST_USER_ID");
+
+// VALIDATE BEFORE SENDING. `user_id` is a uuid column with a foreign key, so anything malformed comes
+// back as an opaque 500 from the handler's catch — which looks like a webhook bug and is not one.
+// The specific trap: pasting the placeholder brackets from the instructions along with the value.
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+  console.error(`TEST_USER_ID is not a UUID: ${userId}`);
+  if (/^<.*>$/.test(userId)) console.error("It still has the < > placeholder brackets around it.");
+  console.error("Copy it from Supabase -> Authentication -> Users, with no surrounding characters.");
+  process.exit(2);
+}
 const priceId = process.env.TEST_PRICE_ID || "price_test_placeholder";
 const status = process.argv[2] || "active";
 
@@ -64,6 +74,10 @@ if (res.status === 200) {
   console.log(`  select company_entitled(id), name from companies;`);
 } else if (res.status === 401) {
   console.log("\n401 means verify_jwt is still ON. Redeploy with --no-verify-jwt.");
+} else if (res.status === 500) {
+  console.log("\n500 means the signature VERIFIED and the handler ran — everything hard is working.");
+  console.log("It failed at the database. Look at Supabase -> Edge Functions -> stripe-webhook -> Logs");
+  console.log("for the real error. Usual causes: migration 009 not applied, or the user does not exist.");
 } else if (res.status === 400) {
   console.log("\n400 means the signature was refused — check STRIPE_WEBHOOK_SECRET matches the");
   console.log("endpoint you are testing. Live, test and `stripe listen` each have a DIFFERENT one.");
