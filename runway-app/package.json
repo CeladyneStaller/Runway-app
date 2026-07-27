@@ -16,7 +16,8 @@
     "test:isolation": "vitest run test/security/tenant-isolation.test.js",
     "verify:retention": "node scripts/verify-retention.mjs",
     "verify:db": "npm run verify:isolation && npm run verify:retention",
-    "stats:compute": "node scripts/compute-stats.mjs"
+    "stats:compute": "node scripts/compute-stats.mjs",
+    "stripe:test-event": "node scripts/stripe-test-event.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
