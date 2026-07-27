@@ -68,7 +68,12 @@ describe("nothing in the fast project secretly needs a browser", () => {
       // This file is exempt from its own scan: the patterns it searches FOR appear in its own source
       // as regex literals, so it would report itself forever.
       if (f.endsWith("testconfig.test.js")) return false;
-      const src = readFileSync(f, "utf8");
+      // COMMENTS ARE STRIPPED FIRST. Scanning raw source matched the word "document." at the end of an
+      // English sentence and failed a file that touches no DOM at all — a guard that fires on prose
+      // teaches people to ignore it, which is worse than not having it.
+      const src = readFileSync(f, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1");
       return /@testing-library|\bdocument\.|\bwindow\./.test(src);
     });
     expect(offenders).toEqual([]);

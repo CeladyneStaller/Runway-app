@@ -6,6 +6,9 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
          markDemoReset, takeDemoReset, switchCompany,
          LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
+import { reportError } from "./state/errors";
+import { TabPrefsProvider, load as loadTabPrefs, save as saveTabPrefs,
+         visibleNav, landingView } from "./state/tabprefs";
 import { SignIn } from "./views/SignIn";
 import { SetPassword } from "./views/SetPassword";
 import { Account } from "./views/Account";
@@ -37,7 +40,8 @@ import { Sales } from "./views/Sales";
 import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 
-function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKeepDemo = () => {}, companyName = null }) {
+function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKeepDemo = () => {},
+                    companyName = null, tabPrefs }) {
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -58,7 +62,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
   const setScenarios = (v) => setDoc(d => ({ ...d, scenarios: typeof v === "function" ? v(d.scenarios || []) : v }));
   const setHist = (v) => setDoc(d => ({ ...d, history: typeof v === "function" ? v(d.history) : v }));
 
-  const { view, tab: routeTab, setView, setTab } = useHashRoute();
+  const { view, tab: routeTab, setView, setTab, navigate } = useHashRoute();
   const toggles = doc.settings.toggles;
   const setToggles = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.settings.toggles) : v; return { ...d, settings: { ...d.settings, toggles: nv } }; });
   const lines = doc.lines;
@@ -243,8 +247,19 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
     ["sales", "Sales", I.sales], ["inv", "Investment", I.invest], ["hist", "Spend history", I.hist], ["ms", "Milestones", I.flag],
     ["scn", "Scenarios", I.invest],
   ];
+  // Hidden tabs are dropped from the NAV only. A hash that points at a hidden view still renders it:
+  // this is decluttering, not permissions, and bouncing somebody off their own bookmark would be a
+  // worse surprise than a tab they had tidied away showing up when they asked for it by name.
+  const SHOWN_NAV = visibleNav(NAV, tabPrefs);
 
   const startCtx = useMemo(() => ({ START_Y: startY, START_M: startM }), [startY, startM]);
+
+  // If the view you are LOOKING AT gets hidden, you have to end up somewhere. Dashboard is locked
+  // against hiding precisely so there is always a destination.
+  useEffect(() => {
+    const next = landingView(view, tabPrefs);
+    if (next !== view) setView(next);
+  }, [view, tabPrefs, setView]);
 
 
   // Your entire backup story: a JSON file you own, on a disk you own. It's also the migration test —
@@ -268,6 +283,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
   const [startedBlank, setStartedBlank] = useState(false);
 
   if (isEmpty && !startedBlank) return (
+    <TabPrefsProvider value={tabPrefs}>
     <StartCtx.Provider value={startCtx}>
       <div className="rw">
         <div className="empty-shell">
@@ -304,9 +320,11 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
         </div>
       </div>
     </StartCtx.Provider>
+    </TabPrefsProvider>
   );
 
   return (
+    <TabPrefsProvider value={tabPrefs}>
     <StartCtx.Provider value={startCtx}>
     <div className="rw">
       <div className="shell">
@@ -316,7 +334,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
             <span className="mark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M3 17 9 9l4 3 8-9" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
             <div><b>Waterline</b><span>runway control</span></div>
           </div>
-          {NAV.map(([k, label, icon]) => (
+          {SHOWN_NAV.map(([k, label, icon]) => (
             <button key={k} className={"nav" + (view === k ? " on" : "")} onClick={() => setView(k)}>{icon}{label}</button>
           ))}
           <div className="railfoot">
@@ -513,10 +531,14 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
 
           </ViewBoundary>
           <ViewBoundary key={view} label={NAV.find(n => n[0] === view)?.[1] || view} onLeave={() => setView("dash")}>
-          {view === "flow" && <CashFlow saas={saas} setSaas={setSaas} routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
+          {view === "flow" && <CashFlow saas={saas} onGoSubs={() => {
+            // ONE navigate call. setView(...) then setTab(...) races: setTab reads `route.view` from
+            // state that the first call has not committed yet, so the tab lands on the OLD view.
+            navigate({ view: "sales", tab: "subs" });
+          }} routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
           {view === "pay" && <Payroll routeTab={routeTab} setRouteTab={setTab} baseDoc={doc} employees={employees} setEmployees={setEmployees} fringeConfig={fringeConfig} setFringe={setFringe} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
           {view === "proj" && <Projects routeTab={routeTab} setRouteTab={setTab} projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
-          {view === "sales" && <Sales routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
+          {view === "sales" && <Sales saas={saas} setSaas={setSaas} routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment routeTab={routeTab} setRouteTab={setTab} rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
           {view === "hist" && <History journal={doc.journal} takeSnapshot={takeSnapshot} currentCurve={modelStarts} routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
           {view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios}
@@ -530,6 +552,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
       </div>
     </div>
     </StartCtx.Provider>
+    </TabPrefsProvider>
   );
 }
 
@@ -550,7 +573,13 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
 class ViewBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error, info) { console.error("[runway] view crashed:", error, info?.componentStack); }
+  componentDidCatch(error, info) {
+    // Was console-only, which meant every crash in production went to a console nobody was reading.
+    // The view name goes with it; the component stack does not, because it is long and can carry
+    // rendered values in prop names.
+    reportError(error, { kind: "view-crash", view: this.props.label });
+    console.error("[runway] view crashed:", error, info?.componentStack);
+  }
   render() {
     if (!this.state.error) return this.props.children;
     return (
@@ -659,6 +688,14 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   const [wasReset, setWasReset] = useState(false);
   const [setup, setSetup] = useState(null);   // null | "model" (empty account) | "company" (new one)
   const [companyName, setCompanyName] = useState(null);
+  // Read synchronously from localStorage: a preference fetched asynchronously makes the nav flicker
+  // from "everything" to "your selection" on every single load.
+  //
+  // NOT keyed by user. An earlier version was, and it was wrong twice: `getSessionProvider()` returns
+  // the session OBJECT rather than a function, so calling it crashed the whole host; and the scoping
+  // was unnecessary anyway, because localStorage is already per browser profile and browser profiles
+  // are how two people share a machine.
+  const [tabPrefs, setTabPrefs] = useState(() => loadTabPrefs(globalThis.localStorage));
   const [seedName, setSeedName] = useState(false);    // this document started this session empty
   const [showAccount, setShowAccount] = useState(false);
   const [err, setErr] = useState(null);
@@ -679,6 +716,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   }, []);
 
   useEffect(() => { if (!demo) loadCompanyName(); }, [demo, loadCompanyName]);
+
+  const applyTabPrefs = useCallback((next) => {
+    setTabPrefs(next);
+    saveTabPrefs(next, globalThis.localStorage);
+  }, []);
 
   // The "your demo reset" notice is ONE-SHOT, and StrictMode runs effects twice on the same instance —
   // so the read-and-clear has to be guarded by something that survives between those two runs. A ref
@@ -839,6 +881,8 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
       onClose={() => setShowAccount(false)}
       // Adding a company opens the WIZARD, not a name box. Nothing is created until it finishes.
       onNewCompany={() => { setShowAccount(false); setSetup("company"); }}
+      tabPrefs={tabPrefs}
+      onTabPrefs={applyTabPrefs}
       onSwitched={(r) => {
         // switchCompany() already flushed and reset the write buffer; adopt whatever it loaded
         if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); setSeedName(!!r.isNew); }

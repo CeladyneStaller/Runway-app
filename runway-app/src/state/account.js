@@ -63,6 +63,12 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       await rpc("set_last_company", { p_company_id: companyId });
     },
 
+    /** Exclude a company from the aggregate statistics we publish. Owner-only, enforced in the RPC.
+     *  The job applies this in its QUERY, so an opted-out company's document is never read at all. */
+    async setStatsOptout(companyId, optout) {
+      await rpc("set_stats_optout", { p_company_id: companyId, p_optout: !!optout });
+    },
+
     async deleteCompany(companyId) {
       await rpc("delete_company", { p_company_id: companyId });
     },

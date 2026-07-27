@@ -17,14 +17,15 @@ import { Sales } from "./Sales";
 import { MOPTS, StageBar, TypeSeg, revOf, timingLabel } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { GrantIOModal } from "./chrome/modals";
+import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
 const ActualsCtx = createContext({ setProjects: () => {}, hist: [], codeMap: {}, customerMap: {} });
 const useProjectsSetter = () => useContext(ActualsCtx).setProjects;
 const useActualsCtx = () => useContext(ActualsCtx);
 
 export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} }) {
-  const TAB_KEYS = ["all", "internal", "grants", "fulfil", "proposals"];
-  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "all";
+  const tabPrefs = useTabPrefs();
+  const tab = resolveTab("proj", routeTab, "all", tabPrefs);
   const setTab = (t) => setRouteTab(t);
   const [collapsed, setCollapsed] = useState(() => new Set());   // UI state — which cards are folded
   // A sub-tab with more than one project opens collapsed, so you scan headers instead of a wall of
@@ -69,6 +70,9 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
     if (shown.length > 1) setCollapsed(c => { const n = new Set(c); shown.forEach(p => n.add(p.id)); return n; });
   }, [tab, shown, autoDone]);
   const TABS = [["all", "All", projects.length], ["internal", "Internal", internals.length], ["grants", "Grants", grants.length], ["fulfil", "Fulfillment", fulfils.length], ["proposals", "Proposals", proposals.length]];
+  // Hidden sub-tabs are dropped here, and the active one is resolved against what is LEFT —
+  // falling back to the view's own default could land on a tab the person asked not to see.
+  const SHOWN = visibleTabs("proj", TABS, tabPrefs);
   const empty = { fulfil: ["No fulfillment projects yet.", "Create one from a purchase order in the Sales tab to model the cost of shipping it."],
     internal: ["No internal projects yet.", "Work funded from your own cash — R&D pushes, tooling, buildouts."],
     grants: ["No awarded grants yet.", "Won an award? Mark a proposal awarded and it lands here."],
@@ -81,7 +85,7 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
     <ActualsCtx.Provider value={actualsCtx}>
     <>
       <div className="subtabs">
-        {TABS.map(([k, label, n]) => (
+        {SHOWN.map(([k, label, n]) => (
           <button key={k} className={"subtab" + (k === "proposals" ? " prop" : "") + (tab === k ? " on" : "")} onClick={() => setTab(k)}>
             {label}<span className="cnt">{n}</span>
           </button>

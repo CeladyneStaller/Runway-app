@@ -1,5 +1,5 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import { daysInMonth } from "./time";
+import { daysInMonth } from "./time.js";
 
 // The three confidence tiers, in cycle order. Single source — the projection gate, the normaliser and
 // both cycle buttons all read this.

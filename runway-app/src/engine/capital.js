@@ -1,5 +1,5 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import { clampM, daysInMonth, floorM } from "./time";
+import { clampM, daysInMonth, floorM } from "./time.js";
 
 export const INST_KINDS = [["equity", "Priced round"], ["safe", "SAFE"], ["note", "Convertible note"], ["debt", "Venture debt"]];
 

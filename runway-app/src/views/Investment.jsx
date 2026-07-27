@@ -7,11 +7,12 @@ import { HORIZON, dateShort, monthLabel, uid } from "../engine/time";
 import { useStart } from "../state/StartCtx";
 import { MOPTS } from "./chrome/bits";
 import { I } from "./chrome/icons";
+import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
 export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds, zeroNoRaise, rowsNoRaise, rowsFin, rowsUp, zeroUp, toggles, setToggles }) {
   const { START_Y, START_M } = useStart();
-  const TAB_KEYS = ["summary", "stack", "goals"];
-  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "summary";
+  const tabPrefs = useTabPrefs();
+  const tab = resolveTab("inv", routeTab, "summary", tabPrefs);
   const setTab = (t) => setRouteTab(t);
   const up = (id, patch) => setRounds(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
   const del = (id) => setRounds(rs => rs.filter(r => r.id !== id));
@@ -42,10 +43,13 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
   const chip = (st) => { const [lab, col, bg] = GOAL_STATUS[st] || GOAL_STATUS["not-started"]; return <span className="schip" style={{ background: bg, color: col }}>{lab}</span>; };
 
   const TABS = [["summary", "Summary", rounds.length], ["stack", "Capital stack", rounds.length], ["goals", "Goals", allGoals.length]];
+  // Hidden sub-tabs are dropped here, and the active one is resolved against what is LEFT —
+  // falling back to the view's own default could land on a tab the person asked not to see.
+  const SHOWN = visibleTabs("inv", TABS, tabPrefs);
   return (
     <>
       <div className="subtabs">
-        {TABS.map(([k, label, n]) => (
+        {SHOWN.map(([k, label, n]) => (
           <button key={k} className={"subtab" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{label}<span className="cnt">{n}</span></button>
         ))}
       </div>

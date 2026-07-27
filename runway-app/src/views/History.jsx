@@ -11,6 +11,7 @@ import { ImportModal } from "./chrome/ImportModal";
 import { CodeMapModal } from "./chrome/CodeMapModal";
 import { CashActualModal } from "./chrome/modals";
 import { JournalPanel } from "./chrome/JournalPanel";
+import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
 export function History({ journal = [], takeSnapshot = () => {}, currentCurve = [], routeTab, setRouteTab = () => {}, hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
@@ -48,10 +49,13 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
 
   const [importing, setImporting] = useState(false);
   const [codesOpen, setCodesOpen] = useState(false);
-  const TAB_KEYS = ["summary", "burn", "ledger", "cash", "forecasts"];
-  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "summary";
+  const tabPrefs = useTabPrefs();
+  const tab = resolveTab("hist", routeTab, "summary", tabPrefs);
   const setTab = (t) => setRouteTab(t);
   const TABS = [["summary", "Summary"], ["burn", "Burn"], ["ledger", "Ledger"], ["cash", "Cash on hand"], ["forecasts", "Forecasts"]];
+  // Hidden sub-tabs are dropped here, and the active one is resolved against what is LEFT —
+  // falling back to the view's own default could land on a tab the person asked not to see.
+  const SHOWN = visibleTabs("hist", TABS, tabPrefs);
   const driftCallout = latest && (
     <div className="callout" style={{ margin: "0 16px 16px", borderLeftColor: latest.varc >= 0 ? "var(--signal)" : "var(--danger)" }}>
       As of <b>{monthLabel(START_Y, START_M, latest.m)}</b>, actual cash is <b className="num">{latest.varc >= 0 ? "+" : "−"}{moneyFull(Math.abs(latest.varc))}</b> ({latest.pct}% {latest.varc >= 0 ? "above" : "below"}) versus the model — {latest.varc >= 0 ? "you’re burning slower than planned." : "you’re burning faster than planned."}
@@ -61,7 +65,7 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
   return (
     <>
       <div className="subtabs">
-        {TABS.map(([k, label]) => (
+        {SHOWN.map(([k, label]) => (
           <button key={k} className={"subtab" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>

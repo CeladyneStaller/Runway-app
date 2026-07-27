@@ -1,8 +1,8 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import * as XLSX from "xlsx";
-import { TIMING_LABEL } from "./grant";
-import { tripCost } from "./history";
-import { HORIZON, clampM, floorM, uid } from "./time";
+import { TIMING_LABEL } from "./grant.js";
+import { tripCost } from "./history.js";
+import { HORIZON, clampM, floorM, uid } from "./time.js";
 
 // ---- SF-424A multi-tab budget: xlsx export / import matching the DOE justification template (3 budget periods) ----
 export function exportBudget(p, g, R) {

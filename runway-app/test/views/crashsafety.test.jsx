@@ -91,3 +91,29 @@ describe("a crashing view is escapable", () => {
     expect(container.textContent).toBe("fine");
   });
 });
+
+describe("a caught crash is reported, not just logged", () => {
+  it("hands the boundary's error to the reporter with the view name", async () => {
+    // It used to console.error only, which in production means a console nobody is reading.
+    const { initErrorReporting, _resetErrorReporting } = await import("../../src/state/errors");
+    const sent = [];
+    initErrorReporting(e => sent.push(e));
+    try {
+      openView(demoDoc(), "Milestones");
+      expect(sent.length).toBeGreaterThan(0);
+      expect(sent[0].message).toMatch(/deliberate test explosion/);
+      expect(sent[0].context).toMatchObject({ kind: "view-crash", view: "Milestones" });
+    } finally { _resetErrorReporting(); }
+  });
+
+  it("sends no document data along with it", async () => {
+    const { initErrorReporting, _resetErrorReporting } = await import("../../src/state/errors");
+    const sent = [];
+    initErrorReporting(e => sent.push(e));
+    try {
+      openView(demoDoc(), "Milestones");
+      const blob = JSON.stringify(sent);
+      expect(blob).not.toMatch(/Alex Rivera|Celadyne|560000/);
+    } finally { _resetErrorReporting(); }
+  });
+});

@@ -1,8 +1,8 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import { computeGrant } from "./grant";
-import { HRS_YR, empCostAt, empHourlyAt } from "./payroll";
-import { NOMINAL_RATE, poNeedsReview, poUnwon } from "./sales";
-import { clampM, uid } from "./time";
+import { computeGrant } from "./grant.js";
+import { HRS_YR, empCostAt, empHourlyAt } from "./payroll.js";
+import { NOMINAL_RATE, poNeedsReview, poUnwon } from "./sales.js";
+import { clampM, uid } from "./time.js";
 
 // A personnel line linked to an employee derives its billing rate from that person's salary,
 // unless the user has overridden it (rateAuto === false). Resolved in ONE place so every

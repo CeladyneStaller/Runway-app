@@ -54,6 +54,21 @@ export function applyPatch(doc, patch) {
     }
     return doc;
   }
+  // PUTTING SOMETHING IN THAT ISN'T IN THE PLAN AT ALL. The counterpart to "remove", and the thing
+  // every other patch kind assumed away: they all edit an item that already exists, so "what if we
+  // raised a round" could not be asked unless you had already entered the round you were unsure about.
+  //
+  // The item carries its OWN id, generated when the change was made and never regenerated here.
+  // Minting one on each apply would give the same round a different identity on every render, which
+  // breaks React keys and any later patch that refers to it.
+  if (patch.kind === "add") {
+    if (!patch.item?.id) return doc;
+    const coll = doc[patch.collection];
+    if (Array.isArray(coll)) coll.push({ ...patch.item });
+    else doc[patch.collection] = [{ ...patch.item }];
+    return doc;
+  }
+
   // TAKING SOMETHING OUT ENTIRELY, which the field-patch model could not express. "Don't hire Sam" had
   // to be written as a start month past the horizon — a workaround that reads as a delay, survives into
   // the description, and quietly breaks if the horizon ever moves again.
@@ -106,6 +121,15 @@ export function explainPatch(patch, baseDoc, ctx = {}) {
   const coll = baseDoc?.[patch.collection] || [];
   const item = coll.find(x => x.id === patch.id);
   const name = itemLabel(item) || patch.id;
+
+  if (patch.kind === "add") {
+    const it = patch.item || {};
+    const label = PATCH_SCHEMA[patch.collection]?.label?.toLowerCase() || "item";
+    const amount = it.amount != null ? ` ${moneyFull(it.amount)}` : "";
+    const when = it.closeMonth != null && ctx.START_Y != null
+      ? ` closing ${monthLabel(ctx.START_Y, ctx.START_M, it.closeMonth)}` : "";
+    return { text: `${itemLabel(it) || `new ${label}`} added —${amount}${when}`, was: null };
+  }
 
   if (patch.kind === "remove") return { text: `${name} removed`, was: null };
 
@@ -280,4 +304,37 @@ export const duplicateScenario = (scn, name) => ({
   id: newScenarioId(),
   name: name || `${scn.name} copy`,
   patches: (scn.patches || []).map(p => ({ ...p })),
+});
+
+/** A funding instrument built from a scenario's answers, in the shape `capital.js` expects.
+ *
+ *  DEBT IS DELIBERATELY NOT OFFERED here. A debt instrument needs a rate, a term, interest-only
+ *  months and fees before it means anything; created without them it models as money arriving and
+ *  never being repaid, which is not a raise — it is a gift, and it would quietly overstate the runway.
+ *  Debt belongs on the Investment tab where those terms live.
+ *
+ *  STATUS DEFAULTS TO `committed`, and getting this right took reading `compileInstrument`. The two
+ *  obvious-looking choices are both wrong:
+ *    - `closed` emits NO cash line at all (capital.js:101), because a closed round's money is already
+ *      sitting in `cash` — adding a line would double-count it. A "what if we raise" scenario built
+ *      that way moves the runway not one day.
+ *    - `planning` and `raising` map to `speculative` via INST_CONF, which is OFF under the default
+ *      toggles, so those show no change either.
+ *  `committed` maps to `expected`, which is on. It is also the honest description of what a scenario
+ *  is asserting: money that will arrive and has not yet.
+ *
+ *  Note this is still not sufficient on its own — FINANCING is a separate axis from the revenue tiers
+ *  and also defaults to off. The caller has to turn it on; the scenario UI emits that as its own
+ *  visible change so the reason the numbers moved is on screen.
+ */
+export const scenarioRound = ({ name, amount, closeMonth, kind = "safe", status = "committed" } = {}) => ({
+  id: newScenarioId().replace("scn_", "rnd_"),
+  kind: ["safe", "equity", "note"].includes(kind) ? kind : "safe",
+  name: String(name || "").trim() || "New round",
+  status: ["planning", "raising", "committed", "closed"].includes(status) ? status : "committed",
+  amount: Number(amount) || 0,
+  closeMonth: Math.max(0, Math.round(Number(closeMonth) || 0)),
+  capType: "post",
+  confAuto: true,
+  goals: [],
 });

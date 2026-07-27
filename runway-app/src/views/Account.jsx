@@ -4,6 +4,7 @@ import { switchCompany, abandonCompany, flush } from "../state/storage";
 import { passwordRules, passwordScore } from "../engine/password";
 import { toJSON } from "../state/document";
 import { DeleteCompany } from "./chrome/DeleteCompany";
+import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
 
 // Account-level settings, as distinct from the model. Reached from the email in the top bar rather than
 // the main nav — it is about you, not about your runway.
@@ -79,12 +80,96 @@ function PasswordSection({ account, session, hasPassword, email, onChanged }) {
   );
 }
 
+/** Which tabs and sub-tabs to show.
+ *
+ *  A VIEW PREFERENCE ONLY: nothing here changes a number, and hiding a tab hides it from the nav, not
+ *  from the app. A hash pointing at a hidden view still opens it, because this is decluttering rather
+ *  than access control and a broken bookmark would be the bigger surprise. */
+export function LayoutSection({ prefs, onChange }) {
+  const hiddenViews = prefs?.views || [];
+  const hiddenSubs = prefs?.subs || {};
+
+  const toggleView = (view) => {
+    const next = hiddenViews.includes(view)
+      ? hiddenViews.filter(v => v !== view)
+      : [...hiddenViews, view];
+    onChange({ ...prefs, views: next, subs: hiddenSubs });
+  };
+
+  const toggleSub = (view, key, subs) => {
+    const cur = hiddenSubs[view] || [];
+    const next = cur.includes(key) ? cur.filter(k => k !== key) : [...cur, key];
+    // NEVER HIDE THE LAST ONE. A view whose sub-tabs are all hidden is a screen with an empty tab row
+    // and no content. `visibleTabs` guarantees this at render time too; refusing here means the
+    // checkbox does not appear to work and then silently not work.
+    if (next.length >= subs.length) return;
+    onChange({ ...prefs, views: hiddenViews, subs: { ...hiddenSubs, [view]: next } });
+  };
+
+  const hiddenCount = hiddenViews.length + Object.values(hiddenSubs).reduce((a, v) => a + v.length, 0);
+
+  return (
+    <section className="acct-sec">
+      <h3>Layout</h3>
+      <p className="signin-fine">
+        Hide anything you don't use. This only affects what you see — nothing is deleted, no number
+        changes, and you can bring it all back. Saved in this browser.
+      </p>
+
+      <div className="tabprefs">
+        {TAB_REGISTRY.map(({ view, label, subs }) => {
+          const off = hiddenViews.includes(view);
+          return (
+            <div className={"tabpref" + (off ? " off" : "")} key={view}>
+              <label className="tabpref-h">
+                <input type="checkbox" checked={!off} disabled={isLocked(view)}
+                       onChange={() => toggleView(view)} aria-label={label} />
+                <b>{label}</b>
+                {isLocked(view) && <em>always shown</em>}
+              </label>
+              {subs.length > 0 && !off && (
+                <div className="tabpref-subs">
+                  {subs.map(([key, subLabel]) => {
+                    const subOff = (hiddenSubs[view] || []).includes(key);
+                    return (
+                      <label className="tabpref-sub" key={key}>
+                        <input type="checkbox" checked={!subOff}
+                               onChange={() => toggleSub(view, key, subs)}
+                               aria-label={`${label}: ${subLabel}`} />
+                        {subLabel}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {hiddenCount > 0 && (
+        <button className="linkbtn" onClick={() => onChange({ views: [], subs: {} })}>
+          Show everything again ({hiddenCount} hidden)
+        </button>
+      )}
+    </section>
+  );
+}
+
 function CompaniesSection({ account, companies, activeId, onReload, onSwitched, onDeleted, onNewCompany, doc }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [renameTo, setRenameTo] = useState("");
   const [deleting, setDeleting] = useState(null);
+
+  /** Excluding a company is applied in the job's QUERY, so its document is never read at all. */
+  const optout = async (id, value) => {
+    setError(null); setBusy(true);
+    try { await account.setStatsOptout(id, value); await onReload(); }
+    catch (e) { setError(e?.message || "Could not change that."); }
+    setBusy(false);
+  };
 
   const rename = async (id) => {
     setError(null); setBusy(true);
@@ -112,6 +197,15 @@ function CompaniesSection({ account, companies, activeId, onReload, onSwitched, 
               <div>
                 <div className="acct-row-t">{c.name}{c.id === activeId && <span className="acct-badge">current</span>}</div>
                 <div className="acct-row-s">{c.role}{c.has_document ? "" : " · empty"}</div>
+                {/* AGGREGATE STATISTICS OPT-OUT. Per company, because the statistics are per
+                    company and somebody may want one counted and not another. Owner-only: the RPC
+                    enforces that too, but disabling it here means the control is not a lie. */}
+                <label className="acct-optout" title="Published statistics never include anything about individual people">
+                  <input type="checkbox" checked={!c.stats_optout} disabled={busy || c.role !== "owner"}
+                         aria-label={`Include ${c.name} in published statistics`}
+                         onChange={(e) => optout(c.id, !e.target.checked)} />
+                  Include in published statistics
+                </label>
               </div>
               <div className="acct-row-a">
                 {c.id !== activeId && (
@@ -228,7 +322,7 @@ function DeleteAccount({ account, session, companies, doc }) {
   );
 }
 
-export function Account({ doc, onSwitched, onClose, onNewCompany }) {
+export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTabPrefs }) {
   const account = getAccountApi();
   const session = getSessionProvider();
   const auth = getAuthAdapter();
@@ -304,6 +398,8 @@ export function Account({ doc, onSwitched, onClose, onNewCompany }) {
         hasPassword={!!profile?.password_set_at}
         onChanged={reload}
       />
+
+      <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />
 
       <CompaniesSection
         account={account} companies={companies} activeId={activeId}

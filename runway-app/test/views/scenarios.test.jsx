@@ -215,3 +215,81 @@ describe("applying a scenario to the real plan", () => {
     expect(get().scenarios).toHaveLength(1);
   });
 });
+
+describe("adding a fundraise", () => {
+  const open = (doc) => {
+    const v = scenariosView(doc);
+    fireEvent.click(btn(v.container, /New scenario/));
+    fireEvent.click(btn(v.container, /Add a fundraise/));
+    return v;
+  };
+
+  it("is offered, and does not need a round to already exist", () => {
+    // Every other intent edits something already in the plan. "What if we raised" could not be asked
+    // unless you had already entered the round you were uncertain about.
+    const { container } = open({ ...demoDoc(), rounds: [] });
+    expect(container.querySelector('[aria-label="Round amount"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Close month"]')).toBeTruthy();
+  });
+
+  it("adds the round AND turns financing on, visibly", () => {
+    // Financing is a separate axis that defaults to off, so the round alone would move nothing at all.
+    const { container, get } = open({ ...demoDoc(), rounds: [] });
+    fireEvent.change(container.querySelector('[aria-label="Round name"]'), { target: { value: "Seed" } });
+    fireEvent.change(container.querySelector('[aria-label="Round amount"]'), { target: { value: "3000000" } });
+    fireEvent.click(btn(container, /Add this change/));
+
+    const p = get().scenarios[0].patches;
+    expect(p[0]).toMatchObject({ kind: "add", collection: "rounds" });
+    expect(p[0].item).toMatchObject({ name: "Seed", amount: 3000000, status: "committed" });
+    expect(p[1]).toMatchObject({ kind: "toggle", path: "financing", value: true });
+    // and it is on screen, so the reason the numbers moved can be seen and taken back off
+    expect(container.textContent).toMatch(/Financing on/);
+  });
+
+  it("moves the runway, which is the whole point", () => {
+    const { container } = open({ ...demoDoc(), rounds: [] });
+    expect(container.textContent).toMatch(/no change/);       // nothing added yet
+    fireEvent.change(container.querySelector('[aria-label="Round amount"]'), { target: { value: "1000000" } });
+    fireEvent.click(btn(container, /Add this change/));
+    // Asserting IMPROVEMENT rather than a shape: the demo has enough revenue that a raise of this size
+    // tips it past a zero date entirely, so pinning "+N mo" would pin the fixture, not the behaviour.
+    expect(container.textContent).not.toMatch(/no change/);
+    expect(container.textContent).toMatch(/cash-flow positive|\+\d+\.\d mo|36\+ mo/);
+  });
+
+  it("does not offer debt, which without terms is money that is never repaid", () => {
+    const { container } = open(demoDoc());
+    const kinds = [...container.querySelector('[aria-label="Round type"]').options].map(o => o.value);
+    expect(kinds).toEqual(["safe", "equity", "note"]);
+  });
+
+  it("does not offer 'closed', which would emit no cash line at all", () => {
+    // A closed round's money is already counted in `cash`; compileInstrument emits nothing for it.
+    const { container } = open(demoDoc());
+    const st = [...container.querySelector('[aria-label="Round status"]').options].map(o => o.value);
+    expect(st).toEqual(["committed", "raising", "planning"]);
+  });
+
+  it("warns that a planned round is speculative and switched off by default", () => {
+    const { container } = open(demoDoc());
+    fireEvent.change(container.querySelector('[aria-label="Round status"]'), { target: { value: "planning" } });
+    expect(container.textContent).toMatch(/speculative/i);
+    expect(container.textContent).toMatch(/show no change/i);
+  });
+
+  it("needs an amount before it will add anything", () => {
+    const { container } = open(demoDoc());
+    expect(btn(container, /Add this change/).disabled).toBe(true);
+    fireEvent.change(container.querySelector('[aria-label="Round amount"]'), { target: { value: "100" } });
+    expect(btn(container, /Add this change/).disabled).toBe(false);
+  });
+
+  it("reads as a sentence in the change list", () => {
+    const { container } = open({ ...demoDoc(), rounds: [] });
+    fireEvent.change(container.querySelector('[aria-label="Round name"]'), { target: { value: "Series A" } });
+    fireEvent.change(container.querySelector('[aria-label="Round amount"]'), { target: { value: "8000000" } });
+    fireEvent.click(btn(container, /Add this change/));
+    expect(container.textContent).toMatch(/Series A added — \$8,000,000 closing/);
+  });
+});

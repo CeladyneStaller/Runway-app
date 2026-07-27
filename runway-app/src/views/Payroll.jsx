@@ -10,12 +10,13 @@ import { useStart } from "../state/StartCtx";
 import { MOPTS } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { PayrollActionModal } from "./chrome/modals";
+import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
 export function Payroll({ routeTab, setRouteTab = () => {}, baseDoc, employees, setEmployees, fringePct = 0, setFringePct, fringeConfig = {}, setFringe = () => {}, derivedBurn = 0, companyOpexNow = 0, rProjects = [], toggles }) {
   const { START_Y, START_M } = useStart();
   const [modal, setModal] = useState(null); // { empId, action }
-  const TAB_KEYS = ["total", "employees", "fringe", "alloc", "priority"];
-  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "total";
+  const tabPrefs = useTabPrefs();
+  const tab = resolveTab("pay", routeTab, "total", tabPrefs);
   const setTab = (t) => setRouteTab(t);
 
   const patch = (id, p) => setEmployees(es => es.map(e => e.id === id ? { ...e, ...p } : e));
@@ -109,10 +110,13 @@ export function Payroll({ routeTab, setRouteTab = () => {}, baseDoc, employees, 
   const peakOf = (id) => { const ms = Object.values(load[id]?.months || {}); return ms.length ? Math.max(...ms) : 0; };
   const overCount = employees.filter(e => peakOf(e.id) > HRS_YR / 12).length;
   const TABS = [["total", "Total"], ["employees", "Employees"], ["fringe", "Fringe"], ["alloc", "Allocation"], ["priority", "Prioritization"]];
+  // Hidden sub-tabs are dropped here, and the active one is resolved against what is LEFT —
+  // falling back to the view's own default could land on a tab the person asked not to see.
+  const SHOWN = visibleTabs("pay", TABS, tabPrefs);
   return (
     <>
       <div className="subtabs">
-        {TABS.map(([k, label]) => (
+        {SHOWN.map(([k, label]) => (
           <button key={k} className={"subtab" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>

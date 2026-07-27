@@ -2,7 +2,7 @@
 // what-ifs, impact with attribution, and duplication.
 import { describe, it, expect } from "vitest";
 import { applyScenario, applyPatch, explainPatch, describePatch, scenarioImpact,
-         duplicateScenario, emptyScenario, PATCH_SCHEMA } from "../../src/engine/scenario";
+         duplicateScenario, emptyScenario, scenarioRound, PATCH_SCHEMA } from "../../src/engine/scenario";
 import { emptyDoc } from "../../src/state/document";
 import { blankSaas } from "../../src/engine/saas";
 
@@ -163,5 +163,88 @@ describe("duplicating", () => {
     const c = duplicateScenario(s);
     c.patches[0].value = 999;
     expect(s.patches[0].value).toBe(1);
+  });
+});
+
+describe("adding something that isn't in the plan at all", () => {
+  it("puts a new round into the document", () => {
+    // Every other patch kind edits an item that already exists, so "what if we raised" could not be
+    // asked unless you had already entered the round you were unsure about.
+    const item = scenarioRound({ name: "Seed", amount: 1500000, closeMonth: 4 });
+    const d = applyScenario(base(), { patches: [{ kind: "add", collection: "rounds", item }] });
+    expect(d.rounds).toHaveLength(1);
+    expect(d.rounds[0]).toMatchObject({ name: "Seed", amount: 1500000, closeMonth: 4 });
+  });
+
+  it("leaves the base document alone", () => {
+    const b = base();
+    applyScenario(b, { patches: [{ kind: "add", collection: "rounds", item: scenarioRound({ amount: 1 }) }] });
+    expect(b.rounds).toHaveLength(0);
+  });
+
+  it("keeps the SAME id every time it is applied", () => {
+    // Minting an id on each apply gives the round a different identity on every render, which breaks
+    // React keys and any later patch that refers to it.
+    const p = { kind: "add", collection: "rounds", item: scenarioRound({ amount: 1 }) };
+    const a = applyScenario(base(), { patches: [p] }).rounds[0].id;
+    const b = applyScenario(base(), { patches: [p] }).rounds[0].id;
+    expect(a).toBe(b);
+  });
+
+  it("refuses an item with no id rather than creating an unaddressable one", () => {
+    const d = applyPatch(base(), { kind: "add", collection: "rounds", item: { name: "x" } });
+    expect(d.rounds).toHaveLength(0);
+  });
+
+  it("does NOTHING on its own, because financing is a separate axis that defaults to off", () => {
+    // Documented here because it is the trap the UI has to handle: a round added with no other change
+    // moves the runway not at all, at ANY status, and looks like a broken feature.
+    const after = scenarioImpact(base(), { patches: [
+      { kind: "add", collection: "rounds", item: scenarioRound({ amount: 3000000, closeMonth: 2 }) },
+    ] });
+    expect(after.delta).toBeCloseTo(0, 6);
+  });
+
+  it("and reaches the runway once financing is on", () => {
+    const before = scenarioImpact(base(), emptyScenario());
+    const after = scenarioImpact(base(), { patches: [
+      { kind: "add", collection: "rounds", item: scenarioRound({ name: "Seed", amount: 3000000, closeMonth: 2 }) },
+      { kind: "toggle", path: "financing", value: true },
+    ] });
+    expect(after.months).toBeGreaterThan(before.months);
+  });
+
+  it("defaults to COMMITTED — the only status that both emits a line and is switched on", () => {
+    // `closed` emits NO line (the money is already in `cash`), and planning/raising map to
+    // speculative, which is off by default. Both look like a broken feature.
+    expect(scenarioRound({ amount: 1 }).status).toBe("committed");
+    const closed = scenarioImpact(base(), { patches: [
+      { kind: "add", collection: "rounds", item: scenarioRound({ amount: 3000000, status: "closed" }) },
+      { kind: "toggle", path: "financing", value: true },
+    ] });
+    expect(closed.delta).toBeCloseTo(0, 6);
+    const planned = scenarioImpact(base(), { patches: [
+      { kind: "add", collection: "rounds", item: scenarioRound({ amount: 3000000, status: "planning" }) },
+    ] });
+    expect(planned.delta).toBeCloseTo(0, 6);
+  });
+
+  it("will not build debt, which without terms is money that is never repaid", () => {
+    expect(scenarioRound({ amount: 1, kind: "debt" }).kind).toBe("safe");
+    expect(scenarioRound({ amount: 1, kind: "equity" }).kind).toBe("equity");
+  });
+
+  it("coerces junk rather than writing it into the document", () => {
+    const r = scenarioRound({ name: "  ", amount: "abc", closeMonth: -4, status: "nonsense" });
+    expect(r.name).toBe("New round");
+    expect(r.amount).toBe(0);
+    expect(r.closeMonth).toBe(0);
+    expect(r.status).toBe("committed");
+  });
+
+  it("reads as a sentence", () => {
+    const item = scenarioRound({ name: "Seed", amount: 1500000, closeMonth: 8 });
+    const e = explainPatch({ kind: "add", collection: "rounds", item }, base(), ctx);
+    expect(e.text).toBe("Seed added — $1,500,000 closing Mar 27");
   });
 });

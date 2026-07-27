@@ -1,5 +1,5 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import { HORIZON, clampM, floorM, uid } from "./time";
+import { HORIZON, clampM, floorM, uid } from "./time.js";
 
 // Labour on a fulfillment project is your own team's time. It belongs in the project — you need to see
 // who is committed to what — but it never draws cash, because payroll already paid for it.

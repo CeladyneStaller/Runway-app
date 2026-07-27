@@ -901,3 +901,20 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .scn-live-r{display:flex;align-items:baseline;gap:10px}
 .scn-live-r b{font-family:var(--fm);font-size:18px;color:var(--ink)}
 .scn-was-run{font-size:12.5px;color:var(--muted-2);text-decoration:line-through}
+
+/* ---- account: layout preferences and stats opt-out ---- */
+.tabprefs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:12px 0}
+.tabpref{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--card)}
+.tabpref.off{opacity:.55}
+.tabpref-h{display:flex;align-items:center;gap:7px;font-family:var(--fb);font-size:13px;cursor:pointer}
+.tabpref-h input{accent-color:var(--signal);margin:0}
+.tabpref-h b{font-weight:600;color:var(--ink)}
+.tabpref-h em{font-style:normal;font-size:10.5px;color:var(--muted-2);margin-left:auto}
+.tabpref-subs{display:flex;flex-direction:column;gap:4px;margin:8px 0 0 20px;
+  padding-top:7px;border-top:1px solid var(--line-2)}
+.tabpref-sub{display:flex;align-items:center;gap:6px;font-family:var(--fb);font-size:11.5px;
+  color:var(--muted);cursor:pointer}
+.tabpref-sub input{accent-color:var(--signal);margin:0}
+.acct-optout{display:flex;align-items:center;gap:6px;margin-top:5px;
+  font-family:var(--fb);font-size:11px;color:var(--muted-2);cursor:pointer}
+.acct-optout input{accent-color:var(--signal);margin:0}

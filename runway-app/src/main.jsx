@@ -1,4 +1,5 @@
 import React from "react";
+import { installGlobalHandlers, initErrorReporting } from "./state/errors";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import App from "./App.jsx";
@@ -39,3 +40,25 @@ if (syncConfigured()) {
 }
 
 createRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);
+
+// ERROR REPORTING. The handlers are always installed — they cost nothing and keep the console
+// consistent — but nothing is SENT anywhere until a sink is installed, which requires a DSN. Off by
+// default is the right default for an app holding salaries: switching it on should be a deliberate
+// act with a reviewable diff, not something that happens because a package was added.
+//
+// To turn it on, install an adapter here that forwards the already-scrubbed event. Do NOT hand a
+// vendor SDK the raw error: `state/errors.js` explains what it strips and why.
+installGlobalHandlers();
+if (import.meta.env.VITE_ERROR_SINK_URL) {
+  initErrorReporting(
+    (event) => {
+      // `keepalive` so a crash on unload still reports. Failures are swallowed by reportError.
+      fetch(import.meta.env.VITE_ERROR_SINK_URL, {
+        method: "POST", keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(event),
+      });
+    },
+    { release: import.meta.env.VITE_RELEASE || "dev" },
+  );
+}

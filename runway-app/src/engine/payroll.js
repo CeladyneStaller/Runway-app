@@ -1,5 +1,5 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import { HORIZON } from "./time";
+import { HORIZON } from "./time.js";
 
 // ---- time-dependent employee compensation ----
 // expand one-time + repeated raises into a flat, chronologically-sorted list of salary events

@@ -819,6 +819,30 @@ wearing a disguise, which read as a delay in the description and would break if 
 "was Sep 26". It was "Sam: start -> 5", which is the document schema read aloud. Knowing the previous
 value is most of the point: "starts Mar 27" is a fact, "starts Mar 27, was Sep 26" is a decision.
 
+**ADD A FUNDRAISE** (`kind: "add"` + `scenarioRound()`). Every other patch kind edits an item that
+already exists, so "what if we raised" could not be asked unless you had already entered the round you
+were uncertain about — backwards. The added item carries its OWN id, generated once when the change is
+made and never regenerated on apply; minting one per apply gives the round a different identity every
+render, breaking React keys and any later patch referring to it.
+
+THREE TRAPS, all found by the runway refusing to move, all now pinned by tests:
+  1. `closed` emits NO cash line (`capital.js:101`) because a closed round's money is already in
+     `cash`. It is absent from the form entirely.
+  2. `planning` and `raising` map to `speculative` via INST_CONF, which is off by default. Offered,
+     but with a warning saying the scenario will show no change until speculative is switched on.
+  3. FINANCING is a separate axis from the revenue tiers and ALSO defaults to off, so even a committed
+     round moves nothing on its own. The picker emits `{toggle: financing, on}` alongside the round —
+     as its own VISIBLE change, so the reason the numbers moved is on screen and can be removed.
+So the default is `committed`: the only status that both emits a line and is switched on.
+
+DEBT IS NOT OFFERED. Without a rate, term, interest-only months and fees it models as money that
+arrives and is never repaid — a gift, not a raise, and it would overstate the runway. It lives on the
+Investment tab where those terms are.
+
+WATCH: `onAdd` takes an ARRAY. Calling a single-patch version twice in one handler does not work —
+both calls read the same `editScn` snapshot and the second silently overwrites the first, which is
+exactly what the fundraise needs to do.
+
 **Intent-first changes**, replacing the four-dropdown what/which/field/value chain that asked you to
 know the schema before you could ask a question. "Something else" keeps the full schema reachable —
 INCLUDING cash and the revenue toggles, which have no intent tile and would otherwise have been
@@ -834,10 +858,24 @@ every keystroke.
 and listed a `milestones` collection that `PATCH_SCHEMA` does not have). And `saas` is patchable at
 last — subscription revenue shipped without it, so churn doubling could not be asked at all.
 
-## SaaS subscription revenue (Revenue tab)
+## SaaS subscription revenue (entered under Sales, read on Cash flow)
 
 `src/engine/saas.js` + `src/views/chrome/SaasPanel.jsx`, edited under Cash flow -> Revenue. Tests
 `test/engine/saas.test.js` (17), `test/engine/saas-integration.test.js` (9), `test/views/saas.test.jsx` (9).
+
+**IT LIVES UNDER SALES, not on the cash-flow tab where it was first built.** Recurring revenue from
+customers is something you SELL; cash flow is where the consequence shows up. The editor sits beside
+the order book as a fourth Sales sub-tab, so the two ways this company earns money are entered in one
+place, and MRR joins booked/pipeline/deposits in the Sales summary stats.
+
+**THE FUNNEL RUNS SALES -> REVENUE, and says so.** Moving the input must not move the money: MRR still
+counts toward recurring revenue on the cash-flow tab. But a total with no editor beneath it is an
+unexplained gap between the stat at the top and the lines listed below, so the Revenue tab now names
+the amount, says it was entered under Sales, and links straight there.
+
+WATCH: that link navigates with ONE `navigate({ view, tab })` call. `setView(...)` followed by
+`setTab(...)` races — `setTab` reads `route.view` from state the first call has not committed yet, so
+the tab lands on the OLD view. Guarded by a test; the two-step version fails it.
 
 **WHY IT ISN'T A RECURRING LINE WITH A GROWTH RATE.** A recurring line grows geometrically from one
 amount. A subscription book is a POPULATION: customers arrive, a share leave every month, and the ones
@@ -865,6 +903,128 @@ revenue line and defaults to "expected" via `tagRevenue`. `saasCeiling()` return
 (unbounded) and for zero adds (decay) — both real answers, neither a ceiling — and the panel names
 those two cases explicitly rather than showing a blank. The Revenue stat strip adds `saasNow` to
 recurring revenue, or a pure-subscription company reads as zero recurring revenue.
+
+## Hiding tabs and sub-tabs (`src/state/tabprefs.js`)
+
+Tests `test/engine/tabprefs.test.js` (12), `test/views/tabprefs.test.jsx` (13). Guards verified by
+reversion. UI is the Layout section of the Account page; stats opt-out sits on each company row there
+(RPC `set_stats_optout`, migration 007, owner-only, and `list_companies` now returns the flag).
+
+**A VIEW PREFERENCE, NOT MODEL DATA.** Deliberately NOT in `doc.settings` alongside the revenue
+toggles: those change the numbers so sharing them is right, whereas one owner decluttering their own
+screen must not rearrange a co-owner's. Stored in localStorage, which means it does NOT follow you to
+another browser — a real trade, taken because the alternative (a profiles column + RPC) needs an async
+read before the chrome can draw, so the nav flickers from "everything" to "your selection" on every
+load. The seam to change is `load`/`save` and nothing else.
+
+**Default is everything visible, and hiding is subtractive**, so a tab added later appears for
+everyone automatically instead of being silently missing for anyone who saved a preference first.
+
+**Three lockout guards.** Dashboard cannot be hidden (there must always be somewhere to go home to,
+and the alternative is inventing a second fallback and protecting THAT). Hiding every sub-tab of a
+view still leaves one — enforced at render AND refused in the settings UI, because a checkbox that
+appears to work and silently doesn't is worse. Hiding the view you are standing on moves you to the
+Dashboard. A hash pointing at a hidden view still RENDERS it: this is decluttering, not permissions,
+and breaking a bookmark is the bigger surprise.
+
+**WATCH: `resolveTab` reads the REGISTRY, not the view's TABS array.** The first version took the
+array, which meant it had to be called where TABS is built — moving `const tab` BELOW code that used
+it, in six views at once. A TDZ error, which `vite build` accepts and only vitest catches. Exactly the
+failure mode this file already warns about; it caught 20 tests across 7 files.
+
+**The registry is duplicated from the views by necessity** — each builds its own TABS locally with
+live counts, so there is nothing importable. `test/views/tabprefs.test.jsx` scans the view sources and
+fails on drift, because a sub-tab the settings screen cannot see is one nobody can hide.
+
+**Also fixed while here:** an attempt to key preferences per user called `getSessionProvider()?.()`,
+but that returns the session OBJECT rather than a function, and it crashed DocumentHost outright. The
+scoping was unnecessary anyway — localStorage is already per browser profile, and browser profiles are
+how two people share a machine.
+
+## Aggregate statistics (the one deliberate hole in tenant isolation)
+
+`src/engine/stats.js` (pure), `scripts/stats-job.mjs` (the job),
+`supabase/migrations/006_company_stats.sql`. Tests `test/engine/stats.test.js` (18),
+`test/state/stats-job.test.js` (10). All three guards verified by reversion.
+
+**THE FINDING THAT CHANGED THE POLICY.** The privacy draft said statistics were "never derived from
+employee records — salaries are excluded from every calculation". THAT IS FALSE AND UNIMPLEMENTABLE:
+you cannot compute a runway without reading salaries, because payroll is most of the burn. The
+headline figure is derived from employee records by construction. The keepable promise is about what
+LEAVES the module, not what it reads — reads a document in memory for one projection, emits anonymous
+numbers, publishes nothing about any person. Policy corrected in all three documents.
+
+**Computed in JS, not SQL, deliberately.** Runway is the most heavily tested calculation in the
+product; reimplementing it in Postgres would create a second source of truth that drifts from the one
+the customer sees. The job imports the real engine. THIS REQUIRED ADDING `.js` TO 13 EXTENSIONLESS
+IMPORTS in `src/engine/**` — Vite resolves them, Node does not. Golden number confirmed unmoved. The
+engine is now Node-importable, which Phase 1's server-side entitlement check will also want.
+
+**How each promise is enforced structurally, not by reviewer vigilance:**
+- `companyStats()` returns SCALARS ONLY, with a test asserting the type of every value — adding
+  `topEarner: "Alex Rivera"` fails the build. The DB write is separately allowlisted.
+- MIN_COHORT (10) suppresses figures by ABSENCE, not rounding or fuzzing; a blurred number still
+  carries information. The COUNT is never suppressed — "14 companies use Waterline" says nothing
+  about any of them.
+- Opt-out is applied IN THE QUERY (inner join on `companies.stats_optout`), so an opted-out
+  document is never read rather than read and discarded.
+- The job logs counts, never names. Tested.
+- `company_stats` has NO insert/update policy: service role only. The public surface is a VIEW
+  serving the newest UNSUPPRESSED snapshot, so a small-sample figure cannot be served even if stored.
+
+**`contributes()` excludes companies that signed up and never typed anything.** Empty documents
+project happily — straight to zero — so counting them would inflate the company count with people who
+never used the product AND drag every average down. Both errors flatter in the wrong direction.
+
+**"No zero date" is never averaged in as HORIZON.** That would cap the healthiest customers at 36 and
+understate exactly the companies doing best; they are counted separately as `companiesBeyondHorizon`.
+
+## Phase 0: version retention + error reporting
+
+### `document_versions` is bounded now (`005_version_retention.sql`)
+
+The table grew without limit: `save_document` inserted a full ~20 KB copy of the body on EVERY
+debounced save and nothing ever deleted any of it — roughly 1 MB per editing session per user, in a
+table on the write path. Two changes for two different problems:
+
+- **RETENTION** (storage): keep the most recent 20 snapshots per document, pruned in `save_document`.
+  Last-N and NOT a time window, because a row count is a hard bound and "90 days" is not — a busy
+  company still accumulates thousands inside it and a dormant one loses everything. Account deletion
+  already cascades, so time-based expiry buys nothing for compliance either.
+- **COALESCING** (write volume): only snapshot when the newest one has aged past 5 minutes. Fifty
+  snapshots one debounce apart is useless granularity — you are not restoring a keystroke, you are
+  restoring yesterday. Safe because NOTHING IN THE CLIENT READS `document_versions`; it is a recovery
+  net, not a feature. The optimistic-concurrency contract is untouched: `documents.version` still
+  increments every write, only the snapshot is skipped, so version numbers simply become sparse.
+
+**Verifying it needed a second idea.** Counting rows cannot detect snapshot-per-save once retention
+has capped the table — a burst adds ten rows and deletes ten and the count never moves. The VERSION
+NUMBERS give it away: consecutive numbers mean every save snapshotted, sparse means coalescing works.
+`scripts/retention-checks.mjs` uses that; `test/state/retention.test.js` drives it against a fake DB.
+
+**BE HONEST ABOUT WHAT A SHORT LIVE RUN PROVES.** Coalescing and retention fight each other: you
+cannot make 21 snapshots in a minute when coalescing is doing its job, so on a fresh project the
+keep-window assertion is near-vacuous. It reliably catches THE MIGRATION NOT BEING APPLIED, and bites
+properly on a project with real history. Stated in the checker and pinned by a test.
+
+### Error reporting (`src/state/errors.js`)
+
+A SEAM, not `@sentry/react`. Error SDKs capture generously by default — breadcrumbs, URLs, request
+bodies, DOM text in replays — which for most apps is a feature and here is a payroll leak. So the
+vendor sits behind an adapter like the auth client and storage backend, and everything passes through
+a scrubber: money-shaped numbers, emails, secret-named keys, query strings on stack frames. Objects
+are DROPPED rather than truncated, because a partial document is still a document.
+
+OFF by default — no `VITE_ERROR_SINK_URL`, no network call — so dev and tests stay silent and turning
+it on is a deliberate act with a reviewable diff. `reportError` never throws, because a reporter that
+can fail is a way of losing the original error. `ViewBoundary` now reports as well as logs, and global
+handlers catch what escapes React (most of storage and sync runs outside the render tree).
+
+### WATCH: the test-config guard scans code, not prose
+
+`testconfig.test.js` failed `errors.test.js` because the regex `\bdocument\.` matched the word
+"document." at the end of an English sentence in a comment. Comments are stripped before scanning now.
+A guard that fires on prose teaches people to ignore it, which is worse than not having one.
 
 ## The test suite runs as TWO PROJECTS (node + jsdom)
 

@@ -8,13 +8,13 @@ import { useStart } from "../state/StartCtx";
 import { Payroll } from "./Payroll";
 import { Projects } from "./Projects";
 import { I } from "./chrome/icons";
-import { SaasPanel } from "./chrome/SaasPanel";
 import { saasSeries } from "../engine/saas";
+import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
-export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [], saas = [], setSaas = () => {} }) {
+export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [], saas = [], onGoSubs }) {
   const { START_Y, START_M } = useStart();
-  const TAB_KEYS = ["net", "revenue", "costs"];
-  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "net";
+  const tabPrefs = useTabPrefs();
+  const tab = resolveTab("flow", routeTab, "net", tabPrefs);
   const setTab = (t) => setRouteTab(t);
   const upd = (id, patch) => setLines(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l));
   const del = (id) => setLines(ls => ls.filter(l => l.id !== id));
@@ -113,14 +113,18 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
 
   // What the subscription books bill THIS month. Recurring revenue in the stat strip would otherwise
   // read as zero for a pure-subscription company, since these expand to per-month one-time lines.
-  const saasNow = (saas || []).filter(x => x.include !== false)
-    .reduce((a, x) => a + (saasSeries(x).find(p => p.month === 0)?.mrr || 0), 0);
+  const includedSaas = (saas || []).filter(x => x.include !== false);
+  const subCount = includedSaas.length;
+  const saasNow = includedSaas.reduce((a, x) => a + (saasSeries(x).find(p => p.month === 0)?.mrr || 0), 0);
 
   const TABS = [["net", "Net cash flow"], ["revenue", "Revenue"], ["costs", "Costs"]];
+  // Hidden sub-tabs are dropped here, and the active one is resolved against what is LEFT —
+  // falling back to the view's own default could land on a tab the person asked not to see.
+  const SHOWN = visibleTabs("flow", TABS, tabPrefs);
   return (
     <>
       <div className="subtabs">
-        {TABS.map(([k, label]) => (
+        {SHOWN.map(([k, label]) => (
           <button key={k} className={"subtab" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
@@ -169,7 +173,19 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
           <div className="stat"><div className="accent" style={{ background: "var(--signal-2)" }} /><div className="lab">Grant payments</div><div className="big">{money(grantTotal)}</div><div className="meta">from Projects, {grantIn.length} payment{grantIn.length !== 1 ? "s" : ""}</div></div>
         </div>
         {editPanel("revenue")}
-        <SaasPanel saas={saas} setSaas={setSaas} />
+
+        {/* THE FUNNEL, made visible. Subscription revenue is entered under Sales — recurring revenue
+            from customers is something you sell, and cash flow is where the consequence lands. It
+            still counts here, so the tab says where the money came from rather than leaving an
+            unexplained gap between the stat at the top and the lines listed below it. */}
+        {saasNow > 0 && (
+          <div className="callout" style={{ borderLeftColor: "var(--signal-2)" }}>
+            <b>{moneyFull(saasNow)}/mo</b> of the recurring revenue above is subscriptions, from{" "}
+            {subCount} product{subCount !== 1 ? "s" : ""} — those are entered under{" "}
+            <button className="linkbtn" onClick={() => onGoSubs?.()}>Sales &rsaquo; Subscriptions</button>,
+            with the customers they belong to.
+          </div>
+        )}
         {roTable("Grant payments", "Awarded reimbursements and milestone payments already counted in your runway.",
           grantIn.map(l => ({ label: l.label || "Payment", src: l.projectName, amount: l.cadence === "recurring" ? l.amount : l.amount, per: l.cadence === "recurring", when: timing(l) })), "Projects")}
       </>)}

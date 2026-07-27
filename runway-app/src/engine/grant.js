@@ -1,6 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import { tripCost } from "./history";
-import { HORIZON, clampM, floorM, nMon } from "./time";
+import { tripCost } from "./history.js";
+import { HORIZON, clampM, floorM, nMon } from "./time.js";
 
 // Billing lives on ONE axis: reimburseTiming = arrears | monthly | advance | milestone.
 // "milestone" is reimbursement in arrears against delivered milestones rather than against a budget period.

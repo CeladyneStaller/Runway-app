@@ -9,11 +9,19 @@ import { Projects } from "./Projects";
 import { MOPTS, statusChipOf } from "./chrome/bits";
 import { I } from "./chrome/icons";
 import { POModal } from "./chrome/modals";
+import { SaasPanel } from "./chrome/SaasPanel";
+import { saasSeries } from "../engine/saas";
+import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
-export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects, addPO, delPO, decideDev }) {
+export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects, addPO, delPO, decideDev,
+                       saas = [], setSaas = () => {} }) {
   const { START_Y, START_M } = useStart();
-  const TAB_KEYS = ["summary", "orders", "targets"];
-  const tab = TAB_KEYS.includes(routeTab) ? routeTab : "summary";
+  // SUBSCRIPTIONS LIVE HERE, not on the cash-flow tab where they were first built. Recurring revenue
+  // from customers is something you SELL; cash flow is where the consequence shows up. Putting the
+  // editor next to the order book means the two ways this company earns money are entered in the same
+  // place, and the Revenue tab reads the total either way — the funnel runs Sales -> Revenue.
+  const tabPrefs = useTabPrefs();
+  const tab = resolveTab("sales", routeTab, "summary", tabPrefs);
   const setTab = (t) => setRouteTab(t);
   const [adding, setAdding] = useState(false);
   const up = (id, patch) => setPos(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p));
@@ -39,11 +47,18 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
   const statusChip = statusChipOf;
   const poMeta = (p) => <>{monthLabel(START_Y, START_M, p.deliveryMonth)} · net {p.termsDays} · paid {monthLabel(START_Y, START_M, poPaidMonth(p))}</>;
 
-  const TABS = [["summary", "Summary", pos.length], ["orders", "Orders", pos.length], ["targets", "Targets", allTargets.length]];
+  const includedSaas = (saas || []).filter(x => x.include !== false);
+  const mrrNow = includedSaas.reduce((a, x) => a + (saasSeries(x).find(p => p.month === 0)?.mrr || 0), 0);
+
+  const TABS = [["summary", "Summary", pos.length], ["orders", "Orders", pos.length],
+                ["targets", "Targets", allTargets.length], ["subs", "Subscriptions", (saas || []).length]];
+  // Hidden sub-tabs are dropped here, and the active one is resolved against what is LEFT —
+  // falling back to the view's own default could land on a tab the person asked not to see.
+  const SHOWN = visibleTabs("sales", TABS, tabPrefs);
   return (
     <>
       <div className="subtabs">
-        {TABS.map(([k, label, n]) => (
+        {SHOWN.map(([k, label, n]) => (
           <button key={k} className={"subtab" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{label}<span className="cnt">{n}</span></button>
         ))}
       </div>
@@ -53,6 +68,7 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
           <div className="stat"><div className="accent" style={{ background: "var(--signal)" }} /><div className="lab">Booked</div><div className="big">{money(bookedValue)}</div><div className="meta">{booked.length} signed order{booked.length !== 1 ? "s" : ""}</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--caution)" }} /><div className="lab">Pipeline</div><div className="big">{money(pipeline)}</div><div className="meta">quoted, not yet signed</div></div>
           <div className="stat"><div className="lab">Deposits</div><div className="big">{money(deposits)}</div><div className="meta">cash up front on booking</div></div>
+          <div className="stat"><div className="accent" style={{ background: "var(--signal-2)" }} /><div className="lab">Subscriptions</div><div className="big">{money(mrrNow)}</div><div className="meta">MRR this month{includedSaas.length ? ` \u00b7 ${includedSaas.length} product${includedSaas.length !== 1 ? "s" : ""}` : ""}</div></div>
           <div className="stat hero"><div className="lab">Targets at risk</div><div className="big" style={{ color: atRisk.length ? "var(--caution)" : "#fff" }}>{atRisk.length}</div><div className="meta">of {allTargets.length} committed</div></div>
         </div>
 
@@ -186,6 +202,8 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
           </table>
         </div>
       </>)}
+
+      {tab === "subs" && <SaasPanel saas={saas} setSaas={setSaas} />}
 
       {tab === "targets" && (<>
         <div className="stats">

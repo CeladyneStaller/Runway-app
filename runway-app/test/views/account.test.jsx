@@ -50,6 +50,11 @@ const fetchImpl = async (url, init) => {
   }
   if (url.includes("rpc/mark_password_set")) { rpcLog.push(["mark_password"]); return json("2026-07-23T00:00:00Z"); }
   if (url.includes("rpc/set_last_company")) { rpcLog.push(["last", body.p_company_id]); return json(null); }
+  if (url.includes("rpc/set_stats_optout")) {
+    companies = companies.map(c => c.id === body.p_company_id ? { ...c, stats_optout: body.p_optout } : c);
+    rpcLog.push(["optout", body.p_company_id, body.p_optout]);
+    return json(null);
+  }
   if (url.includes("rpc/delete_company")) {
     companies = companies.filter(c => c.id !== body.p_company_id);
     delete server[body.p_company_id];
@@ -463,5 +468,23 @@ describe("deleting the account", () => {
     fireEvent.click(btn(container, /Delete my account/));
     await waitFor(() => expect(container.textContent).toMatch(/isn't set up on this deployment/i));
     expect(container.textContent).toMatch(/Nothing has been changed/i);
+  });
+});
+
+describe("aggregate statistics opt-out", () => {
+  it("is offered per company, on by default", async () => {
+    const { container } = await start();
+    await openAccount(container);
+    const box = container.querySelector('[aria-label^="Include"][type="checkbox"]');
+    expect(box).toBeTruthy();
+    expect(box.checked).toBe(true);            // included unless somebody opts out
+    expect(container.textContent).toMatch(/Include in published statistics/);
+  });
+
+  it("calls the owner-only RPC when unticked", async () => {
+    const { container } = await start();
+    await openAccount(container);
+    fireEvent.click(container.querySelector('[aria-label^="Include"][type="checkbox"]'));
+    await waitFor(() => expect(rpcLog.some(r => r[0] === "optout")).toBe(true));
   });
 });

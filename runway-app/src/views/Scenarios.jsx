@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { applyScenario, explainPatch, emptyScenario, duplicateScenario, scenarioImpact,
-         PATCH_SCHEMA, TOP_LEVEL_FIELDS, TOGGLE_FIELDS, itemLabel } from "../engine/scenario";
+         scenarioRound, PATCH_SCHEMA, TOP_LEVEL_FIELDS, TOGGLE_FIELDS, itemLabel } from "../engine/scenario";
 import { buildProjection, zeroInfo } from "../engine/projection";
 import { money, moneyFull } from "../engine/money";
 import { HORIZON, monthLabel } from "../engine/time";
@@ -25,6 +25,10 @@ const INTENTS = [
   { id: "delay",  title: "Delay a hire",        blurb: "Push a start date out",       coll: "employees", field: "start" },
   { id: "drop",   title: "Don't hire someone",  blurb: "Take them out entirely",      coll: "employees", remove: true },
   { id: "salary", title: "Change a salary",     blurb: "Raise, cut, or correct",      coll: "employees", field: "amount" },
+  // ADDING a round, as distinct from moving one. Every other intent edits something already in the
+  // plan, so "what if we raised" could not be asked unless you had already entered the round you were
+  // uncertain about — which is backwards.
+  { id: "fund",   title: "Add a fundraise",    blurb: "A round that isn't in the plan yet", addRound: true },
   { id: "raise",  title: "Move a raise",        blurb: "Bring a round forward or back", coll: "rounds",  field: "closeMonth" },
   { id: "subs",   title: "Change churn or growth", blurb: "Subscription assumptions", coll: "saas",      field: "churnPct" },
   { id: "other",  title: "Something else",      blurb: "Any field, by hand",          other: true },
@@ -32,6 +36,9 @@ const INTENTS = [
 
 const MONTHS = Array.from({ length: HORIZON + 1 }, (_, i) => i);
 
+// `onAdd` takes an ARRAY, always. Calling a single-patch version twice in one handler does not work:
+// both calls read the same `editScn` snapshot, so the second silently overwrites the first — which is
+// exactly what a fundraise needs to do (the round, plus switching financing on).
 function ChangePicker({ baseDoc, ctx, onAdd }) {
   const [intent, setIntent] = useState(INTENTS[0]);
   const [itemId, setItemId] = useState("");
@@ -39,6 +46,7 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
   // "Something else" keeps the original generic path: pick a collection and a field by hand.
   const [otherColl, setOtherColl] = useState("");
   const [otherField, setOtherField] = useState("");
+  const [round, setRound] = useState({ name: "", amount: "", closeMonth: "0", kind: "safe", status: "committed" });
 
   // "Something else" can also reach the two NON-collection targets the old builder had — cash and the
   // revenue toggles. Dropping them because they didn't fit the intent tiles would be losing capability
@@ -50,22 +58,39 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
   const def = coll && field ? PATCH_SCHEMA[coll]?.fields?.[field] : null;
   const current = items.find(x => x.id === itemId);
 
-  const pick = (i) => { setIntent(i); setItemId(""); setValue(""); setOtherColl(""); setOtherField(""); };
+  const pick = (i) => {
+    setIntent(i); setItemId(""); setValue(""); setOtherColl(""); setOtherField("");
+    setRound({ name: "", amount: "", closeMonth: "0", kind: "safe", status: "committed" });
+  };
+  const setR = (patch) => setRound(r => ({ ...r, ...patch }));
 
-  const ready = special ? (special === "toggle" ? !!(otherField && value !== "") : value !== "")
+  const ready = intent.addRound ? (Number(round.amount) > 0)
+    : special ? (special === "toggle" ? !!(otherField && value !== "") : value !== "")
     : intent.remove ? !!itemId
     : !!(itemId && field && value !== "");
 
   const add = () => {
-    if (special === "field:cash") { onAdd({ kind: "field", path: "cash", value: Number(value) }); setValue(""); return; }
-    if (special === "toggle") { onAdd({ kind: "toggle", path: otherField, value: value === "on" }); setValue(""); return; }
-    if (intent.remove) onAdd({ kind: "remove", collection: coll, id: itemId });
+    if (intent.addRound) {
+      const out = [{ kind: "add", collection: "rounds", item: scenarioRound(round) }];
+      // FINANCING IS A SEPARATE AXIS from the revenue tiers, and it defaults to OFF — so a scenario
+      // that adds a round and nothing else shows no change whatsoever, at any status. Somebody asking
+      // "what if we raise" plainly means the money to arrive, so the toggle is switched on for them.
+      // Emitted as its OWN visible change rather than folded into the round, so the reason the numbers
+      // moved is on screen and can be taken back off.
+      if (baseDoc?.settings?.toggles?.financing === false) out.push({ kind: "toggle", path: "financing", value: true });
+      onAdd(out);
+      setRound({ name: "", amount: "", closeMonth: "0", kind: "safe", status: "committed" });
+      return;
+    }
+    if (special === "field:cash") { onAdd([{ kind: "field", path: "cash", value: Number(value) }]); setValue(""); return; }
+    if (special === "toggle") { onAdd([{ kind: "toggle", path: otherField, value: value === "on" }]); setValue(""); return; }
+    if (intent.remove) onAdd([{ kind: "remove", collection: coll, id: itemId }]);
     else {
       const v = def?.type === "select"
         ? (def.options.find(o => String(o[0]) === String(value)) || [value])[0]
         : def?.type === "money" || def?.type === "months" || def?.type === "number" || def?.type === "percent"
           ? Number(value) : value;
-      onAdd({ kind: "item", collection: coll, id: itemId, field, value: v });
+      onAdd([{ kind: "item", collection: coll, id: itemId, field, value: v }]);
     }
     setItemId(""); setValue("");
   };
@@ -99,6 +124,46 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
       </div>
 
       <div className="scn-form">
+        {intent.addRound && (
+          <>
+            <label className="scn-f"><span>Name</span>
+              <input className="inp" style={{ textAlign: "left", width: 140 }} value={round.name}
+                     aria-label="Round name" placeholder="Seed"
+                     onChange={e => setR({ name: e.target.value })} />
+            </label>
+            <label className="scn-f"><span>Amount</span>
+              <input className="inp num" type="number" value={round.amount} aria-label="Round amount"
+                     placeholder="1500000" onChange={e => setR({ amount: e.target.value })} />
+            </label>
+            <label className="scn-f"><span>Closes</span>
+              <select className="sel" value={round.closeMonth} aria-label="Close month"
+                      onChange={e => setR({ closeMonth: e.target.value })}>
+                {MONTHS.map(m => <option key={m} value={m}>{monthLabel(ctx.START_Y, ctx.START_M, m)}</option>)}
+              </select>
+            </label>
+            <label className="scn-f"><span>Type</span>
+              {/* Debt is absent on purpose — without a rate, term and fees it models as money that
+                  arrives and is never repaid, which overstates the runway. It lives on Investment. */}
+              <select className="sel" value={round.kind} aria-label="Round type"
+                      onChange={e => setR({ kind: e.target.value })}>
+                <option value="safe">SAFE</option>
+                <option value="equity">Priced equity</option>
+                <option value="note">Convertible note</option>
+              </select>
+            </label>
+            <label className="scn-f"><span>Assume it</span>
+              {/* "Closed" is deliberately absent: a closed round's money is already counted in
+                  `cash`, so compileInstrument emits no line for it and the scenario would do nothing. */}
+              <select className="sel" value={round.status} aria-label="Round status"
+                      onChange={e => setR({ status: e.target.value })}>
+                <option value="committed">Is committed</option>
+                <option value="raising">Is being raised</option>
+                <option value="planning">Is only planned</option>
+              </select>
+            </label>
+          </>
+        )}
+
         {intent.other && (
           <>
             <label className="scn-f"><span>Where</span>
@@ -165,6 +230,12 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
 
         <button className="addbtn scn-addch" disabled={!ready} onClick={add}>Add this change</button>
       </div>
+
+      {intent.addRound && (round.status === "planning" || round.status === "raising") && (
+        <div className="scn-none">A round that is only planned or still being raised counts as
+          <b> speculative</b>, which is switched off under the default revenue toggles — so this
+          scenario will show no change until you turn speculative revenue on.</div>
+      )}
 
       {items.length === 0 && coll && (
         <div className="scn-none">Nothing to change here yet — add {PATCH_SCHEMA[coll].label.toLowerCase()} on its own tab first.</div>
@@ -381,7 +452,7 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
 
             <div className="modal-body">
               <ChangePicker baseDoc={baseDoc} ctx={ctx}
-                            onAdd={(patch) => upsert({ ...editScn, patches: [...editScn.patches, patch] })} />
+                            onAdd={(patches) => upsert({ ...editScn, patches: [...editScn.patches, ...patches] })} />
 
               {/* LIVE EFFECT. The old editor let you add changes blind, close the modal, and only then
                   see what they did — so building a scenario was a guess followed by a reveal. */}
