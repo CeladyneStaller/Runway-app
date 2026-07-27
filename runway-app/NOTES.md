@@ -1028,6 +1028,34 @@ it on is a deliberate act with a reviewable diff. `reportError` never throws, be
 can fail is a way of losing the original error. `ViewBoundary` now reports as well as logs, and global
 handlers catch what escapes React (most of storage and sync runs outside the render tree).
 
+### Sentry, deliberately WITHOUT `@sentry/browser` (`src/state/sentry.js`)
+
+Tests `test/engine/sentry.test.js` (15), guards verified by reversion.
+
+**THE REASON IS STRUCTURAL, NOT BUNDLE SIZE.** `Sentry.init()` installs its own `window.onerror` and
+`unhandledrejection` handlers, plus breadcrumb instrumentation recording fetch bodies, console
+arguments and DOM text. Those capture RAW errors at the source — before `reportError()` is in the call
+path — so the vendor would receive an unscrubbed message containing whatever a thrown object
+serialised to. Disabling all of it is possible but is a configuration you must keep getting right
+forever, against a dependency that adds integrations in minor versions. Posting the envelope ourselves
+means there is NO BYPASS PATH TO MISCONFIGURE. Adding the SDK later would silently re-open it.
+
+**Format:** `/api/{id}/envelope/`, newline-delimited JSON (envelope header, item header, payload).
+`/store/` is deprecated. AUTH GOES IN THE QUERYSTRING — a custom `X-Sentry-Auth` header triggers a CORS
+preflight on every send, and Sentry documents the querystring form so browsers can avoid it.
+
+**Context becomes TAGS, not `extra`**, because tags are searchable — "every crash in Scenarios" is most
+of the value. Safe only because `scrubContext()` already reduced them to short scalars; a test asserts
+objects never reach a tag.
+
+**Flood protection is ours, not the SDK's**: identical errors within 5s collapse, 25 events per page
+load maximum. A render loop is one bug, not five hundred, and one bad deploy must not burn a month of
+quota and bury the event somebody needed. Removing it fails a test.
+
+**Frames are sent OLDEST FIRST** (reversed from how a stack string reads) because that is what Sentry
+groups on. Unparseable lines are dropped rather than guessed at — a wrong filename groups two
+different bugs together, which is worse than no frame at all.
+
 ### WATCH: the test-config guard scans code, not prose
 
 `testconfig.test.js` failed `errors.test.js` because the regex `\bdocument\.` matched the word

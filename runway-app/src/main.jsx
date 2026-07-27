@@ -1,5 +1,6 @@
 import React from "react";
 import { installGlobalHandlers, initErrorReporting } from "./state/errors";
+import { createSentrySink } from "./state/sentry";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import App from "./App.jsx";
@@ -49,16 +50,22 @@ createRoot(document.getElementById("root")).render(<React.StrictMode><App /></Re
 // To turn it on, install an adapter here that forwards the already-scrubbed event. Do NOT hand a
 // vendor SDK the raw error: `state/errors.js` explains what it strips and why.
 installGlobalHandlers();
-if (import.meta.env.VITE_ERROR_SINK_URL) {
-  initErrorReporting(
-    (event) => {
-      // `keepalive` so a crash on unload still reports. Failures are swallowed by reportError.
-      fetch(import.meta.env.VITE_ERROR_SINK_URL, {
+
+const release = import.meta.env.VITE_RELEASE || "dev";
+const environment = import.meta.env.VITE_ENVIRONMENT || "production";
+
+// SENTRY WITHOUT THE SDK. `state/sentry.js` explains why: `Sentry.init()` installs its own global
+// error handlers, which capture RAW errors before `reportError()` is in the call path — so the vendor
+// would see an unscrubbed message. Posting the envelope ourselves means the only thing that can reach
+// Sentry is what the scrubber produced.
+const sink = createSentrySink({ dsn: import.meta.env.VITE_SENTRY_DSN, release, environment })
+  // Generic fallback: any endpoint that accepts a POST of the scrubbed JSON.
+  || (import.meta.env.VITE_ERROR_SINK_URL
+    ? (event) => fetch(import.meta.env.VITE_ERROR_SINK_URL, {
         method: "POST", keepalive: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(event),
-      });
-    },
-    { release: import.meta.env.VITE_RELEASE || "dev" },
-  );
-}
+      })
+    : null);
+
+if (sink) initErrorReporting(sink, { release, environment });
