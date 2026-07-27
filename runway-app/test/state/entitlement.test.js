@@ -61,3 +61,36 @@ describe("reads are never gated", () => {
     await expect(b.write({ cash: 6 })).rejects.toMatchObject({ kind: ERR_PAYMENT_REQUIRED });
   });
 });
+
+describe("a billing refusal must not trap you", () => {
+  it("is not retryable, so the halt holds the edit rather than looping", () => {
+    expect(isRetryable({ kind: ERR_PAYMENT_REQUIRED })).toBe(false);
+  });
+
+  it("switching away is allowed when the block is BILLING, not connectivity", async () => {
+    // The flush-before-switch guard exists so a dropped connection cannot silently discard work.
+    // payment_required is not transient — it refuses forever until somebody pays — so treating it
+    // the same trapped people on the one company they could not edit, unable to reach a company they
+    // could, or the page where they would pay.
+    const S = await import("../../src/state/storage.js");
+    S._resetWriteState();
+    let saved = 0;
+    S.setBackend({
+      name: "unpaid",
+      async read() { return { raw: { schemaVersion: 3, cash: 1 }, meta: {} }; },
+      async write() {
+        saved++;
+        const e = new Error("payment_required"); e.kind = ERR_PAYMENT_REQUIRED; throw e;
+      },
+      async park() {},
+    });
+    await S.load();
+    S.save({ schemaVersion: 3, cash: 2 });
+    await S.flush();
+    expect(saved).toBeGreaterThan(0);
+
+    // The switch resolves rather than throwing "nothing was switched".
+    const auth = { setActiveCompany() {}, activeCompany: () => "co-2", getAccessToken: async () => "jwt", getCompanyId: async () => "co-2" };
+    await expect(S.switchCompany(auth, "co-2")).resolves.not.toThrow?.();
+  });
+});

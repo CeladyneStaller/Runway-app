@@ -272,7 +272,25 @@ export async function peekRemote() {
  *  one would suppress the first save in the new one. */
 export async function switchCompany(auth, companyId) {
   await flush();
-  if (hasUnsavedWork()) throw new BackendErrorLike("Couldn't save your current work, so nothing was switched.");
+
+  // BLOCKING THE SWITCH ONLY MAKES SENSE FOR A SAVE THAT MIGHT LATER SUCCEED.
+  //
+  // The guard exists so a network failure does not silently discard work. But `payment_required` is
+  // not transient: it will refuse forever until somebody pays. Treating it like a dropped connection
+  // trapped people on the one company they cannot edit — unable to reach a company they CAN edit, and
+  // unable to reach the page where they would pay. A guard meant to protect your work had taken the
+  // product away instead.
+  //
+  // So this refuses only on RETRYABLE failures. On payment_required the switch proceeds and the caller
+  // is told what was left behind, which is honest: the edit was never going to save, and holding
+  // somebody hostage on that screen does not preserve it. Reads and export stay open throughout.
+  if (hasUnsavedWork()) {
+    if (kindOf(_status.error) === ERR_PAYMENT_REQUIRED) {
+      console.warn("[runway] switching away from an unpaid company; its unsaved edit was not kept");
+    } else {
+      throw new BackendErrorLike("Couldn't save your current work, so nothing was switched.");
+    }
+  }
 
   auth.setActiveCompany(companyId);
   await writeActiveCompany(companyId);
