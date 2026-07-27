@@ -979,6 +979,47 @@ never used the product AND drag every average down. Both errors flatter in the w
 **"No zero date" is never averaged in as HORIZON.** That would cap the healthiest customers at 36 and
 understate exactly the companies doing best; they are counted separately as `companiesBeyondHorizon`.
 
+## Phase 1: Stripe (Edge Functions)
+
+`supabase/functions/{stripe-webhook,stripe-checkout,stripe-portal}` +
+`_shared/stripe-signature.js`. Tests `test/engine/stripe-signature.test.js` (9).
+Shape confirmed by Stripe's own implementation planner: hosted Checkout, flat-rate prices, freemium
+no-card trial, Customer Portal, Smart Retries.
+
+**SIGNATURE VERIFICATION IS BY HAND, no Stripe SDK.** Same reasoning as Sentry: the SDK's
+`constructEvent` uses synchronous Node crypto and does not run in Deno, and its async twin has a
+different name that is easy to get wrong SILENTLY. The algorithm is twenty lines and documented.
+
+THIS IS THE SECURITY BOUNDARY OF BILLING — anyone on the internet can POST to a webhook endpoint, and
+if it is wrong somebody grants themselves a subscription by sending us JSON. Four things it does that
+a naive version would not: constant-time comparison (a plain `===` leaks how many leading characters
+matched, which is enough to forge a byte at a time); a 5-minute replay window (without it a captured
+signature is valid forever and can re-apply a cancelled subscription); accepting ANY listed `v1`,
+because Stripe sends several during a secret rotation; and FAILING CLOSED when the secret is missing,
+rather than treating absence as "skip verification".
+
+**RAW BODY, NEVER RE-SERIALISED.** `JSON.stringify` of a parsed body reorders keys and changes
+whitespace, and the signature then fails for a perfectly legitimate event.
+
+**Out-of-order delivery is handled, not assumed away.** Stripe guarantees at-least-once, NOT ordering
+— a `subscription.updated` from before a cancellation can arrive after it and resurrect a dead
+subscription. Every upsert carries `last_event_at` and the PostgREST filter drops anything older, so
+a stale event matches nothing and writes nothing. Replays are harmless via `merge-duplicates`.
+
+**Status codes are chosen for what Stripe does with them:** 400 on a bad signature (not retryable,
+stop); 500 on a database failure (retry, do not lose a subscription change); 200 on unknown event
+types (an error makes Stripe retry forever for something we were never going to act on).
+
+**`user_id` is written to BOTH `client_reference_id` and `subscription_data.metadata`.** The session
+id is useless three months later — a renewal event never mentions it — so the metadata on the
+subscription is what makes lifecycle events attributable at all.
+
+**The portal takes its customer id FROM OUR DATABASE, never the request.** Accepting one from the
+client would let anybody open a billing portal for anybody else's account.
+
+**`STRIPE_PRICE_MAP` is config, not code**, so adding an annual price is a secret change rather than a
+deploy.
+
 ## Phase 1: entitlement (`008_entitlement.sql`)
 
 Tests `test/state/entitlement.test.js` (6), classification guarded by reversion. The Stripe webhook,
