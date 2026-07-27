@@ -1040,6 +1040,14 @@ serialised to. Disabling all of it is possible but is a configuration you must k
 forever, against a dependency that adds integrations in minor versions. Posting the envelope ourselves
 means there is NO BYPASS PATH TO MISCONFIGURE. Adding the SDK later would silently re-open it.
 
+**THE RELEASE TAG IS RESOLVED IN `vite.config.js`, not in the deploy dashboard.** VERCEL DOES NOT
+EXPAND ENVIRONMENT VARIABLES — setting `VITE_RELEASE` to `"$VERCEL_GIT_COMMIT_SHA"` in its UI stores
+that literal string, so every deploy reports a release named `$VERCEL_GIT_COMMIT_SHA`. It looks like
+it worked until you need to tell two builds apart. The config reads `VERCEL_GIT_COMMIT_SHA` /
+`GITHUB_SHA` / `CF_PAGES_COMMIT_SHA` and injects the value via `define`, because Vite only exposes
+`VITE_`-prefixed variables to browser code and the platform's own variable is not one. Guarded by a
+test asserting the injected value never starts with `$`.
+
 **Format:** `/api/{id}/envelope/`, newline-delimited JSON (envelope header, item header, payload).
 `/store/` is deprecated. AUTH GOES IN THE QUERYSTRING — a custom `X-Sentry-Auth` header triggers a CORS
 preflight on every send, and Sentry documents the querystring form so browsers can avoid it.

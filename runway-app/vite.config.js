@@ -24,8 +24,27 @@ const shared = {
   testTimeout: 15000,
 };
 
+// THE RELEASE TAG, resolved at build time.
+//
+// It goes on every error event so Sentry can say "this started at commit a3f9c2e" rather than just
+// "this is broken". Resolved HERE rather than in the Vercel dashboard because VERCEL DOES NOT EXPAND
+// ENVIRONMENT VARIABLES: setting VITE_RELEASE to "$VERCEL_GIT_COMMIT_SHA" in the UI stores that
+// literal string, and you get a release called "$VERCEL_GIT_COMMIT_SHA" on every deploy — which looks
+// like it worked right up until you need to tell two builds apart.
+//
+// Vite only exposes VITE_-prefixed variables to browser code, so the platform's own variable cannot
+// be read directly. This bridges the two, and falls back sensibly everywhere else.
+const release =
+  process.env.VITE_RELEASE                      // explicit override wins
+  || process.env.VERCEL_GIT_COMMIT_SHA          // Vercel
+  || process.env.GITHUB_SHA                     // GitHub Actions
+  || process.env.CF_PAGES_COMMIT_SHA            // Cloudflare Pages
+  || "dev";
+
 export default defineConfig({
   plugins: [react()],
+  // Injected as a literal so it survives into the bundle without a VITE_ variable having to exist.
+  define: { "import.meta.env.VITE_RELEASE": JSON.stringify(release) },
   test: {
     projects: [
       {

@@ -79,3 +79,27 @@ describe("nothing in the fast project secretly needs a browser", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("the release tag", () => {
+  it("is injected at build time, not read from a VITE_ variable", () => {
+    // Vercel DOES NOT EXPAND environment variables, so setting VITE_RELEASE to
+    // "$VERCEL_GIT_COMMIT_SHA" in its dashboard stores that literal string — every deploy then
+    // reports a release called "$VERCEL_GIT_COMMIT_SHA", which looks fine until you need to tell two
+    // builds apart. Resolving it in the config removes the chance to get that wrong.
+    const injected = config.define?.["import.meta.env.VITE_RELEASE"];
+    expect(injected, "vite.config.js must inject a release").toBeTruthy();
+    expect(() => JSON.parse(injected)).not.toThrow();
+    expect(JSON.parse(injected)).not.toMatch(/^\$/);   // never the literal variable name
+  });
+
+  it("falls back to something rather than nothing", () => {
+    expect(JSON.parse(config.define["import.meta.env.VITE_RELEASE"]).length).toBeGreaterThan(0);
+  });
+
+  it("names each CI platform it knows how to read", () => {
+    const src = readFileSync("vite.config.js", "utf8");
+    for (const v of ["VERCEL_GIT_COMMIT_SHA", "GITHUB_SHA", "CF_PAGES_COMMIT_SHA"]) {
+      expect(src, `${v} fallback missing`).toContain(v);
+    }
+  });
+});
