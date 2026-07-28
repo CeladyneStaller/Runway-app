@@ -30,6 +30,34 @@ const PRINT = args.includes("--print");
 // First non-flag argument, so `--print canceled` and `canceled --print` both work.
 const status = args.find((a) => !a.startsWith("-")) || "active";
 
+// UNKNOWN FLAGS ARE FATAL. `-print` with one dash is not `--print`: the parser would treat it as a
+// flag, silently leave PRINT false, and SEND the event — the failure being guarded against here, one
+// keystroke away and quieter.
+const UNKNOWN = args.filter((a) => a.startsWith("-") && a !== "--print");
+if (UNKNOWN.length) {
+  console.error(`Unknown option: ${UNKNOWN.join(" ")}`);
+  console.error("This script accepts --print, and npm needs a separator:");
+  console.error("  npm run stripe:test-event -- --print");
+  process.exit(2);
+}
+
+// VALIDATE THE STATUS TOO, for the reason the UUID check above exists: an unrecognised value is not
+// rejected anywhere downstream. `p_status` is a plain text column, so a typo — or an unsupported flag
+// falling through to this positional, which is how `status=--print` once reached the database — is
+// stored verbatim and read back by the billing UI. It does not even break entitlement, because
+// `company_entitled` also accepts `current_period_end > now()`, so the junk sits there looking fine.
+const STRIPE_STATUSES = ["active", "past_due", "unpaid", "canceled", "incomplete",
+                         "incomplete_expired", "trialing", "paused"];
+if (!STRIPE_STATUSES.includes(status)) {
+  console.error(`Not a Stripe subscription status: ${status}`);
+  if (status.startsWith("-")) {
+    console.error("That looks like a flag. This script accepts --print, and npm needs a separator:");
+    console.error("  npm run stripe:test-event -- --print");
+  }
+  console.error(`Valid: ${STRIPE_STATUSES.join(", ")}`);
+  process.exit(2);
+}
+
 const need = (k) => { const v = process.env[k]; if (!v) { console.error(`Missing ${k}`); process.exit(2); } return v; };
 
 // Not needed when printing: there is nowhere to send it. Demanding it anyway would make the offline
@@ -48,7 +76,6 @@ if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user
   process.exit(2);
 }
 const priceId = process.env.TEST_PRICE_ID || "price_test_placeholder";
-
 const now = Math.floor(Date.now() / 1000);
 const event = {
   id: `evt_test_${now}`,
