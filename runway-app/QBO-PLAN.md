@@ -194,7 +194,28 @@ as positive, and `parseAmount` in signed mode reads positive as cost. So `qbo.js
 what a name means is not knowable from the name — and the probe now prints the SIGN DISTRIBUTION PER
 ACCOUNT so the question gets answered from data rather than from naming conventions.
 
-Carry into Stage 6: the mapping screen has to let somebody say which of their accounts are income,
+**THE SIGN DATA CAME BACK AND IT IS UNAMBIGUOUS: income and expenses are BOTH POSITIVE.**
+`Design income +7/-0` sits next to `Fuel +6/-0`. So sign carries no kind information whatsoever, and
+`parseAmount` in signed mode reads positive as COST — an unmapped import books every dollar of revenue
+as spending, and a runway model with its income turned into burn reports zero. `Discounts given`
+inverts the other way: all negative under Income, so a contra-revenue account would import as revenue
+and inflate it.
+
+Nor is the tree any help. The paths do not share a root — `Expenses > Fuel` is two levels while
+`Ordinary Income/Expenses > Income > Design income` is three — and `Pest Control Services`, an INCOME
+account, sits directly under the wrapper with no `> Income >` in its path at all. No positional rule,
+no substring rule.
+
+**SO `profile.revenueCodes` WAS ADDED TO `applyProfile`** (`src/engine/importer.js`): a list of code
+values that mean revenue, matched case-insensitively, taking precedence over both the sign and
+`kindColumn` because a named account is more reliable than anything inferred. Five tests, including one
+that asserts the WRONG answer without it — the revenue row booking as cost — because that is the
+failure being prevented and it should be visible in the suite.
+
+This helps file imports too, immediately and for free: the same accounting package exports the same
+shape to CSV, so a QuickBooks file import had the identical inversion waiting in it.
+
+Carry into Stage 6: the mapping screen has to let somebody tick which of their accounts are income,
 once, and keep it in the profile. That is one more control on a screen that already has one per field,
 and it is the correct place for it — a person looking at their own chart of accounts knows the answer
 instantly, and no rule we could write does.

@@ -109,6 +109,62 @@ describe("quickbooksSource", () => {
   });
 });
 
+describe("revenue-vs-cost, which this report cannot tell you", () => {
+  // The finding that produced `profile.revenueCodes`. Against the Intuit sandbox, ProfitAndLossDetail
+  // returned `Design income +7/-0` and `Fuel +6/-0` — income and expense BOTH POSITIVE. In signed mode
+  // every revenue row books as spending, which for a runway model is not a cosmetic error: income
+  // becomes burn and the runway goes to zero.
+  const bothPositive = {
+    Columns: { Column: [col("Date", "tx_date"), col("Amount", "subt_nat_amount")] },
+    Rows: { Row: [
+      { Header: { ColData: [{ value: "Ordinary Income/Expenses" }] },
+        Rows: { Row: [
+          { Header: { ColData: [{ value: "Income" }] },
+            Rows: { Row: [
+              { Header: { ColData: [{ value: "Design income" }] },
+                Rows: { Row: [leaf("2026-05-04", "225.00")] }, type: "Section" },
+            ] }, type: "Section" },
+        ] }, type: "Section" },
+      { Header: { ColData: [{ value: "Expenses" }] },
+        Rows: { Row: [
+          { Header: { ColData: [{ value: "Fuel" }] },
+            Rows: { Row: [leaf("2026-06-02", "54.55")] }, type: "Section" },
+        ] }, type: "Section" },
+    ] },
+  };
+
+  const map = (extra) => import("../../src/engine/importer.js").then(({ applyProfile }) =>
+    applyProfile(quickbooksSource(bothPositive),
+      { columns: { date: "Date", amount: "Amount", code: "Account" }, dateFormat: "YMD", ...extra }));
+
+  it("gets it WRONG without help, and that is the point", async () => {
+    const rows = await map({});
+    expect(rows.map(r => r.kind)).toEqual(["cost", "cost"]);   // the revenue row booked as spending
+  });
+
+  it("is fixed by naming the revenue accounts", async () => {
+    const rows = await map({ revenueCodes: ["Design income"] });
+    expect(rows.map(r => r.kind)).toEqual(["revenue", "cost"]);
+  });
+
+  it("matches an account name regardless of case, because a person typed it", async () => {
+    const rows = await map({ revenueCodes: ["  DESIGN INCOME  "] });
+    expect(rows[0].kind).toBe("revenue");
+  });
+
+  it("overrides a kindColumn, since a named account is more reliable than an inferred label", async () => {
+    const rows = await map({ kindColumn: true, kindRevenueValue: "nothing-matches",
+                             revenueCodes: ["Design income"] });
+    expect(rows[0].kind).toBe("revenue");
+  });
+
+  it("changes nothing when absent or empty", async () => {
+    for (const extra of [{}, { revenueCodes: [] }, { revenueCodes: null }]) {
+      expect((await map(extra)).map(r => r.kind)).toEqual(["cost", "cost"]);
+    }
+  });
+});
+
 describe("the shapes that would corrupt a mapping silently", () => {
   it("disambiguates a duplicate header rather than shadowing it", () => {
     // GeneralLedger really does return a column called "Account", and we synthesise one too.

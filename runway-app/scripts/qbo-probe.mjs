@@ -275,15 +275,30 @@ async function main() {
       console.log("\n  SIGNS PER ACCOUNT — does the sign separate revenue from cost?");
       for (const [name, e] of ranked) {
         console.log(`    +${String(e.pos).padStart(3)} -${String(e.neg).padStart(3)}  ` +
-                    `${name.padEnd(30).slice(0, 30)}  ${e.path.slice(0, 40)}`);
+                    `${name.padEnd(30).slice(0, 30)}  ${e.path}`);
       }
-      const mixed = [...per.values()].filter(e => e.pos && e.neg).length;
-      console.log(`\n  ${mixed} of ${per.size} accounts contain BOTH signs.`);
-      console.log(mixed === 0
-        ? "  Every account is single-signed, so `amountMode` may be enough — but check that income and\n" +
-          "  expense accounts differ in sign, not merely that each is consistent."
-        : "  So sign alone cannot decide revenue-vs-cost for those accounts. The mapping screen will\n" +
-          "  have to let somebody say which accounts are income, once, and remember it in the profile.");
+      // THE QUESTION IS NOT WHETHER EACH ACCOUNT IS CONSISTENT. It is whether income accounts and
+      // expense accounts differ from each other — an earlier version asked the first and reported
+      // "2 of 31 mixed", which sounded like a minor caveat while every revenue row was about to book
+      // as spending.
+      const side = (p) => (/(^|>)\s*income\s*(>|$)/i.test(p) ? "income"
+                        : /(^|>)\s*(expenses|cost of goods sold)\s*(>|$)/i.test(p) ? "expense" : "?");
+      const tally = { income: { pos: 0, neg: 0 }, expense: { pos: 0, neg: 0 }, "?": { pos: 0, neg: 0 } };
+      for (const e of per.values()) { tally[side(e.path)].pos += e.pos; tally[side(e.path)].neg += e.neg; }
+      console.log(`\n  By branch:  income +${tally.income.pos}/-${tally.income.neg}   ` +
+                  `expense +${tally.expense.pos}/-${tally.expense.neg}   ` +
+                  `unclassifiable +${tally["?"].pos}/-${tally["?"].neg}`);
+      const separates = tally.income.pos > 0 && tally.expense.pos === 0
+                     || tally.income.neg > 0 && tally.expense.neg === 0;
+      console.log(separates
+        ? "  Sign DOES separate the two branches here. `amountMode` may be enough."
+        : "  SIGN DOES NOT SEPARATE THEM — both branches carry the same sign, so an unmapped import\n" +
+          "  books revenue as spending and the runway goes to zero. Name the revenue accounts in the\n" +
+          "  profile (`revenueCodes`); it is the only source that does not guess.");
+      if (tally["?"].pos + tally["?"].neg) {
+        console.log(`  ${tally["?"].pos + tally["?"].neg} rows sit in NEITHER branch by path, so a` +
+                    " substring rule would miss them too.");
+      }
     }
     if (grid.rows.length !== rows.length) {
       console.log("\n  A DISAGREEMENT IS THE FINDING. Send me the row counts and a section of the raw");

@@ -29,7 +29,8 @@ export async function fileToGrid(file) {
 //   Profile = { columns: { date, amount, code?, customer?, category?, period?, kind?, note? },
 //               dateFormat: "YMD" | "MDY" | "DMY",   // resolves 03/04 ambiguity — the user declares it
 //               amountMode: "signed" | "expensesPositive" | "debitCredit",
-//               kindColumn?, kindRevenueValue? }      // how to tell revenue rows from cost rows
+//               kindColumn?, kindRevenueValue?,       // how to tell revenue rows from cost rows
+//               revenueCodes?: string[] }              // ...or name the accounts that ARE revenue
 
 // Amount parsing. QuickBooks writes money several ways; the profile says which, so we never guess.
 // Returns { amount: magnitude>=0, kind: "cost"|"revenue" } or null if unparseable.
@@ -78,6 +79,11 @@ export function applyProfile(grid, profile) {
     if (i >= 0) idx[field] = i;
   }
   const cell = (row, field) => (idx[field] != null ? row[idx[field]] : undefined);
+  // Lower-cased once, as a Set: this is consulted per row, and a list of accounts is user-typed, so
+  // matching has to survive "Design Income" against "Design income".
+  const revenueCodes = Array.isArray(profile.revenueCodes) && profile.revenueCodes.length
+    ? new Set(profile.revenueCodes.map(c => String(c).trim().toLowerCase()))
+    : null;
   const out = [];
   for (const row of grid.rows || []) {
     const parsedAmt = parseAmount(cell(row, "amount"), profile.amountMode || "signed");
@@ -89,12 +95,25 @@ export function applyProfile(grid, profile) {
       const kv = String(cell(row, "kind") ?? "").trim().toLowerCase();
       if (kv) kind = (kv === String(profile.kindRevenueValue ?? "revenue").toLowerCase()) ? "revenue" : "cost";
     }
+    const codeValue = cell(row, "code") != null ? String(cell(row, "code")).trim() : undefined;
+    // LAST WORD, and deliberately so: a named list of revenue codes beats anything inferred.
+    //
+    // Added after a QuickBooks ProfitAndLossDetail export showed income and expenses BOTH POSITIVE —
+    // `Design income +7/-0` next to `Fuel +6/-0` — so sign carries no kind information, and signed
+    // mode would book every dollar of revenue as spending. Nor is it recoverable from names: the
+    // report's own wrapper is called "Ordinary Income/Expenses", the ancestry has no common root, and
+    // an income account can sit outside the "Income" branch entirely.
+    //
+    // Which leaves the only reliable source: a person looking at their own chart of accounts, once,
+    // remembered in the profile. This applies to file imports too — the same accounting package
+    // produces the same file.
+    if (revenueCodes && codeValue && revenueCodes.has(codeValue.toLowerCase())) kind = "revenue";
     const period = cell(row, "period");
     out.push({
       date,
       amount: parsedAmt.amount,
       kind,
-      code: cell(row, "code") != null ? String(cell(row, "code")).trim() : undefined,
+      code: codeValue,
       customer: cell(row, "customer") != null ? String(cell(row, "customer")).trim() : undefined,
       category: cell(row, "category") != null ? String(cell(row, "category")).trim().toLowerCase() : undefined,
       period: Number.isFinite(+period) && period !== "" && period != null ? +period : undefined,
