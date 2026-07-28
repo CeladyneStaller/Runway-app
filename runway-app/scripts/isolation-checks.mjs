@@ -143,5 +143,24 @@ export async function runIsolationChecks({ client, a, b }) {
   check("the anon key alone reads no documents", !anonRead.ok || anonRows === 0,
     `status ${anonRead.status}, rows ${anonRows}`);
 
+  // 9. QBO CONNECTIONS — the table that holds a credential to somebody's accounting system rather
+  //    than their own numbers. `authenticated` has no grant on it at all, so this must fail outright
+  //    rather than return zero rows: an empty array would mean RLS is doing the work, and RLS is one
+  //    policy edit away from not doing it.
+  const conns = await client.get(`/rest/v1/qbo_connections?select=secret_id,realm_id`, tokenA);
+  check("qbo_connections is not readable by clients at all", !conns.ok,
+    `status ${conns.status}`);
+
+  // 10. And the decrypt path is service-role only. A client that could call this would not need the
+  //     table — it could ask for the token by company id.
+  const tok = await client.rpc("qbo_refresh_token", { p_company_id: idA }, tokenA);
+  check("qbo_refresh_token is not callable by a client", !tok.ok,
+    `status ${tok.status}`);
+
+  // 11. The anon key against the same table, because it ships in every browser bundle.
+  const anonConns = await client.get(`/rest/v1/qbo_connections?select=secret_id`, null);
+  check("the anon key alone reaches no connection rows", !anonConns.ok,
+    `status ${anonConns.status}`);
+
   return { pass: results.every(r => r.pass), results };
 }

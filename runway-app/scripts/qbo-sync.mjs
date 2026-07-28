@@ -140,6 +140,11 @@ async function api(path, token) {
 }
 
 const days = (ms) => Math.round(ms / 86400000);
+const monthsIn = (w) => {
+  const [ay, am] = w.start.split("-").map(Number);
+  const [by, bm] = w.end.split("-").map(Number);
+  return (by - ay) * 12 + (bm - am) + 1;
+};
 
 // ---- run --------------------------------------------------------------------
 async function main() {
@@ -150,11 +155,19 @@ async function main() {
   const before = loadTokens();
   console.log(`stored refresh token: ${short(before.refresh_token)}`);
   const t = await refresh(before);
+  // ROTATION IS ROUGHLY DAILY, NOT PER CALL. Intuit returns the SAME refresh token for repeated calls
+  // inside about 24 hours. An earlier version of this line called that "unexpected"; it is the normal
+  // case. Write-before-use is still right — the window in which a crash costs the connection is just
+  // narrower than it first appeared.
+  const rotated = t.refresh_token !== before.refresh_token;
   console.log(`rotated to:           ${short(t.refresh_token)}  ` +
-              `${t.refresh_token === before.refresh_token ? "(UNCHANGED — unexpected)" : "(new, old is dead)"}`);
+              `${rotated ? "(NEW — the old one is now dead)" : "(same token: rotation is ~daily, not per call)"}`);
   console.log(`access token expires: ${Math.round((t.access_expires_at - Date.now()) / 60000)} min`);
+  // THE CLOCK BELONGS TO THE TOKEN, NOT THE CALL. Refreshing does not push this out; only a rotation
+  // issues a token with a fresh window. So a keep-alive has to run often enough to CATCH a rotation,
+  // which means comfortably inside the window rather than just before it expires.
   console.log(`refresh token expires: ${days(t.refresh_expires_at - Date.now())} days ` +
-              `-> a connection left idle past that needs the customer back`);
+              `${rotated ? "(reset by this rotation)" : "(unchanged — this call did not rotate)"}`);
   console.log(`saved to ${STORE} (0600) before any request was made with it\n`);
 
   if (KEEPALIVE) {
@@ -167,43 +180,74 @@ async function main() {
   // too, so the realm-to-company pairing is a thing a person can get wrong. The name goes on screen.
   const info = await api("/companyinfo/" + REALM, t.access_token);
   const name = info?.CompanyInfo?.CompanyName || "(unnamed)";
-  console.log(`Connected to: ${name}   (realm ${REALM})\n`);
+  const founded = info?.CompanyInfo?.CompanyStartDate || null;
+  console.log(`Connected to: ${name}   (realm ${REALM})` + (founded ? `   books start ${founded}` : ""));
 
   const END = String(flag("until", new Date().toISOString().slice(0, 10)));
-  const START = String(flag("since", `${new Date().getFullYear() - 1}-01-01`));
-  const MONTHS = Number(flag("window", 3)) || 3;
+  const asked = String(flag("since", `${new Date().getFullYear() - 1}-01-01`));
+  // CLAMPED TO WHEN THE BOOKS BEGIN. A first run asking for "everything since 2020" against this
+  // sandbox made 27 requests to find 126 rows, 24 of them returning nothing — six seconds of round
+  // trips through years that cannot contain data. The company knows when it started; ask it.
+  const START = founded && founded > asked ? founded : asked;
+  if (START !== asked) console.log(`  (asked from ${asked}; clamped to the company's start date)`);
+
+  // WIDE BY DEFAULT, SPLIT ONLY WHEN PUNISHED. The 400,000-cell cap is the only reason to chunk at
+  // all, and it depends on transaction volume — which is unknown until a request comes back. Twelve
+  // months costs one request for a quiet company and is halved for a busy one, which is the right way
+  // round: a fixed small window taxes everybody for the busiest customer's data.
+  const MONTHS = Number(flag("window", 12)) || 12;
   const windows = dateWindows(START, END, MONTHS);
-  console.log(`${windows.length} window(s) of ${MONTHS} month(s), ${START} -> ${END}`);
+  console.log(`\n${windows.length} window(s) of up to ${MONTHS} month(s), ${START} -> ${END}`);
 
   const grids = [];
-  let truncated = 0;
+  let requests = 0, splits = 0, unresolved = 0;
   const t0 = Date.now();
-  for (const w of windows) {
+
+  async function fetchWindow(w, depth = 0) {
     const q = new URLSearchParams({
       start_date: w.start, end_date: w.end,
       columns: "tx_date,txn_type,doc_num,name,memo,subt_nat_amount,klass_name",
     });
     const report = await api(`/reports/ProfitAndLossDetail?${q}`, t.access_token);
+    requests += 1;
+
+    // TRUNCATION IS SILENT: the API returns 200 and appends a sentence. Splitting on it is the only
+    // way a wide default is safe — without this, "wide by default" would just mean "quietly partial".
     if (JSON.stringify(report).includes("Unable to display more data")) {
-      truncated += 1;
-      console.log(`  ${w.start}..${w.end}  TRUNCATED — narrow --window`);
+      const halves = dateWindows(w.start, w.end, Math.max(1, Math.floor(monthsIn(w) / 2)));
+      if (depth >= 4 || halves.length < 2) {
+        unresolved += 1;
+        console.log(`  ${w.start}..${w.end}  TRUNCATED and cannot be split further`);
+        grids.push(quickbooksSource(report));
+        return;
+      }
+      splits += 1;
+      console.log(`  ${w.start}..${w.end}  truncated -> splitting into ${halves.length}`);
+      for (const h of halves) await fetchWindow(h, depth + 1);
+      return;
     }
+
     const g = quickbooksSource(report);
     grids.push(g);
     console.log(`  ${w.start}..${w.end}  ${String(g.rows.length).padStart(5)} rows`);
   }
 
+  for (const w of windows) await fetchWindow(w);
+
   const grid = mergeGrids(grids);
   console.log(`\n${grid.rows.length} rows in ${((Date.now() - t0) / 1000).toFixed(1)}s across ` +
-              `${windows.length} request(s)${truncated ? `, ${truncated} TRUNCATED` : ""}`);
+              `${requests} request(s)` + (splits ? `, ${splits} window(s) split` : "") +
+              (unresolved ? `, ${unresolved} STILL TRUNCATED` : ""));
   console.log(`headers: ${grid.headers.join(" | ")}`);
   for (const h of ["Account", "Class", "Section Path"]) {
     const v = columnValues(grid, h);
     if (v.length) console.log(`${h}: ${v.length} distinct`);
   }
-  if (truncated) {
-    console.log("\nTRUNCATION IS SILENT — the API returns 200 and appends a sentence. Any sync that");
-    console.log("does not check for it imports a partial year and reports a confident wrong number.");
+  if (unresolved) {
+    console.log("\nSTILL TRUNCATED AFTER SPLITTING. Truncation is silent — the API returns 200 and");
+    console.log("appends a sentence — so those windows are PARTIAL and the row count above is wrong.");
+    console.log("A month that cannot fit in one response needs a different report or a narrower");
+    console.log("column list, and Stage 5 has to treat it as an error rather than a warning.");
   }
 }
 

@@ -306,13 +306,60 @@ followed by a native crash:
   had for its uuid, which should have been carried over and was not. The `invalid_client` message also
   now names its three real causes, including production keys against a sandbox realm.
 
+**IT RAN, and produced 126 rows — the same count the probe got by a different path.** Two findings and
+one more corrected verdict:
+
+- **ROTATION IS ~DAILY, NOT PER CALL.** Three refreshes inside a minute returned the SAME refresh
+  token, which the script labelled "UNCHANGED — unexpected". It is the normal case. The fourth verdict
+  line in this exercise to be wrong, against tables that have been right every time.
+- **The expiry belongs to the TOKEN, not the call.** 101 days did not move across three refreshes,
+  because only a rotation issues a token with a fresh window. So a keep-alive has to run often enough
+  to CATCH a rotation — comfortably inside the window, not just before it. Monthly is ample if
+  rotation is daily; annually would be a dead connection with a scheduled job pointed at it.
+- **27 requests to find 126 rows, 24 of them empty.** Asking "everything since 2020" walked years that
+  could not contain data. `CompanyInfo.CompanyStartDate` is the answer and costs nothing — the range
+  is now clamped to when the books begin.
+
+**So the windowing strategy inverted: WIDE BY DEFAULT, SPLIT ONLY WHEN PUNISHED.** Twelve months per
+request, halved recursively when a response comes back truncated, to a depth of four. The cell cap
+depends on transaction volume, which is unknown until a request returns — so a fixed small window taxes
+every quiet company for the busiest one's data. A window that is still truncated after splitting is
+now reported as an ERROR rather than a warning: it means the row count is a lie, and Stage 5 has to
+treat it that way.
+
 **STOP IF:** the keep-alive obligation is heavier than the feature is worth. A connection that dies
 silently between quarters produces "the sync is broken" support load against a $149 tier.
 
 ---
 
-## Stage 4 — Token custody
+## Stage 4 — Token custody — **DONE 28 Jul 2026**
 **Cost:** a day. **Proves:** nothing new about QuickBooks. This is the price of more than one user.
+
+`supabase/migrations/017_qbo_connections.sql`. The decisions worth knowing:
+
+- **THE TOKEN IS NOT IN THE TABLE.** Not encrypted in it — not in it. The row holds a `secret_id` into
+  Supabase Vault, which keeps the value encrypted on disk under a per-project key held outside SQL and
+  preserved through backups. `select * from qbo_connections` yields a uuid and no way to use it.
+- **`authenticated` has NO GRANT on the table at all** — not narrowed, not RLS-filtered. Every other
+  table here is readable by its members because the data is theirs; this one holds a credential, and
+  the client never needs it. It asks the server to sync. Three isolation probes assert the table, the
+  decrypt function and the anon key all fail OUTRIGHT rather than returning zero rows: an empty array
+  would mean RLS is doing the work, and RLS is one policy edit from not doing it.
+- **No access token is stored.** It lives 60 minutes and the refresh rotates daily anyway, so keeping
+  it would add a second secret to protect to save a round trip Stage 3 measured at under a second.
+- **`qbo_connect` is an upsert, which is the five-year fix.** Connect and reconnect are one call:
+  the secret is replaced IN PLACE (a new secret plus a repointed row would strand a live credential),
+  `realm_id` and the saved mapping survive, and `authorized_at` restarts because the customer just
+  consented again. `qbo_connection_status` computes `reauth_due_at` and warns 30 days out, so the five
+  year rule has one definition and it is server-side.
+- **A delete trigger removes the Vault secret.** Cascading the row away without it would leave a
+  usable credential to somebody's books in a table nobody looks at any more.
+- **`qbo_due_for_keepalive`** is what the scheduled job asks for: active connections untouched for 25
+  days. Rotation is daily and the idle window ~100 days, so monthly catches a rotation with three
+  months to spare.
+
+WATCH: Supabase logs statements by default, so a `vault.create_secret(...)` carrying a literal token
+can land in the logs UNENCRYPTED. Statement logging must be off before this holds a real token.
 
 `qbo_connections`: company-scoped, RLS on, token columns encrypted with a key in Supabase Vault rather
 than relying on disk encryption — disk encryption protects a stolen drive, not a leaked read of the
@@ -323,6 +370,32 @@ Audit connect and disconnect via `log_audit` (015).
 
 ## Stage 5 — Edge Functions
 **Cost:** two to three days. `connect`, `callback`, `refresh`, `sync`, `disconnect`.
+
+**`connect` MUST BE RE-RUNNABLE AGAINST AN EXISTING CONNECTION.** This is the entire cost of handling
+the five-year ceiling, and it is only cheap if it is designed in now. A refresh token carries TWO
+clocks: an idle one of about 100 days, which a monthly keep-alive resets forever, and an ABSOLUTE
+ceiling of five years from the original authorization, which rotation does NOT reset — that is the
+point of the policy. On that day the refresh returns `invalid_grant` and only the customer can fix it.
+
+So reconnection is just connection plus a flag and a banner, PROVIDED `connect` can run against a row
+that already exists:
+
+1. `status = 'needs_reauth'`, set when a refresh fails with `invalid_grant` or `refresh_expires_at`
+   comes close.
+2. **The row is NOT deleted.** The realm mapping and the saved column profile survive, so reconnecting
+   does not mean mapping every account again — which would turn a two-click repair into an afternoon.
+3. The same authorize flow behind the same button.
+
+If `connect` assumes it only ever happens once, all three get rewritten later, under time pressure,
+years after anyone remembers how it works.
+
+**The banner says why, in the customer's terms.** Something close to:
+
+> **Reconnect QuickBooks.** QuickBooks requires apps to be re-authorized every five years. Your
+> mapping and history are kept — use *Connect QuickBooks* to reauthorize.
+
+Naming the cause matters: a reconnection prompt with no explanation reads as "this app broke", and the
+customer's next move is support rather than the button.
 
 Three lessons from the billing functions apply directly and should save a day of the same debugging:
 
@@ -376,6 +449,18 @@ drafts, and the same rule applies: start it before you need it, and do not plan 
 Stages 0–3 are roughly a week and carry all the risk. Stages 4–8 are roughly two weeks and carry all the
 cost. That is the shape to hold in mind: **the first week buys the information, the next two buy the
 product.**
+
+## The decision to build ahead of demand — 28 Jul 2026
+
+This plan was written hedging: build the spike, defer the phase until a prospect asks. **That hedge is
+withdrawn, deliberately, and the reasoning is worth keeping.** A go/no-go that turns on automation is
+lost at the moment it is asked, not at the moment it could have been built — and "we didn't build it
+because there was no demand" is indistinguishable, from the customer's side, from "it doesn't do
+that". The asymmetry favours building: the cost of being early is a few weeks of work sitting idle at
+zero running cost, and the cost of being late is the customer.
+
+Note what this does NOT change: the Connected tier stays "Not available yet" until Stage 8 is green.
+Building ahead of demand and selling ahead of delivery are different decisions.
 
 ## What would change this plan
 
