@@ -116,6 +116,20 @@ and quietly downgrade somebody to `solo`.
 
 ## Testing the webhook
 
+**Start with `npm run stripe:test-event`** — it builds the payload this handler expects, signs it the
+way Stripe does, and posts it at the deployed URL. `stripe trigger` sends a subscription with NO
+`metadata.user_id`, because that field is attached by our own checkout function, so it exercises
+everything EXCEPT the database write. Needs `WEBHOOK_URL`, `STRIPE_WEBHOOK_SECRET`, `TEST_USER_ID`
+and `TEST_PRICE_ID`; takes an optional status (`npm run stripe:test-event -- canceled`).
+
+**`npm run stripe:test-event -- --print`** emits the body on one line plus a matching
+`Stripe-Signature` instead of sending, for the Dashboard's function test panel. Method POST, no query
+parameters, no `Authorization` header. Paste the body EXACTLY — the panel's editor reformatting it
+changes the bytes and the signature no longer matches — and within five minutes, or it fails with
+`timestamp_outside_tolerance`.
+
+For real Stripe payload shapes:
+
 ```bash
 stripe listen --forward-to https://<project-ref>.supabase.co/functions/v1/stripe-webhook
 stripe trigger customer.subscription.created

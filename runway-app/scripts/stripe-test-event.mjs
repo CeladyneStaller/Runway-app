@@ -5,7 +5,11 @@
 //   STRIPE_WEBHOOK_SECRET=whsec_... \
 //   TEST_USER_ID=<supabase user uuid> \
 //   TEST_PRICE_ID=price_...            \
-//   node scripts/stripe-test-event.mjs [status]
+//   node scripts/stripe-test-event.mjs [status] [--print]
+//
+// `--print` emits the body and the matching Stripe-Signature INSTEAD of sending, for pasting into
+// Dashboard -> Edge Functions -> stripe-webhook -> the test panel. WEBHOOK_URL is not needed then.
+// Via npm the flag needs a separator: `npm run stripe:test-event -- --print`.
 //
 // WHY THIS EXISTS. `stripe trigger` sends a generic subscription with NO metadata.user_id, because
 // that field is attached by our own checkout function — so it exercises everything except the
@@ -15,10 +19,22 @@
 // It is a TEST TOOL, not part of the app. It proves the round trip: signature accepted, event
 // parsed, row upserted, entitlement recomputed.
 import { createHmac } from "node:crypto";
+// The SAME verifier the deployed function runs, imported rather than reimplemented. This script signs
+// with node's `createHmac` while production verifies with WebCrypto, so the two could drift and the
+// only symptom would be a tool that hands you pairs the server rejects — indistinguishable from a
+// misconfigured secret, which is the thing this script exists to rule out. It self-checks below.
+import { verifyStripeSignature } from "../supabase/functions/_shared/stripe-signature.js";
+
+const args = process.argv.slice(2);
+const PRINT = args.includes("--print");
+// First non-flag argument, so `--print canceled` and `canceled --print` both work.
+const status = args.find((a) => !a.startsWith("-")) || "active";
 
 const need = (k) => { const v = process.env[k]; if (!v) { console.error(`Missing ${k}`); process.exit(2); } return v; };
 
-const url = need("WEBHOOK_URL");
+// Not needed when printing: there is nowhere to send it. Demanding it anyway would make the offline
+// half of this tool require the one value you do not have until the function is deployed.
+const url = PRINT ? null : need("WEBHOOK_URL");
 const secret = need("STRIPE_WEBHOOK_SECRET");
 const userId = need("TEST_USER_ID");
 
@@ -32,7 +48,6 @@ if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user
   process.exit(2);
 }
 const priceId = process.env.TEST_PRICE_ID || "price_test_placeholder";
-const status = process.argv[2] || "active";
 
 const now = Math.floor(Date.now() / 1000);
 const event = {
@@ -58,6 +73,30 @@ const event = {
 
 const body = JSON.stringify(event);
 const sig = createHmac("sha256", secret).update(`${now}.${body}`).digest("hex");
+
+// SELF-CHECK. Refuse to hand over a pair that will not verify: an invalid signature printed here
+// would be debugged as a server problem, in the one place where the server is not involved yet.
+const check = await verifyStripeSignature(body, `t=${now},v1=${sig}`, secret);
+if (!check.ok) {
+  console.error(`Refusing to emit an unverifiable signature: ${check.reason}`);
+  process.exit(1);
+}
+
+if (PRINT) {
+  console.log("--- BODY (one line, paste EXACTLY — any reformatting breaks the signature) ---");
+  console.log(body);
+  console.log("\n--- HEADERS ---");
+  console.log("Content-Type: application/json");
+  console.log(`Stripe-Signature: t=${now},v1=${sig}`);
+  console.log("\n--- NOTES ---");
+  console.log("Method POST. No query parameters. No Authorization header (verify_jwt is off).");
+  // The pair is perishable, and a stale one fails with `timestamp_outside_tolerance` — which reads
+  // like a broken secret to anyone who has not been told this.
+  console.log(`This pair EXPIRES at ${new Date((now + 300) * 1000).toLocaleTimeString()} ` +
+              "(5-minute replay window). Re-run for a fresh one.");
+  console.log(`Expect: 200 {"received":true}   status=${status} user=${userId}`);
+  process.exit(0);
+}
 
 const res = await fetch(url, {
   method: "POST",
