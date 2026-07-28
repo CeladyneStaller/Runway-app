@@ -6,11 +6,34 @@ const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173";
-const PRICE_MAP: Record<string, string> = JSON.parse(Deno.env.get("STRIPE_PRICE_IDS") || "{}");
+
+// PARSED DEFENSIVELY, like the webhook's `readPriceMap` — this was a bare `JSON.parse` and should
+// never have been. A THROW AT MODULE SCOPE MEANS THE FUNCTION NEVER BOOTS, so every request fails,
+// including the CORS preflight, and the browser reports a CORS error with nothing in the function
+// logs. A JSON typo in a secret then presents as a deployment or CORS problem — three plausible
+// causes for one symptom, distinguishable only by curling the endpoint by hand.
+function readPriceIds(): Record<string, string> {
+  const raw = Deno.env.get("STRIPE_PRICE_IDS");
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    return parsed as Record<string, string>;
+  } catch (e) {
+    console.error("[checkout] STRIPE_PRICE_IDS is not valid JSON, ignoring it:", (e as Error).message);
+    console.error('[checkout] expected: {"solo":"price_123","advisor":"price_456"}');
+    return {};
+  }
+}
+const PRICE_MAP: Record<string, string> = readPriceIds();
 
 const cors = {
   "Access-Control-Allow-Origin": SITE_URL,
   "Access-Control-Allow-Headers": "authorization, content-type",
+  // POST is a CORS-safelisted method, so a preflight passes without this by specification. Sent
+  // anyway: relying on a safelist for the one call that takes money is a needless edge to sit on.
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
 };
 
 /** Who is calling? Verified against Supabase Auth rather than trusted from the request body — a
@@ -32,6 +55,13 @@ Deno.serve(async (req) => {
   if (!userId) return new Response("unauthorized", { status: 401, headers: cors });
 
   const { plan } = await req.json().catch(() => ({}));
+  // Told apart on purpose. An EMPTY map is a deployment that was never finished; a missing KEY is a
+  // plan this deployment does not sell. Reporting both as "unknown plan" sends you to look at the
+  // client for a server-side omission.
+  if (Object.keys(PRICE_MAP).length === 0) {
+    console.error("[checkout] STRIPE_PRICE_IDS is unset or empty — no plan can be priced");
+    return new Response("not_configured", { status: 500, headers: cors });
+  }
   const price = PRICE_MAP[plan];
   if (!price) return new Response("unknown plan", { status: 400, headers: cors });
 

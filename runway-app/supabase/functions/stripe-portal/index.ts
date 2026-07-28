@@ -9,6 +9,8 @@ const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173";
 const cors = {
   "Access-Control-Allow-Origin": SITE_URL,
   "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
 };
 
 Deno.serve(async (req) => {
