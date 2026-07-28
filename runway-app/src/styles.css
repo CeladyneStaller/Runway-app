@@ -935,3 +935,9 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .unpaidbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#FBF3E6;
   border-bottom:1px solid #EBD4A8;font-family:var(--fb);font-size:12.5px;color:#7A5310;line-height:1.5}
 .unpaidbar b{font-weight:600}
+/* Deliberately NOT the unpaid bar's amber: this is an invitation, not a warning, and two bars that look
+   alike would train people to dismiss both. */
+.setupbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#F1F7F5;
+  border-bottom:1px solid #CFE4DC;font-family:var(--fb);font-size:12.5px;color:#1E4F42;line-height:1.5}
+.setupbar b{font-weight:600}
+.setupbar .linkbtn{white-space:nowrap}

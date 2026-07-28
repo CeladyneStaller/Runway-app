@@ -87,13 +87,22 @@ describe("a new company's first model", () => {
 
   it("and still seeds the name for anybody who skips the wizard entirely", async () => {
     // The seed is the backstop for the skip path — the wizard is not the only way into a model.
+    // NOTE the route: cancelling used to land on the empty-model SCREEN and its cash box, which hosted
+    // mode no longer has. Cash now goes in where it lives for every other model, which is a better test
+    // of the same rule: the seed fires when the document gains substance, by whatever path.
     goHosted();
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Set up your company/i));
     fireEvent.click(btn(container, /^Cancel$/));
-    await waitFor(() => expect(container.textContent).toMatch(/Nothing in the model yet/i));
+    await waitFor(() => expect(container.textContent).toMatch(/This model is empty/i));
 
-    fireEvent.change(container.querySelector(".empty-cash input"), { target: { value: "250000" } });
+    fireEvent.click(btn(container, /Spend history/i));
+    const field = await waitFor(() => {
+      const l = [...container.querySelectorAll(".startcfg label")].find(x => /Cash on hand at start/i.test(x.textContent));
+      if (!l) throw new Error("no cash field");
+      return l.querySelector("input");
+    });
+    fireEvent.change(field, { target: { value: "250000" } });
     await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
   });
 

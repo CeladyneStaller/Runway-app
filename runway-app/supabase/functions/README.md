@@ -74,9 +74,35 @@ supabase secrets set \
   STRIPE_SECRET_KEY=sk_test_... \
   STRIPE_WEBHOOK_SECRET=whsec_... \
   SITE_URL=https://runway-app-two.vercel.app \
+  ALLOWED_ORIGINS=https://runway-app-two.vercel.app \
   STRIPE_PRICE_MAP='{"price_AAA":"solo","price_BBB":"advisor","price_CCC":"connected"}' \
   STRIPE_PRICE_IDS='{"solo":"price_AAA","advisor":"price_BBB","connected":"price_CCC"}'
 ```
+
+PowerShell does not take the backslash continuations — put it on one line, or use backticks.
+
+**Which function reads what**, since they differ and a missing one fails in its own way:
+
+| Secret | Used by | Missing means |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | checkout, portal | 500 from the function |
+| `STRIPE_WEBHOOK_SECRET` | webhook | every event rejected, logged `no_secret` — it FAILS CLOSED |
+| `STRIPE_PRICE_IDS` | checkout | the plan cannot be priced; checkout refuses |
+| `STRIPE_PRICE_MAP` | webhook | subscriptions silently land on `solo`, logged loudly |
+| `SITE_URL` | checkout, portal | also the CORS origin — see below |
+| `ALLOWED_ORIGINS` | **delete-account** | **every browser call refused** — see below |
+
+**`ALLOWED_ORIGINS` is REQUIRED for `delete-account`, comma-separated, no trailing slash.** The
+allow-list FAILS CLOSED: unset means nothing is allowed, and the function logs
+`[delete-account] ALLOWED_ORIGINS is not set` once per isolate. It used to fail OPEN — an empty list
+echoed whatever origin asked — which is the state every fresh deployment starts in. A literal `*` is
+dropped rather than honoured, so "allow everything" is not expressible. Rule and tests:
+`_shared/cors.js`, `test/engine/cors.test.js`.
+
+**`SITE_URL` does double duty** for checkout and portal: it is the redirect target AND the literal
+`Access-Control-Allow-Origin`. If it does not exactly match the browser's origin — trailing slash, a
+`www`, a per-deployment Vercel host — the function succeeds and the browser discards the response.
+That presents as "the button does nothing", with clean function logs.
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically —
 do not set them yourself.
@@ -104,3 +130,7 @@ Watch the logs in **Dashboard → Edge Functions → stripe-webhook → Logs**. 
 from a replay (`timestamp_outside_tolerance`) from a missing secret (`no_secret`).
 
 A `401` in Stripe's event log and **nothing at all** in the function logs means `verify_jwt` is still on.
+
+A **CORS error in the browser with clean function logs** is the mirror image of that, and means an
+origin mismatch: `ALLOWED_ORIGINS` for `delete-account`, `SITE_URL` for checkout and portal. The
+request reached the function and the answer was thrown away on the doorstep.

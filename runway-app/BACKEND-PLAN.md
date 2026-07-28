@@ -1,11 +1,53 @@
-# Backend build plan — online-only
+# Backend build plan — hosted, with local-first kept
 
-Destination: **multi-user, multi-company, high security.** The app becomes a hosted product with the
-server as the single source of truth. IndexedDB is retired.
+Destination: **multi-user, multi-company, high security.** The app is a hosted product with the server
+as the source of truth for anyone signed in.
 
 This document is the plan of record. It supersedes the local-first draft and amends the "multi-user
 seam" note in `NOTES.md`, which stays correct about client code and is amended on database schema
 (§1.4).
+
+---
+
+## STATUS — refreshed 28 Jul 2026
+
+**Phase 1 (hosted document) is SHIPPED and in production.** Phases 2 and 3 are not started. Everything
+below is kept as written except where a `STATUS:` line says otherwise — the reasoning is still why the
+thing is shaped the way it is, and rewriting history would lose that.
+
+**THE HEADLINE DEVIATION: online-only did not happen, and that was the right call.** This plan opened
+by retiring IndexedDB. What shipped instead runs BOTH modes from one codebase, chosen by
+`syncConfigured()` — hosted when `VITE_SYNC_ENABLED` and the keys are present, local-first when they
+are not. `idb-keyval` is still a dependency, `state/backends/local.js` still exists, and demo mode
+adds a third backend on localStorage. Consequences, all of them good:
+
+- **The §0 one-way door was never walked through.** Offline remains reachable later without adding
+  reconciliation to a live product.
+- **§6's cutover order is moot.** There was no cutover, so nobody could be stranded by one, and the
+  adoption offer (`AdoptLocalDialog`) is a permanent feature rather than a one-release window.
+- **§0's "what gets worse" applies to hosted users only.** A local user still has a backstop copy on
+  the device.
+- The cost is a second backend to keep working, which the pluggable seam already made cheap, and which
+  the demo mode paid for twice over.
+
+**A SECOND NUMBERING EXISTS AND THIS ONE IS NOT IT.** The build sessions used Phase 0/1/2 for a
+*launch* track — production readiness, billing, installability — while this document numbers *platform*
+phases. They are different axes and both names are already in `NOTES.md`, so here is the mapping rather
+than a rename:
+
+| Launch track (NOTES.md) | What it was | Platform phase (this file) |
+|---|---|---|
+| Phase 0 | version retention, error reporting, stats, tenant-isolation probes, legal drafts | inside Phase 1 |
+| Phase 1 | entitlement, Stripe, billing UI | **not in this plan at all** — see below |
+| Phase 2 | installable PWA | not in this plan |
+| — | hosted document, auth, conflicts, adoption | **Phase 1 here** |
+
+**COMMERCIAL WORK THIS PLAN NEVER MENTIONED, now shipped:** entitlement enforced in `save_document`
+(008), plans and a computed 14-day trial (009), subscription RPCs (010/011), staff exemption (014),
+three Stripe Edge Functions, and the billing UI. A reader of the original document would think it was
+missing; it is not, it was simply never planned here. `NOTES.md` carries its reasoning.
+
+**WHAT IS ACTUALLY LEFT is §8.** Four items block taking money, and none of them is code.
 
 ---
 
@@ -57,6 +99,12 @@ multi-user is the stated destination, this is the trade that pays.
 Local-first → online-only is a deletion. Online-only → local-first later means adding reconciliation to a
 live product with real customers. If offline ever becomes a requirement, it will be more expensive then
 than it would be now. Proceeding anyway is a reasonable call; it should just be a knowing one.
+
+> **STATUS: not taken, and deliberately.** The door was left standing. `storage.js` dispatches to a
+> local, hosted or demo backend, so the deletion this section warned about never happened and the
+> option it was warning about losing is still there. The whole of §0 above should be read as "what
+> online-only WOULD have changed" — the parts that came true are the ones about hosted users, because
+> a signed-in user genuinely has no backstop copy and `document_versions` genuinely is the safety net.
 
 ---
 
@@ -204,7 +252,11 @@ already isolates the client from document shape, so the split will not ripple in
 
 ---
 
-## 2. Phase 1 — Hosted document
+## 2. Phase 1 — Hosted document — **SHIPPED**
+
+> **STATUS: done and live**, except the four items listed in §8 under "Still open inside Phase 1".
+> Migrations 001–014, `state/storage.js` + `state/backends/`, `state/auth.js`, `state/sync.js`,
+> `views/SignIn.jsx`, `views/chrome/ConflictDialog.jsx`, `views/chrome/AdoptLocalDialog.jsx`.
 
 **Goal:** the server is the source of truth. Multi-device works. Journal snapshots and cash actuals stop
 being hostage to one browser. Real backups exist.
@@ -224,6 +276,14 @@ subscribe(fn)   → status changes, for the indicator
 ```
 
 `idb-keyval` comes out of `package.json`.
+
+> **STATUS: shipped as FIVE functions, and `idb-keyval` stayed.** `flush()` was added because the
+> cadence moved into `storage.js` — a caller that can only `save()` cannot force a write before a
+> company switch, a sign-out or a tab close, and all three turned out to need one. `idb-keyval`
+> remains because local mode remains; the seam dispatches to `backends/{local,supabase,demo}.js`
+> instead of holding IndexedDB code itself, which is the property this section actually wanted.
+> The RPC below shipped essentially as written, later extended by 005 (retention + snapshot
+> coalescing) and 008 (the entitlement check).
 
 Writes go through an RPC, not a blind update:
 
@@ -267,6 +327,10 @@ The current 400 ms debounce is free against IndexedDB and wrong over a network �
 40–300 KB body every 400 ms while someone types a project name.
 
 - **Debounce 2.5 s**, with a hard flush every 30 s while unsaved.
+  *(**STATUS: NOT DONE.** `SAVE_DEBOUNCE_MS` is still 400 — correct for IndexedDB, wrong over a
+  network, which is exactly what this line was written to prevent. The 30 s ceiling shipped as
+  `MAX_UNSAVED_MS`. This is a live open item in §8: the constant needs to depend on the backend, not
+  on the file it lives in.)*
 - **Skip unchanged:** hash the body; never push an identical document.
 - **Coalesce in flight:** one push at a time; supersede queued pushes rather than stacking them.
 - **Flush on `visibilitychange` → hidden**, and on `beforeunload` via `sendBeacon`.
@@ -351,7 +415,14 @@ Field-level merge is Phase 3. Do not build it now.
 
 ---
 
-## 3. Phase 2 — Live QuickBooks
+## 3. Phase 2 — Live QuickBooks — **NOT STARTED**
+
+> **STATUS: not started, and less urgent than it was.** The four-piece FILE import shipped instead
+> (`engine/importer.js`, `engine/profile` rules, `ImportModal`, tolerant profile matching), which is
+> the same pipeline a live connection would feed. Everything in §3.3 still holds: a live source
+> replaces `fileToGrid` and nothing else. Note this is the phase the "Connected $149" plan tier is
+> sold against, and the billing UI deliberately renders it as "Not available yet" rather than a buy
+> button — selling it before it exists is the one failure no refund fixes.
 
 **A security escalation, not just more code.** Phase 1 stores documents people typed. Phase 2 stores OAuth
 refresh tokens for their accounting system. Separate project, separate review.
@@ -396,7 +467,12 @@ are all untouched. "New source, not new pipeline" holds.
 
 ---
 
-## 4. Phase 3 — Collaboration
+## 4. Phase 3 — Collaboration — **NOT STARTED**
+
+> **STATUS: not started.** The groundwork is in place and was cheap: `memberships` is many-to-many,
+> `member_role` already has owner/admin/editor/viewer, multi-company shipped with a switcher, and
+> `can_edit()` is the single gate. What does not exist is any UI for a second person — no invitations,
+> no seat management, no viewer shell — and the document is still a single blob (§4.2).
 
 Online-only makes this the phase that got cheaper. There are no divergent local caches to reconcile — one
 authoritative document, and the only question is who touched what.
@@ -459,8 +535,20 @@ on member removal.
 **Audit.** Every document save, membership change and connector action logged with actor, time and IP.
 Owners can read their own company's log.
 
+> **STATUS: the TABLE exists (001) and NOTHING WRITES TO IT.** `save_document` does not insert an
+> audit row, no RPC does, and no view reads one. That is worse than not having the table, because the
+> schema now implies an audit trail this product cannot produce — and "we log every save" is the kind
+> of claim that ends up in a security questionnaire. Either wire `save_document` to write it, or drop
+> the table until something does. Listed in §8.
+
 **Backups.** PITR plus independent nightly dumps to separate storage. Quarterly tested restore. With no
 local copies anywhere, **backups are now the only copy** — this moves from good practice to existential.
+
+> **STATUS: deferred, knowingly, with a trigger.** Supabase's own PITR is on; the independent dump and
+> the tested restore are not built. The trigger agreed in the build sessions is THE FIRST REAL
+> CUSTOMER DOCUMENT — not the first sign-up, not the first payment attempt. Until then the only data
+> at risk is the author's own. Deferring is defensible; forgetting is not, which is why it has a
+> trigger written down rather than a place in a backlog.
 
 **Deletion.** Soft delete then scheduled hard purge across `documents`, `document_versions`, `audit_log`
 and connector tokens, with a published SLA. Online-only makes this genuinely clean: no stray copies in
@@ -479,7 +567,10 @@ named owner.
 **Feature flag.** `SYNC_ENABLED`. Local-only remains the fallback for the whole Phase 1 build, and the app
 must stay fully functional with the flag off until the cutover ships.
 
-**Cutover order.** This is the one sequencing detail that cannot be got wrong:
+**Cutover order.** *(**STATUS: moot — there was no cutover.** Local mode was kept, so no document was
+ever stranded behind a removed backend and the adoption offer became permanent rather than a window.
+Kept here because the reasoning applies again the day IndexedDB is genuinely removed.)* This is the one
+sequencing detail that cannot be got wrong:
 
 1. Ship the **adoption build** — still local-first, plus "Upload this model to your account."
 2. Leave it live for a release cycle so people actually upload.
@@ -515,57 +606,99 @@ the journal's own Phase 2 and 3 need.
 | Blob model outliving its welcome | plan the section split before a second editor, not during |
 | Offline becomes a requirement later | acknowledged one-way door (§0); retrofitting onto a live product is materially harder |
 
-**Open questions**
+**Open questions — three of the four are now answered**
 
-1. **Companies per user.** Can one person belong to several companies from day one? The schema supports
-   it; the UI needs a switcher. Cheap now, awkward later.
-2. **Pricing shape.** Per company or per seat? Decides whether `memberships` needs a seat-limit column in
-   migration 001.
-3. **Residency.** Any customer likely to require EU or in-country data residency? A region decision made
-   once, at project creation.
-4. **Version retention.** Keep everything, or thin after N? Suggest keep-everything until a company
-   exceeds a few thousand versions, then dailies-then-weeklies.
+1. ~~**Companies per user.**~~ **ANSWERED: yes, from day one.** `memberships` was always many-to-many;
+   what was missing was `list_companies` / `create_company` / `rename_company` and a notion of which
+   company is ACTIVE (003). The switcher is on the Account page, the active company is per-device in
+   IndexedDB because it is a view preference rather than data, and `switchCompany()` flushes first so a
+   pending write cannot land against the wrong company.
+2. ~~**Pricing shape.**~~ **ANSWERED: per ACCOUNT, not per seat or per company.** Solo $40 (1 company),
+   Advisor $99 (unlimited), Connected $149 (unlimited + the ledger connection Phase 2 has not built).
+   14-day trial computed from the signup timestamp with NO card — buyers here bounce off a card wall,
+   so Checkout happens at conversion. The free slot is the OLDEST COMPANY YOU OWN, computed rather than
+   stored. So `memberships` needed no seat-limit column after all; seats become a real question again
+   at Phase 3, and the shape to reach for then is a seat count on the SUBSCRIPTION, not on membership.
+3. **Residency.** STILL OPEN. No customer has asked. Still a decision made once, at project creation,
+   so it stays worth asking the first EU prospect before signing them rather than after.
+4. ~~**Version retention.**~~ **ANSWERED: last 20 per document, plus 5-minute snapshot coalescing**
+   (005). Last-N rather than a time window because a row count is a hard bound and "90 days" is not.
 
 ---
 
 ## 8. Sequenced checklist
 
-**Pre-cutover**
+**Pre-cutover** — *not applicable; local mode was kept and there was no cutover.*
 
-- [ ] Adoption build: local-first + "Upload this model to your account"
-- [ ] Live for one full release cycle
+- [x] Adoption build: "Upload this model to your account" — shipped as a PERMANENT feature
+      (`AdoptLocalDialog`), offered only when the account is empty, and never deleting the local copy
 
-**Phase 1**
+**Phase 1 — done**
 
-- [ ] Supabase dev + prod, MFA on the account
-- [ ] Migration 001: tenancy, documents, versions, audit, RLS, `save_document`
-- [ ] Auth (magic link + Google); sign-up creates company + owner membership
-- [ ] `storage.js` → four-function online seam behind `SYNC_ENABLED`; drop `idb-keyval`
-- [ ] Hazard 1: never-save-without-successful-load (+ failing test first)
-- [ ] Hazard 2: schema-skew refusal (+ test)
-- [ ] Hazard 3: sync indicator, `beforeunload` guard, export button kept prominent
-- [ ] Debounce 2.5 s, skip-unchanged, coalesce, flush on hide/unload, retry with backoff
-- [ ] Conflict prompt with headline diff
-- [ ] Cross-tenant isolation test in CI
-- [ ] Backups + tested restore
-- [ ] Exit criteria §2.6 green; golden still 5.6
+- [x] Supabase dev + prod, MFA on the account
+- [x] Migration 001: tenancy, documents, versions, audit, RLS, `save_document`
+- [x] Migration 002: the GRANTs 001 forgot — RLS and privileges are two independent gates, and a
+      missing GRANT fails differently (permission denied) from an RLS denial (zero rows)
+- [x] Auth: magic link + Google + password, with `SetPassword` for both creating and resetting;
+      sign-in bootstraps a company atomically via `current_company()`
+- [x] `storage.js` → the online seam behind `syncConfigured()` (five functions; `idb-keyval` KEPT)
+- [x] Hazard 1: never-save-without-successful-load — `test/state/saveguard.test.js` includes a test
+      that reproduces the destruction with the guard removed
+- [x] Hazard 2: schema-skew refusal (`LOAD_STALE`, `stale_client`)
+- [x] Hazard 3: sync indicator, `beforeunload` guard, export never gated — not even when unpaid
+- [x] Skip-unchanged, coalesce in flight, retry with backoff, flush on hide/unload
+- [x] Conflict prompt with headline diff — and RESOLUTION, which the plan did not ask for: "mine"
+      re-reads first so the retry actually lands, "theirs" suppresses the immediate write-back
+- [x] Cross-tenant isolation test against a REAL project (`npm run test:isolation`, 8 probes,
+      skipped offline so `npm test` stays hermetic)
+- [x] Exit criteria §2.6 green; golden still 5.6
 
-**Phase 2**
+**Still open inside Phase 1 — the plan asked for these and they are not done**
 
-- [ ] QuickBooks app + sandbox
+- [ ] **Debounce → 2500 ms when the backend is hosted.** Still 400 ms. Pushing a 40–300 KB body every
+      400 ms while somebody types a project name is the exact waste §2.2 was written to prevent.
+      The constant has to become backend-dependent, and the write-cadence tests are already the place
+      that proves the behaviour did not otherwise move.
+- [ ] **Audit log: write it or drop it.** The table has existed since 001 with nothing inserting a row.
+- [ ] **Rate-limit `save_document` per user.** Nothing limits it today.
+- [ ] **Backups: independent dump + a tested restore.** Deferred with a trigger (first real customer
+      document). PITR alone is not a tested restore, and an untested backup is a rumour.
+
+**Before taking money — four items, and only one is code**
+
+1. [ ] **Deploy `stripe-checkout` and `stripe-portal`.** The billing UI calls Edge Functions that are
+       written and not deployed, so today the buttons fail.
+2. [ ] **Create the products and prices in Stripe** (test mode first) and set both price maps.
+       `STRIPE_PRICE_MAP` is config precisely so an annual price is a secret change, not a deploy.
+3. [ ] **Run ONE real checkout with `4242 4242 4242 4242`.** This is the only thing that proves the
+       `metadata.user_id` path end to end — the test script fakes exactly that field, so it is the one
+       part the suite structurally cannot verify.
+4. [ ] **Send the legal drafts for review.** Privacy policy, terms and subprocessors are drafted and
+       unreviewed. START THIS FIRST regardless of the other three: it is the only item on the whole
+       list whose lead time is not yours.
+
+**Also outstanding, small**
+
+- [ ] PNG icons at 192 and 512 for the PWA — the manifest points at SVGs, which modern browsers accept
+      and older Android and iOS do not, so install prompts are unreliable until they exist.
+
+**Phase 2 — QuickBooks (not started)**
+
+- [ ] QuickBooks app + sandbox company
 - [ ] `qbo_connections` + Vault-encrypted tokens + RLS
 - [ ] Edge Function: connect / callback / refresh / sync / disconnect
-- [ ] `quickbooksSource()` into the existing import pipeline
-- [ ] Audit + refresh-failure alerting
-- [ ] Exit criteria §3.5
+- [ ] `quickbooksSource()` emitting the existing row shape into the existing pipeline
+- [ ] Audit + refresh-failure alerting — a silently dead sync is worse than no sync
+- [ ] Exit criteria §3.5. **Do not sell the Connected tier before this is green.**
 
-**Phase 3**
+**Phase 3 — collaboration (not started)**
 
 - [ ] `document_sections` split; journal to its own table
 - [ ] Per-section optimistic concurrency
-- [ ] Roles in UI, invitations, seat management
+- [ ] Roles in the UI, invitations, seat management, session revocation on removal
 - [ ] Presence via Realtime
 - [ ] Exit criteria §4.4
 
 **Before real customers:** penetration test, incident-response plan with a named owner, published
-deletion SLA.
+deletion SLA. *(Deletion is BUILT — `delete_my_data()` + the account-deletion Edge Function, with
+shared companies surviving — but the published SLA is not written.)*

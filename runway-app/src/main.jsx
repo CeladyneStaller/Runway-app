@@ -82,3 +82,14 @@ if (sink) {
   console.info("[runway] error reporting is OFF — no VITE_SENTRY_DSN in this build. "
     + "Vite inlines VITE_ variables at build time, so setting one requires a rebuild.");
 }
+
+// SERVICE WORKER. Registered after load so it never competes with the first paint, and only in
+// production — a worker caching a dev server produces confusing staleness during development.
+//
+// Failure is ignored on purpose: an unregistered worker costs offline support and installability, and
+// nothing else. The app must not fail to start because a cache did.
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => { /* offline support is optional */ });
+  });
+}

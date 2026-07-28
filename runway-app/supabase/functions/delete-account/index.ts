@@ -15,23 +15,27 @@
 //   4. SUPABASE_SERVICE_ROLE_KEY comes from function secrets and never leaves this process.
 //
 // Deploy:  supabase functions deploy delete-account
-// Secrets: supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
+// Secrets: supabase secrets set ALLOWED_ORIGINS=https://your-app-origin
+//          (SUPABASE_URL and the keys are injected by the platform — do not set them yourself.)
+//
+// ALLOWED_ORIGINS IS REQUIRED, not optional. The allow-list fails CLOSED: unset means every browser
+// call is refused. It used to fail open — an empty list allowed any origin — which is the state every
+// fresh deployment starts in and the opposite of what this file claimed to do. See `_shared/cors.js`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, parseOrigins } from "../_shared/cors.js";
 
-const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map(s => s.trim()).filter(Boolean);
+const ALLOWED_ORIGINS = parseOrigins(Deno.env.get("ALLOWED_ORIGINS"));
 
-function cors(origin: string | null) {
-  // Echo the origin only when it is one we know; otherwise send no CORS header at all rather than "*",
-  // which would let any page on the internet call this with a stolen token.
-  const allow = origin && (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) ? origin : "";
-  return {
-    ...(allow ? { "Access-Control-Allow-Origin": allow } : {}),
-    "Access-Control-Allow-Headers": "authorization, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
+// SAID OUT LOUD, ONCE PER ISOLATE, because the failure it describes is otherwise invisible from the
+// server side: the browser reports a CORS error, the function logs a clean 200 on the preflight, and
+// the two never meet. A line in the log is the only place these can be connected.
+if (ALLOWED_ORIGINS.length === 0) {
+  console.error("[delete-account] ALLOWED_ORIGINS is not set — every browser call will be refused. " +
+                "Set it to the app's origin, e.g. https://your-app.example.com");
 }
+
+const cors = (origin: string | null) => corsHeaders(origin, ALLOWED_ORIGINS);
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");

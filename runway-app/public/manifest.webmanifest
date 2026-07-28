@@ -1,0 +1,15 @@
+{
+  "name": "Waterline — runway control",
+  "short_name": "Waterline",
+  "description": "Know your runway. Cash projection, scenarios and grant reporting for small companies.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#E9EEEC",
+  "theme_color": "#10876B",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

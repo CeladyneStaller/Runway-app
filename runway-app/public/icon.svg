@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Waterline">
+  <rect width="512" height="512" rx="96" fill="#0C1A22"/>
+  <path d="M64 300 L160 300 L224 180 L288 380 L352 260 L448 260" fill="none"
+        stroke="#4FB79A" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="64" y1="300" x2="448" y2="300" stroke="#10876B" stroke-width="10" stroke-dasharray="18 14"/>
+</svg>

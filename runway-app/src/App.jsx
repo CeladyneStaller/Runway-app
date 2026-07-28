@@ -41,7 +41,7 @@ import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 
 function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKeepDemo = () => {},
-                    companyName = null, tabPrefs }) {
+                    companyName = null, tabPrefs, onSetup = null }) {
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -282,7 +282,16 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
   // team, or who simply did not know their balance yet, had no door at all.
   const [startedBlank, setStartedBlank] = useState(false);
 
-  if (isEmpty && !startedBlank) return (
+  // A LOCAL-MODE SCREEN NOW. In hosted mode the setup wizard is the single door into a new model and
+  // this one is retired — see SetupBar for why a second full-screen front door was the wrong shape.
+  // Local mode has no account, no landing screen and therefore no wizard, and this is also the only
+  // place the demo can be reached there, so it stays exactly as it was.
+  //
+  // KEYED ON `onSetup`, NOT on `syncConfigured()`. The host decides the mode once and passes the
+  // consequence down; re-deriving it here would be a second source of truth for one fact, which is the
+  // trap this file already records for the auth gate — and the two DO disagree, because the host is
+  // configured by an injected env while `syncConfigured()` reads `import.meta.env`.
+  if (isEmpty && !startedBlank && !onSetup) return (
     <TabPrefsProvider value={tabPrefs}>
     <StartCtx.Provider value={startCtx}>
       <div className="rw">
@@ -328,6 +337,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
     <StartCtx.Provider value={startCtx}>
     <div className="rw">
       <UnpaidBar onOpenAccount={onOpenAccount} />
+      {onSetup && isEmpty && <SetupBar onSetup={onSetup} onImport={doImport} />}
       <div className="shell">
         {/* NAV RAIL */}
         <aside className="rail">
@@ -668,6 +678,30 @@ function UnpaidBar({ onOpenAccount }) {
   );
 }
 
+/** THE EMPTY-MODEL PROMPT, in hosted mode, and it is a BAR rather than a SCREEN on purpose.
+ *
+ *  The screen it replaces rendered INSTEAD of the app, which made it a second front door: when the
+ *  wizard failed to fire, somebody landed on a different-looking product asking for cash on hand, and
+ *  nothing on it hinted that a setup flow existed at all — so a trigger bug looked like the intended
+ *  design. A bar cannot do that. The app is behind it either way, the wizard is one click away, and if
+ *  the trigger breaks again the failure is a missing bar rather than a wrong screen.
+ *
+ *  It also keeps the one thing the old screen was right about: an import is a legitimate way to start,
+ *  and it must not be buried inside a wizard somebody has just declined. */
+function SetupBar({ onSetup, onImport }) {
+  return (
+    <div className="setupbar" role="status">
+      <span><b>This model is empty.</b> Answer a few questions to set your company up, or add people and
+        costs directly — the projection appears as soon as there is something to project.</span>
+      <button className="linkbtn" onClick={onSetup}>Set up your company</button>
+      <label className="linkbtn" style={{ cursor: "pointer" }}>Import a model
+        <input type="file" accept="application/json,.json" style={{ display: "none" }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = ""; }} />
+      </label>
+    </div>
+  );
+}
+
 function SyncPill() {
   const [s, setS] = useState(status());
   useEffect(() => subscribe(setS), []);
@@ -685,9 +719,24 @@ function SyncPill() {
 // Skipping the wizard is "not now", not "never" — so it is remembered for the TAB and not the account.
 // A schema field would make a transient UI choice permanent, and the account is genuinely still empty,
 // so offering again on a later visit is help rather than nagging.
+//
+// SCOPED BY COMPANY, and that scoping is the whole of a reported bug. This was ONE global key, written
+// on cancel and cleared NOWHERE — not on sign-out, not on a company switch. sessionStorage outlives a
+// sign-out within a tab, so any tab in which the wizard had ever been dismissed suppressed it for every
+// account opened in that tab afterwards, and a brand-new account landed on the old empty-model screen
+// instead. It also explains the shape of the report — it worked when first tested and stopped later,
+// because the flag accumulates. Keyed by company, declining for one cannot answer for another.
 const SETUP_SKIP = "runway:setup-skipped";
-const setupSkipped = () => { try { return !!globalThis.sessionStorage?.getItem(SETUP_SKIP); } catch { return false; } };
-const skipSetup = () => { try { globalThis.sessionStorage?.setItem(SETUP_SKIP, "1"); } catch { /* nothing to remember */ } };
+const skipKey = (id) => `${SETUP_SKIP}:${id || "unknown"}`;
+const setupSkipped = (id) => { try { return !!globalThis.sessionStorage?.getItem(skipKey(id)); } catch { return false; } };
+const skipSetup = (id) => { try { globalThis.sessionStorage?.setItem(skipKey(id), "1"); } catch { /* nothing to remember */ } };
+
+/** Which company a skip belongs to. `activeCompany()` is SYNCHRONOUS and already resolved by the time
+ *  the document has been read, so this needs no await. NOTE it is a method on the auth ADAPTER: an
+ *  earlier attempt at per-user scoping called `getSessionProvider()?.()`, which returns the session
+ *  OBJECT rather than a function and crashed DocumentHost outright. Null in local and demo mode, where
+ *  there is no account and no wizard either. */
+const currentCompanyId = () => { try { return getAuthAdapter()?.activeCompany?.() || null; } catch { return null; } };
 
 /** Names the app itself supplied, as opposed to one somebody typed. Only these may be overwritten by
  *  the company's name — `emptyDoc()` ships "Untitled", and a cleared input leaves "". */
@@ -770,27 +819,41 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
       // A demo in progress still has nothing to migrate INTO — there is no account yet. The reverse
       // direction (a demo migrating into a new account) is handled below and only once signed in.
       if (demo) return;
-      if (r.state !== LOAD_OK || !r.isNew || !getSessionProvider()) return;
+      if (r.state !== LOAD_OK || !getSessionProvider()) return;
 
-      // DELIBERATE REVERSAL, flagged rather than quietly edited. This path used to bail on demo mode
-      // outright — "a demo has nothing to migrate, and nothing it touches is real" — and that was
-      // correct while demo data was strictly disposable. It no longer is: somebody can now ask, from
-      // inside the demo, to carry the model into an account they are about to create. The stash is
-      // written at the moment of that request, so what arrives here is an explicit intent, not a
-      // fictional company drifting into a real account by accident. Checked BEFORE the stranded-local
-      // adoption because it is the more recent and more explicit of the two signals.
-      const promo = pendingPromotion();
-      if (alive && promo) { setPromoting(promo); return; }
+      // THE TWO OFFERS TO IMPORT SOMEBODY ELSE'S DOCUMENT STAY GATED ON `isNew`. Both propose putting
+      // a whole model into this account, and if the server already holds one that is not a migration,
+      // it is a conflict — and a conflict does not get a cheerful blue button.
+      if (r.isNew) {
+        // DELIBERATE REVERSAL, flagged rather than quietly edited. This path used to bail on demo mode
+        // outright — "a demo has nothing to migrate, and nothing it touches is real" — and that was
+        // correct while demo data was strictly disposable. It no longer is: somebody can now ask, from
+        // inside the demo, to carry the model into an account they are about to create. The stash is
+        // written at the moment of that request, so what arrives here is an explicit intent, not a
+        // fictional company drifting into a real account by accident. Checked BEFORE the stranded-local
+        // adoption because it is the more recent and more explicit of the two signals.
+        const promo = pendingPromotion();
+        if (alive && promo) { setPromoting(promo); return; }
 
-      // NOTE the restructure: `adoptionDismissed()` used to `return` here, which would now swallow the
-      // wizard for anybody who had ever declined an adoption. Three offers can claim an empty account
-      // and they are checked in order of how explicit the signal is — an asked-for promotion, then a
-      // model stranded in this browser, then the generic offer to set one up.
-      if (!(await adoptionDismissed())) {
-        const local = await peekLocal();
-        if (alive && hasSubstance(local)) { setStrandedLocal(local); return; }
+        // NOTE the restructure: `adoptionDismissed()` used to `return` here, which would now swallow the
+        // wizard for anybody who had ever declined an adoption. Three offers can claim an empty account
+        // and they are checked in order of how explicit the signal is — an asked-for promotion, then a
+        // model stranded in this browser, then the generic offer to set one up.
+        if (!(await adoptionDismissed())) {
+          const local = await peekLocal();
+          if (alive && hasSubstance(local)) { setStrandedLocal(local); return; }
+        }
       }
-      if (alive && !setupSkipped()) setSetup("model");
+
+      // THE WIZARD IS GATED ON AN EMPTY MODEL, NOT ON `isNew`, and that difference IS the fix. `isNew`
+      // is a fact about STORAGE — "the backend had no row" — which is one stray write away from being
+      // false: a name seed, an entitlement probe, anything that calls save() on arrival. When it
+      // flipped, the wizard silently did not fire and the old empty-model screen stood in for it, with
+      // nothing anywhere to say why. "Is there anything in this model" is the question actually being
+      // asked, it is answered from the document in hand rather than from storage metadata, and it
+      // survives a save. `hasSubstance` is the SAME predicate the adoption dialog and the name seed
+      // read, so there is one definition of an empty document in this file rather than three.
+      if (alive && !hasSubstance(r.doc) && !setupSkipped(currentCompanyId())) setSetup("model");
     }).catch(e => { if (alive) { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); } });
     return () => { alive = false; };
     // `demo` is a prop that is constant for the life of this component (entering or leaving demo mode
@@ -860,11 +923,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     <Setup
       mode={setup}
       initialName={setup === "company" ? "" : (companyName || "")}
-      onCancel={() => { skipSetup(); setSetup(null); }}
+      onCancel={() => { skipSetup(currentCompanyId()); setSetup(null); }}
       onImport={(file) => {
         const r = new FileReader();
         r.onload = () => {
-          try { setDoc(fromJSON(String(r.result))); skipSetup(); setSetup(null); }
+          try { setDoc(fromJSON(String(r.result))); skipSetup(currentCompanyId()); setSetup(null); }
           catch (e) { alert("That file isn't a Runway document: " + e.message); }
         };
         r.readAsText(file);
@@ -891,7 +954,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
           // set — and the ordinary save effect persists it, so there is one write path, not two.
           setDoc(built);
         }
-        skipSetup();
+        skipSetup(currentCompanyId());
         setSetup(null);
       }}
     />
@@ -908,10 +971,13 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
       onSwitched={(r) => {
         // switchCompany() already flushed and reset the write buffer; adopt whatever it loaded
         if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); setSeedName(!!r.isNew); }
-        // A company created from the Account page gets the SAME wizard, deliberately — the second
+        // Switching to a company with an empty model offers the SAME wizard, deliberately — the second
         // company deserves the same start as the first, and "just a name box" was how the old flow
-        // dumped people into an empty model. Not gated on the skip flag: they just asked for this.
-        setSetup(r?.isNew ? "model" : null);
+        // dumped people into an empty model. Emptiness rather than `isNew` for the reason given at the
+        // load effect, and the skip flag is honoured because `switchCompany` has already pointed
+        // `currentCompanyId()` at the company being switched TO: declining for one company must not
+        // answer for another, and re-asking on every switch would be nagging.
+        setSetup(!hasSubstance(r?.doc) && !setupSkipped(currentCompanyId()) ? "model" : null);
         setStrandedLocal(null);   // a freshly created company is `isNew` by definition; offering to
         setPromoting(null);       // fill it with a stale browser model would be actively wrong
         setShowAccount(false);
@@ -923,6 +989,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   return <>
     <RunwayApp doc={doc} setDoc={setDoc} demo={demo} onLeaveDemo={onLeaveDemo} onKeepDemo={onKeepDemo}
                companyName={companyName}
+               // The prompt exists exactly where the wizard does, so it is keyed on the SAME signal the
+               // wizard trigger and the auth gate use: a registered session provider. `enableHostedSync`
+               // only registers one when the config is complete, so the provider IS hosted mode. In demo
+               // mode the model is never empty, and in local mode the screen above is still right.
+               onSetup={!demo && getSessionProvider() ? () => setSetup("model") : null}
                onOpenAccount={demo ? null : () => setShowAccount(true)} />
     {demo && wasReset && (
       <div className="cf-backdrop" role="dialog" aria-modal="true" aria-label="Demo reset">

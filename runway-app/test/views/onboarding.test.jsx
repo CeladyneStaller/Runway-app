@@ -38,13 +38,16 @@ beforeEach(async () => {
   S._resetWriteState();
 });
 
-const goHosted = () => {
+// `company` and `doc` are parameters because two of the bugs below are ABOUT them: a skip recorded for
+// one company must not answer for another, and a document that exists but is empty must still be
+// offered the wizard.
+const goHosted = ({ company = "co-1", doc = null } = {}) => {
   const sink = [];
-  let stored = null;
+  let stored = doc;
   uploaded = sink;
   sync.enableHostedSync({
     authClient: fakeAuthClient({ access_token: "jwt", user: { email: "c@x.com" } }),
-    env: full, activeCompany: "co-1",
+    env: full, activeCompany: company,
     fetchImpl: async (u) => String(u).includes("list_companies")
       ? { ok: true, status: 200, json: async () => companies }
       : { ok: true, status: 200, json: async () => [] },
@@ -164,7 +167,7 @@ describe("not cooperating with the wizard", () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/The basics/));
     fireEvent.click(btn(container, /^Cancel$/));
-    await waitFor(() => expect(container.textContent).toMatch(/Nothing in the model yet/i));
+    await waitFor(() => expect(container.textContent).toMatch(/This model is empty/i));
     await new Promise(r => setTimeout(r, 600));
     // Nothing written — so the account is still `isNew` and can be offered the wizard again.
     expect(uploaded).toEqual([]);
@@ -178,7 +181,7 @@ describe("not cooperating with the wizard", () => {
     fireEvent.click(btn(container, /Skip this step/));
     fireEvent.click(btn(container, /Skip this step/));
     fireEvent.click(btn(container, /Finish without this/));
-    await waitFor(() => expect(container.textContent).toMatch(/Nothing in the model yet/i));
+    await waitFor(() => expect(container.textContent).toMatch(/This model is empty/i));
     await new Promise(r => setTimeout(r, 600));
     expect(uploaded).toEqual([]);
   });
@@ -188,12 +191,78 @@ describe("not cooperating with the wizard", () => {
     const first = render(<App />);
     await waitFor(() => expect(first.container.textContent).toMatch(/The basics/));
     fireEvent.click(btn(first.container, /^Cancel$/));
-    await waitFor(() => expect(first.container.textContent).toMatch(/Nothing in the model yet/i));
+    await waitFor(() => expect(first.container.textContent).toMatch(/This model is empty/i));
     first.unmount();
 
     const second = render(<App />);
-    await waitFor(() => expect(second.container.textContent).toMatch(/Nothing in the model yet/i));
+    await waitFor(() => expect(second.container.textContent).toMatch(/This model is empty/i));
     expect(second.container.textContent).not.toMatch(/The basics/);
+  });
+
+  it("but declining for ONE company does not answer for another in the same tab", async () => {
+    // THE REPORTED BUG. The skip flag was a single global sessionStorage key, written on cancel and
+    // cleared nowhere — not on sign-out. So the second account opened in a tab never saw the wizard and
+    // landed on the old empty-model screen instead, with nothing to say why.
+    goHosted({ company: "co-1" });
+    const first = render(<App />);
+    await waitFor(() => expect(first.container.textContent).toMatch(/The basics/));
+    fireEvent.click(btn(first.container, /^Cancel$/));
+    await waitFor(() => expect(first.container.textContent).toMatch(/This model is empty/i));
+    first.unmount();
+
+    goHosted({ company: "co-2" });
+    const second = render(<App />);
+    await waitFor(() => expect(second.container.textContent).toMatch(/The basics/));
+  });
+
+  it("and the way back to it is in the app, not a screen instead of it", async () => {
+    goHosted();
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/The basics/));
+    fireEvent.click(btn(container, /^Cancel$/));
+    await waitFor(() => expect(container.textContent).toMatch(/This model is empty/i));
+    // The app itself is behind the prompt — a bar, not a front door standing in for it.
+    expect(container.querySelector(".empty-shell")).toBeNull();
+    expect(container.querySelector(".rail")).toBeTruthy();
+
+    fireEvent.click(btn(container, /Set up your company/));
+    await waitFor(() => expect(container.textContent).toMatch(/The basics/));
+  });
+});
+
+describe("the wizard is gated on an EMPTY MODEL, not on storage metadata", () => {
+  it("fires for an account whose document row exists but holds nothing", async () => {
+    // `isNew` means "the backend had no row", which is one stray write away from being false — a name
+    // seed, an entitlement probe, anything that saves on arrival. When it flipped, the wizard silently
+    // did not fire. The question actually being asked is whether the MODEL has anything in it.
+    const docs = await import("../../src/state/document.js");
+    goHosted({ doc: docs.emptyDoc() });
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/The basics/));
+  });
+
+  it("does not fire for a document with something in it", async () => {
+    const docs = await import("../../src/state/document.js");
+    goHosted({ doc: docs.demoDoc() });
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/Runway remaining/i));
+    expect(container.textContent).not.toMatch(/The basics/);
+    expect(container.textContent).not.toMatch(/This model is empty/i);
+  });
+
+  it("retires the old empty-model screen in hosted mode entirely", async () => {
+    // Two front doors was the real fault: a trigger bug rendered as a different, older-looking product
+    // asking for cash on hand, which is indistinguishable from an intended design.
+    // ASSERTED AFTER DISMISSAL, deliberately — while the wizard is up RunwayApp is not mounted at all,
+    // so asserting there passes whether or not the screen still exists. The first version of this test
+    // did exactly that and survived reverting the fix.
+    goHosted({ doc: (await import("../../src/state/document.js")).emptyDoc() });
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.textContent).toMatch(/The basics/));
+    fireEvent.click(btn(container, /^Cancel$/));
+    await waitFor(() => expect(container.querySelector(".rail")).toBeTruthy());
+    expect(container.querySelector(".empty-shell")).toBeNull();
+    expect(container.textContent).not.toMatch(/Nothing in the model yet/i);
   });
 });
 

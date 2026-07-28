@@ -1,6 +1,6 @@
 # Runway — extracted
 
-`npm install && npm run dev` → http://localhost:5173 · `npm test` → 544 passing + 8 skipped isolation probes · `npm run lint` → oxlint
+`npm install && npm run dev` → http://localhost:5173 · `npm test` → 905 passing + 8 skipped isolation probes · `npm run lint` → oxlint
 
 **Daily use is the built app, not the dev server:** `npm run build && npm run preview` → **:4173**.
 Note the port. **IndexedDB is origin-scoped**, so a model built on `:5173` is invisible on `:4173` and
@@ -9,17 +9,20 @@ vice versa. Pick one and stay there, or move between them with Export/Import.
 ## What this is
 
 A cash-runway model for a company with grants, purchase orders, payroll and a capital stack.
-Single-user, local-first: your model lives in this browser's IndexedDB and in whatever JSON you
-export. No account, no server, no network call.
+It runs in TWO MODES from one codebase: hosted (Supabase — accounts, multi-company, billing) when
+`VITE_SYNC_ENABLED` and the keys are set, and local-first (IndexedDB, no account, no network call)
+when they are not. Local is a supported mode, not a degraded one — `state/storage.js` is the seam
+that makes the difference two functions wide.
 
 ## Layout
 
 ```
-src/engine/     810 lines, ZERO React. The whole model. Import it anywhere, test it in isolation.
-src/views/      the 19 components
-src/state/      document.js (the shape + migrations) · storage.js (THE SEAM) · StartCtx.jsx
+src/engine/     2,884 lines across 26 modules, ZERO React. The whole model. Test it in isolation.
+src/views/      28 components (13 views + 15 under chrome/)
+src/state/      document.js (the shape + migrations) · storage.js (THE SEAM) · backends/ · auth · sync
 src/seed.js     the demo company — explicitly loaded, never a default
-test/           86 tests: the golden runway, every accounting identity, F1-F8 regressions, renders
+supabase/       14 migrations + 4 Edge Functions (account deletion, Stripe webhook/checkout/portal)
+test/           82 files, 905 tests: the golden runway, every accounting identity, renders, RLS probes
 ```
 
 ## The golden number
@@ -221,7 +224,17 @@ Until then: no auth, no user IDs, no tenancy columns, not even a `userId: null`.
   (2) data is deleted BEFORE the auth row, because the reverse order leaves someone unable to sign in
   with data nobody can reach if step two fails;
   (3) CORS echoes a known origin or sends no header — `*` would let any page call this with a stolen
-  token;
+  token. CORRECTED LATER, and the correction is the lesson: the check read
+  `ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)`, so an UNSET secret allowed every
+  origin — the exact opposite of the comment sitting above it, and the state every fresh deployment
+  starts in. An allow-list that permits everything until configured is a deferred decision nobody
+  returns to, because nothing looks broken while it is wrong. The rule now lives in
+  `supabase/functions/_shared/cors.js`, plain `.js` like `stripe-signature.js` and for the same reason:
+  an `index.ts` importing Deno globals and esm.sh modules CANNOT BE REACHED BY THE SUITE, which is how
+  a clause contradicting its own comment survived. It fails closed, drops a literal `*` so
+  "allow everything" is not expressible, and says so in the log once per isolate — because the failure
+  is otherwise invisible server-side, appearing only as a CORS error in somebody else's browser.
+  Tests `test/engine/cors.test.js`, verified by reverting to the shipped clause (2 fail);
   (4) `auth_delete_failed` is reported honestly rather than as success, because the data really is gone
   and the person needs to know their sign-in is not.
   SHARED COMPANIES SURVIVE: only companies where you are the SOLE owner are deleted; where someone else
@@ -979,6 +992,29 @@ never used the product AND drag every average down. Both errors flatter in the w
 **"No zero date" is never averaged in as HORIZON.** That would cap the healthiest customers at 36 and
 understate exactly the companies doing best; they are counted separately as `companiesBeyondHorizon`.
 
+## Phase 2: installable (PWA)
+
+`public/manifest.webmanifest`, `public/sw.js`, registration in `main.jsx`. Tests
+`test/engine/pwa.test.js` (8).
+
+**HAND-WRITTEN, not `vite-plugin-pwa`.** The plugin is blocked by the sandbox's package policy, but
+it is also the right call: generated workers ship a precache manifest and routing rules that are easy
+to adopt without reading, and the failure mode HERE is silently serving stale financial data.
+
+**THE ONE RULE: CACHE THE APP, NEVER THE DATA.** Any cross-origin request — Supabase, Stripe, Sentry —
+returns before the worker touches it. A stale runway number is far worse than an error: an error is
+obviously wrong, and a cached figure from last week looks exactly like this week's, and somebody makes
+a hiring decision on it. Only `/assets/` is cached, because Vite content-hashes those so the filename
+changes when the content does. Navigations are network-first so a deploy lands immediately.
+
+Registration is production-only (a worker caching a dev server produces confusing staleness) and its
+failure is ignored — an unregistered worker costs offline support and nothing else, and the app must
+not fail to start because a cache did.
+
+**STILL NEEDED: PNG icons.** The manifest points at SVGs, which modern browsers accept but older
+Android and iOS do not reliably. 192px and 512px PNGs are required before install prompts work
+everywhere.
+
 ## Phase 1: billing UI (Account + unpaid bar)
 
 `BillingSection` in `Account.jsx`, `UnpaidBar` in `App.jsx`, plus `myPlan`/`checkout`/`billingPortal`
@@ -1339,6 +1375,52 @@ if the model turns positive at month 30. Collapsing the two back together fails 
 The rule is PURE and in `state/setup.js` rather than inline in the view specifically because
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
+
+## The wizard that did not fire — and the screen that stood in for it
+
+`src/App.jsx`: the load effect, the skip flag, and `SetupBar`. Tests `test/views/onboarding.test.jsx`;
+both guards verified by reversion.
+
+Reported as **a newly created account landing on the old "cash on hand" screen instead of the setup
+wizard**. Two independent faults, plus a third thing that turned either of them into a wrong-looking
+product rather than a missing prompt.
+
+**FAULT 1 — THE TRIGGER READ STORAGE METADATA, NOT THE MODEL.** The wizard fired on `r.isNew`, which
+means "the backend had no document row". That is one stray write away from false — a name seed, an
+entitlement probe, anything that calls `save()` on arrival — and when it flipped, the wizard silently
+did not fire. The question actually being asked is "is there anything in this model", so it is now
+answered from the document in hand: `!hasSubstance(r.doc)`, the SAME predicate the adoption dialog and
+the name seed already use, so the file holds one definition of an empty document instead of three.
+`isNew` still gates the two offers to import somebody ELSE'S document (kept-demo promotion, stranded
+local model), which is where it belongs: if the server already holds a document, offering to replace
+it is not a migration, it is a conflict.
+
+**FAULT 2 — THE "NOT NOW" FLAG WAS GLOBAL AND CLEARED NOWHERE.** `runway:setup-skipped` was a single
+sessionStorage key, written on cancel/import/done and removed by nothing — not on sign-out, not on a
+company switch. sessionStorage outlives a sign-out within a tab, so ANY tab in which the wizard had
+once been dismissed suppressed it for every account opened in that tab afterwards. That also explains
+the shape of the report — it worked when first tested and stopped later — because the flag accumulates.
+It is now keyed by company (`runway:setup-skipped:<id>`), so declining for one cannot answer for
+another. `currentCompanyId()` reads `activeCompany()` on the auth ADAPTER, which is synchronous and
+already resolved by the time the document has been read — NOT `getSessionProvider()?.()`, which returns
+the session OBJECT and crashed DocumentHost the last time somebody reached for it.
+
+**THE THIRD THING, and the reason a trigger bug read as a design.** The empty-model screen rendered
+INSTEAD of the app, so a prompt that failed to appear did not look like a missing prompt: it looked
+like a different product, asking for cash on hand, with nothing on it hinting a setup flow existed at
+all. In hosted mode it is retired in favour of `SetupBar` — a strip above the working app carrying
+"Set up your company" and an import — so if the trigger ever breaks again the failure is a missing bar
+rather than a wrong screen. The full-screen version survives in LOCAL mode, where there is no account,
+no landing screen and therefore no wizard, and where it is also the only door to the demo.
+
+The bar is deliberately NOT the unpaid bar's amber. One is an invitation and the other is a warning,
+and two bars that look alike train people to dismiss both.
+
+WATCH: the shell is keyed on the `onSetup` PROP, not on a local `syncConfigured()` call. The host
+decides the mode once and passes the consequence down; re-deriving it in the child would be a second
+source of truth for one fact — the trap this file already records for the auth gate, and the two DO
+disagree, since the host is configured by an injected env while `syncConfigured()` reads
+`import.meta.env`.
 
 ## The Scenarios white screen — and why one deref took the whole app down
 
