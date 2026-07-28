@@ -37,6 +37,8 @@ async function body(res) {
   try { return await res.json(); } catch { return null; }
 }
 
+export const HOSTED_SAVE_DEBOUNCE_MS = 2500;
+
 export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
   if (!url || !anonKey) throw new Error("Supabase backend needs a url and an anon key");
   const doFetch = fetchImpl || ((...a) => globalThis.fetch(...a));
@@ -72,6 +74,11 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
 
   return {
     name: "supabase",
+    // 2500, not the local 400. A save here is a 40-300KB body over a network, and at 400ms a person
+    // typing a project name generates one per keystroke pause. The cost is that up to 2.5s of work
+    // sits only in memory — bounded by MAX_UNSAVED_MS during a continuous stream, and by the flush on
+    // pagehide when a tab closes, so the real exposure is a browser dying mid-sentence.
+    saveDebounceMs: HOSTED_SAVE_DEBOUNCE_MS,
 
     async read() {
       const companyId = await auth.getCompanyId();

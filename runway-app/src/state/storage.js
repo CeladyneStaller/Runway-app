@@ -83,12 +83,20 @@ export const LOAD_OK = "ok";
 export const LOAD_STALE = "stale";
 export const LOAD_FAILED = "failed";
 
-// Local writes are cheap, so a short debounce keeps "saved" honest. Over a network this becomes ~2500ms:
-// pushing a 40-300KB body every 400ms while someone types a project name is wasteful and pointless.
+// THE DEBOUNCE BELONGS TO THE BACKEND, not to this file. Local writes are cheap, so a short wait keeps
+// "saved" honest; pushing a 40-300KB body over a network every 400ms while somebody types a project
+// name is wasteful and pointless. This constant is now only the FALLBACK for a backend that declares
+// no cadence of its own — test fakes, mostly — and the local value it happens to equal.
 export const SAVE_DEBOUNCE_MS = 400;
 // Never let unsaved work sit indefinitely behind a stream of edits that keeps resetting the debounce.
 export const MAX_UNSAVED_MS = 30000;
 const RETRY_MS = [400, 1500, 4000];
+
+/** The scheduler's wait, ASKED OF THE ACTIVE BACKEND every time rather than captured once.
+ *  The backend changes during a session — sign-in swaps in the hosted one, demo mode swaps in its own —
+ *  so a value read at module load would give a hosted session the local cadence for its whole life,
+ *  which is the bug this indirection exists to prevent rather than a style preference. */
+export const saveDebounceMs = () => backend().saveDebounceMs ?? SAVE_DEBOUNCE_MS;
 
 export async function load() {
   let found;
@@ -181,7 +189,7 @@ export function save(doc) {
 
   if (_deadline == null) _deadline = Date.now() + MAX_UNSAVED_MS;
   if (_timer) clearTimeout(_timer);
-  const wait = Math.max(0, Math.min(SAVE_DEBOUNCE_MS, _deadline - Date.now()));
+  const wait = Math.max(0, Math.min(saveDebounceMs(), _deadline - Date.now()));
   _timer = setTimeout(() => { _timer = null; flush(); }, wait);
 }
 
@@ -231,7 +239,9 @@ export async function flush() {
 
   // something arrived mid-write, or a retry is due
   if (_pending != null && _timer == null && _attempt === 0 && !_halted) {
-    _timer = setTimeout(() => { _timer = null; flush(); }, SAVE_DEBOUNCE_MS);
+    // Same cadence as the scheduler above: work that arrived mid-write is not more urgent than work
+    // that arrived before one, and a second timing rule here would drift from the first.
+    _timer = setTimeout(() => { _timer = null; flush(); }, saveDebounceMs());
   }
   return _status;
 }

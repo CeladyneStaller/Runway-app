@@ -122,3 +122,53 @@ describe("write cadence", () => {
     expect(seen[seen.length - 1]).toBe("saved");
   });
 });
+
+describe("the debounce belongs to the backend", () => {
+  it("local schedules the short wait, hosted the long one", async () => {
+    const { LOCAL_SAVE_DEBOUNCE_MS } = await import("../../src/state/backends/local");
+    const { HOSTED_SAVE_DEBOUNCE_MS } = await import("../../src/state/backends/supabase");
+    expect(LOCAL_SAVE_DEBOUNCE_MS).toBe(400);
+    // 2500 is the number §2.2 of BACKEND-PLAN.md asked for. If this ever fails, the question is not
+    // "fix the test" — it is whether somebody meant to change how much work a crash can take.
+    expect(HOSTED_SAVE_DEBOUNCE_MS).toBe(2500);
+
+    expect(S.saveDebounceMs()).toBe(LOCAL_SAVE_DEBOUNCE_MS);
+    S.setBackend({ name: "fake-hosted", saveDebounceMs: HOSTED_SAVE_DEBOUNCE_MS,
+                   read: async () => null, write: async () => ({ meta: {} }) });
+    expect(S.saveDebounceMs()).toBe(HOSTED_SAVE_DEBOUNCE_MS);
+  });
+
+  it("a backend swapped in mid-session changes the cadence, because it is read per schedule", async () => {
+    // THE REGRESSION THIS GUARDS. Sign-in swaps the hosted backend in after the module has loaded, so
+    // a value captured once would leave a hosted session writing on the local cadence for its life.
+    expect(S.saveDebounceMs()).toBe(400);
+    S.setBackend({ name: "fake-hosted", saveDebounceMs: 2500,
+                   read: async () => null, write: async () => ({ meta: {} }) });
+    expect(S.saveDebounceMs()).toBe(2500);
+    S.setBackend({ name: "fake-local", saveDebounceMs: 400,
+                   read: async () => null, write: async () => ({ meta: {} }) });
+    expect(S.saveDebounceMs()).toBe(400);
+  });
+
+  it("a backend that declares no cadence falls back rather than scheduling NaN", async () => {
+    // Test fakes and anything older than this change. `setTimeout(fn, undefined)` fires immediately,
+    // which would look like a passing test and a defeated debounce.
+    S.setBackend({ name: "bare", read: async () => null, write: async () => ({ meta: {} }) });
+    expect(S.saveDebounceMs()).toBe(S.SAVE_DEBOUNCE_MS);
+    expect(Number.isFinite(S.saveDebounceMs())).toBe(true);
+  });
+
+  it("the 30-second ceiling still overrides the debounce during a continuous stream", async () => {
+    const { demoDoc } = await import("../../src/state/document");
+    S.setBackend({ name: "fake-hosted", saveDebounceMs: 2500,
+                   read: async () => null, write: async () => ({ meta: {} }) });
+    // MAX_UNSAVED_MS bounds the wait, so a long debounce cannot hold work indefinitely behind edits
+    // that keep resetting it. The scheduler takes the MINIMUM of the two.
+    expect(S.MAX_UNSAVED_MS).toBe(30000);
+    expect(Math.min(S.saveDebounceMs(), S.MAX_UNSAVED_MS)).toBe(2500);
+    S.save(demoDoc());
+    expect(S.status().state).toBe("unsaved");
+    await S.flush();
+    expect(S.status().state).toBe("saved");
+  });
+});

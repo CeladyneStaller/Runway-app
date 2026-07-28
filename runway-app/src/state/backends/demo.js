@@ -88,6 +88,10 @@ export function createDemoBackend(seed) {
 
   return {
     name: "demo",
+    // 400, matching local, and stated here rather than imported from `local.js`: the two share a
+    // REASON, not a dependency. Nothing in a demo crosses a network, and a demo is exactly where
+    // somebody closes the tab abruptly, so the window stays short.
+    saveDebounceMs: 400,
     async read() {
       const env = live(get(KEY), DEMO_WINDOW_MS);
       return env ? { raw: env.doc, meta: {} } : null;

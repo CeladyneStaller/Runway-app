@@ -29,9 +29,14 @@ export async function writeActiveCompany(id) {
   try { await set(ACTIVE_COMPANY, id || null); } catch { /* the server remembers too */ }
 }
 
+export const LOCAL_SAVE_DEBOUNCE_MS = 400;
+
 export function createLocalBackend() {
   return {
     name: "local",
+    // IndexedDB writes cost nothing worth saving up for, so keep the window short: the less time a
+    // document spends only in memory, the less a crash can take with it.
+    saveDebounceMs: LOCAL_SAVE_DEBOUNCE_MS,
     async read() {
       const raw = await get(KEY);          // a throw here propagates: unreachable != empty
       return raw ? { raw, meta: {} } : null;

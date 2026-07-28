@@ -1376,6 +1376,33 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## The debounce belongs to the backend, not to storage.js
+
+`SAVE_DEBOUNCE_MS` was 400 with a comment saying it "becomes ~2500 over a network" — a note describing
+work nobody had done, which is the most expensive kind of comment because it reads as a decision.
+Hosted users were pushing a 40-300KB body every 400ms while somebody typed a project name.
+
+It is now a property of the BACKEND: 400 for local and demo, 2500 for `supabase`. The module constant
+survives only as the fallback for a backend that declares none — test fakes, mostly — and
+`saveDebounceMs()` asks the ACTIVE backend every time it schedules. Reading it once at module load
+would have been the natural way to write this and would have been wrong: sign-in swaps the hosted
+backend in after load, so a hosted session would have run its whole life on the local cadence, and
+nothing would have looked broken.
+
+TWO CALL SITES, and the second is easy to miss: the scheduler in `save()`, and the reschedule at the
+tail of `flush()` when an edit arrives mid-write. Work that arrived during a write is not more urgent
+than work that arrived before one.
+
+WHAT THIS COSTS, stated where somebody will find it: up to 2.5 seconds of work now lives only in
+memory instead of 0.4. Not on a tab close — `pagehide` flushes — but on a crash or a battery death.
+`MAX_UNSAVED_MS` still forces a write every 30s during a continuous stream, because the scheduler
+takes the MINIMUM of the two, so a long debounce cannot hold work indefinitely behind edits that keep
+resetting it.
+
+The number 2500 is asserted directly in `test/state/writecadence.test.js`. If that assertion ever
+fails, the question is not "fix the test" — it is whether somebody meant to change how much work a
+crash can take.
+
 ## verify_jwt has to be off for every browser-facing Edge Function, and the reason is the preflight
 
 Symptom: clicking a plan produced `Failed to fetch`, and the console said the preflight to

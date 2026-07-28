@@ -47,7 +47,11 @@ than a rename:
 three Stripe Edge Functions, and the billing UI. A reader of the original document would think it was
 missing; it is not, it was simply never planned here. `NOTES.md` carries its reasoning.
 
-**WHAT IS ACTUALLY LEFT is §8.** Four items block taking money, and none of them is code.
+**BILLING IS LIVE as of 28 July 2026.** Checkout, the portal and the webhook are deployed in live
+mode, a real card has been charged, and the subscription round trip — purchase, row, entitlement,
+portal — is confirmed end to end. Of the four items that blocked taking money, three are done and the
+fourth is LEGAL REVIEW, which is now the only thing standing between this product and a paying
+stranger. **WHAT IS ACTUALLY LEFT is §8.**
 
 ---
 
@@ -619,9 +623,12 @@ the journal's own Phase 2 and 3 need.
    so Checkout happens at conversion. The free slot is the OLDEST COMPANY YOU OWN, computed rather than
    stored. So `memberships` needed no seat-limit column after all; seats become a real question again
    at Phase 3, and the shape to reach for then is a seat count on the SUBSCRIPTION, not on membership.
-3. **Residency.** STILL OPEN. No customer has asked. Still a decision made once, at project creation,
+3. **Sales tax / VAT.** NEW AND OPEN — this plan never mentioned it and neither did anything else.
+   Live subscriptions create a tax position; Stripe Tax exists and is a configuration decision, not a
+   code one. Needs an answer from whoever answers the legal drafts, not from this document.
+4. **Residency.** STILL OPEN. No customer has asked. Still a decision made once, at project creation,
    so it stays worth asking the first EU prospect before signing them rather than after.
-4. ~~**Version retention.**~~ **ANSWERED: last 20 per document, plus 5-minute snapshot coalescing**
+5. ~~**Version retention.**~~ **ANSWERED: last 20 per document, plus 5-minute snapshot coalescing**
    (005). Last-N rather than a time window because a row count is a hard bound and "90 days" is not.
 
 ---
@@ -655,27 +662,45 @@ the journal's own Phase 2 and 3 need.
 
 **Still open inside Phase 1 — the plan asked for these and they are not done**
 
-- [ ] **Debounce → 2500 ms when the backend is hosted.** Still 400 ms. Pushing a 40–300 KB body every
-      400 ms while somebody types a project name is the exact waste §2.2 was written to prevent.
-      The constant has to become backend-dependent, and the write-cadence tests are already the place
-      that proves the behaviour did not otherwise move.
+- [x] **Debounce → 2500 ms when the backend is hosted. DONE 28 Jul 2026.** Not a constant swap: the
+      cadence is now a property of the backend (400 local and demo, 2500 hosted) and is read from the
+      ACTIVE backend at schedule time, because sign-in swaps the backend in after module load. Both
+      call sites — the scheduler and the reschedule inside `flush()` — and four tests including the
+      mid-session swap. The trade is recorded in `NOTES.md`: up to 2.5s of work in memory instead of
+      0.4, bounded by `MAX_UNSAVED_MS` and the flush on `pagehide`.
 - [ ] **Audit log: write it or drop it.** The table has existed since 001 with nothing inserting a row.
 - [ ] **Rate-limit `save_document` per user.** Nothing limits it today.
-- [ ] **Backups: independent dump + a tested restore.** Deferred with a trigger (first real customer
-      document). PITR alone is not a tested restore, and an untested backup is a rumour.
+- [ ] **Backups: independent dump + a tested restore. THE TRIGGER HAS ESSENTIALLY FIRED.** The
+      deferral was agreed against "the first real customer document", and billing going live means
+      that is now days away rather than hypothetical. PITR alone is not a tested restore, and an
+      untested backup is a rumour. This is the item most likely to be regretted.
 
-**Before taking money — four items, and only one is code**
+**Before taking money — DONE except legal, 28 Jul 2026**
 
-1. [ ] **Deploy `stripe-checkout` and `stripe-portal`.** The billing UI calls Edge Functions that are
-       written and not deployed, so today the buttons fail.
-2. [ ] **Create the products and prices in Stripe** (test mode first) and set both price maps.
-       `STRIPE_PRICE_MAP` is config precisely so an annual price is a secret change, not a deploy.
-3. [ ] **Run ONE real checkout with `4242 4242 4242 4242`.** This is the only thing that proves the
-       `metadata.user_id` path end to end — the test script fakes exactly that field, so it is the one
-       part the suite structurally cannot verify.
+1. [x] **`stripe-checkout` and `stripe-portal` deployed.** Took four rounds, all of them presenting as
+       a CORS error and none of them being one. Recorded in `NOTES.md` and the functions README because
+       every one was invisible to this repo's tests: `verify_jwt` rejecting the PREFLIGHT (a browser
+       cannot send `Authorization` on an `OPTIONS`, so the gateway check made the function unreachable
+       and logged nothing); a JSON secret mangled by PowerShell's quote-stripping, throwing at module
+       scope so the function never booted; and an `Access-Control-Allow-Headers` list written from what
+       the handler READS rather than what a browser SENDS, omitting `apikey`.
+2. [x] **Products and prices created; both maps set.** Now in LIVE mode.
+3. [x] **Test-mode checkout with `4242`, then a real live purchase.** `metadata.user_id` survives a
+       real Checkout Session, the row lands with a `stripe_customer_id`, and the portal opens against
+       it. This is the part the suite structurally cannot verify.
 4. [ ] **Send the legal drafts for review.** Privacy policy, terms and subprocessors are drafted and
-       unreviewed. START THIS FIRST regardless of the other three: it is the only item on the whole
-       list whose lead time is not yours.
+       unreviewed. THE LAST THING BETWEEN THIS PRODUCT AND A PAYING STRANGER, and the only item whose
+       lead time is not yours. Money can now be taken; that is precisely why this stops being an
+       item on a list and starts being an exposure.
+
+**THE LESSON FROM THAT SEQUENCE, because it will happen again in Phase 2.** Every one of those four
+failures lived in DEPLOYMENT CONFIGURATION — a dashboard toggle, a shell-quoted secret, a header
+literal in a file no test can import. The suite was green throughout. `vite build` was clean
+throughout. The first signal in each case was a person unable to pay, and the error message named the
+wrong subsystem every time. Two things came out of it worth keeping: the CORS rule now has ONE tested
+definition in `_shared/cors.js` rather than a literal per function, and secrets read at module scope
+are parsed defensively, so a bad value degrades loudly at request time instead of preventing boot.
+What remains unprotected is the `verify_jwt` setting itself, which exists only in a README.
 
 **Also outstanding, small**
 
