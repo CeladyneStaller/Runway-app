@@ -948,3 +948,9 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .acct-binned-h{font-family:var(--fb);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--ink-3);margin-bottom:8px}
 .acct-warn{color:var(--danger)}
+
+/* Critical dates: the row is now editable, so the inputs have to sit in the line rather than break it. */
+.ms-name{width:190px;text-align:left;font-weight:600}
+.ms-target{display:inline-flex;align-items:center;gap:6px;margin-left:10px;color:var(--muted-2);font-size:12px}
+.ms-target .inp{width:96px}
+.ms-gap{font-family:var(--fb);font-size:11.5px;font-weight:500;margin-top:2px}

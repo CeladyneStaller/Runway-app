@@ -38,6 +38,20 @@ export const roundMS = (rounds, START_Y, START_M) => (rounds || []).filter(r => 
   return { id: `round-${r.id}`, label: `${r.name} close`, y, m, day: daysInMonth(y, m), fromRound: r.id };
 });
 
+// ---- critical dates: the target, and whether a date clears it ----
+//
+// A milestone used to pass on `bal >= 0` — "will there be any money left". A TARGET says how much
+// has to be left: a covenant floor, a payroll buffer, the reserve a board asked for. Zero is the
+// default, so a milestone with no target behaves exactly as it always did.
+//
+// These live here rather than in the view because THREE places judged it independently — the
+// Critical dates panel and two readouts on the dashboard — and three copies of a rule is how the
+// dashboard ends up calling a date green while the panel calls it a shortfall.
+export const msTarget = (ms) => (Number.isFinite(+ms?.target) ? +ms.target : 0);
+export const msPass = (bal, ms) => bal >= msTarget(ms);
+/** Positive is headroom, negative is the amount you would need to find. */
+export const msGap = (bal, ms) => bal - msTarget(ms);
+
 export const postMoney = (r) => (r.preMoney || 0) + (r.amount || 0);
 
 export const dilution = (r) => { const pm = postMoney(r); return pm > 0 ? (r.amount || 0) / pm : 0; };

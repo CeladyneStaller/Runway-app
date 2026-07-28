@@ -1376,6 +1376,41 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Critical dates became editable, and gained a target
+
+Reported as: milestone details cannot be altered at all. Correct — `Milestones.jsx` had `add` and
+`del` and nothing else, and the thing `add` created was hard-coded to **15 May 2027**, a date that was
+a year out when it was written and is a critical date you have already missed by the time anyone reads
+this. The panel rendered a name and a date it gave you no way to change.
+
+Now the row is always-editable, matching how `CashFlow` and `History` already work — an `upd(id, patch)`
+and plain inputs, no edit mode to enter and leave.
+
+**THE DATE CONVERSION LIVES IN EXACTLY ONE PLACE.** Milestones are stored `{y, m, day}` with a
+ZERO-BASED month, because that is what `new Date(y, m, day)` takes and what every consumer assumes;
+`<input type="date">` speaks `YYYY-MM-DD` with a one-based month. Getting that backwards moves every
+critical date by a month and nothing errors, so there is a test asserting January round-trips as
+`m: 0`. Neither direction builds a Date from a string — `new Date("2027-05-15")` is UTC midnight and
+reads as the 14th in Denver, and the suite runs under that timezone. A half-typed date is ignored
+rather than written, or clearing the field to retype it would wipe the stored one.
+
+**TARGET CASH ON HAND.** A milestone used to pass on `bal >= 0` — "will there be any money left". A
+target says how much has to be left: a covenant floor, a payroll buffer, the reserve a board asked
+for. Zero is the default, so a milestone without one behaves exactly as before.
+
+The rule went into `engine/capital.js` (`msTarget` / `msPass` / `msGap`) rather than the view because
+THREE places judged it independently — the panel and two dashboard readouts — and three copies is how
+the headline calls a date green while the panel underneath calls it a shortfall. `App.jsx` computes
+`pass` and `gap` once, where `bal` is computed, and everything downstream reads them.
+
+Clearing the target sets `undefined` rather than `0`: they mean different things — "no target" and "I
+require a balance of exactly zero" — and only one of them should hide the gap line.
+
+WATCH: a round's close date is still owned by the Investment tab and is not editable here, which the
+panel says. Rounds also cannot carry a target, because the milestone is DERIVED from the round each
+render and there is nowhere to put one. Storing it would mean either a field on the round or a
+target map keyed by a synthesised id; neither was worth it before somebody asks.
+
 ## Soft delete, and the three things that had to be true at once
 
 `companies.deleted_at` existed from 001, was filtered on in SEVEN queries, and was SET BY NOTHING —

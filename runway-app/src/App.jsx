@@ -19,7 +19,7 @@ import { Landing } from "./views/Landing";
 import { Setup } from "./views/Setup";
 import { hasSubstance } from "./views/chrome/docsummary";
 import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
-import { roundMS } from "./engine/capital";
+import { roundMS, msTarget, msPass, msGap } from "./engine/capital";
 import { money, moneyFull } from "./engine/money";
 import { buildModelFromDoc, buildModelParts } from "./engine/buildmodel";
 import { confidenceBand } from "./engine/band";
@@ -212,9 +212,14 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
   const modelStarts = useMemo(() => modelRows.map(r => r.start), [modelRows]); // PURE model start-of-month balance, for the actual-vs-model comparison
   const actualsCash = useMemo(() => Object.fromEntries(Object.entries(cashActuals).map(([m, o]) => [m, o.cash])), [cashActuals]); // cash-only map for the chart
 
+  // `pass` and `gap` are computed HERE, once, and read everywhere. The dashboard used to re-derive
+  // `bal >= 0` in three places; with targets in play that would let the headline call a date green
+  // while the panel below called it a shortfall.
   const msWithBal = [...milestones, ...roundMS(rounds, startY, startM)].map(ms => {
     const b = balanceAtDate(rows, startY, startM, ms.y, ms.m, ms.day);
-    return { ...ms, bal: b?.bal ?? 0, t: b?.t ?? 0, date: new Date(ms.y, ms.m, ms.day) };
+    const bal = b?.bal ?? 0;
+    return { ...ms, bal, t: b?.t ?? 0, date: new Date(ms.y, ms.m, ms.day),
+             target: msTarget(ms), pass: msPass(bal, ms), gap: msGap(bal, ms) };
   }).sort((a, b) => a.t - b.t);
 
   const netBurn = rows.slice(0, 3).reduce((a, r) => a + r.net, 0) / 3;
@@ -439,11 +444,11 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
                   <div className="meta">as of {dateStamp(startY, startM)}</div>
                 </div>
                 <div className="stat">
-                  <div className="accent" style={{ background: nextMs && nextMs.bal >= 0 ? "var(--signal)" : "var(--caution)" }} />
+                  <div className="accent" style={{ background: nextMs && nextMs.pass ? "var(--signal)" : "var(--caution)" }} />
                   <div className="lab">Next milestone</div>
                   <div className="big" style={{ fontSize: 19, marginTop: 13 }}>{nextMs ? nextMs.label : "—"}</div>
-                  <div className="meta" style={{ color: nextMs && nextMs.bal >= 0 ? "var(--signal-ink)" : "var(--caution)" }}>
-                    {nextMs ? `${money(nextMs.bal)} projected ${nextMs.bal >= 0 ? "✓" : "✗"}` : ""}
+                  <div className="meta" style={{ color: nextMs && nextMs.pass ? "var(--signal-ink)" : "var(--caution)" }}>
+                    {nextMs ? `${money(nextMs.bal)} projected ${nextMs.pass ? "✓" : "✗"}` : ""}
                   </div>
                 </div>
               </div>
@@ -453,7 +458,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
                 {zero
                   ? <>On your <b>committed + expected</b> plan you run dry <b className="num">{dateLong(zero.date)}</b>
                      {(() => { const seed = msWithBal.find(m => /seed/i.test(m.label)); return seed
-                       ? <> — {seed.bal >= 0 ? <>clearing</> : <>falling short of</>} <b>{seed.label}</b> ({dateShort(seed.date)}) by <span className="num">{money(Math.abs(seed.bal))}</span>.</>
+                       ? <> — {seed.pass ? <>clearing</> : <>falling short of</>} <b>{seed.label}</b> ({dateShort(seed.date)}) by <span className="num">{money(Math.abs(seed.bal))}</span>.</>
                        : "."; })()}
                      {showUpside && (upsideDefersZero
                        ? <> Turn on <b>speculative</b> revenue and zero moves out to <b className="num">{zeroUp ? dateShort(zeroUp.date) : "beyond the horizon"}</b>.</>
