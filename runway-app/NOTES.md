@@ -1376,6 +1376,50 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Soft delete, and the three things that had to be true at once
+
+`companies.deleted_at` existed from 001, was filtered on in SEVEN queries, and was SET BY NOTHING —
+`delete_company` hard-deleted and cascaded away memberships, documents and every version. The read
+side had been built for soft delete all along; only the write disagreed, so a mis-click was final.
+
+Making the write agree was the small part. Three things had to hold together for "deleted" to mean
+anything (016):
+
+**UNREACHABLE, not merely unlisted.** Membership rows survive a soft delete — they must, or restore
+could not put anything back — so anyone who still knew a company id could have read its document
+straight from PostgREST for the whole window while every list showed it as gone. `is_member` and
+`can_edit` now join `companies` and require `deleted_at is null`. The latency question was worth
+asking, since those two sit under every RLS policy in the schema: `memberships` is keyed
+(user_id, company_id) and `companies` is joined on its primary key, inside `stable` functions Postgres
+caches per statement. One extra index probe on the smallest table.
+
+**A WAY BACK THE CUSTOMER CAN REACH.** `restore_company` plus a "Recently deleted" section on the
+Account page. A recovery path that only an operator can reach protects the operator.
+
+**AN END.** `purge_deleted_companies` hard-deletes past `company_purge_window()` — 30 days — or
+"deleted" is just a lie with a longer fuse, and a data-protection answer nobody wants to give. It is
+service-role and NOT scheduled from inside the database: a destructive job on an invisible timer is
+how you learn about a bug in it afterwards.
+
+TWO CONSEQUENCES WORTH KNOWING. `restore_company` and `list_deleted_companies` do their own membership
+checks rather than calling `can_edit`, which now answers false for exactly the companies they exist to
+reach. And `save_document` gained an explicit deleted check FIRST, with its own SQLSTATE (P0004) —
+because `can_edit` would have refused anyway with `forbidden`, which tells somebody they are not a
+member when they are, and that is the misdiagnosis that has already cost this project an afternoon.
+
+THE FLAG. Delete-and-restore is not forbidden and blocking it would strand somebody mid-mistake, but
+it is a shape worth seeing: a company is entitled only while it is among the oldest N you own that are
+NOT deleted, so cycling delete and restore rotates which company is writable without paying for a
+second one. The second restore inside the window writes `company.restore.repeated`, and the count
+surfaces in the UI. One row, in the place logs are already read.
+
+WATCH: enabling `no-undef` while doing this found `setErr` being called in `modals.jsx` where no such
+function exists — a ReferenceError on the malformed-workbook path, i.e. exactly the error handler. The
+rule had been off, `vite build` does not catch an undefined identifier, and it had also let two
+missing imports through in a single afternoon. It is on now, with `Deno` declared for
+`supabase/functions/**` and the node env for `scripts/**`, `test/**` and `vite.config.js` — declared
+where those globals genuinely exist rather than switching the rule back off.
+
 ## "Could not save — forbidden": the device remembered somebody else's company
 
 Reported live: every save 403ing with `forbidden` from `save_document`, which raises that only when

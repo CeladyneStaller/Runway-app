@@ -7,6 +7,15 @@ import { DeleteCompany } from "./chrome/DeleteCompany";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
 import { PLANS, planSummary, unpaidMessage, TRIAL_DAYS } from "../state/plans";
 
+/** A date somebody can act on. `toLocaleDateString` and not a relative "in 12 days": the point of
+ *  showing this is that the reader can put it in a calendar. */
+const fmtDay = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—"
+    : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+};
+
 // Account-level settings, as distinct from the model. Reached from the email in the top bar rather than
 // the main nav — it is about you, not about your runway.
 //
@@ -247,6 +256,27 @@ function CompaniesSection({ account, companies, activeId, onReload, onSwitched, 
   const [renaming, setRenaming] = useState(null);
   const [renameTo, setRenameTo] = useState("");
   const [deleting, setDeleting] = useState(null);
+  const [binned, setBinned] = useState([]);
+
+  // What is still recoverable. Loaded alongside the live list rather than behind a disclosure, because
+  // somebody who has just deleted the wrong thing should not have to discover that a way back exists.
+  useEffect(() => {
+    let alive = true;
+    account.listDeletedCompanies?.()
+      .then(rows => { if (alive) setBinned(rows || []); })
+      .catch(() => { if (alive) setBinned([]); });   // an older server simply has no such RPC
+    return () => { alive = false; };
+  }, [account, companies]);
+
+  const restore = async (id) => {
+    setError(null); setBusy(true);
+    try {
+      await account.restoreCompany(id);
+      setBinned(b => b.filter(c => c.id !== id));
+      await onReload();
+    } catch (e) { setError(e?.message || "Could not restore that company."); }
+    setBusy(false);
+  };
 
   /** Excluding a company is applied in the job's QUERY, so its document is never read at all. */
   const optout = async (id, value) => {
@@ -314,6 +344,30 @@ function CompaniesSection({ account, companies, activeId, onReload, onSwitched, 
           The wizard now runs first and the company is created from what it collected, which means
           backing out creates nothing at all. */}
       <button className="addbtn ghost signin-go" onClick={onNewCompany}>Add company</button>
+
+      {binned.length > 0 && (
+        <div className="acct-binned">
+          <div className="acct-binned-h">Recently deleted</div>
+          {binned.map(c => (
+            <div key={c.id} className="acct-row">
+              <div>
+                <div className="acct-row-t">{c.name}</div>
+                {/* The DATE it stops being recoverable, not "30 days" — a window somebody has to do
+                    arithmetic on is one they will get wrong on the last day of it. */}
+                <div className="acct-row-s">
+                  Deleted {fmtDay(c.deleted_at)} · recoverable until {fmtDay(c.purges_at)}
+                  {c.restores_in_window > 1 && (
+                    <span className="acct-warn"> · restored {c.restores_in_window} times recently</span>
+                  )}
+                </div>
+              </div>
+              <div className="acct-row-a">
+                <button className="linkbtn" disabled={busy} onClick={() => restore(c.id)}>Restore</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {deleting && (
         <DeleteCompany

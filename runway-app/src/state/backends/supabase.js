@@ -15,7 +15,8 @@
 // blind-write over a newer document, because this file cannot issue one.
 
 import {
-  BackendError, ERR_CONFLICT, ERR_FORBIDDEN, ERR_PAYMENT_REQUIRED, ERR_STALE_CLIENT, ERR_UNREACHABLE,
+  BackendError, ERR_COMPANY_DELETED, ERR_CONFLICT, ERR_FORBIDDEN, ERR_PAYMENT_REQUIRED,
+  ERR_STALE_CLIENT, ERR_UNREACHABLE,
 } from "./errors.js";
 
 // PostgREST surfaces a raised exception's SQLSTATE, which is how the RPC's three refusals are told
@@ -29,6 +30,9 @@ function classify(status, payload) {
   // a gateway that drops the code would otherwise land this on forbidden and tell somebody they lack
   // permission when what they lack is a subscription.
   if (code === "P0003" || msg.includes("payment_required")) return ERR_PAYMENT_REQUIRED;
+  // Also before the 403 branch, and for the same reason: `can_edit` refuses a deleted company too, so
+  // without this the specific answer loses to the generic one.
+  if (code === "P0004" || msg.includes("company_deleted")) return ERR_COMPANY_DELETED;
   if (code === "42501" || status === 401 || status === 403) return ERR_FORBIDDEN;
   return ERR_UNREACHABLE;
 }

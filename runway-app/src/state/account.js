@@ -97,8 +97,20 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       return (await r.json()).url;
     },
 
+    /** SOFT delete since 016 — recoverable for `company_purge_window()`, then purged for real. */
     async deleteCompany(companyId) {
       await rpc("delete_company", { p_company_id: companyId });
+    },
+
+    /** What is still recoverable, with when it stops being. Owner-only, enforced in the RPC.
+     *  `restores_in_window` is there so the UI can show a company that keeps coming back. */
+    async listDeletedCompanies() {
+      const rows = await rpc("list_deleted_companies");
+      return Array.isArray(rows) ? rows : [];
+    },
+
+    async restoreCompany(companyId) {
+      await rpc("restore_company", { p_company_id: companyId });
     },
 
     /** `{ password_set_at, last_company_id }` — creates the row on first read. */

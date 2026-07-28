@@ -41,7 +41,8 @@
       "frames"
     ],
     "react/no-unescaped-entities": "off",
-    "react-hooks/exhaustive-deps": "error"
+    "react-hooks/exhaustive-deps": "error",
+    "no-undef": "error"
   },
   "overrides": [
     {
@@ -73,6 +74,33 @@
       ],
       "rules": {
         "no-restricted-globals": "off"
+      },
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "supabase/functions/**"
+      ],
+      "globals": {
+        "Deno": "readonly"
+      }
+    },
+    {
+      "files": [
+        "scripts/**"
+      ],
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "vite.config.js"
+      ],
+      "env": {
+        "node": true
       }
     }
   ]

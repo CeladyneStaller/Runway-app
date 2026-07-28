@@ -710,6 +710,13 @@ definition in `_shared/cors.js` rather than a literal per function, and secrets 
 are parsed defensively, so a bad value degrades loudly at request time instead of preventing boot.
 What remains unprotected is the `verify_jwt` setting itself, which exists only in a README.
 
+**Done since**
+
+- [x] **`delete_company` is recoverable (016).** Soft delete, 30-day window, self-service restore on
+      the Account page, a service-role purge, and `is_member`/`can_edit` narrowed so a deleted company
+      is unreachable rather than merely unlisted. Repeat delete/restore inside the window is flagged,
+      because it rotates which company is writable without paying for a second one.
+
 **Also outstanding, small**
 
 - [ ] PNG icons at 192 and 512 for the PWA — the manifest points at SVGs, which modern browsers accept

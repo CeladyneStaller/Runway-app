@@ -30,12 +30,18 @@ function fakeAuthClient(session) {
   };
 }
 
-let App, S, sync, server, rpcLog, companies, profileRow, deleteAccountResult;
+let App, S, sync, server, rpcLog, companies, profileRow, deleteAccountResult, deletedRows;
 
 const fetchImpl = async (url, init) => {
   const body = init?.body ? JSON.parse(init.body) : {};
   const json = (v) => ({ ok: true, status: 200, json: async () => v });
   if (url.includes("rpc/my_profile")) return json([profileRow]);
+  if (url.includes("rpc/list_deleted_companies")) return json(deletedRows);
+  if (url.includes("rpc/restore_company")) {
+    rpcLog.push(["restore", body.p_company_id]);
+    deletedRows = deletedRows.filter(c => c.id !== body.p_company_id);
+    return json(null);
+  }
   if (url.includes("rpc/list_companies")) return json(companies);
   if (url.includes("rpc/create_company")) {
     const id = `co-${companies.length + 1}`;
@@ -73,7 +79,7 @@ const fetchImpl = async (url, init) => {
 beforeEach(async () => {
   vi.resetModules();
   idb.clear();
-  rpcLog = []; deleteAccountResult = null;
+  rpcLog = []; deleteAccountResult = null; deletedRows = [];
   server = {};                        // company id -> document
   companies = [{ id: "co-1", name: "Celadyne Energy", role: "owner", has_document: true }];
   profileRow = { password_set_at: null, last_company_id: "co-1" };
@@ -492,5 +498,42 @@ describe("aggregate statistics opt-out", () => {
     await openAccount(container);
     fireEvent.click(container.querySelector('[aria-label^="Include"][type="checkbox"]'));
     await waitFor(() => expect(rpcLog.some(r => r[0] === "optout")).toBe(true));
+  });
+});
+
+describe("recently deleted companies", () => {
+  it("lists what is recoverable, with the date it stops being", async () => {
+    deletedRows = [{ id: "co-9", name: "Old Co", deleted_at: "2026-07-01T00:00:00Z",
+                     purges_at: "2026-07-31T00:00:00Z", restores_in_window: 1 }];
+    const { container } = await start();
+    await openAccount(container);
+    await waitFor(() => expect(container.textContent).toMatch(/Recently deleted/));
+    expect(container.textContent).toMatch(/Old Co/);
+    // The DATE, not "30 days": a window the reader has to do arithmetic on is one they get wrong.
+    expect(container.textContent).toMatch(/recoverable until Jul 3[01], 2026/);
+  });
+
+  it("flags a company that keeps coming back", async () => {
+    deletedRows = [{ id: "co-9", name: "Churn Co", deleted_at: "2026-07-20T00:00:00Z",
+                     purges_at: "2026-08-19T00:00:00Z", restores_in_window: 3 }];
+    const { container } = await start();
+    await openAccount(container);
+    await waitFor(() => expect(container.textContent).toMatch(/restored 3 times recently/i));
+  });
+
+  it("does not flag a single restore", async () => {
+    deletedRows = [{ id: "co-9", name: "Fine Co", deleted_at: "2026-07-20T00:00:00Z",
+                     purges_at: "2026-08-19T00:00:00Z", restores_in_window: 1 }];
+    const { container } = await start();
+    await openAccount(container);
+    await waitFor(() => expect(container.textContent).toMatch(/Fine Co/));
+    expect(container.textContent).not.toMatch(/times recently/i);
+  });
+
+  it("shows nothing at all when the bin is empty", async () => {
+    deletedRows = [];
+    const { container } = await start();
+    await openAccount(container);
+    expect(container.textContent).not.toMatch(/Recently deleted/);
   });
 });

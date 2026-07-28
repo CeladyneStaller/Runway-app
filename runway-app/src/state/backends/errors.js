@@ -8,6 +8,10 @@ export const ERR_STALE_CLIENT = "stale_client"; // this build is older than the 
 // refused this way — an unpaid account can always open and export its own model.
 export const ERR_PAYMENT_REQUIRED = "payment_required";
 export const ERR_FORBIDDEN = "forbidden";       // not permitted — do not retry, do not discard
+// The company was DELETED and is inside its recovery window. Distinct from forbidden for the reason
+// that keeps recurring in this codebase: "you are not a member" sends somebody to check permissions,
+// when the truth is that the thing they are editing was thrown away and can be brought back.
+export const ERR_COMPANY_DELETED = "company_deleted";
 
 export class BackendError extends Error {
   constructor(kind, message, cause) {

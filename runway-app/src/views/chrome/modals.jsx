@@ -177,7 +177,7 @@ export function GrantIOModal({ p, g, R, setGrant, onClose }) {
   // SheetJS and the SF-424A parser load on first use, not on page load. They are over half the
   // bundle and are needed only when someone actually touches a workbook.
   const sheets = () => Promise.all([import("xlsx"), import("../../engine/sf424a")]);
-  const readWb = (file, cb) => sheets().then(([XLSX]) => { const reader = new FileReader(); reader.onload = (e) => { try { cb(XLSX.read(e.target.result, { type: "array" })); } catch (err) { setErr(String(err.message || err)); } }; reader.readAsArrayBuffer(file); });
+  const readWb = (file, cb) => sheets().then(([XLSX]) => { const reader = new FileReader(); reader.onload = (e) => { try { cb(XLSX.read(e.target.result, { type: "array" })); } catch (err) { setMsg({ ok: false, text: String(err.message || err) }); } }; reader.readAsArrayBuffer(file); });
   const onBudget = (e) => { const f = e.target.files[0]; if (!f) return; readWb(f, async (wb) => {
     const { importWorkbook } = await import("../../engine/sf424a");
     const { periods, categories, costSharePct, funder, reimburseTiming } = importWorkbook(wb);
