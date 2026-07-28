@@ -2,6 +2,7 @@
 //
 // Called from the browser with the user's Supabase JWT. The SECRET KEY never leaves this function.
 // We do not build card fields: Checkout is hosted, which keeps this out of PCI scope entirely.
+import { corsHeaders } from "../_shared/cors.js";
 const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -27,14 +28,10 @@ function readPriceIds(): Record<string, string> {
 }
 const PRICE_MAP: Record<string, string> = readPriceIds();
 
-const cors = {
-  "Access-Control-Allow-Origin": SITE_URL,
-  "Access-Control-Allow-Headers": "authorization, content-type",
-  // POST is a CORS-safelisted method, so a preflight passes without this by specification. Sent
-  // anyway: relying on a safelist for the one call that takes money is a needless edge to sit on.
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Vary": "Origin",
-};
+// ONE definition of the CORS rules, shared with the other browser-facing functions and unit-tested
+// in `test/engine/cors.test.js`. Hand-writing this header set per function is what produced three
+// different CORS failures in a row, each a separate omission from a separate literal.
+const cors = corsHeaders(SITE_URL, [SITE_URL]);
 
 /** Who is calling? Verified against Supabase Auth rather than trusted from the request body — a
  *  user_id in a POST is a claim, not an identity, and this one decides who gets billed. */

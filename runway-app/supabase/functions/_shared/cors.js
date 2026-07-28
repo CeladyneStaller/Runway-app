@@ -51,6 +51,17 @@ export function allowedOrigin(origin, allowList) {
   return allowList.includes(o) ? origin : "";
 }
 
+/** The request headers a Supabase-shaped caller actually sends.
+ *
+ *  `apikey` and `x-client-info` are NOT optional to allow. Every client built on Supabase attaches
+ *  them — ours does, because the same header builder serves PostgREST, where `apikey` is REQUIRED —
+ *  and `supabase.functions.invoke` adds both whether you want them or not. A function that allows
+ *  only `authorization, content-type` is therefore unreachable from the browser, failing with
+ *  `Request header field apikey is not allowed by Access-Control-Allow-Headers`, which reads as a
+ *  CORS misconfiguration and is really a header list written from what the function NEEDS rather than
+ *  from what a browser SENDS. The preflight is a question about the request, not about the handler. */
+export const ALLOWED_REQUEST_HEADERS = "authorization, x-client-info, apikey, content-type";
+
 /** Headers for a browser-facing function. The `Access-Control-Allow-Origin` key is ABSENT rather than
  *  empty when the origin is refused: an empty header value is a header, and browsers treat the two
  *  differently. `Vary: Origin` is always sent so a proxy cannot cache one caller's answer for another. */
@@ -58,7 +69,7 @@ export function corsHeaders(origin, allowList, methods = "POST, OPTIONS") {
   const allow = allowedOrigin(origin, allowList);
   return {
     ...(allow ? { "Access-Control-Allow-Origin": allow } : {}),
-    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Headers": ALLOWED_REQUEST_HEADERS,
     "Access-Control-Allow-Methods": methods,
     "Vary": "Origin",
   };

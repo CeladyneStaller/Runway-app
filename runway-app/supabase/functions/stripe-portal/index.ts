@@ -1,17 +1,13 @@
 // Opens the Stripe Customer Portal so people manage their own subscription — change plan, update a
 // card, cancel, download invoices. Nothing here is built by us; that is the point.
+import { corsHeaders } from "../_shared/cors.js";
 const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173";
 
-const cors = {
-  "Access-Control-Allow-Origin": SITE_URL,
-  "Access-Control-Allow-Headers": "authorization, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Vary": "Origin",
-};
+const cors = corsHeaders(SITE_URL, [SITE_URL]);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });

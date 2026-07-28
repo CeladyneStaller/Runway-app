@@ -6,7 +6,7 @@
 // allowed every origin until a secret was set sat in the file under a comment saying the opposite.
 // Extracting it into a plain module is what makes the rule checkable.
 import { describe, it, expect } from "vitest";
-import { parseOrigins, allowedOrigin, corsHeaders }
+import { parseOrigins, allowedOrigin, corsHeaders, ALLOWED_REQUEST_HEADERS }
   from "../../supabase/functions/_shared/cors.js";
 
 const APP = "https://runway.example.com";
@@ -81,6 +81,24 @@ describe("corsHeaders", () => {
         expect(corsHeaders(origin, list)["Access-Control-Allow-Origin"]).not.toBe("*");
       }
     }
+  });
+
+  it("allows the headers a Supabase client actually sends, not just the ones we read", () => {
+    // THE REGRESSION. `apikey` is attached by our own header builder (PostgREST requires it) and by
+    // `supabase.functions.invoke`. Omitting it made the function unreachable from the browser with
+    // `Request header field apikey is not allowed by Access-Control-Allow-Headers`.
+    const allowed = corsHeaders(APP, [APP])["Access-Control-Allow-Headers"];
+    for (const h of ["authorization", "apikey", "x-client-info", "content-type"]) {
+      expect(allowed).toContain(h);
+    }
+  });
+
+  it("sends the same header list whether the origin is allowed or refused", () => {
+    // Only the ORIGIN is conditional. A refused caller still learns which headers are acceptable,
+    // and the two paths cannot drift apart.
+    expect(corsHeaders(APP, [APP])["Access-Control-Allow-Headers"])
+      .toBe(corsHeaders("https://evil.example", [APP])["Access-Control-Allow-Headers"]);
+    expect(corsHeaders(APP, [APP])["Access-Control-Allow-Headers"]).toBe(ALLOWED_REQUEST_HEADERS);
   });
 
   it("always varies on Origin, allowed or not", () => {
