@@ -288,16 +288,25 @@ async function main() {
       console.log(`\n  By branch:  income +${tally.income.pos}/-${tally.income.neg}   ` +
                   `expense +${tally.expense.pos}/-${tally.expense.neg}   ` +
                   `unclassifiable +${tally["?"].pos}/-${tally["?"].neg}`);
-      const separates = tally.income.pos > 0 && tally.expense.pos === 0
-                     || tally.income.neg > 0 && tally.expense.neg === 0;
+      // SEPARATION MEANS DISJOINT SIGNS. An earlier version asked whether one branch had negatives the
+      // other lacked, and answered "sign DOES separate" for income +56/-5 against expense +18/-0 —
+      // where both branches are overwhelmingly positive and sign settles nothing. Every wrong call
+      // this probe has made has been in a verdict; the tables underneath have been right every time.
+      const onlyPos = (t) => t.pos > 0 && t.neg === 0;
+      const onlyNeg = (t) => t.neg > 0 && t.pos === 0;
+      const separates = (onlyPos(tally.income) && onlyNeg(tally.expense))
+                     || (onlyNeg(tally.income) && onlyPos(tally.expense));
       console.log(separates
-        ? "  Sign DOES separate the two branches here. `amountMode` may be enough."
-        : "  SIGN DOES NOT SEPARATE THEM — both branches carry the same sign, so an unmapped import\n" +
+        ? "  Sign DOES separate the two branches — one is wholly positive, the other wholly negative.\n" +
+          "  `amountMode` may be enough here."
+        : "  SIGN DOES NOT SEPARATE THEM. Both branches carry the same sign, so an unmapped import\n" +
           "  books revenue as spending and the runway goes to zero. Name the revenue accounts in the\n" +
           "  profile (`revenueCodes`); it is the only source that does not guess.");
-      if (tally["?"].pos + tally["?"].neg) {
-        console.log(`  ${tally["?"].pos + tally["?"].neg} rows sit in NEITHER branch by path, so a` +
-                    " substring rule would miss them too.");
+      const un = tally["?"].pos + tally["?"].neg;
+      if (un) {
+        console.log(`  And ${un} of ${grid.rows.length} rows (${pct(un, grid.rows.length)}) sit in` +
+                    " NEITHER branch by path — income accounts hanging off the wrapper, or under a");
+        console.log("  root of their own — so a substring rule cannot classify them either.");
       }
     }
     if (grid.rows.length !== rows.length) {

@@ -215,8 +215,25 @@ failure being prevented and it should be visible in the suite.
 This helps file imports too, immediately and for free: the same accounting package exports the same
 shape to CSV, so a QuickBooks file import had the identical inversion waiting in it.
 
+The full paths, once the probe stopped truncating them at 40 characters, made the second half of this
+worse than the first: **47 of 126 rows — 37% — sit in NEITHER branch.** `Pest Control Services` and
+`Sales of Product Income` are income accounts hanging directly off the wrapper; `Decks and Patios`
+lives under a `Job Materials` root of its own. So the ancestry cannot classify better than two thirds
+of a report even when you are willing to match on names.
+
 Carry into Stage 6: the mapping screen has to let somebody tick which of their accounts are income,
-once, and keep it in the profile. That is one more control on a screen that already has one per field,
+once, and keep it in the profile.
+
+**A NOTE ON THIS PROBE, worth carrying into anything similar.** Every wrong call it has made has been in
+a VERDICT — the double-entry tripwire that failed a clean report on 4 rows in 123, the "outermost
+section" that meant to yield two values and yielded nineteen, and a separation test that answered
+"sign DOES separate" for income `+56/-5` against expense `+18/-0`, where both branches are
+overwhelmingly positive and sign settles nothing. The TABLES underneath were right every time, and in
+each case reading them is what caught the verdict.
+
+The lesson is not "write better heuristics". It is that a diagnostic's job is to SHOW, and every
+summary line it adds is a new thing that can be confidently wrong — which is more dangerous than
+silence, because a verdict is what gets read when the output is long. That is one more control on a screen that already has one per field,
 and it is the correct place for it — a person looking at their own chart of accounts knows the answer
 instantly, and no rule we could write does.
 
