@@ -539,11 +539,16 @@ on member removal.
 **Audit.** Every document save, membership change and connector action logged with actor, time and IP.
 Owners can read their own company's log.
 
-> **STATUS: the TABLE exists (001) and NOTHING WRITES TO IT.** `save_document` does not insert an
-> audit row, no RPC does, and no view reads one. That is worse than not having the table, because the
-> schema now implies an audit trail this product cannot produce — and "we log every save" is the kind
-> of claim that ends up in a security questionnaire. Either wire `save_document` to write it, or drop
-> the table until something does. Listed in §8.
+> **STATUS: WIRED (015), and this line is amended rather than met.** Company created/renamed/deleted,
+> account data wiped, and subscription changes are logged — the administrative and destructive acts,
+> all rare and none recorded anywhere else. DOCUMENT SAVES ARE DELIBERATELY NOT LOGGED, so the "every
+> document save" above is now wrong on purpose: `document_versions.created_by` already records who
+> saved what and when WITH the body, so an audit row would duplicate it while carrying less, at
+> hundreds of rows a day per active editor against a handful of administrative events a year. The
+> trigger for revisiting is Phase 3 putting a second editor in a company. IP is also not collected —
+> it is personal data and the privacy policy is at review; see 015 for the reasoning. Append-only is
+> now explicit (`revoke insert, update, delete`) rather than true by omission, and reads narrowed to
+> owner/admin plus your own actions. `npm run verify:audit`.
 
 **Backups.** PITR plus independent nightly dumps to separate storage. Quarterly tested restore. With no
 local copies anywhere, **backups are now the only copy** — this moves from good practice to existential.
@@ -668,7 +673,10 @@ the journal's own Phase 2 and 3 need.
       call sites — the scheduler and the reschedule inside `flush()` — and four tests including the
       mid-session swap. The trade is recorded in `NOTES.md`: up to 2.5s of work in memory instead of
       0.4, bounded by `MAX_UNSAVED_MS` and the flush on `pagehide`.
-- [ ] **Audit log: write it or drop it.** The table has existed since 001 with nothing inserting a row.
+- [x] **Audit log: written, 28 Jul 2026 (015).** Administrative and destructive events only, with the
+      reasoning for excluding saves recorded in the migration and §5 amended to match rather than left
+      claiming more than the table does. `npm run verify:audit` proves both halves: that it records,
+      and that a client cannot insert, update or delete a row.
 - [ ] **Rate-limit `save_document` per user.** Nothing limits it today.
 - [ ] **Backups: independent dump + a tested restore. THE TRIGGER HAS ESSENTIALLY FIRED.** The
       deferral was agreed against "the first real customer document", and billing going live means

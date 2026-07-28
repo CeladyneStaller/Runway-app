@@ -1376,6 +1376,47 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## The audit log, and the two questions that decided its shape
+
+`audit_log` existed from 001 with nothing inserting a row, under a plan that promised "every document
+save, membership change and connector action logged with actor, time and IP". A schema that implies a
+trail the product cannot produce is worse than no table, because the promise is what gets repeated
+into a security questionnaire.
+
+**QUESTION ONE: log saves?** No — and this is the interesting half. `document_versions.created_by`
+ALREADY records who saved what and when, with the body attached, so an audit row would duplicate it
+while carrying strictly less. Volume settles what taste does not: at the 30-second unsaved ceiling an
+active editor makes hundreds of rows a day, against a handful of administrative events a year. What
+IS logged is the set of acts that are rare, irreversible or entitlement-changing and recorded nowhere
+else: company created, renamed, deleted; account data wiped; subscription changed. The trigger for
+revisiting is Phase 3 putting a SECOND EDITOR in a company, at which point "who changed this" stops
+having one possible answer.
+
+**QUESTION TWO: log IP?** No, though the column exists. It is personal data and the privacy policy is
+at review — quietly beginning to collect a new category of it after sending drafts to a lawyer is the
+wrong order. `request.headers` is also only populated on PostgREST calls, so anything service-role
+would leave it null, and a column populated for some rows and not others is worse than an empty one.
+
+TWO THINGS THE SCHEMA ALMOST HID. `audit_log.company_id` is `on delete set null`, so deleting a
+company empties the foreign key on the very row recording the deletion — under the old member-based
+policy that row became unreadable the instant it was written. Fixed twice over: the policy now also
+matches `user_id = auth.uid()` so your own actions stay readable, and deletion events duplicate the
+company id and name into `detail`, which is what survives. And append-only held only BY OMISSION
+(002 granted just SELECT); it is now an explicit revoke, because a property that holds by accident is
+one somebody removes by accident.
+
+Billing is a TRIGGER on `subscriptions`, not an edit to `apply_subscription_event`. That function is
+the security boundary billing rests on and has already been repaired once for its parameter names;
+rewriting it to append two lines risks the thing it protects. A trigger also catches a hand correction
+made in the SQL editor at 2am, which is precisely the change somebody later wishes had been recorded.
+The actor comes from the ROW, not `auth.uid()`, because the webhook runs as the service role — which
+also lets a customer read their own billing history, something `subscriptions` cannot give them since
+it holds only the current state and never how it got there.
+
+WATCH: `delete_company` is a HARD delete, while `companies.deleted_at` exists and is filtered on in
+seven queries and SET BY NOTHING. The soft-delete design was never built, so the audit row is now the
+only surviving trace of a deleted company. Worth resolving before somebody deletes the wrong one.
+
 ## The debounce belongs to the backend, not to storage.js
 
 `SAVE_DEBOUNCE_MS` was 400 with a comment saying it "becomes ~2500 over a network" — a note describing

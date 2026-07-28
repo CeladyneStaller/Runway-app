@@ -39,6 +39,21 @@ export function makeClient({ url, anonKey, fetchImpl }) {
       return { status: res.status, ok: res.ok, body: await j(res) };
     },
 
+    /** Any method against any path. `get` and `rpc` cover the happy paths; this exists for the checks
+     *  that must assert a write is REFUSED, which needs POST/PATCH/DELETE and a status code. */
+    async request(path, { method = "GET", body } = {}, token) {
+      const res = await f(`${base}${path}`, {
+        method,
+        headers: {
+          apikey: anonKey,
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      return { status: res.status, ok: res.ok, body: await j(res) };
+    },
+
     async rpc(name, args, token) {
       const res = await f(`${base}/rest/v1/rpc/${name}`, {
         method: "POST",
