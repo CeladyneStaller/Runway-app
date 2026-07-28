@@ -19,6 +19,7 @@
 const args = process.argv.slice(2);
 const fixtureAt = args.indexOf("--fixture");
 const FIXTURE = fixtureAt >= 0 ? args[fixtureAt + 1] : null;
+const GRID = args.includes("--grid");
 const reportAt = args.indexOf("--report");
 // DEFAULT CHANGED FROM GeneralLedger AFTER THE FIRST RUN. A GL is DOUBLE-ENTRY: every transaction
 // appears under both accounts it touches, so importing it counts everything twice with opposite signs,
@@ -233,6 +234,63 @@ async function main() {
       "`--report TransactionList` and compare, and check whether this company codes with Classes\n" +
       "at all. An import that looks automatic and allocates wrongly is worse than the file path it\n" +
       "replaces, and this is the stage that is supposed to catch that.");
+  // ---- cross-check the engine's flattener against this same response ----------
+  // The probe walks the tree by ColType; `src/engine/qbo.js` walks it by header and emits a Grid.
+  // TWO INDEPENDENT IMPLEMENTATIONS, deliberately — if they disagree on a real report, one of them is
+  // wrong about a shape no fixture in the repo contains, and that is worth knowing before Stage 6
+  // trusts the engine one with somebody's books.
+  if (GRID) {
+    const { quickbooksSource, columnValues } = await import("../src/engine/qbo.js");
+    const grid = quickbooksSource(report);
+    console.log("\n" + "=".repeat(72));
+    console.log("ENGINE FLATTENER (src/engine/qbo.js)");
+    console.log(`  headers: ${grid.headers.join(" | ")}`);
+    console.log(`  rows:    ${grid.rows.length}   probe found ${rows.length}   ` +
+                (grid.rows.length === rows.length ? "AGREE" : "*** DISAGREE ***"));
+    for (const h of ["Account", "Section", "Class"]) {
+      const vals = columnValues(grid, h);
+      if (vals.length) console.log(`  ${h}: ${vals.length} distinct — ${vals.slice(0, 6).join(", ")}` +
+                                   (vals.length > 6 ? " …" : ""));
+    }
+    console.log("  first row:", JSON.stringify(grid.rows[0] ?? null));
+
+    // ---- the kind question, asked of the data instead of the names ------------
+    // Revenue-vs-cost cannot be read off account NAMES: the wrapper Intuit puts at the top is called
+    // "Ordinary Income/Expenses", so any "does the path contain Income" rule marks everything revenue.
+    // So look at SIGNS per account, and at whether they line up with where the account sits.
+    const H = (h) => grid.headers.indexOf(h);
+    const iAmt = H("Amount"), iAcct = H("Account"), iPath = H("Section Path");
+    if (iAmt >= 0 && iAcct >= 0) {
+      const per = new Map();
+      for (const r of grid.rows) {
+        const n = Number(String(r[iAmt]).replace(/[^0-9.-]/g, ""));
+        if (!Number.isFinite(n)) continue;
+        const k = r[iAcct] || "(none)";
+        const e = per.get(k) || { pos: 0, neg: 0, path: r[iPath] || "" };
+        if (n < 0) e.neg++; else e.pos++;
+        per.set(k, e);
+      }
+      const ranked = [...per.entries()].sort((a, b) =>
+        (b[1].pos + b[1].neg) - (a[1].pos + a[1].neg)).slice(0, 12);
+      console.log("\n  SIGNS PER ACCOUNT — does the sign separate revenue from cost?");
+      for (const [name, e] of ranked) {
+        console.log(`    +${String(e.pos).padStart(3)} -${String(e.neg).padStart(3)}  ` +
+                    `${name.padEnd(30).slice(0, 30)}  ${e.path.slice(0, 40)}`);
+      }
+      const mixed = [...per.values()].filter(e => e.pos && e.neg).length;
+      console.log(`\n  ${mixed} of ${per.size} accounts contain BOTH signs.`);
+      console.log(mixed === 0
+        ? "  Every account is single-signed, so `amountMode` may be enough — but check that income and\n" +
+          "  expense accounts differ in sign, not merely that each is consistent."
+        : "  So sign alone cannot decide revenue-vs-cost for those accounts. The mapping screen will\n" +
+          "  have to let somebody say which accounts are income, once, and remember it in the profile.");
+    }
+    if (grid.rows.length !== rows.length) {
+      console.log("\n  A DISAGREEMENT IS THE FINDING. Send me the row counts and a section of the raw");
+      console.log("  response; the engine module is the one that ships, so it is the one to fix.");
+    }
+  }
+
   console.log("\nREMEMBER: a sandbox proves the MECHANISM. Only a real chart of accounts proves the");
   console.log("MAPPING — and the file importer already eats a GL export, so a prospect's export run");
   console.log("through the existing import screen answers Stage 1b with no code at all.");

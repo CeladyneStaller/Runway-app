@@ -19,14 +19,28 @@ refund fixes.
 
 ## The seam this is all aimed at
 
+**CORRECTED 28 Jul 2026 — the seam is a GRID, not `ImportRow[]`.** The pipeline is
+
 ```
-ImportRow = { date, code?, customer?, category?, period?, kind?, amount, note? }
+fileToGrid → applyProfile → mergeImport
+     ^ this is the only step a live source replaces
+
+Grid = { headers: string[], rows: (string|number)[][] }
 ```
 
-`date` and `amount` are the only required fields. `engine/importer.js` already says in its own comment
-that a QuickBooks CSV parser, an Excel parser and a hand mock all produce the same thing — so the whole
-integration reduces to one function returning that array. `applyProfile`, `mergeImport`, the code map,
-coded actuals and the merge report are built, tested and untouched by any of this.
+The original version of this file aimed `quickbooksSource()` at `ImportRow[]`, one step too far down.
+That would have meant deciding IN CODE which QuickBooks field becomes `code` — and the Classes result
+below shows that decision cannot be made in code, because it differs per company. A landscaping firm
+whose accounts ARE its categories wants Account; a nonprofit running four awards through one payroll
+account has to use Class or Customer, since the account just says "Salaries".
+
+Emitting a Grid hands that decision back to `applyProfile` and the mapping screen that already exists —
+a dropdown per field, tolerant profile matching, save-and-reuse. `ImportModal` needs one change: where
+it calls `fileToGrid(file)`, it can equally call `quickbooksSource(report)`. Everything after that is
+untouched, including the preview, the merge report and the saved profiles.
+
+So **the Classes question stops being a blocker and becomes a fixture.** If a company tracks Classes the
+column is in the grid and the user maps it; if not, they map Account. No branch in our code either way.
 
 Which means **almost none of this plan is modeling work.** It is OAuth token custody, a sync trigger,
 and operations. Phase 1 stored numbers people typed; Phase 2 stores credentials to their accounting
@@ -113,9 +127,14 @@ skips rows without a document number and the verdict uses a threshold rather tha
 double entry is most of a report, not a rounding error, and a check that fails on any coincidence is a
 check people learn to ignore.
 
-Also unanswered: `klass_name` was requested and NOT RETURNED. Classes are how many grant-funded
-organisations code, so whether that is a GL limitation, a wrong column name for this report, or a
-sandbox with no classes defined is still open — and it matters more than anything else here.
+**THE CLASSES QUESTION, ANSWERED AS FAR AS A SANDBOX CAN.** `klass_name` came back empty on both
+reports. The probe now checks why before reporting it, and the answer is that class tracking is OFF in
+this company and ZERO classes are defined — so the empty column says nothing about the API. Craig's
+Landscaping has no classes to return.
+
+That can be closed in ten minutes (enable class tracking, tag two transactions, re-run), and it is
+worth doing for the second fixture. But it stopped being a gate the moment the seam moved to a Grid:
+a Class column, if present, is simply another column the user can map.
 
 **STOP IF:** attribution cannot be recovered from what the API returns — for example, coding lives only
 in Classes the report does not expose, or in free-text memos with no convention. Then the live
@@ -127,9 +146,14 @@ automatic and is wrong. **Stop here and the total spend is one day.**
 ## Stage 2 — `quickbooksSource()`, offline and pure
 **Cost:** a day. **Proves:** the seam holds, permanently and in CI.
 
-Save the Stage 1 response as a fixture. Write `quickbooksSource(reportJson) -> ImportRow[]` as a pure
-function with no network in it, tested in `test/engine/` against that fixture like everything else in
-the engine.
+Save the Stage 1 response as a fixture. Write `quickbooksSource(reportJson) -> Grid` as a pure function
+with no network in it, tested in `test/engine/` against that fixture like everything else in the engine.
+
+Its whole job is flattening: QBO report rows are a TREE whose sections carry the account, so the
+function walks it and emits a rectangle, **synthesising the section header as an `Account` column**
+because that is where the account lives and a grid has no other place to put it. Whatever else came
+back — Class, Customer, Memo, Num — becomes a column under its own `ColTitle`. It decides nothing about
+meaning; `applyProfile` and the user do that.
 
 Pure and fixture-driven is not fastidiousness: it means every later stage can break the network, the
 tokens or the UI without anyone having to wonder whether the mapping still works. It is also the only
@@ -137,6 +161,47 @@ part of this phase that belongs in `src/engine/` — everything after it is stat
 
 **STOP IF:** nothing. This stage is cheap and its output survives even if the phase is abandoned — a
 saved fixture and a mapping function are notes-to-self with tests attached.
+
+**DONE 28 Jul 2026.** `src/engine/qbo.js` — `quickbooksSource(report) -> Grid` plus `columnValues()`
+for showing somebody what their accounts actually contain before they pick one. Nine tests in
+`test/engine/qbo.test.js`, built from the shapes the probe really returned. Four of them exist because
+they are how this quietly goes wrong:
+
+- **Section totals are not transactions.** A `Summary` counted as data would double the report.
+- **The outermost header is emitted as `Section`.** Not decoration: ProfitAndLossDetail reports income
+  as a POSITIVE number and `parseAmount` in signed mode reads positive as COST, so sign alone inverts
+  every revenue row. `profile.kindColumn` fixes it and needs a column to point at.
+- **Duplicate headers are disambiguated.** GeneralLedger returns a column called "Account" and we
+  synthesise one too; `applyProfile` resolves by `indexOf`, so the second would be mapped and never
+  read — a silent wrong answer rather than an error.
+- **Short rows are padded.** Otherwise the synthesised columns slide left onto a different field and
+  produce plausible numbers in the wrong place.
+
+**CORRECTED THE SAME DAY, by running it against the real fixture.** The `--grid` cross-check agreed on
+row counts — 126 from both walks — and then showed the design fault the shallow fixtures could not:
+
+`Section` was meant to be the OUTERMOST header, a clean Income/Expenses column for
+`profile.kindColumn`. Against the sandbox it produced **nineteen distinct values**. Real reports nest
+deeper and unevenly — sub-accounts inside sub-groups inside a wrapper, some levels unnamed — so
+"outermost" resolved to a different depth on different branches, and an unnamed level let a sub-group
+look like a root. It is now `Section Path`: every ancestor, joined, which cannot be wrong because it
+claims nothing.
+
+**AND THE KIND QUESTION IS HARDER THAN IT LOOKED, which is the real find.** Intuit's top-level wrapper
+is called **"Ordinary Income/Expenses"**. Any rule that decides revenue-vs-cost by looking for "Income"
+in the ancestry marks EVERY ROW AS REVENUE. Sign does not settle it either: P&L Detail reports income
+as positive, and `parseAmount` in signed mode reads positive as cost. So `qbo.js` derives nothing —
+what a name means is not knowable from the name — and the probe now prints the SIGN DISTRIBUTION PER
+ACCOUNT so the question gets answered from data rather than from naming conventions.
+
+Carry into Stage 6: the mapping screen has to let somebody say which of their accounts are income,
+once, and keep it in the profile. That is one more control on a screen that already has one per field,
+and it is the correct place for it — a person looking at their own chart of accounts knows the answer
+instantly, and no rule we could write does.
+
+`npm run qbo:probe -- --fixture <saved.json> --grid` runs BOTH implementations over the same response
+and compares. The probe walks by ColType, the engine walks by header; a disagreement on a real report
+means one of them is wrong about a shape no fixture here contains.
 
 ---
 
