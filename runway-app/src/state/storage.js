@@ -15,7 +15,7 @@
 
 import { emptyDoc, migrate } from "./document";
 import { createLocalBackend, adoptionDismissed, dismissAdoption,
-         readActiveCompany, writeActiveCompany } from "./backends/local.js";
+         readActiveCompany, writeActiveCompany, clearActiveCompany } from "./backends/local.js";
 import { createSupabaseBackend } from "./backends/supabase.js";
 import { createDemoBackend, clearDemo, demoInProgress, demoExpired, demoRemainingMs, DEMO_WINDOW_MS,
          stashPromotion, pendingPromotion, clearPromotion, markDemoReset, takeDemoReset } from "./backends/demo.js";
@@ -264,7 +264,7 @@ export async function peekLocal() {
   }
 }
 
-export { adoptionDismissed, dismissAdoption, readActiveCompany };
+export { adoptionDismissed, dismissAdoption, readActiveCompany, clearActiveCompany };
 
 /** The server's current document, without adopting it. Used to show a conflict as a comparison rather
  *  than as an alarming sentence — nobody can choose between two versions they cannot see. */
@@ -303,7 +303,7 @@ export async function switchCompany(auth, companyId) {
   }
 
   auth.setActiveCompany(companyId);
-  await writeActiveCompany(companyId);
+  await writeActiveCompany(companyId, await auth.userId?.());
 
   _pending = null; _lastWritten = null; _deadline = null; _attempt = 0; _halted = false;
   emit({ state: "saved", error: null });
@@ -330,7 +330,7 @@ export async function abandonCompany(auth, nextCompanyId) {
 
   if (nextCompanyId) {
     auth.setActiveCompany(nextCompanyId);
-    await writeActiveCompany(nextCompanyId);
+    await writeActiveCompany(nextCompanyId, await auth.userId?.());
   } else {
     auth.clearSelection();
     await writeActiveCompany(null);

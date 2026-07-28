@@ -85,7 +85,10 @@ beforeEach(async () => {
 
 // An empty document renders the onboarding screen, which has no top bar — so the UI cases need a real
 // document on the server before they can reach the account page.
-const start = async (session = { access_token: "jwt", user: { email: "corey@acme.com" } }, seed = true) => {
+// The device's remembered company is stored against the user who chose it, so the stub session needs
+// an id like a real one has.
+const TEST_USER_ID = "user-1";
+const start = async (session = { access_token: "jwt", user: { id: TEST_USER_ID, email: "corey@acme.com" } }, seed = true) => {
   if (seed) {
     const { demoDoc } = await import("../../src/state/document.js");
     server["co-1"] = demoDoc();
@@ -277,7 +280,10 @@ describe("switching companies", () => {
   it("remembers the choice on this device", async () => {
     const { auth } = await start();
     await S.switchCompany(auth, "co-2");
-    expect(await S.readActiveCompany()).toBe("co-2");
+    expect(await S.readActiveCompany(TEST_USER_ID)).toBe("co-2");
+    // And NOT for anybody else on this browser — the leak that produced 403s on every save.
+    expect(await S.readActiveCompany("some-other-user")).toBeNull();
+    expect(await S.readActiveCompany(null)).toBeNull();
     expect(auth.activeCompany()).toBe("co-2");
   });
 
@@ -395,7 +401,7 @@ describe("abandoning a company at the storage layer", () => {
     await S.abandonCompany(auth, null);
     // The DEVICE preference is cleared; what the app then resolves comes from current_company(), which
     // creates a fresh company rather than leaving the account pointing at nothing.
-    expect(await S.readActiveCompany()).toBeFalsy();
+    expect(await S.readActiveCompany(TEST_USER_ID)).toBeFalsy();
     expect(await auth.getCompanyId()).toBe("co-fresh");
   });
 });

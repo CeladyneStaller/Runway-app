@@ -89,6 +89,13 @@ export function createSupabaseAuth({ url, anonKey, getSession, fetchImpl, compan
     getAccessToken,
     getCompanyId,
 
+    /** The signed-in user's id, or null. Needed because the DEVICE's remembered company has to be
+     *  stored against whoever chose it — a bare id in IndexedDB is inherited by the next person to
+     *  sign in on this browser, and every save then 403s against a company they do not belong to. */
+    async userId() {
+      try { return (await getSession())?.user?.id ?? null; } catch { return null; }
+    },
+
     /** Point this device at a different company. Returns nothing: the CALLER is responsible for
      *  flushing pending writes and reloading, because a write in flight belongs to the company you were
      *  in and landing it afterwards files your numbers against the wrong one. */

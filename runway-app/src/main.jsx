@@ -32,7 +32,13 @@ if (syncConfigured()) {
   );
   // supabase.auth is passed whole, not just getSession: the app needs sign-in, sign-out and live auth
   // events too. readActiveCompany() restores which company THIS DEVICE was last looking at.
-  enableHostedSync({ authClient: supabase.auth, activeCompany: await readActiveCompany() });
+  // The device's remembered company is read FOR THE SIGNED-IN USER. Without the id it comes back null,
+  // and current_company() resolves one properly — which is the right answer, not a degraded one.
+  const { data: sess } = await supabase.auth.getSession().catch(() => ({ data: null }));
+  enableHostedSync({
+    authClient: supabase.auth,
+    activeCompany: await readActiveCompany(sess?.session?.user?.id ?? null),
+  });
 } else {
   console.info(
     "[runway] hosted sync off — running local-first against IndexedDB. Missing:\n  - "

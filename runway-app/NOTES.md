@@ -1376,6 +1376,33 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## "Could not save — forbidden": the device remembered somebody else's company
+
+Reported live: every save 403ing with `forbidden` from `save_document`, which raises that only when
+`can_edit(p_company_id)` is false — the signed-in user is not a member of the company the client is
+sending. The client was sending one it had no business holding.
+
+`readActiveCompany()` stored a BARE COMPANY ID in IndexedDB, per device, and `main.jsx` handed it to
+the auth adapter at boot before anything checked whose it was. Sign out, sign in as somebody else on
+the same browser, and the previous account's company id is still sitting there — so every write goes
+to a company the new user cannot edit. `auth.reset()` on sign-out cleared the resolved company IN
+MEMORY and the file comment says exactly why; the copy on disk was missed.
+
+THIS IS THE THIRD TIME. `SETUP_SKIP` suppressed the setup wizard for every account opened in a tab
+where it had once been dismissed; the resolved company inherited the previous user's document until
+`enableHostedSync` was wired to reset it; now the persisted company id. The shape is always the same:
+PER-DEVICE STATE THAT OUTLIVES THE SESSION THAT CREATED IT. Anything stored on the device that
+describes a USER has to name the user, or the next one inherits it.
+
+So the value is user-keyed — `{ companyId, userId }` — and a bare string, the old format, reads as
+belonging to nobody rather than to whoever asks. Keying beats clearing because it does not depend on
+sign-out RUNNING: a refresh token expires, cookies get cleared, a tab closes offline, and none of
+those fire the handler. Sign-out clears it too, but as the second lock rather than the first.
+
+WATCH: `403 forbidden` was a bad error for this. It names permissions, which sends you to RLS and
+grants, when the actual fault is a stale id on the client and the fix is to re-resolve. If it recurs,
+`auth.clearSelection()` already exists for exactly this and nothing calls it on a forbidden save.
+
 ## The audit log, and the two questions that decided its shape
 
 `audit_log` existed from 001 with nothing inserting a row, under a plan that promised "every document

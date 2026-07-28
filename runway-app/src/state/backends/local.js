@@ -22,11 +22,34 @@ export async function dismissAdoption() {
 }
 
 // Which company THIS DEVICE is looking at. Per-device on purpose: a view preference, not data.
-export async function readActiveCompany() {
-  try { return (await get(ACTIVE_COMPANY)) || null; } catch { return null; }
+//
+// STORED WITH THE USER IT BELONGS TO, and that is the whole point of the shape. It used to be a bare
+// id, so signing out and signing in as somebody else on the same browser left the previous account's
+// company id sitting in IndexedDB, where boot handed it straight to the auth adapter. Every save then
+// went to a company the new user is not a member of and came back 403 `forbidden` — an error that
+// names permissions and points at nothing you can act on.
+//
+// A user-keyed value cannot be inherited, and it does not depend on sign-out RUNNING. Clearing on
+// sign-out is done as well (see `sync.js`), but a session can end without that ever firing: an expired
+// refresh token, cleared cookies, a tab that was closed while offline. The stored value has to be
+// self-describing for those.
+export async function readActiveCompany(userId = null) {
+  try {
+    const v = await get(ACTIVE_COMPANY);
+    if (!v) return null;
+    // A bare string is the OLD format, from before this was keyed. Treat it as belonging to nobody:
+    // returning it would reintroduce exactly the inheritance this shape exists to prevent.
+    if (typeof v === "string") return null;
+    if (!v.userId || !userId || v.userId !== userId) return null;
+    return v.companyId || null;
+  } catch { return null; }
 }
-export async function writeActiveCompany(id) {
-  try { await set(ACTIVE_COMPANY, id || null); } catch { /* the server remembers too */ }
+export async function writeActiveCompany(id, userId = null) {
+  try { await set(ACTIVE_COMPANY, id ? { companyId: id, userId: userId || null } : null); }
+  catch { /* the server remembers too */ }
+}
+export async function clearActiveCompany() {
+  try { await set(ACTIVE_COMPANY, null); } catch { /* nothing further to try */ }
 }
 
 export const LOCAL_SAVE_DEBOUNCE_MS = 400;

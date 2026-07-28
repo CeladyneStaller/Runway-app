@@ -6,7 +6,7 @@
 import { createSupabaseAuth } from "./auth.js";
 import { createAccountApi } from "./account.js";
 import { createSession } from "./session.js";
-import { syncConfigured, activateHostedBackend, activateLocalBackend } from "./storage.js";
+import { syncConfigured, activateHostedBackend, activateLocalBackend, clearActiveCompany } from "./storage.js";
 
 // The live session provider and company resolver, registered once at start-up so the UI can reach them
 // without threading them through every component. Null in local mode, which is how the app knows not to
@@ -52,7 +52,10 @@ export function enableHostedSync({ authClient, getSession, env = import.meta.env
   // Signing out must clear the resolved company, or the next person to sign in on this browser inherits
   // the previous user's document. Wiring it here rather than in the button means it cannot be forgotten.
   if (session) {
-    session.onChange((s) => { if (!s) auth.reset(); });
+    // Belt AND braces: `auth.reset()` clears the resolved company in memory, `clearActiveCompany()`
+    // clears the copy on disk. The disk copy is also user-keyed, because this handler does not fire
+    // for every way a session ends — an expired refresh token, cleared cookies, a tab closed offline.
+    session.onChange((s) => { if (!s) { auth.reset(); void clearActiveCompany(); } });
   }
 
   return { enabled: true, auth, session, account: _account };
