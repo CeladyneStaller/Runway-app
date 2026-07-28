@@ -14,31 +14,59 @@ imported by the others and is bundled automatically.
 
 ## The one that will catch you
 
-**Supabase verifies a JWT on every function call by default. Stripe does not send one.**
+**Supabase verifies a JWT on every function call by default, and it must be OFF for ALL FOUR of
+these functions.** Not just the webhook. This is the setting that will cost you an afternoon.
 
-So a webhook deployed normally returns **401 to every event Stripe ever sends**. In the Stripe
-dashboard this looks like the endpoint failing, and it will keep retrying and failing for days. The
-signature verification you are about to test never even runs, because the request is rejected before
-reaching your code.
+**Stripe does not send a JWT**, so a webhook deployed normally returns 401 to every event Stripe ever
+sends. In the Stripe dashboard that looks like the endpoint failing, and it retries for days. The
+signature verification never runs, because the request is rejected before reaching your code.
 
-Two ways to switch it off. Prefer the config file — a deploy flag is a thing somebody forgets on the
-next deploy, and the failure is silent until you check Stripe's event log.
+**Browsers do not send one either — on the PREFLIGHT.** This is the part that is easy to get wrong,
+because the reasoning that leads there sounds right: checkout and portal need to know who is asking,
+so surely leave the check on? No. A CORS preflight is an `OPTIONS` request that by specification
+carries no `Authorization` header, so the gateway rejects it with a 401 before your `OPTIONS` handler
+runs, and the browser reports:
 
-**In `supabase/config.toml`** (add to your existing file, do not replace it):
+```
+Response to preflight request doesn't pass access control check: It does not have HTTP ok status.
+```
+
+The function is then unreachable from the browser entirely. Nothing appears in its logs, because
+nothing ran.
+
+**Turning the gateway check off does not make these functions unauthenticated.** Each one verifies
+the caller itself, against `/auth/v1/user`, and returns 401 without a valid token — see `callerId()`
+in `stripe-checkout` and the equivalent in `stripe-portal` and `delete-account`. That check is
+STRONGER than the gateway's, which only proves *some* valid token was presented; these need to know
+*which user*, and they have to ask anyway. All the gateway adds is a preflight that cannot pass.
+
+**In `supabase/config.toml`** — add these to your existing file, do not replace it. This repo does
+not ship a `config.toml` on purpose: yours contains your `project_id`, and an archive that overwrote
+it would unlink your project.
 
 ```toml
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.stripe-checkout]
+verify_jwt = false
+
+[functions.stripe-portal]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = false
 ```
 
-**Or per deploy:**
+**Per deploy** — works, but a flag is a thing somebody forgets on the next deploy, and the failure is
+silent until somebody cannot pay you:
 
 ```bash
-supabase functions deploy stripe-webhook --no-verify-jwt
+supabase functions deploy stripe-checkout --no-verify-jwt
 ```
 
-Leave it ON for `stripe-checkout` and `stripe-portal`. Those are called by the browser and the JWT is
-how they know who is asking — without it, anyone could open a checkout or a billing portal as anybody.
+**Or right now, without a redeploy:** Dashboard → Edge Functions → the function → Details →
+turn off *Enforce JWT Verification*.
 
 ---
 
@@ -144,6 +172,11 @@ Watch the logs in **Dashboard → Edge Functions → stripe-webhook → Logs**. 
 from a replay (`timestamp_outside_tolerance`) from a missing secret (`no_secret`).
 
 A `401` in Stripe's event log and **nothing at all** in the function logs means `verify_jwt` is still on.
+
+**`preflight ... does not have HTTP ok status` in the browser, with nothing in the function logs, is
+the same fault** wearing different clothes: the gateway refused the `OPTIONS` request. Distinguish it
+from a genuine origin mismatch by whether the function logged anything at all — if it ran and merely
+refused the origin, the request appears in the logs; if `verify_jwt` blocked it, nothing does.
 
 A **CORS error in the browser with clean function logs** is the mirror image of that, and means an
 origin mismatch: `ALLOWED_ORIGINS` for `delete-account`, `SITE_URL` for checkout and portal. The

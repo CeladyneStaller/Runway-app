@@ -1376,6 +1376,36 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## verify_jwt has to be off for every browser-facing Edge Function, and the reason is the preflight
+
+Symptom: clicking a plan produced `Failed to fetch`, and the console said the preflight to
+`stripe-checkout` "does not have HTTP ok status". Both `stripe-checkout` and `stripe-portal` answer
+`OPTIONS` with a 200 on their first line, so the function plainly never ran — the gateway rejected the
+request before it.
+
+**A CORS PREFLIGHT CARRIES NO `Authorization` HEADER.** It cannot: the spec forbids it, which is the
+whole point of a preflight — the browser asks permission BEFORE sending the real request and its
+credentials. So Supabase's default JWT check 401s the `OPTIONS`, the browser never sends the POST, and
+the function is unreachable from a browser entirely. Nothing appears in its logs, because nothing ran.
+
+THE PLAUSIBLE-SOUNDING WRONG ANSWER is the one that shipped in the README: leave `verify_jwt` on for
+checkout and portal, because "those are called by the browser and the JWT is how they know who is
+asking". The second half is true and the conclusion does not follow. Every one of these functions
+verifies the caller ITSELF against `/auth/v1/user` and returns 401 without a valid token; the gateway
+check only proves that SOME valid token was presented, not which user, which is the thing they
+actually need and have to ask for anyway. Turning it off removes a check that was never load-bearing
+and was preventing the request from arriving.
+
+Applies to `delete-account` too, and it was live with the same fault — account deletion would have
+failed in the browser for exactly this reason, unnoticed because nobody had exercised it in
+production.
+
+WATCH: this is a DEPLOYMENT setting, not a code one, so no test in this repo can catch it. `config.toml`
+is deliberately not in this repo — it carries the `project_id` and an archive that overwrote it would
+unlink somebody's project — which means the four `verify_jwt = false` entries live only in
+`supabase/functions/README.md`. That is the weakest link in the whole billing path: nothing fails
+locally, nothing fails at build, and the first sign is a customer who cannot pay.
+
 ## The wizard that did not fire — and the screen that stood in for it
 
 `src/App.jsx`: the load effect, the skip flag, and `SetupBar`. Tests `test/views/onboarding.test.jsx`;
