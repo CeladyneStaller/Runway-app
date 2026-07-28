@@ -3,7 +3,7 @@
 // correctness: nested sections, a section Summary, a report that already has an "Account" column, and
 // rows shorter than the declared column list.
 import { describe, it, expect } from "vitest";
-import { quickbooksSource, columnValues } from "../../src/engine/qbo.js";
+import { quickbooksSource, columnValues, dateWindows, mergeGrids } from "../../src/engine/qbo.js";
 
 const col = (title, type) => ({ ColTitle: title, ColType: type });
 const leaf = (...values) => ({ ColData: values.map(v => ({ value: v })) });
@@ -212,5 +212,73 @@ describe("columnValues", () => {
     expect(columnValues(g, "Account")).toEqual(["Design income", "Fuel"]);
     expect(columnValues(g, "Section Path")).toEqual(["Income > Design income", "Expenses > Fuel"]);
     expect(columnValues(g, "Class")).toEqual([]);   // absent, not an error
+  });
+});
+
+describe("dateWindows — because the Reports API will not paginate", () => {
+  it("covers the range with no gaps and no overlaps", () => {
+    const w = dateWindows("2026-01-01", "2026-07-28", 3);
+    expect(w).toEqual([
+      { start: "2026-01-01", end: "2026-03-31" },
+      { start: "2026-04-01", end: "2026-06-30" },
+      { start: "2026-07-01", end: "2026-07-28" },
+    ]);
+  });
+
+  it("ends exactly on the requested end, never past it", () => {
+    for (const months of [1, 2, 3, 6, 12]) {
+      const w = dateWindows("2024-03-15", "2026-07-28", months);
+      expect(w[0].start).toBe("2024-03-15");
+      expect(w[w.length - 1].end).toBe("2026-07-28");
+      for (let i = 1; i < w.length; i++) expect(w[i].start > w[i - 1].end).toBe(true);
+    }
+  });
+
+  it("does not shift a date by a timezone, which is why it never builds a Date", () => {
+    // `new Date("2026-01-01")` is UTC midnight and reports as 31 Dec in Denver. The suite runs under
+    // TZ=America/Denver precisely so this assertion means something.
+    expect(dateWindows("2026-01-01", "2026-01-31", 1)[0].start).toBe("2026-01-01");
+  });
+
+  it("handles a leap February and a year boundary", () => {
+    expect(dateWindows("2024-01-01", "2024-12-31", 2)[0].end).toBe("2024-02-29");
+    const w = dateWindows("2025-11-01", "2026-02-28", 2);
+    expect(w[0]).toEqual({ start: "2025-11-01", end: "2025-12-31" });
+    expect(w[1]).toEqual({ start: "2026-01-01", end: "2026-02-28" });
+  });
+
+  it("returns a single window when the range is shorter than one", () => {
+    expect(dateWindows("2026-05-01", "2026-05-09", 3))
+      .toEqual([{ start: "2026-05-01", end: "2026-05-09" }]);
+  });
+
+  it("refuses nonsense rather than looping", () => {
+    expect(dateWindows("", "2026-01-01")).toEqual([]);
+    expect(dateWindows("2026-01-01", "2026-06-01", 0)).toEqual([]);
+  });
+});
+
+describe("mergeGrids", () => {
+  it("unions headers rather than assuming every window returned the same columns", () => {
+    // A quarter where nothing carried a Class returns no Class column. Concatenating positionally
+    // would file its amounts under a different heading — plausible numbers, wrong field.
+    const a = { headers: ["Date", "Amount", "Class"], rows: [["2026-01-05", "10", "Grant A"]] };
+    const b = { headers: ["Date", "Amount"], rows: [["2026-04-05", "20"]] };
+    const g = mergeGrids([a, b]);
+    expect(g.headers).toEqual(["Date", "Amount", "Class"]);
+    expect(g.rows).toEqual([["2026-01-05", "10", "Grant A"], ["2026-04-05", "20", ""]]);
+  });
+
+  it("keeps window order and drops nothing", () => {
+    const g = mergeGrids([
+      { headers: ["A"], rows: [["1"], ["2"]] },
+      { headers: ["A"], rows: [["3"]] },
+    ]);
+    expect(g.rows.flat()).toEqual(["1", "2", "3"]);
+  });
+
+  it("survives empty and malformed input", () => {
+    expect(mergeGrids([]).rows).toEqual([]);
+    expect(mergeGrids([null, undefined, {}]).rows).toEqual([]);
   });
 });

@@ -12,3 +12,9 @@ dist
 # Secret bundles for `supabase secrets set --env-file` — real values, never committed.
 *.secrets.env
 stripe-secrets.env
+
+# Live OAuth tokens and the file that seeds them. Never committed.
+.qbo-tokens.json
+.qbo-tokens.json.tmp
+.env.qbo
+qbo-fixture-*.json

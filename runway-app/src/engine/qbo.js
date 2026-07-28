@@ -111,3 +111,63 @@ export function columnValues(grid, header) {
   }
   return [...seen];
 }
+
+// ---------------------------------------------------------------- windows --
+// The Reports API caps a response at 400,000 cells and DOES NOT PAGINATE. Past the cap it appends
+// "Unable to display more data. Please reduce the date range" — and returns 200, so a caller that
+// checks only the status silently imports a truncated year.
+//
+// The answer is to ask for less at a time, which makes date arithmetic part of the sync. Done on the
+// STRING, deliberately: `new Date("2026-01-01")` parses as UTC midnight and then reports a local date,
+// so in a negative-offset timezone it is the 31st of December. This project has already been bitten by
+// that class of bug and its tests run under TZ=America/Denver to keep it visible.
+
+const pad = (n) => String(n).padStart(2, "0");
+const partsOf = (iso) => {
+  const [y, m, d] = String(iso).split("-").map(Number);
+  return { y, m, d };
+};
+const lastDayOf = (y, m) => [31, (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28,
+                             31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+
+/** Split an inclusive date range into consecutive windows of at most `months` calendar months.
+ *  No gaps, no overlaps, and the last window ends exactly on `end`. */
+export function dateWindows(start, end, months = 3) {
+  const a = partsOf(start), b = partsOf(end);
+  if (!a.y || !b.y || months < 1) return [];
+  const out = [];
+  let y = a.y, m = a.m, d = a.d;
+  for (;;) {
+    // last day of the window: advance `months`, step back one day
+    let ey = y, em = m + months - 1;
+    ey += Math.floor((em - 1) / 12); em = ((em - 1) % 12) + 1;
+    let ed = lastDayOf(ey, em);
+    const windowEnd = `${ey}-${pad(em)}-${pad(ed)}`;
+    const stop = windowEnd >= end;
+    out.push({ start: `${y}-${pad(m)}-${pad(d)}`, end: stop ? end : windowEnd });
+    if (stop) break;
+    // next window starts the day after
+    m = em + 1; y = ey; d = 1;
+    if (m > 12) { m = 1; y += 1; }
+    if (out.length > 600) break;   // a runaway loop is worse than a partial answer
+  }
+  return out;
+}
+
+/** Combine grids from several windows into one. Headers are unioned rather than assumed identical:
+ *  a quarter with no Class on any transaction returns no Class column, and concatenating positionally
+ *  would file its amounts under someone else's heading. */
+export function mergeGrids(grids) {
+  const list = (grids || []).filter(g => g && Array.isArray(g.headers));
+  if (!list.length) return { headers: [], rows: [] };
+
+  const headers = [];
+  for (const g of list) for (const h of g.headers) if (!headers.includes(h)) headers.push(h);
+
+  const rows = [];
+  for (const g of list) {
+    const at = headers.map(h => g.headers.indexOf(h));
+    for (const row of g.rows || []) rows.push(at.map(i => (i < 0 ? "" : row[i] ?? "")));
+  }
+  return { headers, rows };
+}

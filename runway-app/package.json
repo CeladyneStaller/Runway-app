@@ -19,7 +19,9 @@
     "stats:compute": "node scripts/compute-stats.mjs",
     "stripe:test-event": "node scripts/stripe-test-event.mjs",
     "verify:audit": "node scripts/verify-audit.mjs",
-    "qbo:probe": "node scripts/qbo-probe.mjs"
+    "qbo:probe": "node scripts/qbo-probe.mjs",
+    "qbo:sync": "node scripts/qbo-sync.mjs",
+    "qbo:keepalive": "node scripts/qbo-sync.mjs --keepalive"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

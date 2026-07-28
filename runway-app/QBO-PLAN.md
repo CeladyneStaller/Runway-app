@@ -265,6 +265,34 @@ What this stage is actually for is the operational reality, which is where Quick
   multi-company too, so the connection is realm↔company and a person can absolutely connect the wrong
   pair. Whatever the UI ends up being, it has to show the QuickBooks company NAME back for confirmation.
 
+**BUILT 28 Jul 2026.** `npm run qbo:sync` — refresh, fetch, flatten, report — and
+`npm run qbo:keepalive`, which does only the refresh and is the whole of what a scheduled job needs to
+do. Config from `.env.qbo` or the environment; tokens in `.qbo-tokens.json`; all four gitignored.
+
+Two pure pieces moved into `src/engine/qbo.js` because Stage 5 will need them again and they are
+testable without a network — 9 more tests:
+
+- **`dateWindows(start, end, months)`.** The Reports API caps a response at 400,000 cells and does NOT
+  paginate; past the cap it appends "Unable to display more data" and returns **200**, so a sync that
+  checks only the status imports a partial year and reports a confident wrong number. Windowing is
+  therefore not an optimisation, it is correctness. Done on the STRING: `new Date("2026-01-01")` is UTC
+  midnight and reports as 31 December in Denver, and this suite runs under `TZ=America/Denver` so that
+  assertion means something.
+- **`mergeGrids(grids)`.** Headers are UNIONED, not assumed identical — a quarter where nothing carried
+  a Class returns no Class column, and concatenating positionally would file its amounts under a
+  different heading. Plausible numbers, wrong field, no error.
+
+**THE THING THIS STAGE EXISTS TO GET RIGHT is that a refresh token is SINGLE-USE.** Every refresh
+returns a new one and kills the old immediately. So the script persists the new token BEFORE the access
+token is used for anything, and writes it atomically — temp file then rename, 0600 — because a crash
+between "received" and "written" disconnects the customer and the only repair is asking them to
+authorise again. Verified by simulating a crash with a half-written temp file: the store stays intact.
+Stage 4 gets the same property from a transaction instead of a rename.
+
+It also stores `x_refresh_token_expires_in` as an absolute time, prints the days remaining, and names
+the company back from `/companyinfo` — one Intuit login can own several companies and this app is
+multi-company too, so the realm-to-company pairing is something a person can get wrong silently.
+
 **STOP IF:** the keep-alive obligation is heavier than the feature is worth. A connection that dies
 silently between quarters produces "the sync is broken" support load against a $149 tier.
 
