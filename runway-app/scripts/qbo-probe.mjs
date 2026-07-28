@@ -19,6 +19,13 @@
 const args = process.argv.slice(2);
 const fixtureAt = args.indexOf("--fixture");
 const FIXTURE = fixtureAt >= 0 ? args[fixtureAt + 1] : null;
+const reportAt = args.indexOf("--report");
+// DEFAULT CHANGED FROM GeneralLedger AFTER THE FIRST RUN. A GL is DOUBLE-ENTRY: every transaction
+// appears under both accounts it touches, so importing it counts everything twice with opposite signs,
+// and the account a row is filed under is as likely to be "Checking" as a category. `importer.js` was
+// built for an expense register — one row per transaction — and ProfitAndLossDetail is that: grouped
+// by income and expense account, balance-sheet noise and opening balances excluded.
+const REPORT = reportAt >= 0 ? args[reportAt + 1] : "ProfitAndLossDetail";
 
 const need = (k) => {
   const v = process.env[k];
@@ -82,17 +89,39 @@ async function main() {
     // with what somebody sees in their own QuickBooks is a trust problem before it is a data problem.
     const prefs = await qbo("/preferences", token, realm);
     method = prefs?.Preferences?.ReportPrefs?.ReportBasis || "unknown";
-    console.log(`Company reports on: ${method}\n`);
+    console.log(`Company reports on: ${method}   |   report: ${REPORT}\n`);
+
+    // WHY `klass_name` CAME BACK EMPTY, asked properly. "Not returned" has two very different causes:
+    // the report cannot give them, or this company has none to give. Only one of those is a problem,
+    // and grant-funded organisations frequently carry their attribution in Classes — so this is the
+    // question Stage 1 actually turns on.
+    const ai = prefs?.Preferences?.AccountingInfoPrefs || {};
+    const tracking = [ai.ClassTrackingPerTxn, ai.ClassTrackingPerTxnLine].some(Boolean);
+    let classCount = null;
+    try {
+      const q = encodeURIComponent("select count(*) from Class");
+      const r = await qbo(`/query?query=${q}&minorversion=70`, token, realm);
+      classCount = r?.QueryResponse?.totalCount ?? 0;
+    } catch { /* the diagnostic failing is not the run failing */ }
+    console.log(`Class tracking enabled: ${tracking ? "yes" : "no"}   |   classes defined: ${classCount ?? "?"}`);
+    if (!tracking || classCount === 0) {
+      console.log("  -> so an empty `klass_name` says NOTHING about the API. This company simply has no");
+      console.log("     classes. To answer it: turn on class tracking in the sandbox, tag two");
+      console.log("     transactions, and re-run. Until then Classes remain the open question.\n");
+    } else {
+      console.log("  -> classes EXIST here, so an empty `klass_name` is the report's limit, not the");
+      console.log("     company's. Try `--report TransactionList`, which supports different columns.\n");
+    }
 
     const q = new URLSearchParams({
       start_date: START, end_date: END,
       columns: COLUMNS.join(","),
       ...(method !== "unknown" ? { accounting_method: method } : {}),
     });
-    report = await qbo(`/reports/GeneralLedger?${q}`, token, realm);
+    report = await qbo(`/reports/${REPORT}?${q}`, token, realm);
 
     const { writeFileSync } = await import("node:fs");
-    const path = `qbo-fixture-${today}.json`;
+    const path = `qbo-fixture-${REPORT}-${today}.json`;
     writeFileSync(path, JSON.stringify(report, null, 2));
     console.log(`Raw response saved to ${path} — this is Stage 2's fixture.\n`);
   }
@@ -135,6 +164,46 @@ async function main() {
   console.log(`  section header ${String(sectioned).padStart(5)} rows  ${pct(sectioned, rows.length)}` +
               "   <- the account, carried from the enclosing section");
 
+  // ---- WHICH accounts, not just whether there is one -------------------------
+  // The first run scored 100% "attributable" while every code was `Checking`. A bank account is not
+  // attribution; it is the other side of the entry. A histogram makes that visible in one glance.
+  const bySection = new Map();
+  for (const r of rows) bySection.set(r.section || "(none)", (bySection.get(r.section || "(none)") || 0) + 1);
+  const top = [...bySection.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+  console.log(`\nROWS BY ACCOUNT (${bySection.size} distinct)`);
+  for (const [name, n] of top) console.log(`  ${String(n).padStart(5)}  ${name}`);
+  const BANKISH = /checking|savings|bank|cash on hand|accounts (receivable|payable)|a\/[rp]|undeposited/i;
+  const bankRows = rows.filter(r => BANKISH.test(r.section || "")).length;
+  if (bankRows) {
+    console.log(`\n  ${bankRows} rows (${pct(bankRows, rows.length)}) are filed under a BALANCE-SHEET`);
+    console.log("  account. Those are the cash side of an entry, not a category — if this is a GL,");
+    console.log("  the same transactions also appear under their expense account.");
+  }
+
+  // ---- is this double-entry? --------------------------------------------------
+  // Same day, same document number, equal magnitude, opposite sign = one transaction seen twice.
+  // ROWS WITHOUT A DOCUMENT NUMBER ARE EXCLUDED FROM THIS. With `doc_num` blank the key collapses to
+  // date+amount, and two unrelated $8.75 discounts on the same day look like one transaction seen
+  // twice. The first version counted those and failed a clean report on 4 rows out of 123.
+  const pairs = new Map();
+  for (const r of rows) {
+    const doc = String(cell(r, "doc_num")).trim();
+    if (!doc) continue;
+    const k = `${cell(r, "tx_date")}|${doc}|${Math.abs(Number(String(cell(r, "subt_nat_amount")).replace(/[^0-9.-]/g, "")) || 0)}`;
+    pairs.set(k, (pairs.get(k) || 0) + 1);
+  }
+  const doubled = [...pairs.values()].filter(n => n > 1).reduce((a, n) => a + n, 0);
+  // And a THRESHOLD, not a tripwire. Genuine double entry is most of a report, not a rounding error;
+  // a pass/fail on `> 0` turns any coincidence into a stop signal, which is how a useful check gets
+  // ignored.
+  const doubledPct = doubled / Math.max(rows.length, 1);
+  if (doubled) {
+    console.log(`\n  DOUBLE-ENTRY SUSPECTED: ${doubled} rows (${pct(doubled, rows.length)}) share a date,`);
+    console.log("  document number and magnitude with another row. Importing all of them would count");
+    console.log("  those transactions twice. This is what a General Ledger looks like, and it is why");
+    console.log("  the default report here is ProfitAndLossDetail.");
+  }
+
   // ---- what an ImportRow would look like --------------------------------------
   console.log("\nFIRST ROWS AS ImportRow[] (date + amount required; the rest is attribution)");
   const sample = rows.slice(0, 8).map(r => ({
@@ -147,15 +216,23 @@ async function main() {
   console.log(JSON.stringify(sample, null, 2));
 
   // ---- the verdict, said out loud ---------------------------------------------
-  const codeable = rows.filter(r =>
-    cell(r, "klass_name") || cell(r, "account_name") || r.section).length;
+  // USABLY coded, which is a different question from coded. A row filed under a bank account has a
+  // string in the code slot and no attribution in it — the first version of this probe counted those
+  // and reported 100%, which is how a probe tells you what you hoped instead of what is there.
+  const usable = rows.filter(r => {
+    const code = cell(r, "klass_name") || cell(r, "account_name") || r.section || "";
+    return code && !BANKISH.test(code);
+  }).length;
   console.log("\n" + "-".repeat(72));
-  console.log(`ATTRIBUTABLE ROWS: ${codeable} of ${rows.length} (${pct(codeable, rows.length)})`);
-  console.log(codeable / Math.max(rows.length, 1) > 0.9
-    ? "Every row can be given a code. The seam holds — Stage 2 is worth writing."
-    : "SOME ROWS CANNOT BE CODED. Before going further, find out where those transactions carry\n" +
-      "their attribution in the real books. An import that looks automatic and allocates wrongly\n" +
-      "is worse than the file path it replaces.");
+  console.log(`USABLY CODED ROWS: ${usable} of ${rows.length} (${pct(usable, rows.length)})`);
+  console.log(`  (a code that names a bank account does not count — it is the other side of the entry)`);
+  const ok = usable / Math.max(rows.length, 1) > 0.9 && doubledPct < 0.1;
+  console.log(ok
+    ? "\nEvery row carries a category and nothing looks double-counted. The seam holds — Stage 2 is\nworth writing against this fixture."
+    : "\nNOT YET. Either rows lack a usable category or the same transactions appear twice. Try\n" +
+      "`--report TransactionList` and compare, and check whether this company codes with Classes\n" +
+      "at all. An import that looks automatic and allocates wrongly is worse than the file path it\n" +
+      "replaces, and this is the stage that is supposed to catch that.");
   console.log("\nREMEMBER: a sandbox proves the MECHANISM. Only a real chart of accounts proves the");
   console.log("MAPPING — and the file importer already eats a GL export, so a prospect's export run");
   console.log("through the existing import screen answers Stage 1b with no code at all.");

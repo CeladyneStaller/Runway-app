@@ -86,6 +86,37 @@ today.** Ask a prospect for one, run it through the existing import, and watch w
 matcher finds their codes. That answers the mapping question with zero QuickBooks code written, and it
 is a customer conversation worth having regardless of whether this phase ever ships.
 
+**FIRST RESULT, 28 Jul 2026 — sandbox, and the probe was wrong before it was right.** GeneralLedger
+returned 335 rows, every one carrying a code, and the probe called it 100% attributable. Every code was
+`Checking`. Two faults, one in the report and one in the question:
+
+- **A GENERAL LEDGER IS DOUBLE-ENTRY.** Each transaction appears under BOTH accounts it touches, so
+  importing it counts everything twice with opposite signs, and the account a row is filed under is as
+  likely to be the bank as a category. `importer.js` says in its own comment that it matches "a typical
+  expense-register export" — one row per transaction. GL is not that. The default is now
+  **ProfitAndLossDetail**: grouped by income and expense account, one line per transaction, no
+  balance-sheet noise and no opening balances.
+- **THE PROBE ASKED "IS THERE A CODE" RATHER THAN "IS IT THE RIGHT DIMENSION."** A bank account name
+  fills the code slot and carries no attribution. It now scores rows as USABLY coded, prints a
+  histogram of accounts, and flags rows whose date, document number and magnitude match another row —
+  the signature of double entry. Both checks fail on the very fixture the first version passed.
+
+**SECOND RESULT, same afternoon — ProfitAndLossDetail, and Stage 1a is PASSED for account coding.**
+123 rows across 30 genuine income and expense accounts (Landscaping Services, Plants and Soil, Design
+income), 100% usably coded, customer names arriving via the `name` column, and no meaningful double
+entry. The seam holds: an account-coded company maps onto `ImportRow` without argument.
+
+The probe failed it anyway, and that was a THIRD bug in the question rather than the data: 4 rows out
+of 123 tripped the double-entry check because rows with a blank `doc_num` collapse the key to
+date+amount, so two unrelated discounts on one day look like one transaction seen twice. The key now
+skips rows without a document number and the verdict uses a threshold rather than a tripwire — genuine
+double entry is most of a report, not a rounding error, and a check that fails on any coincidence is a
+check people learn to ignore.
+
+Also unanswered: `klass_name` was requested and NOT RETURNED. Classes are how many grant-funded
+organisations code, so whether that is a GL limitation, a wrong column name for this report, or a
+sandbox with no classes defined is still open — and it matters more than anything else here.
+
 **STOP IF:** attribution cannot be recovered from what the API returns — for example, coding lives only
 in Classes the report does not expose, or in free-text memos with no convention. Then the live
 connection would import numbers nobody can allocate, which is worse than the file path: it looks
