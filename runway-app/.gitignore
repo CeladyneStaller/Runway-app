@@ -8,3 +8,7 @@ dist
 .env
 .env.*
 !.env.example
+
+# Secret bundles for `supabase secrets set --env-file` — real values, never committed.
+*.secrets.env
+stripe-secrets.env

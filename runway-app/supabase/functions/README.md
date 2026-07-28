@@ -107,7 +107,35 @@ supabase secrets set \
   STRIPE_PRICE_IDS='{"solo":"price_AAA","advisor":"price_BBB","connected":"price_CCC"}'
 ```
 
-PowerShell does not take the backslash continuations — put it on one line, or use backticks.
+**POWERSHELL EATS THE QUOTES IN JSON SECRETS. Use an env file instead.** Windows PowerShell strips
+embedded double quotes when passing arguments to a native executable, so
+
+```powershell
+supabase secrets set STRIPE_PRICE_IDS='{"solo":"price_123"}'      # DO NOT
+```
+
+stores `{solo:price_123}`. In `stripe-webhook` that parses defensively and every subscription
+SILENTLY lands on `solo`; in `stripe-checkout` it used to throw at module scope, so the function never
+booted and the browser reported it as a CORS failure. Two very different symptoms, one cause.
+
+Put them in a file, where no shell touches them:
+
+```
+# stripe-secrets.env  — delete it afterwards; it is gitignored
+STRIPE_PRICE_IDS={"solo":"price_123","advisor":"price_456","connected":"price_789"}
+STRIPE_PRICE_MAP={"price_123":"solo","price_456":"advisor","price_789":"connected"}
+```
+
+```powershell
+supabase secrets set --env-file stripe-secrets.env
+```
+
+The one-liner escape (`'{\"solo\":\"price_123\"}'`) also works and is easy to get subtly wrong.
+
+**You cannot read a secret back** — `supabase secrets list` shows names and a digest, not values — so
+verify by what the function LOGS on boot, never by inspecting the secret.
+
+PowerShell also does not take the backslash continuations above — put it on one line, or use backticks.
 
 **Which function reads what**, since they differ and a missing one fails in its own way:
 
