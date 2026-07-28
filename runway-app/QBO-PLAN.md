@@ -293,6 +293,19 @@ It also stores `x_refresh_token_expires_in` as an absolute time, prints the days
 the company back from `/companyinfo` — one Intuit login can own several companies and this app is
 multi-company too, so the realm-to-company pairing is something a person can get wrong silently.
 
+**FIRST RUN, and both faults were in the script rather than in QuickBooks.** `401 invalid_client`
+followed by a native crash:
+
+- **`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`** — libuv aborting on Windows because the
+  script called `process.exit()` while a fetch socket was still open. It reads like a broken API client
+  and is nothing of the sort. Nothing in the file exits any more: failures throw a `Fail`, `main()`
+  catches it and sets `process.exitCode`, and the event loop drains on its own.
+- **`.env.qbo` still held the template's dots.** `invalid_client` is about the CLIENT ID AND SECRET,
+  not the refresh token, so the error pointed at the Intuit app rather than at a copied placeholder.
+  Config is now refused before the network is touched — the same guard the Stripe test script already
+  had for its uuid, which should have been carried over and was not. The `invalid_client` message also
+  now names its three real causes, including production keys against a sandbox realm.
+
 **STOP IF:** the keep-alive obligation is heavier than the feature is worth. A connection that dies
 silently between quarters produces "the sync is broken" support load against a $149 tier.
 
