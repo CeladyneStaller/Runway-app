@@ -51,7 +51,9 @@ missing; it is not, it was simply never planned here. `NOTES.md` carries its rea
 mode, a real card has been charged, and the subscription round trip — purchase, row, entitlement,
 portal — is confirmed end to end. Of the four items that blocked taking money, three are done and the
 fourth is LEGAL REVIEW, which is now the only thing standing between this product and a paying
-stranger. **WHAT IS ACTUALLY LEFT is §8.**
+stranger. **AS OF 28 JULY EVERY REMAINING ITEM IS TRIGGER-BOUND RATHER THAN OPEN**, which is a different state
+from a backlog: nothing is waiting on somebody remembering it, each one names the event that starts
+it. Marked `[~]`. **WHAT IS ACTUALLY LEFT is §8.**
 
 ---
 
@@ -454,6 +456,13 @@ are all untouched. "New source, not new pipeline" holds.
 
 ### 3.4 Rollout actions
 
+> **A stage-by-stage build plan is in `QBO-PLAN.md`**, ordered by what could kill the phase rather than
+> by what depends on what, with a stop condition at each stage. The list below is still the inventory of
+> work; that file is the order to do it in. In short: the first week answers whether QuickBooks carries
+> the attribution this model needs and what a live connection costs to KEEP, and both answers arrive
+> before any token is stored anywhere.
+
+
 1. QuickBooks developer app; sandbox company first.
 2. `qbo_connections` + Vault-encrypted token columns + RLS.
 3. Edge Function: `connect`, `callback`, `refresh`, `sync`, `disconnect`.
@@ -677,11 +686,40 @@ the journal's own Phase 2 and 3 need.
       reasoning for excluding saves recorded in the migration and §5 amended to match rather than left
       claiming more than the table does. `npm run verify:audit` proves both halves: that it records,
       and that a client cannot insert, update or delete a row.
-- [ ] **Rate-limit `save_document` per user.** Nothing limits it today.
-- [ ] **Backups: independent dump + a tested restore. THE TRIGGER HAS ESSENTIALLY FIRED.** The
-      deferral was agreed against "the first real customer document", and billing going live means
-      that is now days away rather than hypothetical. PITR alone is not a tested restore, and an
-      untested backup is a rumour. This is the item most likely to be regretted.
+- [~] **Rate-limit `save_document` per user. DEFERRED 28 Jul 2026, with a trigger — MEASURE FIRST.**
+      Nothing limits it today, and the cost of a flood is smaller than it looks: `documents` is one
+      upserted row per company and `document_versions` is capped at 20 with 5-minute coalescing, so an
+      abuser burns CPU and egress but grows nothing. Against that, a mistuned limit stops a paying
+      customer saving their work — the one failure this codebase exists to prevent. TRIGGER: the stats
+      job starts counting saves per user per hour; build the limiter when a real number justifies a
+      real threshold, not before. Note the change is wider than a migration when it comes: a refusal
+      needs `ERR_RATE_LIMITED`, an entry in `isRetryable()`, and a backoff longer than the current
+      400/1500/4000, or the client either drops the work or retries straight back into the limit.
+- [~] **Backups. HELD 28 Jul 2026 as ONE decision with PITR, not split from it.** An earlier version of
+      this entry separated "the part that costs money" (PITR, managed daily backups) from "the part
+      that is free" (a `pg_dump` pipeline). That split was wrong and is corrected here rather than
+      quietly edited: a self-built logical dump is not a cheaper version of the paid path, it is a
+      DIFFERENT path with failure modes the paid one does not have. `supabase db dump` excludes the
+      `auth` schema, so a restore returns rows whose owners do not exist and trials that cannot be
+      computed — `company_entitled` reads `auth.users.created_at`. And restored tables inherit default
+      privileges, so a restore that omits
+      `alter default privileges in schema public revoke all on tables from anon, authenticated;`
+      hands blanket access to `anon` and silently undoes migration 002. Pro's managed restore has
+      neither problem. Building the pipeline now would buy a recovery route nobody has rehearsed, to be
+      used for the first time on the worst day.
+
+      WHAT THE PAID PATH STILL DOES NOT COVER is losing the ACCOUNT — deleting a project removes its
+      backups with it, so managed backups are no defence against a billing dispute, a compromised
+      credential or a mis-click. Pre-traction the only data that failure destroys is the author's, and
+      the app's JSON export is never gated, not even when unpaid, so exporting occasionally IS the
+      independent copy with no infrastructure attached. That stops being sufficient the moment somebody
+      else's numbers are in there.
+
+      TRIGGER: the same one as legal review — the first customer who is not the author. On that day the
+      order is Pro, then PITR, then one restore into a scratch project verified with `verify:isolation`
+      (grants and RLS come back too) and the golden number (the data came back REAL, not merely
+      present), then a Stripe resync, because `subscriptions` will be stale and Stripe can resend
+      events at the webhook.
 
 **Before taking money — DONE except legal, 28 Jul 2026**
 
@@ -696,10 +734,13 @@ the journal's own Phase 2 and 3 need.
 3. [x] **Test-mode checkout with `4242`, then a real live purchase.** `metadata.user_id` survives a
        real Checkout Session, the row lands with a `stripe_customer_id`, and the portal opens against
        it. This is the part the suite structurally cannot verify.
-4. [ ] **Send the legal drafts for review.** Privacy policy, terms and subprocessors are drafted and
-       unreviewed. THE LAST THING BETWEEN THIS PRODUCT AND A PAYING STRANGER, and the only item whose
-       lead time is not yours. Money can now be taken; that is precisely why this stops being an
-       item on a list and starts being an exposure.
+4. [~] **Send the legal drafts for review. HELD 28 Jul 2026 pending traction.** Privacy policy, terms
+       and subprocessors are drafted and unreviewed. Held knowingly, and the trigger is not a date: it
+       is THE FIRST CUSTOMER WHO IS NOT THE AUTHOR. Billing is live, so nothing technical stands
+       between today and that customer — the only thing standing there is not having sold to one yet.
+       Also the only item on this list whose lead time is not yours, so the trigger firing and the
+       review completing are weeks apart. Note for whoever reviews it: a `pg_dump` held in third-party
+       storage is a subprocessor, and sales tax is open (§7.3).
 
 **THE LESSON FROM THAT SEQUENCE, because it will happen again in Phase 2.** Every one of those four
 failures lived in DEPLOYMENT CONFIGURATION — a dashboard toggle, a shell-quoted secret, a header
