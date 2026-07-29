@@ -46,8 +46,11 @@ export async function tokenRequest(params, { clientId, clientSecret, fetchImpl =
   };
 }
 
+// The token exchange sends `redirect_uri` AGAIN and Intuit checks it AGAIN, so a stray byte that
+// slipped past the authorize step would fail here instead — one step later and much more confusingly.
 export const exchangeCode = (code, redirectUri, cfg) =>
-  tokenRequest({ grant_type: "authorization_code", code, redirect_uri: redirectUri }, cfg);
+  tokenRequest({ grant_type: "authorization_code", code,
+                 redirect_uri: cleanEnv("QBO_REDIRECT_URI", redirectUri) }, cfg);
 
 export const refreshTokens = (refreshToken, cfg) =>
   tokenRequest({ grant_type: "refresh_token", refresh_token: refreshToken }, cfg);
@@ -63,10 +66,30 @@ export async function revokeToken(token, { clientId, clientSecret, fetchImpl = f
   return { ok: res.ok, status: res.status };
 }
 
+/** TRIMMED, AND LOUD ABOUT IT.
+ *
+ *  A secret loaded from a CRLF env file arrives with a trailing `\r`. Nothing displays it, every
+ *  comparison a person can make by eye says the values are identical, and then `URLSearchParams`
+ *  encodes it as `%0D` and Intuit answers "The redirect_uri query parameter value is invalid" — an
+ *  error that sends you to check the thing that is already correct.
+ *
+ *  Trimming silently would hide it; refusing outright would break a deploy over a stray byte. So:
+ *  trim, and say exactly what was wrong so the env file gets fixed too. */
+export function cleanEnv(name, value) {
+  const raw = String(value ?? "");
+  const clean = raw.trim();
+  if (clean !== raw) {
+    const shown = JSON.stringify(raw.replace(clean, "…"));
+    console.error(`[qbo] ${name} had surrounding whitespace ${shown} — trimmed. ` +
+                  "A CRLF .env file is the usual cause; rewrite it with LF endings.");
+  }
+  return clean;
+}
+
 export function authorizeUrl({ clientId, redirectUri, state }) {
   const q = new URLSearchParams({
-    client_id: clientId, response_type: "code", scope: SCOPE,
-    redirect_uri: redirectUri, state,
+    client_id: cleanEnv("QBO_CLIENT_ID", clientId), response_type: "code", scope: SCOPE,
+    redirect_uri: cleanEnv("QBO_REDIRECT_URI", redirectUri), state,
   });
   return `${AUTHORIZE_URL}?${q}`;
 }

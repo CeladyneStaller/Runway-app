@@ -62,5 +62,10 @@ Deno.serve(async (req) => {
   if (!member.ok || (await member.json()) !== true) return json({ error: "forbidden" }, 403);
 
   const state = await signState({ companyId, userId }, STATE_SECRET);
-  return json({ url: authorizeUrl({ clientId: CLIENT_ID, redirectUri: REDIRECT_URI, state }) });
+  const url = authorizeUrl({ clientId: CLIENT_ID, redirectUri: REDIRECT_URI, state });
+  // LOGGED, because `redirect_uri` mismatches are invisible from the outside: Intuit's error names the
+  // parameter and not the difference, and every value a person can inspect by eye looks right. This
+  // line is the only place the byte-for-byte value actually sent is recoverable.
+  console.log(`[qbo-connect] redirect_uri=${JSON.stringify(new URL(url).searchParams.get("redirect_uri"))}`);
+  return json({ url });
 });
