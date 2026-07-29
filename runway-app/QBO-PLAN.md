@@ -509,6 +509,33 @@ why, at the point of refusal, in the log AND in the body.
 - Disconnect deletes the tokens AND calls Intuit's revoke endpoint. Deleting your copy of a credential
   is not revoking it.
 
+**BUILT 28 Jul 2026.** Migration 019, two scripts, one workflow, 11 tests.
+
+**THE SCHEDULER IS THE ALERTING CHANNEL.** `scripts/qbo-keepalive.mjs` calls `qbo-refresh`, reads
+`qbo_health()`, and EXITS NON-ZERO when something needs a person — GitHub marks the run failed and
+emails the repository owner. No webhook to maintain, no vendor to pay, and a notification path that
+already exists and is already watched. Monthly on the 4th, because the 1st is when every scheduled job
+on GitHub runs and cron there is best-effort under load; nothing here needs a particular day, only to
+have happened.
+
+**WHAT WAKES SOMEBODY AND WHAT DOES NOT** is a tested function (`scripts/qbo-alerts.mjs`), not an `if`
+inside a script — every wrong call in this entire phase was a one-line verdict nobody exercised, and
+this one decides between an email and silence.
+
+- WAKES: a connection that died this run; one still unreconnected from an earlier run (repeated,
+  because an alert that fires once is indistinguishable from a fixed problem); and a HEALTHY
+  connection that has stopped syncing, which is the failure the whole job exists for — nothing is
+  broken and the numbers stopped being true.
+- DOES NOT: transient refresh failures, a five-year ceiling still 90 days out, a connection that has
+  never synced. An alert that cries wolf monthly is filtered into a folder within a quarter, and then
+  the real one is invisible too.
+
+**`qbo_health()` counts and nothing else** — no company ids, no names, no realm ids. Its output lands
+in a CI log, and a log is not a place to put a customer's identity.
+
+Audit was already wired in 017 (`qbo.connect`, `qbo.sync`, `qbo.disconnect`, `qbo.needs_reauth` all
+call `log_audit`), and disconnect already revokes at Intuit before deleting locally.
+
 ---
 
 ## Stage 8 — Production, and only then a price

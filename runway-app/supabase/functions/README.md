@@ -190,6 +190,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 `base64url` on purpose — no `+`, `/` or `=`, so no shell or env file can mangle them.
 
+**The keep-alive needs THREE secrets in GITHUB, not in Supabase** — it is a scheduled job that calls
+in from outside: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the same `QBO_CRON_SECRET` value you
+set in Supabase. Repository → Settings → Secrets and variables → Actions. The workflow is
+`.github/workflows/qbo-keepalive.yml`; run it once with **Run workflow** rather than waiting a month
+to discover a typo.
+
 **Supabase secrets are PROJECT-WIDE, not per-function.** `qbo-connect` signs the state and
 `qbo-callback` verifies it, and both read the same `QBO_STATE_SECRET` from one `secrets set` — they
 cannot drift apart. Rotating it fails any authorization already in flight (a ten-minute window) and
