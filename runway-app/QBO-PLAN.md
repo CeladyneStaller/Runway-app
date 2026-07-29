@@ -477,6 +477,28 @@ the one that helps.
 not available here at all, `null` = available and not connected. Collapsing the last two put a Connect
 button in front of local-mode users that could never do anything; a test caught it.
 
+**FIRST LIVE SYNC, and the failure was a permission surface nobody looked at.** `qbo-sync` refreshed
+and rotated correctly, then failed reading `realm_id` STRAIGHT FROM THE TABLE over PostgREST — the one
+place any of these functions touched a table instead of an RPC. The response came back as an error
+object rather than an array, `?? []` turned it into `[]`, and `[0]?.realm_id` reported `undefined` as
+"no realm_id", a state that cannot exist.
+
+Either `service_role` lacked a grant that 017's revoke never restored, or RLS-with-no-policies returned
+zero rows; both produce the same shape and the repair is the same. **NOTES.md already records this from
+migration 001** — RLS and privileges are two independent gates, and a missing GRANT fails DIFFERENTLY
+from an RLS denial. Second time, same trap.
+
+018 fixes the CAUSE rather than the grant: `qbo_sync_context` returns the realm and the token in one
+`SECURITY DEFINER` call, so no Edge Function needs table privileges at all. Two round trips became one
+and a whole permission surface disappeared. `stripe-portal` still reads `subscriptions` the same way —
+it works, so that table's privileges are fine, but it is the same shape.
+
+**THE DEBUGGING COST MORE THAN THE BUG, and that is the note worth keeping.** Four rounds went to a
+409 whose meaning was already on screen in the panel and in the response body, while the browser
+console — which can only ever show a status code — was the thing being read. Both 409 branches also
+returned without logging anything server-side, so the function was silent about its own refusals. Say
+why, at the point of refusal, in the log AND in the body.
+
 ## Stage 7 — Operations
 **Cost:** a day. The stage that decides whether this is trustworthy.
 

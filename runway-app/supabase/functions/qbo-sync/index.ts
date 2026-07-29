@@ -50,17 +50,26 @@ Deno.serve(async (req) => {
   });
   if (!allowed.ok || (await allowed.json()) !== true) return json({ error: "forbidden" }, 403);
 
-  const stored = await rpc("qbo_refresh_token", { p_company_id: companyId });
-  const refreshToken = stored.ok ? await stored.json() : null;
-  if (!refreshToken) {
+  // ONE CALL FOR EVERYTHING THIS FUNCTION NEEDS FROM THE DATABASE. It used to fetch the token by RPC
+  // and then read `realm_id` from the table — two round trips and two permission surfaces, and the
+  // second one was missing a grant that turned a permission error into `undefined` and reported it as
+  // impossible data. A function that already has an RPC has no business also reaching into a table.
+  const ctxRes = await rpc("qbo_sync_context", { p_company_id: companyId });
+  const ctxBody = ctxRes.ok ? await ctxRes.json().catch(() => null) : await ctxRes.text();
+  if (!ctxRes.ok) {
+    console.error(`[qbo-sync] qbo_sync_context failed for ${companyId}: ${ctxRes.status} ${ctxBody}`);
+    return json({ error: "not_connected" }, 409);
+  }
+  const ctx = Array.isArray(ctxBody) ? ctxBody[0] : ctxBody;
+  const refreshToken = ctx?.refresh_token ?? null;
+  const realmId = ctx?.realm_id ?? null;
+  if (!refreshToken || !realmId) {
     // SAID OUT LOUD. This returned a bare 409 and logged nothing, so a connection that looked fine in
     // the UI failed with a status code and no explanation anywhere on the server. The three causes
     // below are entirely different repairs, and the RPC's own status is what tells them apart.
-    console.error(`[qbo-sync] no refresh token for ${companyId}: ` +
-      (stored.ok
-        ? "the RPC returned null — either there is no qbo_connections row, or its secret_id points at " +
-          "a Vault secret that cannot be read (check vault.decrypted_secrets)"
-        : `qbo_refresh_token failed with ${stored.status} — a grant or a missing function`));
+    console.error(`[qbo-sync] incomplete connection for ${companyId}: ` +
+                  `realm=${realmId ? "yes" : "no"} token=${refreshToken ? "yes" : "no"} — ` +
+                  "no row, or a secret_id pointing at a Vault secret that cannot be read");
     return json({ error: "not_connected" }, 409);
   }
 
@@ -98,16 +107,6 @@ Deno.serve(async (req) => {
     await rpc("qbo_mark_error", { p_company_id: companyId,
                                   p_error: "rotated token could not be stored", p_terminal: true });
     return json({ error: "needs_reauth" }, 409);
-  }
-
-  const conn = await fetch(
-    `${SUPABASE_URL}/rest/v1/qbo_connections?company_id=eq.${companyId}&select=realm_id`,
-    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
-  const realmId = ((await conn.json()) ?? [])[0]?.realm_id;
-  if (!realmId) {
-    console.error(`[qbo-sync] no realm_id for ${companyId} — a connection row exists with a usable ` +
-                  "token but no company attached to it, which should be impossible via qbo_connect");
-    return json({ error: "not_connected" }, 409);
   }
 
   const end = until || new Date().toISOString().slice(0, 10);
