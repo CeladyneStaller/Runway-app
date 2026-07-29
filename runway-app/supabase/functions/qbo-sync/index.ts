@@ -81,8 +81,24 @@ Deno.serve(async (req) => {
   }
   // STORED BEFORE THE ACCESS TOKEN IS USED FOR ANYTHING. Intuit invalidates the previous refresh
   // token the moment it issues a new one, so a rotation fetched and not stored is a dead connection.
-  await rpc("qbo_rotate", { p_company_id: companyId, p_refresh_token: tokens.refreshToken,
-                            p_refresh_expires_at: tokens.refreshExpiresAt });
+  //
+  // AND THE WRITE IS CHECKED. It was fire-and-forget: if `qbo_rotate` failed, Intuit had already
+  // killed the old token while the database still held it, the sync carried on and reported success,
+  // and the connection was dead from that moment with nothing anywhere saying so. The next sync would
+  // fail with `invalid_grant` and look like a QuickBooks problem.
+  //
+  // Failing here is the honest outcome: the customer sees an error and reconnects, instead of finding
+  // out weeks later that their numbers stopped updating.
+  const rotated = await rpc("qbo_rotate", { p_company_id: companyId, p_refresh_token: tokens.refreshToken,
+                                            p_refresh_expires_at: tokens.refreshExpiresAt });
+  if (!rotated.ok) {
+    console.error(`[qbo-sync] COULD NOT STORE THE ROTATED TOKEN for ${companyId}: ${rotated.status} ` +
+                  `${await rotated.text()} — the connection is now dead at Intuit's end and must be ` +
+                  "reconnected. This is the one failure in this function that cannot be retried away.");
+    await rpc("qbo_mark_error", { p_company_id: companyId,
+                                  p_error: "rotated token could not be stored", p_terminal: true });
+    return json({ error: "needs_reauth" }, 409);
+  }
 
   const conn = await fetch(
     `${SUPABASE_URL}/rest/v1/qbo_connections?company_id=eq.${companyId}&select=realm_id`,

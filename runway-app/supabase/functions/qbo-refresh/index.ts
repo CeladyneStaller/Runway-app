@@ -57,8 +57,19 @@ Deno.serve(async (req) => {
                                     p_error: `${t.error} ${t.detail}`.trim(), p_terminal: t.terminal });
       continue;
     }
-    await rpc("qbo_rotate", { p_company_id: row.company_id, p_refresh_token: t.refreshToken,
-                              p_refresh_expires_at: t.refreshExpiresAt });
+    // SAME CHECK AS qbo-sync, for the same reason: Intuit has already invalidated the old token by
+    // the time this runs, so a failed write leaves a connection that is dead and looks healthy. A
+    // keep-alive that quietly kills connections is worse than no keep-alive at all.
+    const stored2 = await rpc("qbo_rotate", { p_company_id: row.company_id, p_refresh_token: t.refreshToken,
+                                              p_refresh_expires_at: t.refreshExpiresAt });
+    if (!stored2.ok) {
+      console.error(`[qbo-refresh] ${row.company_id}: COULD NOT STORE the rotated token ` +
+                    `(${stored2.status}) — connection is dead and must be reconnected`);
+      await rpc("qbo_mark_error", { p_company_id: row.company_id,
+                                    p_error: "rotated token could not be stored", p_terminal: true });
+      terminal += 1;
+      continue;
+    }
     rotated += 1;
   }
 
