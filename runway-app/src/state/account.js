@@ -109,6 +109,56 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       return Array.isArray(rows) ? rows : [];
     },
 
+    // ---- QuickBooks -------------------------------------------------------
+    // The Edge Functions live behind the same base as billing, so they share this file's headers and
+    // its honest-failure handling rather than growing a second client with its own idea of what a
+    // 404 means.
+
+    /** Null when there is no connection. Never returns a token — the RPC cannot see one. */
+    async qboStatus(companyId) {
+      const rows = await rpc("qbo_connection_status", { p_company_id: companyId });
+      return Array.isArray(rows) ? (rows[0] ?? null) : (rows ?? null);
+    },
+
+    /** Returns Intuit's authorize URL. The CALLER navigates — this deliberately does not, so a popup
+     *  and a full-page redirect are both the caller's choice rather than this file's. */
+    async qboConnect(companyId) {
+      const r = await doFetch(`${base}/functions/v1/qbo-connect`, {
+        method: "POST", headers: await headers(), body: JSON.stringify({ company_id: companyId }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.url) {
+        throw new BackendError(ERR_UNREACHABLE,
+          body.error === "not_configured" ? "QuickBooks is not configured on the server yet."
+                                          : "Could not start the QuickBooks connection.");
+      }
+      return body.url;
+    },
+
+    /** Returns a Grid for the existing import screen — headers and rows, nothing interpreted. */
+    async qboSync(companyId, { since, until } = {}) {
+      const r = await doFetch(`${base}/functions/v1/qbo-sync`, {
+        method: "POST", headers: await headers(),
+        body: JSON.stringify({ company_id: companyId, since, until }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) return body;
+      // These three are told apart because they need DIFFERENT ACTIONS from the person reading them:
+      // reconnect, wait, or narrow the range. One generic failure message would send all three to
+      // support.
+      if (body.error === "needs_reauth") throw new BackendError(ERR_UNREACHABLE, "needs_reauth");
+      if (body.error === "truncated") throw new BackendError(ERR_UNREACHABLE, "truncated");
+      if (body.error === "not_connected") throw new BackendError(ERR_UNREACHABLE, "not_connected");
+      throw new BackendError(ERR_UNREACHABLE, "Could not reach QuickBooks. Try again shortly.");
+    },
+
+    async qboDisconnect(companyId) {
+      const r = await doFetch(`${base}/functions/v1/qbo-disconnect`, {
+        method: "POST", headers: await headers(), body: JSON.stringify({ company_id: companyId }),
+      });
+      if (!r.ok) throw new BackendError(ERR_UNREACHABLE, "Could not disconnect QuickBooks.");
+    },
+
     async restoreCompany(companyId) {
       await rpc("restore_company", { p_company_id: companyId });
     },

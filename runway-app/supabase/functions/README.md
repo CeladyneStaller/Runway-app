@@ -56,7 +56,29 @@ verify_jwt = false
 
 [functions.delete-account]
 verify_jwt = false
+
+[functions.qbo-connect]
+verify_jwt = false
+
+[functions.qbo-callback]
+verify_jwt = false
+
+[functions.qbo-sync]
+verify_jwt = false
+
+[functions.qbo-disconnect]
+verify_jwt = false
+
+[functions.qbo-refresh]
+verify_jwt = false
 ```
+
+**`qbo-callback` and `qbo-refresh` are off for DIFFERENT reasons than the rest**, and it is worth
+knowing which is which. The browser-facing ones verify the caller against `/auth/v1/user` themselves.
+`qbo-callback` has NO caller to verify — Intuit redirects a browser there with no session — and is
+guarded instead by an HMAC-signed `state` it issued itself (`_shared/oauth-state.js`).
+`qbo-refresh` is not user-facing at all: it is gated by `x-cron-secret`, has no CORS headers on
+purpose, and fails closed if the secret is unset.
 
 **Per deploy** — works, but a flag is a thing somebody forgets on the next deploy, and the failure is
 silent until somebody cannot pay you:
@@ -147,6 +169,21 @@ PowerShell also does not take the backslash continuations above — put it on on
 | `STRIPE_PRICE_MAP` | webhook | subscriptions silently land on `solo`, logged loudly |
 | `SITE_URL` | checkout, portal | also the CORS origin — see below |
 | `ALLOWED_ORIGINS` | **delete-account** | **every browser call refused** — see below |
+
+**QuickBooks secrets** (Stage 5 of `QBO-PLAN.md`):
+
+| Secret | Used by | Missing means |
+|---|---|---|
+| `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` | all five | `invalid_client` on every token call |
+| `QBO_REDIRECT_URI` | connect, callback | Intuit rejects the authorize request |
+| `QBO_STATE_SECRET` | connect, callback | connect refuses to issue an unsigned state (500) |
+| `QBO_CRON_SECRET` | refresh | the keep-alive refuses everything — it FAILS CLOSED |
+| `QBO_ENV` | callback, sync | defaults to sandbox |
+
+`QBO_REDIRECT_URI` must match the callback URL registered in the Intuit app EXACTLY —
+`https://<ref>.supabase.co/functions/v1/qbo-callback`. `QBO_STATE_SECRET` should be a long random
+string; it is the only thing standing between a stranger and attaching their QuickBooks to somebody
+else's company.
 
 **`ALLOWED_ORIGINS` is REQUIRED for `delete-account`, comma-separated, no trailing slash.** The
 allow-list FAILS CLOSED: unset means nothing is allowed, and the function logs

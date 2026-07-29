@@ -358,8 +358,14 @@ silently between quarters produces "the sync is broken" support load against a $
   days. Rotation is daily and the idle window ~100 days, so monthly catches a rotation with three
   months to spare.
 
-WATCH: Supabase logs statements by default, so a `vault.create_secret(...)` carrying a literal token
-can land in the logs UNENCRYPTED. Statement logging must be off before this holds a real token.
+WATCH: a `vault.create_secret(...)` carrying a LITERAL token can put it somewhere the Vault does not
+reach. Supabase's default is `log_statement = 'ddl'`, so ordinary calls are NOT logged — an earlier
+version of this note said otherwise and was wrong. What remains true: pgAudit is preloaded and a broad
+scope captures function parameters, and the dashboard SQL Editor keeps a query history that no
+Postgres setting governs. Every write in 017 passes the token as an RPC PARAMETER, which PostgREST
+sends in the request body and executes as a bind variable, so it never appears in statement text.
+Check with `show log_statement;` and `show "pgaudit.log";` — and never paste a live token into the
+SQL Editor.
 
 `qbo_connections`: company-scoped, RLS on, token columns encrypted with a key in Supabase Vault rather
 than relying on disk encryption — disk encryption protects a stolen drive, not a leaked read of the
@@ -409,6 +415,38 @@ Three lessons from the billing functions apply directly and should save a day of
 
 ---
 
+**BUILT 28 Jul 2026.** Five functions, plus two shared modules that carry the parts worth testing.
+
+- **`_shared/oauth-state.js`** — HMAC-signed `state`, 9 tests, weighted toward refusals. The callback
+  is the only unauthenticated entry point in the product: no session, no auth header, no CORS, so the
+  ONLY thing identifying the request is the state we signed and got back. A forged one attaches
+  somebody's QuickBooks to the wrong company. Signed rather than stored, because a pending-state table
+  needs a lifecycle, a cleanup and its own RLS while an HMAC needs a secret we must have anyway. The
+  signature is checked BEFORE the payload is parsed — parsing first means acting on attacker-controlled
+  JSON — and it expires in ten minutes so a signed link cannot be replayed out of a browser history.
+- **`_shared/qbo-intuit.js`** — every Intuit call in one place, because a refresh token ROTATES and
+  three functions storing the new one is three chances to get the order wrong. It also classifies
+  `invalid_grant` as TERMINAL, which is what lets callers tell "reconnect" apart from "retry later".
+- **`_shared/qbo-report.js`** — the Stage 2 flattener MOVED here, with `src/engine/qbo.js` re-exporting
+  it. One implementation, two runtimes: the Edge Function bundles only what sits under
+  `supabase/functions/`, the browser build imports from `src/engine/`, and a mapping fix landing in one
+  and not the other is exactly the class of failure this phase keeps finding.
+
+The three billing lessons applied and cost nothing this time: `verify_jwt = false` on all five with
+the caller verified inside, `_shared/cors.js` rather than hand-written headers, and no module-scope
+parse that can prevent boot.
+
+**Two functions are unauthenticated for DIFFERENT reasons, which the README now spells out.**
+`qbo-callback` has no caller to verify and is guarded by the signed state. `qbo-refresh` is not
+user-facing at all — gated by `x-cron-secret`, no CORS headers on purpose, and it fails closed when
+the secret is unset rather than leaving an open endpoint that walks every connection in the database.
+
+**Ordering decisions worth not re-litigating later.** Membership is checked at CONNECT, never at the
+callback, because the callback has no session to check it with. The rotated refresh token is stored
+BEFORE the access token is used for anything. Disconnect revokes at Intuit FIRST and deletes locally
+even if that fails, because a token we have thrown away but not revoked stays valid and we no longer
+hold it to revoke later.
+
 ## Stage 6 — The UI
 **Cost:** a day or two, because it is mostly reuse.
 
@@ -417,6 +455,27 @@ same mapping screen, same commit, same merge report. New source, not new pipelin
 company name wherever the connection is displayed (Stage 3).
 
 ---
+
+**BUILT 28 Jul 2026.** `views/chrome/QuickBooks.jsx`, four client calls on the account API, and one
+change to `ImportModal`. 13 tests.
+
+**THE SYNC BUTTON DOES NOT IMPORT ANYTHING.** It fetches a Grid and opens the SAME import screen a
+file opens — mapping, preview, merge report, commit. An integration that writes straight into the
+numbers is one nobody can check, and this product's entire output is a date computed from those
+numbers. `ImportModal` gained `initialGrid`, and the file path and the live path now share one
+`acceptGrid`, so profile matching and the guesses cannot drift between them.
+
+**THREE SYNC FAILURES ARE TOLD APART**, because they need three different actions: reconnect, wait, or
+sync a shorter period. A single "sync failed" would send all three to support.
+
+**THE RECONNECT BANNER CARRIES THE REASON** — "QuickBooks requires apps to be re-authorized every five
+years. Your mapping and history are kept." Without the cause, a reconnect prompt reads as the app
+being broken. `Sync now` is hidden while the connection cannot work, so the only offered action is
+the one that helps.
+
+**A THIRD STATE THE FIRST DRAFT DID NOT HAVE.** `undefined` = not looked yet, `false` = QuickBooks is
+not available here at all, `null` = available and not connected. Collapsing the last two put a Connect
+button in front of local-mode users that could never do anything; a test caught it.
 
 ## Stage 7 — Operations
 **Cost:** a day. The stage that decides whether this is trustworthy.

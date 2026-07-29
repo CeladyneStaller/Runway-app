@@ -11,6 +11,8 @@ import { ImportModal } from "./chrome/ImportModal";
 import { CodeMapModal } from "./chrome/CodeMapModal";
 import { CashActualModal } from "./chrome/modals";
 import { JournalPanel } from "./chrome/JournalPanel";
+import { QuickBooks } from "./chrome/QuickBooks";
+import { getAccountApi, getAuthAdapter } from "../state/sync";
 import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
 export function History({ journal = [], takeSnapshot = () => {}, currentCurve = [], routeTab, setRouteTab = () => {}, hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
@@ -48,6 +50,9 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
   const latest = actualRows.length ? (() => { const r = actualRows[actualRows.length - 1]; const model = modelStarts[r.m] ?? 0; const varc = r.cash - model; return { m: r.m, varc, pct: model ? Math.abs(varc / model * 100).toFixed(1) : "0" }; })() : null;
 
   const [importing, setImporting] = useState(false);
+  // A grid handed over by a sync. Opening the import screen with it means a live connection and a
+  // file land in exactly the same place, with the same mapping, preview and merge report.
+  const [synced, setSynced] = useState(null);
   const [codesOpen, setCodesOpen] = useState(false);
   const tabPrefs = useTabPrefs();
   const tab = resolveTab("hist", routeTab, "summary", tabPrefs);
@@ -307,11 +312,17 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
             </div>
           )}
 
+          <QuickBooks
+            account={getAccountApi?.()}
+            companyId={getAuthAdapter?.()?.activeCompany?.()}
+            onGrid={(grid, label) => { setSynced({ grid, label }); setImporting(true); }}
+          />
+
           <div className="panel">
             <div className="panel-h"><div><h3>Spend ledger</h3><p>Every line that left the bank, coded the way your books code it. Coded lines flow to their project automatically; uncoded lines stay in the company baseline. This is the shape a QuickBooks class export lands in.</p></div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button className="addbtn ghost" onClick={() => setCodesOpen(true)}>View cost codes</button>
-                <button className="addbtn ghost" onClick={() => setImporting(true)}>{I.plus} Import</button>
+                <button className="addbtn ghost" onClick={() => { setSynced(null); setImporting(true); }}>{I.plus} Import</button>
                 <button className="addbtn ghost" onClick={addMonthL}>{I.plus} Month</button>
               </div></div>
             {hist.length === 0 ? (
@@ -422,7 +433,8 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
             const others = (ps || []).filter(p => p.name !== prof.name);
             return [...others, prof];
           })}
-          onClose={() => setImporting(false)}
+          initialGrid={synced?.grid || null} initialLabel={synced?.label || ""}
+          onClose={() => { setImporting(false); setSynced(null); }}
         />
       )}
     </>

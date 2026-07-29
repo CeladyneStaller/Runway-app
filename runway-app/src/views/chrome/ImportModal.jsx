@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { fileToGrid, applyProfile, mergeImport, matchProfile, codesInRows } from "../../engine/importer";
 import { moneyFull } from "../../engine/money";
 import { I } from "./icons";
@@ -22,7 +22,7 @@ const AMOUNT_MODES = [
 // Guess a column for a field by fuzzy header match, so the dropdowns start pre-filled sensibly.
 const guess = (headers, needles) => headers.find(h => needles.some(n => h.toLowerCase().includes(n))) || "";
 
-export function ImportModal({ startY, startM, hist, profiles = [], projects = [], codeMap = {}, setCodeMap, customerMap = {}, setCustomerMap, onCommit, onSaveProfile, onClose }) {
+export function ImportModal({ startY, startM, hist, profiles = [], projects = [], codeMap = {}, setCodeMap, customerMap = {}, setCustomerMap, onCommit, onSaveProfile, onClose, initialGrid = null, initialLabel = "" }) {
   const [grid, setGrid] = useState(null);
   const [fileName, setFileName] = useState("");
   const [err, setErr] = useState(null);
@@ -31,28 +31,39 @@ export function ImportModal({ startY, startM, hist, profiles = [], projects = []
   const [amountMode, setAmountMode] = useState("signed");
   const [profileName, setProfileName] = useState("");
 
+  // ONE PATH FOR A FILE AND FOR A LIVE CONNECTION. `quickbooksSource` produces the same
+  // `{headers, rows}` that `fileToGrid` does, so profile matching, the guesses, the preview and the
+  // commit are shared rather than reimplemented — which is the whole reason Stage 2 aimed at a Grid
+  // instead of at finished rows.
+  const acceptGrid = useCallback((g, label) => {
+    setErr(null); setFileName(label || "");
+    if (!g?.headers?.length) { setErr("No columns found."); return; }
+    setGrid(g);
+    // pre-fill from a saved profile whose headers match, else guess
+    const match = matchProfile(profiles, g.headers);
+    if (match) {
+      setColumns(match.columns); setDateFormat(match.dateFormat); setAmountMode(match.amountMode);
+      setProfileName(match.name);
+    } else {
+      setColumns({
+        date: guess(g.headers, ["date"]), amount: guess(g.headers, ["amount", "amt", "total"]),
+        customer: guess(g.headers, ["customer", "client", "name"]),
+        code: guess(g.headers, ["class", "code", "account"]),
+        note: guess(g.headers, ["memo", "note", "description"]),
+      });
+    }
+  }, [profiles]);
+
   const onFile = async (file) => {
     if (!file) return;
-    setErr(null); setFileName(file.name);
     try {
-      const g = await fileToGrid(file);
-      if (!g.headers.length) { setErr("No columns found in that file."); return; }
-      setGrid(g);
-      // pre-fill from a saved profile whose headers match, else guess
-      const match = matchProfile(profiles, g.headers);
-      if (match) {
-        setColumns(match.columns); setDateFormat(match.dateFormat); setAmountMode(match.amountMode);
-        setProfileName(match.name);
-      } else {
-        setColumns({
-          date: guess(g.headers, ["date"]), amount: guess(g.headers, ["amount", "amt", "total"]),
-          customer: guess(g.headers, ["customer", "client", "name"]),
-          code: guess(g.headers, ["class", "code", "account"]),
-          note: guess(g.headers, ["memo", "note", "description"]),
-        });
-      }
+      acceptGrid(await fileToGrid(file), file.name);
     } catch (e) { setErr("Couldn't read that file: " + (e.message || e)); }
   };
+
+  // A grid handed in by a live connection takes the SAME route a file does. Keyed on the object so a
+  // second sync in the same session replaces the first rather than being ignored.
+  useEffect(() => { if (initialGrid) acceptGrid(initialGrid, initialLabel); }, [initialGrid, initialLabel, acceptGrid]);
 
   // memoised so the memo below can depend on the OBJECT rather than hand-listing what's inside it
   const profile = useMemo(() => ({ columns, dateFormat, amountMode }), [columns, dateFormat, amountMode]);

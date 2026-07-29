@@ -14,9 +14,15 @@
 -- exchange for saving an occasional round trip. Stage 3 measured that round trip at well under a
 -- second.
 --
--- WATCH: Supabase logs statements by default, so a `vault.create_secret(...)` call with a literal
--- token in it can land in the logs UNENCRYPTED. Every write below goes through a function that takes
--- the token as a parameter from the service role, and statement logging should be off in production.
+-- WATCH: A `vault.create_secret(...)` call carrying a LITERAL token can put that token somewhere the
+-- Vault does not reach. Supabase's default is `log_statement = 'ddl'`, so an ordinary call is not
+-- logged — but pgAudit is preloaded and a broad scope would capture function calls and their
+-- parameters, and the dashboard SQL Editor keeps its own query history that no Postgres setting
+-- governs. Hand-typing a real token into the editor is the realistic leak.
+--
+-- Every write below therefore takes the token as a PARAMETER. PostgREST sends RPC arguments in the
+-- request body and issues a parameterized query, so the value never appears in statement text at all.
+-- Verify with `show log_statement;` (expect ddl) and `show "pgaudit.log";` (expect none).
 
 create table if not exists qbo_connections (
   -- ONE CONNECTION PER COMPANY, enforced by making the company the key. Two realms feeding one
