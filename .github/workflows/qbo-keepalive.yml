@@ -1,5 +1,14 @@
 # The QuickBooks keep-alive, monthly.
 #
+# WHERE THIS FILE HAS TO LIVE: `.github/workflows/` at the ROOT OF THE REPOSITORY. The app itself sits
+# in a `runway-app/` subdirectory, so the repo root is one level ABOVE the app — which is why every
+# step below runs with `working-directory: runway-app`.
+#
+# The copy of this file that arrives inside `runway-app/.github/` in a release archive is INERT: GitHub
+# reads workflows only from the repository root, with no error anywhere if they are somewhere else. It
+# is shipped there so the file is version-controlled next to the code it runs; the live one is the copy
+# at the root. If they ever disagree, the root one is what actually happens.
+#
 # THE SCHEDULER IS ALSO THE ALERTING CHANNEL. `qbo-keepalive.mjs` exits non-zero when something needs
 # a person, GitHub marks the run failed, and GitHub emails whoever owns the repository. No webhook to
 # maintain, no vendor to pay, and a notification path that already exists and is already watched.
@@ -19,6 +28,11 @@ on:
 jobs:
   keepalive:
     runs-on: ubuntu-latest
+    # Job-level rather than per-step, so anything added later inherits it. A step that forgets would
+    # fail with "Cannot find module", which names the path and is at least self-explanatory.
+    defaults:
+      run:
+        working-directory: runway-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
