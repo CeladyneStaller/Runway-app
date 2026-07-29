@@ -172,13 +172,28 @@ PowerShell also does not take the backslash continuations above — put it on on
 
 **QuickBooks secrets** (Stage 5 of `QBO-PLAN.md`):
 
-| Secret | Used by | Missing means |
-|---|---|---|
-| `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` | all five | `invalid_client` on every token call |
-| `QBO_REDIRECT_URI` | connect, callback | Intuit rejects the authorize request |
-| `QBO_STATE_SECRET` | connect, callback | connect refuses to issue an unsigned state (500) |
-| `QBO_CRON_SECRET` | refresh | the keep-alive refuses everything — it FAILS CLOSED |
-| `QBO_ENV` | callback, sync | defaults to sandbox |
+**Three of these come FROM Intuit and three do not**, which is not obvious from a list of names.
+
+| Secret | Where it comes from | Used by | Missing means |
+|---|---|---|---|
+| `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` | **Intuit** — app → Keys & credentials, per environment | all five | `invalid_client` on every token call |
+| `QBO_REDIRECT_URI` | **Intuit** — must match a registered redirect URI exactly | connect, callback | Intuit rejects the authorize request |
+| `QBO_STATE_SECRET` | **you generate it** — see below | connect, callback | connect refuses to issue an unsigned state (500) |
+| `QBO_CRON_SECRET` | **you generate it** | refresh | the keep-alive refuses everything — it FAILS CLOSED |
+| `QBO_ENV` | **you choose** — `sandbox` or `production` | callback, sync | defaults to sandbox |
+
+The two you generate are just long random strings:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+
+`base64url` on purpose — no `+`, `/` or `=`, so no shell or env file can mangle them.
+
+**Supabase secrets are PROJECT-WIDE, not per-function.** `qbo-connect` signs the state and
+`qbo-callback` verifies it, and both read the same `QBO_STATE_SECRET` from one `secrets set` — they
+cannot drift apart. Rotating it fails any authorization already in flight (a ten-minute window) and
+nothing else.
 
 `QBO_REDIRECT_URI` must match the callback URL registered in the Intuit app EXACTLY —
 `https://<ref>.supabase.co/functions/v1/qbo-callback`. `QBO_STATE_SECRET` should be a long random
