@@ -52,13 +52,29 @@ Deno.serve(async (req) => {
 
   const stored = await rpc("qbo_refresh_token", { p_company_id: companyId });
   const refreshToken = stored.ok ? await stored.json() : null;
-  if (!refreshToken) return json({ error: "not_connected" }, 409);
+  if (!refreshToken) {
+    // SAID OUT LOUD. This returned a bare 409 and logged nothing, so a connection that looked fine in
+    // the UI failed with a status code and no explanation anywhere on the server. The three causes
+    // below are entirely different repairs, and the RPC's own status is what tells them apart.
+    console.error(`[qbo-sync] no refresh token for ${companyId}: ` +
+      (stored.ok
+        ? "the RPC returned null — either there is no qbo_connections row, or its secret_id points at " +
+          "a Vault secret that cannot be read (check vault.decrypted_secrets)"
+        : `qbo_refresh_token failed with ${stored.status} — a grant or a missing function`));
+    return json({ error: "not_connected" }, 409);
+  }
 
   const tokens = await refreshTokens(refreshToken, { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET });
   if (!tokens.ok) {
     // TERMINAL FAILURES SET `needs_reauth`; everything else is left alone to be retried. Marking a
     // transient network blip as needing re-authorisation would nag a working connection; treating a
     // dead token as transient retries it forever and nobody is ever told.
+    console.error(`[qbo-sync] refresh failed for ${companyId}: ${tokens.error} ${tokens.detail}` +
+      (tokens.terminal
+        ? "  TERMINAL — the stored refresh token is dead. Usually because something else refreshed " +
+          "the same authorization since (Intuit invalidates the previous token on rotation), or it " +
+          "sat unused past ~100 days. Only the customer reconnecting fixes it."
+        : "  transient — worth retrying"));
     await rpc("qbo_mark_error", { p_company_id: companyId, p_error: `${tokens.error} ${tokens.detail}`.trim(),
                                   p_terminal: tokens.terminal });
     return json({ error: tokens.terminal ? "needs_reauth" : "refresh_failed" }, tokens.terminal ? 409 : 502);
@@ -72,7 +88,11 @@ Deno.serve(async (req) => {
     `${SUPABASE_URL}/rest/v1/qbo_connections?company_id=eq.${companyId}&select=realm_id`,
     { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
   const realmId = ((await conn.json()) ?? [])[0]?.realm_id;
-  if (!realmId) return json({ error: "not_connected" }, 409);
+  if (!realmId) {
+    console.error(`[qbo-sync] no realm_id for ${companyId} — a connection row exists with a usable ` +
+                  "token but no company attached to it, which should be impossible via qbo_connect");
+    return json({ error: "not_connected" }, 409);
+  }
 
   const end = until || new Date().toISOString().slice(0, 10);
   const start = since || `${new Date().getFullYear() - 1}-01-01`;
