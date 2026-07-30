@@ -104,3 +104,45 @@ describe("the trial", () => {
     expect(TRIAL_DAYS).toBe(14);
   });
 });
+
+describe("the advisor ladder", () => {
+  it("prices two tiers, neither of them free", async () => {
+    const { ADVISOR_PLANS } = await import("../../src/state/plans.js");
+    expect(ADVISOR_PLANS.map(p => [p.id, p.price, p.companies]))
+      .toEqual([["advisor", 99, 3], ["advisor_unlimited", 199, Infinity]]);
+  });
+
+  it("stays above the cheapest marginal seat, or it becomes the cheap seat", async () => {
+    const { ADVISOR_PLANS, PLANS } = await import("../../src/state/plans.js");
+    // Solo -> Collaborative buys two extra seats for $59, about $30 each. An advisor plan below that
+    // would be a cheaper way to buy a seat, and the seat model would have a hole in it.
+    const perSeat = (PLANS[1].price - PLANS[0].price) / (PLANS[1].seats - PLANS[0].seats);
+    expect(Math.min(...ADVISOR_PLANS.map(p => p.price))).toBeGreaterThan(perSeat * 2);
+  });
+
+  it("agrees with advisor_companies_allowed() in migration 031", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { ADVISOR_PLANS } = await import("../../src/state/plans.js");
+    const sql = readFileSync("supabase/migrations/031_advisor_billing.sql", "utf8");
+    const fn = sql.slice(sql.indexOf("function advisor_companies_allowed"),
+                         sql.indexOf("$$;", sql.indexOf("function advisor_companies_allowed")));
+    expect(fn).toMatch(/'advisor'\s+then\s+3/);
+    expect(fn).toMatch(/'advisor_unlimited'\s+then\s+1000000/);
+    for (const p of ADVISOR_PLANS) expect(fn).toContain(`'${p.id}'`);
+  });
+
+  it("says what to DO when the plan is full", async () => {
+    const { advisorSummary } = await import("../../src/state/plans.js");
+    const s = advisorSummary({ plan: "advisor", status: "active", used: 3, allowed: 3 });
+    expect(s.state).toBe("full");
+    expect(s.text).toMatch(/upgrade|leave a company/i);
+  });
+
+  it("says plainly when a plan will not renew", async () => {
+    const { advisorSummary } = await import("../../src/state/plans.js");
+    const s = advisorSummary({ plan: "advisor", status: "active", used: 1, allowed: 3,
+                               cancel_at_period_end: true });
+    expect(s.state).toBe("ending");
+    expect(s.text).toMatch(/will not renew/i);
+  });
+});

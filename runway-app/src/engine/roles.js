@@ -71,6 +71,8 @@ export function removalRefusal({ actorRole, subjectRole, isSelf, ownerCount }) {
 export const REFUSALS = Object.freeze({
   advisor_is_viewer: "Advisors are always viewers — they hold no seat, and plan in their own scenarios " +
                      "rather than in the company's model.",
+  advisor_limit: "Your advisor plan covers a limited number of companies and is full. " +
+                 "Upgrade to Advisor Unlimited, or leave a company first.",
   no_seats_left: "Every seat on this plan is taken, including any pending invitations. " +
                  "Remove somebody, cancel an invitation, or move to a larger plan.",
   no_seat: "This company's seats are all taken, so you can read it but not save changes. " +

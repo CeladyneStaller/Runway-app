@@ -98,3 +98,56 @@ export function unpaidMessage(summary) {
   return "This company isn't covered by your plan, so changes aren't being saved. Your model is safe "
        + "and you can still export it.";
 }
+
+// ---- the advisor product -----------------------------------------------------
+// A SEPARATE LADDER, sold to a different person for a different thing. A company plan buys seats in
+// one company; an advisor plan buys the ability to work across many without taking a seat in any of
+// them. They share no table, no Stripe product and no vocabulary — `subscriptions` is keyed on the
+// company, `advisor_subscriptions` on the user.
+//
+// NO FREE TIER, and the floor is arbitrage rather than taste: the cheapest marginal seat is
+// Solo -> Collaborative, +$59 for two seats, about $30 each. An advisor plan below that would be a
+// cheaper way to buy seats, and the seat model would have a hole in it.
+export const ADVISOR_PLANS = [
+  {
+    id: "advisor",
+    name: "Advisor",
+    price: 99,
+    companies: 3,
+    blurb: "Up to three companies you advise.",
+    features: [
+      "A seat in three companies, without using any of their seats",
+      "Your own scenarios in each, shared only if you offer them",
+      "One portfolio view across all of them",
+    ],
+  },
+  {
+    id: "advisor_unlimited",
+    name: "Advisor Unlimited",
+    price: 199,
+    companies: Infinity,
+    blurb: "Every company you advise.",
+    features: [
+      "Everything in Advisor",
+      "No limit on companies",
+    ],
+  },
+];
+
+export const advisorPlanById = (id) => ADVISOR_PLANS.find(p => p.id === id) || null;
+
+/** What to say about an advisor's own plan. `used` and `allowed` come from `advisor_usage()`. */
+export function advisorSummary({ plan, status, used = 0, allowed = 0, cancel_at_period_end } = {}) {
+  if (!plan || status === "none") return { state: "none", text: "You do not have an advisor plan." };
+  const name = advisorPlanById(plan)?.name || plan;
+  const left = Math.max(0, allowed - used);
+  if (used >= allowed) {
+    return { state: "full", text: `${name}: ${used} of ${allowed} companies. ` +
+      "You cannot join another until you upgrade or leave one." };
+  }
+  return {
+    state: cancel_at_period_end ? "ending" : "active",
+    text: `${name}: ${used} of ${allowed} companies, ${left} left.` +
+          (cancel_at_period_end ? " Ends at the close of this period and will not renew." : ""),
+  };
+}

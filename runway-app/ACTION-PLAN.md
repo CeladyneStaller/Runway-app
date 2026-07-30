@@ -33,6 +33,21 @@ Pricing landed differently and better: **per ACCOUNT, not per company** — Solo
 Connected $149, with a 14-day trial computed from the signup timestamp and no card. The free slot is
 the oldest company you own, computed rather than stored, so `memberships` needed no seat column.
 
+**1.7 — Automatic subscription renewal, and a notice before one stops.** Stripe renews by default, so
+the work is not making renewal happen — it is NOTICING WHEN IT WILL NOT. `cancel_at_period_end` is now
+stored on both `subscriptions` and `advisor_subscriptions` (031), and `expiring_subscriptions(interval)`
+answers "which plans stop inside a month" across companies and advisors together, because losing a
+company plan and losing an advisor plan are the same surprise from different directions.
+
+What remains: the webhook has to WRITE `cancel_at_period_end` — the company half of that query is dead
+until it does — and something has to run the query and tell somebody. The keep-alive workflow already
+runs monthly with a service key and already fails a run when a person is needed, so it is the obvious
+home rather than a second scheduler.
+
+Worth deciding when it is built: WHO HEARS. For a company plan the owner is the billing contact; for an
+advisor plan it is the advisor. Probably both — plus the owners of any company an expiring advisor is
+in, because their advisor is about to start consuming a seat.
+
 ### Phase 2 — "downloadable"
 
 - **(a) PWA — DONE.** Manifest, service worker, install prompt. **Outstanding: PNG icons at 192 and
