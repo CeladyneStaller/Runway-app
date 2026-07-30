@@ -116,3 +116,31 @@ describe("telling broken from refused — the whole point", () => {
     }
   });
 });
+
+describe("a function that was deliberately removed is not reported as broken", () => {
+  const surface = rpcSurface(files).map(f => f.name);
+
+  it("drops it from the surface", () => {
+    // `my_plan` was dropped in 024 on purpose — "what am I paying for" stopped having one answer when
+    // subscriptions moved to the company. An earlier `grant execute` kept it on the list and the smoke
+    // run reported it BROKEN, which is a scanner crying wolf about correct work.
+    expect(surface).not.toContain("my_plan");
+    expect(surface).not.toContain("plan_company_allowance");
+  });
+
+  it("but keeps one that was dropped and recreated", () => {
+    // The reason the walk has to be ordered rather than set-based: several functions are dropped
+    // precisely so they can be recreated with a new shape.
+    for (const name of ["list_companies", "list_members", "apply_subscription_event",
+                        "accept_invitation"]) {
+      expect(surface, `${name} was dropped and recreated, and should still be callable`).toContain(name);
+    }
+  });
+
+  it("uses the LATEST definition's parameters, not the first", () => {
+    // `list_members` gained two OUT columns in 032 and `invite_member` changed twice; calling either
+    // with an old signature would be a 404 reported as a missing migration.
+    const fn = rpcSurface(files).find(f => f.name === "accept_invitation");
+    expect(fn.file).toBe("031_advisor_billing.sql");
+  });
+});

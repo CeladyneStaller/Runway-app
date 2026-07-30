@@ -33,25 +33,40 @@ export const SKIP = new Map([
  *  Read from the GRANTs rather than from the `create function` statements: what matters is the surface
  *  somebody can actually call. A definer function nobody may execute cannot break a customer. */
 export function rpcSurface(files) {
-  const defs = new Map();
-  const grants = new Map();
+  const live = new Map();
 
+  // WALKED IN ORDER, STATEMENT BY STATEMENT, because a function can be created, granted, dropped and
+  // created again across migrations — `list_companies` and `list_members` both are. Collecting all the
+  // creates and all the grants and intersecting them at the end ignores the drops, which reported
+  // `my_plan` as BROKEN forever: 024 removed it on purpose, and 009's old grant kept it on the list.
+  //
+  // A scanner that cries wolf about a deliberately deleted function is one people learn to skim.
   for (const { name: file, sql } of files) {
-    const fnRe = /create\s+(?:or\s+replace\s+)?function\s+(\w+)\s*\(([\s\S]*?)\)\s*\n?\s*returns\b/gi;
+    const re = new RegExp(
+      "create\\s+(?:or\\s+replace\\s+)?function\\s+(\\w+)\\s*\\(([\\s\\S]*?)\\)\\s*\\n?\\s*returns\\b" +
+      "|drop\\s+function\\s+(?:if\\s+exists\\s+)?(\\w+)\\s*\\(" +
+      "|grant\\s+execute\\s+on\\s+function\\s+(\\w+)\\s*\\(([^)]*)\\)\\s+to\\s+([\\w\\s,]+);",
+      "gi");
     let m;
-    while ((m = fnRe.exec(sql))) {
-      defs.set(m[1], { name: m[1], params: parseParams(m[2]), file });
-    }
-    const grantRe = /grant\s+execute\s+on\s+function\s+(\w+)\s*\(([^)]*)\)\s+to\s+([\w\s,]+);/gi;
-    while ((m = grantRe.exec(sql))) {
-      const roles = m[3].split(",").map(r => r.trim()).filter(Boolean);
-      grants.set(m[1], roles);
+    while ((m = re.exec(sql))) {
+      const [, created, params, dropped, granted, , roles] = m;
+      if (created) {
+        const prev = live.get(created);
+        live.set(created, { name: created, params: parseParams(params), file,
+                            roles: prev?.roles || null });
+      } else if (dropped) {
+        live.delete(dropped);
+      } else if (granted) {
+        const prev = live.get(granted);
+        // A grant for a function this schema never defines is somebody else's — ignore it rather than
+        // inventing a definition we cannot call.
+        if (prev) prev.roles = roles.split(",").map(r => r.trim()).filter(Boolean);
+      }
     }
   }
 
-  return [...grants.entries()]
-    .filter(([name]) => defs.has(name))
-    .map(([name, roles]) => ({ ...defs.get(name), roles }))
+  return [...live.values()]
+    .filter(f => f.roles?.length)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

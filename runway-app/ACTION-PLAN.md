@@ -414,6 +414,22 @@ pass** — `forbidden` on a random uuid means the function executed. Eleven are 
 reason each, because a random uuid protects you from a function that takes an id and not from one that
 takes none.
 
+**FIRST REAL RUN: 56 executed, 11 skipped, 1 BROKEN — and the one BROKEN was the scanner's fault.**
+`my_plan` was dropped deliberately in 024, and an old `grant execute` from 009 kept it on the list. The
+surface is now walked STATEMENT BY STATEMENT IN ORDER rather than collected and intersected, because
+several functions are dropped precisely so they can be recreated with a new shape — `list_companies`,
+`list_members`, `apply_subscription_event` and `accept_invitation` all are, and all must survive while
+`my_plan` does not.
+
+Worth keeping: a scanner that reports correct work as broken is one people learn to skim, at which
+point it stops catching the real thing too. That is the same argument as the alerting rules in the
+QuickBooks keep-alive, arriving from a different direction.
+
+Everything else in that run was the tool working: 45 functions executed cleanly, and every refusal was
+the right refusal — `forbidden` on ids matching nothing, `P0010 invalid_invitation` for a made-up token,
+and a foreign-key violation from `qbo_record_sync` writing an audit row for a company that does not
+exist.
+
 Both run in `npm run verify:db`. Neither would have existed if I had not made all three mistakes, which
 is the honest reason to write down what a scanner covers: I wrote a throwaway version of the first one,
 did not re-run it, and shipped the second failure in the very next migration.
