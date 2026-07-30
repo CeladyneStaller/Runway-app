@@ -100,6 +100,13 @@ position and nothing has addressed it. It belongs with whoever reviews the legal
   failure as three hand-written CORS header lists. The probes now live in one module, both entry points
   drive it, and both env conventions are accepted.
 
+- **AND THE RUNNER DID NOT READ AN ENV FILE.** `.env.example` documented `SUPABASE_TEST_*` while the
+  shell runner demanded `SUPABASE_*` from the process environment only, so following the instructions
+  produced `Missing SUPABASE_ANON_KEY` and a hunt through a script header. All three verification
+  runners now load `.env.isolation` / `.env.local` / `.env`, accept either naming convention, tolerate
+  CRLF, and when something is genuinely missing they name every accepted spelling and where they
+  looked. A task that happens once every few months cannot also require remembering how it works.
+
 Net: **14 probes instead of 8 or 12**, one of them new (`document_versions` — a body can be denied while
 its history is not, two tables and two policies, only one of them obvious).
 

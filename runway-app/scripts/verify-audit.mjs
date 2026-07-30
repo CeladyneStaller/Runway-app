@@ -9,12 +9,11 @@
 // Exits non-zero on failure so it can gate a deploy.
 import { makeClient } from "./isolation-checks.mjs";
 import { runAuditChecks } from "./audit-checks.mjs";
+import { loadEnvFiles, requireEnv } from "./env-file.mjs";
 
-const need = (k) => {
-  const v = process.env[k];
-  if (!v) { console.error(`Missing ${k}`); process.exit(2); }
-  return v;
-};
+// Same env-file handling as verify-isolation: run months apart, by hand, from memory.
+const loadedFrom = loadEnvFiles();
+const need = (k) => requireEnv([k, k.replace(/^SUPABASE_/, "SUPABASE_TEST_").replace(/^TEST_A_EMAIL$/, "TEST_USER_A").replace(/^TEST_A_PASSWORD$/, "TEST_PASS_A")], { loadedFrom });
 
 const client = makeClient({ url: need("SUPABASE_URL"), anonKey: need("SUPABASE_ANON_KEY") });
 
