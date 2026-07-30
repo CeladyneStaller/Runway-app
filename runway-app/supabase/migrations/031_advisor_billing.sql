@@ -172,6 +172,14 @@ revoke all on function apply_advisor_event(uuid, text, text, timestamptz, boolea
 grant execute on function apply_advisor_event(uuid, text, text, timestamptz, boolean, text, text, text, timestamptz) to service_role;
 
 -- ---------------------------------------------------------------- task 1.7 --
+-- THE COLUMN FIRST, because `expiring_subscriptions` below is `language sql` and is therefore PARSED
+-- WHEN CREATED. A column referenced before it exists fails the migration outright. This is the second
+-- time in this batch — 022 had it too — so `test/engine/migrations.test.js` now scans for it.
+--
+-- `subscriptions` never recorded this, so the company half of that query stays dead until the Stripe
+-- webhook writes it.
+alter table subscriptions add column if not exists cancel_at_period_end boolean not null default false;
+
 /** Subscriptions that will STOP, inside a month. Both tables, because a company losing its plan and an
  *  advisor losing theirs are the same surprise from different directions. Service role: this feeds a
  *  scheduled notice, not a screen. */
@@ -189,8 +197,6 @@ language sql security definer stable set search_path = public as $$
      and a.current_period_end between now() and now() + p_within;
 $$;
 
--- `subscriptions` never recorded this, so the company half of the query above is dead until it does.
-alter table subscriptions add column if not exists cancel_at_period_end boolean not null default false;
 
 revoke all on function expiring_subscriptions(interval) from public;
 grant execute on function expiring_subscriptions(interval) to service_role;
