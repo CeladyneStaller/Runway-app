@@ -75,9 +75,11 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
     /** `checkout_completed` is recorded HERE, on a subscription that reads active — not on the redirect
      *  back from Stripe, which is a URL the browser could have typed. The webhook is the only thing
      *  that can make this true, so this is the only honest place to count a purchase. */
-    async myPlan() {
-      const out = await rpc("my_plan", {});
-      const row = unwrapOne(out) || { plan: "none", status: "none", companies_allowed: 0 };
+    /** The plan for ONE COMPANY (024). `my_plan()` is gone: a person can be in several companies on
+     *  several plans, so "what am I paying for" stopped having a single answer. */
+    async companyPlan(companyId) {
+      const out = await rpc("company_plan", { p_company_id: companyId });
+      const row = unwrapOne(out) || { plan: "none", status: "none", seats: 0, used: 0, pending: 0 };
       // A LIVE SUBSCRIPTION IS THE ONLY HONEST DEFINITION OF A COMPLETED PURCHASE. Recording it on the
       // redirect back from Stripe would count a URL the browser could have typed; `active` here can
       // only have been caused by the webhook, which required Stripe to have charged a card.
@@ -94,9 +96,9 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
      *  is a Stripe session that actually exists. `checkout_completed` cannot be recorded from the
      *  browser at all — the browser is told by a redirect it could fabricate — so it is recorded when
      *  the SUBSCRIPTION reads active, which only the webhook can cause. */
-    async checkout(plan) {
+    async checkout(companyId, plan) {
       const r = await doFetch(`${base}/functions/v1/stripe-checkout`, {
-        method: "POST", headers: await headers(), body: JSON.stringify({ plan }),
+        method: "POST", headers: await headers(), body: JSON.stringify({ plan, company_id: companyId }),
       });
       if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `checkout failed (${r.status})`);
       void track("checkout_started");
@@ -105,9 +107,9 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
 
     /** Open the Stripe Customer Portal: change plan, update card, cancel, download invoices.
      *  None of it built by us, which is the point. */
-    async billingPortal() {
+    async billingPortal(companyId) {
       const r = await doFetch(`${base}/functions/v1/stripe-portal`, {
-        method: "POST", headers: await headers(),
+        method: "POST", headers: await headers(), body: JSON.stringify({ company_id: companyId }),
       });
       if (r.status === 404) throw new BackendError(ERR_FORBIDDEN, "no_subscription");
       if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `portal failed (${r.status})`);
@@ -121,6 +123,54 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
 
     /** What is still recoverable, with when it stops being. Owner-only, enforced in the RPC.
      *  `restores_in_window` is there so the UI can show a company that keeps coming back. */
+    // ---- team ---------------------------------------------------------------
+
+    async listMembers(companyId) {
+      const rows = await rpc("list_members", { p_company_id: companyId });
+      return Array.isArray(rows) ? rows : [];
+    },
+
+    /** Returns the invite LINK, once. The raw token exists only in this response — nothing stores it,
+     *  and `list_invitations` deliberately cannot return it. Re-invite to issue a new one. */
+    async inviteMember(companyId, email, role = "editor") {
+      const token = await rpc("invite_member",
+        { p_company_id: companyId, p_email: String(email || "").trim(), p_role: role });
+      const raw = typeof token === "string" ? token : unwrapOne(token);
+      if (!raw) throw new BackendError(ERR_UNREACHABLE, "Could not create the invitation.");
+      // Built against the CURRENT origin rather than a configured one: an invite link that points at
+      // the wrong deployment is worse than no link, and the person inviting is standing in the right
+      // place by definition.
+      return { token: raw, url: `${globalThis.location?.origin ?? ""}/?invite=${encodeURIComponent(raw)}` };
+    },
+
+    async listInvitations(companyId) {
+      const rows = await rpc("list_invitations", { p_company_id: companyId });
+      return Array.isArray(rows) ? rows : [];
+    },
+
+    async revokeInvitation(id) {
+      await rpc("revoke_invitation", { p_id: id });
+    },
+
+    async acceptInvitation(token) {
+      const out = await rpc("accept_invitation", { p_token: String(token || "") });
+      return unwrapOne(out) || null;
+    },
+
+    /** The INVITEE says no. Distinct from revoking, which is the inviter withdrawing it: only one of
+     *  those means stop asking, and the audit trail should be able to tell them apart. */
+    async declineInvitation(token) {
+      await rpc("decline_invitation", { p_token: String(token || "") });
+    },
+
+    async setMemberRole(companyId, userId, role) {
+      await rpc("set_member_role", { p_company_id: companyId, p_user_id: userId, p_role: role });
+    },
+
+    async removeMember(companyId, userId) {
+      await rpc("remove_member", { p_company_id: companyId, p_user_id: userId });
+    },
+
     async listDeletedCompanies() {
       const rows = await rpc("list_deleted_companies");
       return Array.isArray(rows) ? rows : [];

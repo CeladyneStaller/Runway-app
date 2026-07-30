@@ -12,6 +12,11 @@ export const ERR_FORBIDDEN = "forbidden";       // not permitted — do not retr
 // that keeps recurring in this codebase: "you are not a member" sends somebody to check permissions,
 // when the truth is that the thing they are editing was thrown away and can be brought back.
 export const ERR_COMPANY_DELETED = "company_deleted";
+// The company is paid for and this person may edit, but the plan's seats are held by others. A THIRD
+// distinct refusal because it needs a third action: not "upgrade" and not "you lack permission", but
+// "ask somebody in this company for a seat, or add one". Collapsing it into `payment_required` would
+// tell a member to buy a subscription their company already has.
+export const ERR_NO_SEAT = "no_seat";
 
 export class BackendError extends Error {
   constructor(kind, message, cause) {

@@ -6,13 +6,15 @@ import { render, waitFor, fireEvent } from "@testing-library/react";
 import { BillingSection } from "../../src/views/Account";
 
 const api = (plan, over = {}) => ({
-  myPlan: async () => plan,
+  // `my_plan()` became `company_plan(company_id)` in 024: a person can be in several companies on
+  // several plans, so the panel is scoped to one.
+  companyPlan: async () => plan,
   checkout: vi.fn(async () => "https://checkout.stripe.com/x"),
   billingPortal: vi.fn(async () => "https://billing.stripe.com/x"),
   ...over,
 });
 const draw = async (a) => {
-  const { container } = render(<BillingSection account={a} onError={() => {}} />);
+  const { container } = render(<BillingSection account={a} companyId="co-1" onError={() => {}} />);
   await waitFor(() => expect(container.textContent).toMatch(/Billing/));
   return container;
 };
@@ -26,7 +28,7 @@ describe("what it tells you", () => {
   });
 
   it("names the current plan and its renewal", async () => {
-    const c = await draw(api({ plan: "advisor", status: "active", period_end: days(20) }));
+    const c = await draw(api({ plan: "collaborative", status: "active", period_end: days(20) }));
     await waitFor(() => expect(c.textContent).toMatch(/Advisor/));
     expect(c.textContent).toMatch(/\$99\/month/);
   });
@@ -74,8 +76,8 @@ describe("the ladder", () => {
     const a = api({ plan: "none", status: "none" });
     const c = await draw(a);
     await waitFor(() => expect(c.querySelectorAll(".plancard").length).toBe(3));
-    fireEvent.click([...c.querySelectorAll("button")].find(b => /Choose Advisor/.test(b.textContent)));
-    await waitFor(() => expect(a.checkout).toHaveBeenCalledWith("advisor"));
+    fireEvent.click([...c.querySelectorAll("button")].find(b => /Choose Collaborative/.test(b.textContent)));
+    await waitFor(() => expect(a.checkout).toHaveBeenCalledWith("co-1", "collaborative"));
   });
 
   it("offers the portal only once there is a subscription to manage", async () => {

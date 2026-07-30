@@ -49,11 +49,15 @@ const sql = async (path: string, init: RequestInit = {}) =>
     },
   });
 
-/** Our user id, from whichever place Checkout put it. `client_reference_id` is set on the Checkout
- *  Session; `metadata.user_id` is copied onto the subscription itself so later lifecycle events —
- *  which never mention the session — can still be attributed. */
-const userIdOf = (obj: any) =>
-  obj?.metadata?.user_id || obj?.client_reference_id || null;
+/** WHICH COMPANY this subscription is for. `client_reference_id` is set on the Checkout Session;
+ *  `metadata.company_id` is copied onto the subscription itself, so lifecycle events a year later —
+ *  which never mention the session — are still attributable.
+ *
+ *  `user_id` is read separately and only records WHO PAID: a Stripe customer is a person, and the
+ *  billing portal needs that link. It is not what the subscription belongs to. */
+const companyIdOf = (obj: any) =>
+  obj?.metadata?.company_id || obj?.client_reference_id || null;
+const userIdOf = (obj: any) => obj?.metadata?.user_id || null;
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -76,11 +80,15 @@ Deno.serve(async (req) => {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
+        const companyId = companyIdOf(obj);
         const userId = userIdOf(obj);
-        if (!userId) {
+        if (!companyId) {
           // Nothing to attribute this to. 200 so Stripe stops retrying something that will never
-          // succeed, but loud, because it means Checkout was created without the metadata.
-          console.error("[stripe] subscription with no user_id", obj.id);
+          // succeed, but loud, because it means Checkout was created without the metadata — or that
+          // this subscription predates the move to company-level billing (024), in which case it needs
+          // attaching by hand rather than guessing which of somebody's companies was meant.
+          console.error("[stripe] subscription with no company_id", obj.id,
+                        userId ? `(user_id ${userId} present — pre-024 subscription?)` : "");
           break;
         }
 
@@ -103,7 +111,8 @@ Deno.serve(async (req) => {
         const res = await sql("rpc/apply_subscription_event", {
           method: "POST",
           body: JSON.stringify({
-            p_user_id: userId,
+            p_company_id: companyId,
+            p_purchased_by: userId,
             p_status: status,
             p_plan: plan || "solo",
             p_period_end: periodEnd,

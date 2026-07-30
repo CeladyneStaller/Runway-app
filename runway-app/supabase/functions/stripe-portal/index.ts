@@ -21,13 +21,39 @@ Deno.serve(async (req) => {
   if (!who.ok) return new Response("unauthorized", { status: 401, headers: cors });
   const userId = (await who.json())?.id;
 
+  // A SUBSCRIPTION BELONGS TO A COMPANY (024), so the portal is opened for one — and the caller must be
+  // able to edit it. Without that check, anybody could name any company id and reach the billing
+  // account of whoever pays for it.
+  const { company_id: companyId } = await req.json().catch(() => ({}));
+  if (!companyId) return new Response("company_required", { status: 400, headers: cors });
+
+  const allowed = await fetch(`${SUPABASE_URL}/rest/v1/rpc/can_edit`, {
+    method: "POST",
+    headers: { apikey: ANON_KEY, Authorization: req.headers.get("Authorization")!,
+               "Content-Type": "application/json" },
+    body: JSON.stringify({ c: companyId }),
+  });
+  if (!allowed.ok || (await allowed.json()) !== true) {
+    return new Response("forbidden", { status: 403, headers: cors });
+  }
+
   // THE CUSTOMER ID COMES FROM OUR DATABASE, never from the request. Accepting one from the client
   // would let anybody open a portal session for anybody else's billing account.
-  const row = await fetch(
-    `${SUPABASE_URL}/rest/v1/subscriptions?select=stripe_customer_id&user_id=eq.${userId}`,
-    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
-  const customer = (await row.json())?.[0]?.stripe_customer_id;
-  if (!customer) return new Response("no_subscription", { status: 404, headers: cors });
+  //
+  // Read through an RPC rather than off the table, for the reason `qbo-sync` learned the hard way: a
+  // direct PostgREST read depends on a grant that a later `revoke` can quietly remove, and the failure
+  // arrives as an error object that `?.[0]` turns into "no subscription".
+  const row = await fetch(`${SUPABASE_URL}/rest/v1/rpc/company_stripe_customer`, {
+    method: "POST",
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`,
+               "Content-Type": "application/json" },
+    body: JSON.stringify({ p_company_id: companyId }),
+  });
+  const customer = row.ok ? await row.json() : null;
+  if (!customer || typeof customer !== "string") {
+    console.error(`[stripe-portal] no customer for ${companyId}: ${row.status}`);
+    return new Response("no_subscription", { status: 404, headers: cors });
+  }
 
   const r = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
     method: "POST",

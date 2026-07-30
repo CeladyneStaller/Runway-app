@@ -4,6 +4,7 @@ import { switchCompany, abandonCompany, flush } from "../state/storage";
 import { passwordRules, passwordScore } from "../engine/password";
 import { toJSON } from "../state/document";
 import { DeleteCompany } from "./chrome/DeleteCompany";
+import { Members } from "./chrome/Members";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
 import { PLANS, planSummary, unpaidMessage, TRIAL_DAYS } from "../state/plans";
 
@@ -95,20 +96,23 @@ function PasswordSection({ account, session, hasPassword, email, onChanged }) {
  *  A VIEW PREFERENCE ONLY: nothing here changes a number, and hiding a tab hides it from the nav, not
  *  from the app. A hash pointing at a hidden view still opens it, because this is decluttering rather
  *  than access control and a broken bookmark would be the bigger surprise. */
-/** Plan, trial, and the way to pay.
+/** Plan, trial, seats, and the way to pay — FOR ONE COMPANY.
  *
- *  Reads `my_plan()` — ONE call, so nothing has to be assembled from company rows. Plan is a property
- *  of an account, not a company, and putting it on company rows is exactly the confusion migration
- *  009 existed to remove. */
-export function BillingSection({ account, onError }) {
+ *  Reads `company_plan()`. The comment here used to say the opposite: that a plan is a property of an
+ *  account and putting it on company rows was "exactly the confusion migration 009 existed to remove".
+ *  024 reversed that, because per-account pricing could not express an advisor — `company_entitled`
+ *  only ever consulted OWNERS, and an advisor is invited as an admin. A person can now be in several
+ *  companies on several plans, so this panel is scoped to the active one. */
+export function BillingSection({ account, companyId, onError }) {
   const [row, setRow] = useState(null);
   const [busy, setBusy] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    account?.myPlan?.().then(p => { if (alive) setRow(p); }).catch(() => {});
+    if (!companyId) return () => { alive = false; };
+    account?.companyPlan?.(companyId).then(p => { if (alive) setRow(p); }).catch(() => {});
     return () => { alive = false; };
-  }, [account]);
+  }, [account, companyId]);
 
   const s = planSummary(row);
   const staff = row?.plan === "staff";
@@ -160,7 +164,7 @@ export function BillingSection({ account, onError }) {
                 <span className="plancard-soon">Your plan</span>
               ) : (
                 <button className="addbtn plancard-go" disabled={!!busy}
-                        onClick={() => go(() => account.checkout(p.id), p.id)}>
+                        onClick={() => go(() => account.checkout(companyId, p.id), p.id)}>
                   {busy === p.id ? "Opening…" : `Choose ${p.name}`}
                 </button>
               )}
@@ -171,7 +175,7 @@ export function BillingSection({ account, onError }) {
 
       {(s.state === "active" || s.state === "past_due") && (
         <button className="linkbtn" disabled={!!busy}
-                onClick={() => go(() => account.billingPortal(), "portal")}>
+                onClick={() => go(() => account.billingPortal(companyId), "portal")}>
           {busy === "portal" ? "Opening…" : "Manage billing, card and invoices"}
         </button>
       )}
@@ -538,7 +542,9 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
         onChanged={reload}
       />
 
-      <BillingSection account={account} onError={setErr} />
+      <Members account={account} companyId={activeId} />
+
+      <BillingSection account={account} companyId={activeId} onError={setErr} />
 
       <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />
 

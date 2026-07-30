@@ -48,7 +48,7 @@ the oldest company you own, computed rather than stored, so `memberships` needed
 | 3.1 | Support channel | **NOT DONE.** |
 | 3.2 | Product analytics | **NOT DONE**, and now the most expensive omission on this list — see below. |
 | 3.3 | Rate limiting on `save_document` | **DEFERRED, with a trigger: measure first.** A flood costs CPU and egress but grows nothing (`documents` is one upserted row, versions are capped at 20), while a mistuned limit stops a paying customer saving their work. |
-| 3.4 | Team invitations | Not done. Still the most likely first serious request; schema still shaped for it. |
+| 3.4 | Team invitations | **DONE 29 Jul 2026.** Migrations 021–025, `engine/roles.js`, the People panel and the invitation screen. 48 tests. |
 | 3.5 | Status page | Not done. |
 | 3.6 | Onboarding email sequence | Not done. |
 | 3.7 | Migration rehearsal as a release step | Not done. |
@@ -204,6 +204,92 @@ trains people to re-run instead of read**, and this codebase's whole safety stor
 believed. Fix with deterministic waits rather than by loosening the assertion.
 
 ---
+
+## The commercial model moved to the COMPANY — 29 Jul 2026
+
+Solo 1 seat / Collaborative 3 / Connected 5 + QuickBooks. **Advisor is a USER ATTRIBUTE, not a plan** —
+invited to any number of companies, consumes no seat, priced for a portfolio panel rather than for
+access.
+
+**WHY THIS REVERSES 009, which had moved subscriptions from company to user.** `company_entitled` only
+ever consulted members whose role is OWNER, and an advisor is invited as an admin or a viewer — so the
+Advisor tier sold an unlimited-companies allowance that applied to the zero companies an advisor owns.
+The workaround, making the advisor an owner, became actively dangerous the same afternoon 021 shipped:
+an owner can delete the company, remove you and demote you.
+
+**009's OTHER TWO REASONS SURVIVED AND WERE RESPECTED.** No free tier — the free thing is the demo, and
+nothing here grants a free company. And the one that nearly caught me out: *"a stored trial needs a row
+created at signup, which needs a hook, which can fail and leave an account unable to write."* My first
+proposal walked into it. `companies.trial_ends_at` is therefore **NOT NULL WITH A DEFAULT**, and the
+"no trial on a second company" rule is applied by CLEARING it — so a creation path that forgets hands
+out an extra fourteen days rather than making a company nobody can ever write to. The failure falls
+towards costing money instead of towards locking somebody out.
+
+**DOWNGRADES DESTROY NOTHING.** Entitlement asks "am I within the seat count", seats ordered owner-first
+then by join date — so Collaborative → Solo leaves the owner writing and everybody else read-only
+WITHOUT deleting a single membership, and upgrading restores them exactly. That was a deliberate
+departure from the stated rule ("they lose it fully"), because the trigger is a billing event: a card
+expiring on holiday would otherwise delete three people's access irreversibly. Removing somebody stays
+a deliberate act by an owner.
+
+**THREE REFUSALS, THREE CODES.** `forbidden` (fix your role), `payment_required` (buy a subscription),
+`no_seat` (ask for a seat). Raised in that order, because somebody with no business writing here should
+not learn the company's billing status, and a company nobody has paid for has no seats to be short of —
+reporting `no_seat` first would describe a consequence as the cause.
+
+**Split across two migrations on purpose.** 022 is entirely additive: `subscriptions.user_id` keeps its
+primary key, the Stripe webhook is untouched, and the live subscription keeps working. 023 is the one
+that can refuse a paying customer, and it is `save_document` reproduced from 016 with exactly one block
+changed — verified by diffing the two.
+
+**DONE SINCE:** the rekey (024), seats enforced at invite time (025), and the UI — a People panel with
+seat usage, role controls limited to what the server will accept, invitations with a copy-link, and an
+acceptance screen that ASKS rather than acting on being opened, because a link that acts when opened is
+a link that acts when a mail client scans it.
+
+**REMAINING:** new Stripe prices keyed `collaborative` in both maps, and another live `4242` run —
+checkout now stamps `metadata.company_id` and the webhook attributes by it, which is the one path no
+test can verify.
+
+**Superseded:** rekey `subscriptions` to `company_id` and move the checkout metadata and webhook onto
+it (the only step that can break billing, and it needs another live `4242` run); seats enforced in
+`invite_member`; the members and advisor UI; and `plans.js` renamed from `advisor` to `collaborative`,
+which cannot happen before the Stripe price maps do.
+
+## Team invitations — what was decided, 29 Jul 2026
+
+**NO EMAIL IS SENT.** An invite produces a LINK, once, and the inviter sends it however they already
+talk to that person. Not a shortcut around building email: it avoids adding an email subprocessor to a
+product whose privacy documents are at review, and it works today. Delivery by email later is an
+addition to this rather than a replacement.
+
+**THE TOKEN IS STORED AS A SHA-256 HASH.** It is a bearer credential to somebody's payroll; a leak of
+the table with raw tokens in it would make every outstanding invitation usable by whoever read it.
+`sha256()` is built into Postgres, so no extension. The raw token exists only in the response that
+creates it — `list_invitations` cannot return it, deliberately, because a link re-readable from a list
+outlives the moment it was meant for.
+
+**THE INVITE IS BOUND TO AN EMAIL ADDRESS.** Accepting requires being signed in AS the invited address,
+so a link forwarded into a group chat is useless to everyone in it. The cost is that somebody who signs
+up with a different address gets refused; for a document holding salaries that is the right way round,
+and `wrong_email` is a distinct error with its own message because that person is real and holds a real
+invitation.
+
+**THREE ESCALATIONS ARE BLOCKED**, and each would make the others decorative:
+- Nobody may grant a role above their own — an admin who can mint owners promotes themselves by
+  inviting their own second address.
+- An admin may not demote or remove an owner.
+- The last owner cannot be demoted, removed, or leave. A company with no owner cannot invite, cannot be
+  deleted, and cannot be repaired by the customer.
+
+**ONE ERROR FOR FOUR CASES.** "No such invitation", "already used", "revoked" and "expired" all raise
+`invalid_invitation`, because a caller holding a token should not be able to learn which — the
+difference is exactly what somebody probing tokens would want.
+
+**A BUSINESS DECISION IS NOW LIVE AND UNPRICED.** Pricing is per ACCOUNT, so a Solo plan at $40 can now
+have unlimited members. The previous plan anticipated this: "seats become a real question again at Phase
+3, and the shape to reach for then is a seat count on the SUBSCRIPTION, not on membership." Worth
+deciding before it is discovered by a customer with a large team.
 
 ## What I would still NOT do
 

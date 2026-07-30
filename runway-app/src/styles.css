@@ -965,3 +965,15 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .qbo-note.ok{color:var(--signal-ink)}
 .qbo-note.bad{color:var(--danger)}
 .qbo-note .linkbtn{margin-left:8px}
+
+/* People: members, seats and invitations. */
+.members-invite{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.members-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.members-form .inp{min-width:220px}
+.members-link{margin-top:12px;padding:10px 12px;background:#F1F7F5;border:1px solid #CFE4DC;border-radius:8px}
+.members-link .inp{width:100%;margin-top:8px;font-family:var(--fm);font-size:12px}
+.members-pending{margin-top:16px}
+.invite-card{max-width:520px;margin:60px auto;padding:24px;background:var(--card);
+  border:1px solid var(--line);border-radius:12px}
+.invite-card h3{font-family:var(--fd);margin:0 0 8px}
+.invite-card p{font-family:var(--fb);font-size:13px;color:var(--muted);line-height:1.6}

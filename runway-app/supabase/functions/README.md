@@ -221,6 +221,23 @@ That presents as "the button does nothing", with clean function logs.
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically —
 do not set them yourself.
 
+**PRICE MAP KEYS CHANGED IN 024: `advisor` is now `collaborative`.** An advisor became a user attribute
+rather than a plan, so the tier was renamed. Both maps and the Stripe products need the new key, or
+checkout refuses with `not_configured` and the webhook silently files subscriptions as `solo`:
+
+```
+STRIPE_PRICE_IDS={"solo":"price_A","collaborative":"price_B","connected":"price_C"}
+STRIPE_PRICE_MAP={"price_A":"solo","price_B":"collaborative","price_C":"connected"}
+```
+
+`plan_seats()` still answers 3 for a literal `advisor`, so an existing live subscription is not reduced
+to zero seats by the rename — but nothing new should be sold under it.
+
+**Checkout and the portal now take a `company_id`** and refuse without one, because a subscription
+belongs to a company. Both verify `can_edit` first: otherwise anybody could open a session against any
+company id and pay for a stranger's subscription, which is harmless to them and inexplicable forever
+afterwards.
+
 **The two price maps point in opposite directions on purpose.** The webhook receives a price ID and
 needs the plan name; checkout receives a plan name and needs the price ID. One map would mean
 inverting it at runtime in both directions, which is a lookup that can silently return `undefined`

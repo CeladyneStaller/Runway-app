@@ -16,7 +16,7 @@ export const PLANS = [
     id: "solo",
     name: "Solo",
     price: 40,
-    companies: 1,
+    seats: 1,
     blurb: "One company. Everything the app does.",
     features: [
       "Full projection, scenarios and confidence bands",
@@ -26,14 +26,14 @@ export const PLANS = [
     ],
   },
   {
-    id: "advisor",
-    name: "Advisor",
+    id: "collaborative",
+    name: "Collaborative",
     price: 99,
-    companies: Infinity,
-    blurb: "Every company you look after.",
+    seats: 3,
+    blurb: "You and two colleagues in the same model.",
     features: [
       "Everything in Solo",
-      "Unlimited companies",
+      "Up to 3 people",
       "Invite colleagues to a company",
     ],
   },
@@ -41,7 +41,7 @@ export const PLANS = [
     id: "connected",
     name: "Connected",
     price: 149,
-    companies: Infinity,
+    seats: 5,
     // NOT BUILT. Listed so the ladder is visible, and marked so nobody sells it by accident.
     comingSoon: true,
     blurb: "Your ledger, imported automatically.",

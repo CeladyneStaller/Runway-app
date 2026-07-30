@@ -6,6 +6,7 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
          markDemoReset, takeDemoReset, switchCompany,
          LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
+import { AcceptInvite } from "./views/chrome/Members";
 import { reportError } from "./state/errors";
 import { TabPrefsProvider, load as loadTabPrefs, save as saveTabPrefs,
          visibleNav, landingView } from "./state/tabprefs";
@@ -737,6 +738,36 @@ function SyncPill() {
  *  A component rather than a call inside the render, because an effect fires once per mount while a
  *  render body fires on every re-render — and `track` deduplicates per device, so the difference would
  *  be invisible in the numbers and visible in the request log. */
+/** `?invite=<token>` — the other end of an invitation link.
+ *
+ *  Read once and stripped from the URL, so a refresh does not re-offer an invitation that has already
+ *  been accepted or declined, and so the token stops sitting in the address bar where it can be copied
+ *  out of a screenshot. */
+const INVITE_KEY = "runway:invite";
+function useInviteToken() {
+  const [token, setToken] = useState(undefined);
+  useEffect(() => {
+    try {
+      const url = new URL(globalThis.location.href);
+      const t = url.searchParams.get("invite");
+      if (t) {
+        // KEPT ACROSS THE SIGN-IN ROUND TRIP. Whoever opens an invitation link usually has no account
+        // yet, so the token has to survive signing up — otherwise the flow is "click the link, create
+        // an account, and now click the link again", which most people read as the link being broken.
+        try { globalThis.sessionStorage?.setItem(INVITE_KEY, t); } catch { /* nothing to remember with */ }
+        url.searchParams.delete("invite");
+        globalThis.history?.replaceState?.({}, "", url.toString());
+      }
+      setToken(t || globalThis.sessionStorage?.getItem(INVITE_KEY) || null);
+    } catch { setToken(null); }
+  }, []);
+  const clear = () => {
+    try { globalThis.sessionStorage?.removeItem(INVITE_KEY); } catch { /* nothing to clear */ }
+    setToken(null);
+  };
+  return [token, clear];
+}
+
 function LandedOnce() {
   useEffect(() => { void track("landed"); }, []);
   return null;
@@ -767,6 +798,9 @@ const isDefaultName = (n) => !n || !String(n).trim() || String(n).trim() === "Un
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
 function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
+  // An invitation is answered BEFORE the model loads. Somebody arriving on a link is not here to look
+  // at their own numbers, and dropping them into a dashboard with a banner would bury the decision.
+  const [inviteToken, clearInvite] = useInviteToken();
   const [doc, setDoc] = useState(null);
   const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
   const [conflict, setConflict] = useState(false);
@@ -915,6 +949,26 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
       window.removeEventListener("beforeunload", onLeave);
     };
   }, []);
+
+  // ANSWERED BEFORE THE MODEL LOADS. Somebody arriving on an invitation link is not here to look at
+  // their own numbers, and dropping them into a dashboard with a banner buries the decision.
+  if (inviteToken && !demo) return (
+    <div className="rw">
+      <AcceptInvite
+        account={getAccountApi?.()}
+        token={inviteToken}
+        onDone={async (joined) => {
+          clearInvite();
+          // Joining puts you in a company you were not looking at, so "Open it" should open THAT one.
+          if (joined?.company_id) {
+            try { await switchCompany(joined.company_id); }
+            catch { /* a failed switch is not a reason to strand somebody on this screen */ }
+          }
+          globalThis.location?.reload?.();
+        }}
+      />
+    </div>
+  );
 
   if (!doc) return <div className="rw"><div className="splash">Loading your model…</div></div>;
 
@@ -1178,7 +1232,7 @@ export default function App() {
       <>
         <LandedOnce />
         <Landing onDemo={() => { void track("demo_started"); enterDemo(); }}
-                 onCreate={() => setEntry("create")}
+                 onCreate={() => { void track("signup_started"); setEntry("create"); }}
                  onSignIn={() => setEntry("signin")} />
       </>
     );

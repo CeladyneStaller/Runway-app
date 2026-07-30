@@ -51,7 +51,21 @@ Deno.serve(async (req) => {
   const userId = await callerId(req);
   if (!userId) return new Response("unauthorized", { status: 401, headers: cors });
 
-  const { plan } = await req.json().catch(() => ({}));
+  const { plan, company_id: companyId } = await req.json().catch(() => ({}));
+  if (!companyId) return new Response("company_required", { status: 400, headers: cors });
+
+  // ONLY SOMEBODY WHO COULD USE IT MAY BUY IT. Without this check anyone could open a Checkout session
+  // against any company id and pay for a stranger's subscription — harmless to them and confusing
+  // forever afterwards, since the webhook would attach it and nobody would know why.
+  const allowed = await fetch(`${SUPABASE_URL}/rest/v1/rpc/can_edit`, {
+    method: "POST",
+    headers: { apikey: ANON_KEY, Authorization: req.headers.get("Authorization")!,
+               "Content-Type": "application/json" },
+    body: JSON.stringify({ c: companyId }),
+  });
+  if (!allowed.ok || (await allowed.json()) !== true) {
+    return new Response("forbidden", { status: 403, headers: cors });
+  }
   // Told apart on purpose. An EMPTY map is a deployment that was never finished; a missing KEY is a
   // plan this deployment does not sell. Reporting both as "unknown plan" sends you to look at the
   // client for a server-side omission.
@@ -70,8 +84,13 @@ Deno.serve(async (req) => {
     cancel_url: `${SITE_URL}/#account?checkout=cancelled`,
     // BOTH, deliberately. `client_reference_id` identifies the session; the metadata is copied onto
     // the SUBSCRIPTION, so later lifecycle events — which never mention the session — can still be
-    // attributed to a user. Without it, a renewal three months from now is unattributable.
-    client_reference_id: userId,
+    // attributed. Without it, a renewal three months from now is unattributable.
+    //
+    // THE COMPANY IS WHAT A SUBSCRIPTION BELONGS TO now, so that is what the session and the
+    // subscription are both stamped with. `user_id` rides along as WHO PAID, which the billing portal
+    // still needs because a Stripe customer is a person rather than a company.
+    client_reference_id: companyId,
+    "subscription_data[metadata][company_id]": companyId,
     "subscription_data[metadata][user_id]": userId,
     // Lets Checkout collect a billing address, which Stripe Tax needs if it is ever switched on.
     billing_address_collection: "auto",

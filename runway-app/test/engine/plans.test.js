@@ -8,17 +8,34 @@ const days = (n) => new Date(NOW.getTime() + n * 86400000).toISOString();
 
 describe("the ladder", () => {
   it("prices the three tiers as agreed", () => {
-    expect(PLANS.map(p => [p.id, p.price])).toEqual([["solo", 40], ["advisor", 99], ["connected", 149]]);
+    // `advisor` became `collaborative` in 024: an advisor is a USER ATTRIBUTE, not a plan, because
+    // `company_entitled` only ever consulted OWNERS and an advisor is invited as an admin — so the tier
+    // sold an unlimited-companies allowance covering the zero companies an advisor owns.
+    expect(PLANS.map(p => [p.id, p.price]))
+      .toEqual([["solo", 40], ["collaborative", 99], ["connected", 149]]);
   });
 
-  it("gates on companies, never on features", () => {
-    // The engine ships to the browser: scenarios and SF-424A cannot be withheld from anyone who opens
-    // devtools. A tier list promising to withhold them would be a lie with a price on it.
-    expect(PLANS[0].companies).toBe(1);
-    expect(PLANS[1].companies).toBe(Infinity);
+  it("gates on SEATS, never on features", () => {
+    // The axis changed from companies to seats in 024; the principle did not. The engine ships to the
+    // browser, so scenarios and SF-424A cannot be withheld from anybody who opens devtools, and a tier
+    // list promising to withhold them would be a lie with a price on it.
+    expect(PLANS.map(p => p.seats)).toEqual([1, 3, 5]);
     for (const p of PLANS) {
+      expect(p.companies, "companies allowances were replaced by seats").toBeUndefined();
       expect(p.features.join(" ")).not.toMatch(/only|not included|upgrade to unlock/i);
     }
+  });
+
+  it("agrees with plan_seats() in the database", async () => {
+    // Two copies of one number, so the drift shows up here rather than as a company whose seat count
+    // depends on which side of the wire you ask.
+    const { readFileSync } = await import("node:fs");
+    const sql = readFileSync("supabase/migrations/022_company_subscriptions.sql", "utf8");
+    const fn = sql.slice(sql.indexOf("function plan_seats"), sql.indexOf("end $$", sql.indexOf("function plan_seats")));
+    for (const p of PLANS) expect(fn, `plan_seats has no case for ${p.id}`).toContain(`'${p.id}'`);
+    expect(fn).toMatch(/'solo'\s+then\s+1/);
+    expect(fn).toMatch(/'collaborative'\s+then\s+3/);
+    expect(fn).toMatch(/'connected'\s+then\s+5/);
   });
 
   it("marks Connected as not built, so nobody sells it by accident", () => {
@@ -41,9 +58,9 @@ describe("where somebody stands", () => {
   });
 
   it("a paying account reports its plan", () => {
-    const s = planSummary({ status: "active", plan: "advisor", period_end: days(20) }, NOW);
+    const s = planSummary({ status: "active", plan: "collaborative", period_end: days(20) }, NOW);
     expect(s.state).toBe("active");
-    expect(s.plan.name).toBe("Advisor");
+    expect(s.plan.name).toBe("Collaborative");
   });
 
   it("past_due is still active, because a failing card is dunning not lockout", () => {
