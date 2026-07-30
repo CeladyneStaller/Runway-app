@@ -19,11 +19,16 @@ export function AdvisorBilling({ account, onError }) {
   }, [account]);
   useEffect(load, [load]);
 
-  // Only shown to somebody who already has a plan, or who is in more than one company. Advertising an
-  // advisor tier to a founder with one company is selling them something that would do nothing.
+  // SHOWN TO EVERYBODY SIGNED IN. The gate that used to be here gave this section only to somebody
+  // already on a plan or already in several companies — which meant the one person the product is FOR,
+  // a fractional CFO evaluating it before any client has invited them, was the one person who could not
+  // see it. Hiding a product until somebody already needs it is a decision that only makes sense from
+  // the inside.
+  //
+  // A founder with one company is not confused by it. They read the first line, which says who it is
+  // for rather than what it costs, and skip it.
   const has = row?.allowed > 0;
-  const plural = (row?.companies ?? 0) > 1;
-  if (!row || (!has && !plural)) return null;
+  if (!row) return null;
 
   // MAPPED EXPLICITLY, not spread. `advisor_usage()` returns `companies`; `advisorSummary` speaks
   // `used`, because "used of allowed" is what a seat-style limit reads like. Spreading the row meant
@@ -44,8 +49,11 @@ export function AdvisorBilling({ account, onError }) {
     <section className="panel">
       <div className="panel-h">
         <div>
-          <h3>Your advisor plan</h3>
-          <p>{s.text}</p>
+          <h3>{has ? "Your advisor plan" : "Advise several companies?"}</h3>
+          <p>{has ? s.text
+                  : "For accountants and fractional CFOs. Be invited into any number of companies " +
+                    "without taking one of their seats, keep your own scenarios in each, and see " +
+                    "every client's runway in one place."}</p>
         </div>
         {has && (
           <button className="linkbtn" disabled={busy === "portal"}

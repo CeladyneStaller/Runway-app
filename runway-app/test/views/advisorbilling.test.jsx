@@ -22,11 +22,24 @@ const draw = async (a) => {
 };
 
 describe("when it stays out of the way", () => {
-  it("is absent for somebody with one company and no plan", async () => {
-    // Advertising an advisor tier to a founder with a single company is selling them something that
-    // would do nothing — they already have every seat their own plan grants.
+  it("IS SHOWN to somebody with one company and no plan", async () => {
+    // REVERSED DELIBERATELY. This used to assert absence, on the reasoning that an advisor tier does
+    // nothing for a founder with a single company. True of a founder, and it hid the panel from the one
+    // person it is for: a fractional CFO evaluating this before any client has invited them has exactly
+    // one company, or none.
     const v = await draw(api({ companies: 1, allowed: 0 }));
-    expect(v.container.textContent).toBe("");
+    expect(v.container.textContent).toMatch(/Advise several companies/i);
+  });
+
+  it("is shown to somebody in no companies at all", async () => {
+    const v = await draw(api({ companies: 0, allowed: 0 }));
+    expect(v.container.textContent).toMatch(/Advise several companies/i);
+  });
+
+  it("leads with WHO it is for rather than what it costs", async () => {
+    // Somebody it does not apply to should be able to stop reading at the first line.
+    const v = await draw(api({ companies: 1, allowed: 0 }));
+    expect(v.container.textContent).toMatch(/accountants and fractional CFOs/i);
   });
 
   it("is absent when the plan call fails", async () => {
@@ -37,9 +50,10 @@ describe("when it stays out of the way", () => {
 
 describe("when it appears", () => {
   it("pitches to somebody already in several companies", async () => {
-    // The one signal that an advisor plan would be worth anything to them.
+    // Still the strongest signal an advisor plan is worth something to them — it just is no longer the
+    // CONDITION for showing it.
     const v = await draw(api({ companies: 3, allowed: 0 }));
-    expect(v.container.textContent).toMatch(/Your advisor plan/);
+    expect(v.container.textContent).toMatch(/Advise several companies/i);
     expect(v.container.textContent).toMatch(/Choose Advisor/);
   });
 
