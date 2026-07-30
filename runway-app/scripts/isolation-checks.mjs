@@ -73,6 +73,9 @@ export function makeClient({ url, anonKey, fetchImpl }) {
  * @returns {Promise<{pass: boolean, results: Array<{name, pass, detail}>}>}
  */
 export async function runIsolationChecks({ client, a, b }) {
+  // Every check appends `{name, pass, detail}`. `seededA` is read below; ESLint's no-unused-vars is on,
+  // so a seed whose result is never consulted would be flagged rather than silently ignored — which is
+  // how the original lost track of one.
   const results = [];
   const check = (name, pass, detail) => results.push({ name, pass: !!pass, detail: detail ?? "" });
 
@@ -88,22 +91,57 @@ export async function runIsolationChecks({ client, a, b }) {
     idA && idB && idA !== idB,
     `A=${idA} B=${idB}`);
 
-  // Seed a document for B so there is something for A to fail to read. Without this a passing result
-  // could just mean "B has no data", which proves nothing.
-  await client.rpc("save_document",
-    { p_company_id: idB, p_schema_version: 3, p_body: { marker: "B-ONLY-SECRET" }, p_base_version: null },
-    tokenB);
+  // SEED BOTH, AND CHECK THE SEEDS LANDED.
+  //
+  // This is the part that made the whole suite capable of passing for the wrong reason. The original
+  // seeded B and never inspected the result, under a comment correctly noting that without a seed "a
+  // passing result could just mean B has no data, which proves nothing" — which is exactly what an
+  // unchecked seed permits. `save_document` has since gained ways to refuse that did not exist when
+  // this was written, and the likeliest one is mundane: A TEST ACCOUNT AGES OUT OF ITS 14-DAY TRIAL,
+  // `company_entitled` returns false, `payment_required` is raised, no document is written, and the
+  // headline probe reports isolation working perfectly against an empty table.
+  const seed = async (label, id, token, marker) => {
+    const res = await client.rpc("save_document",
+      { p_company_id: id, p_schema_version: 3, p_body: { marker }, p_base_version: null }, token);
+    const why = res.ok ? "" :
+      String(JSON.stringify(res.body)).includes("payment_required")
+        ? " — payment_required: this test account's trial has expired, so nothing was written and every " +
+          "read-isolation check below would pass against an empty table"
+        : ` — ${JSON.stringify(res.body).slice(0, 160)}`;
+    check(`${label} can save its own document (the suite is meaningless without this)`, res.ok,
+      `status ${res.status}${why}`);
+    return res.ok;
+  };
 
-  // 1. A reads its own document. If this fails the rest of the run is meaningless — a locked door
-  //    proves nothing if the key never worked.
+  const seededA = await seed("A", idA, tokenA, "A-ONLY-SECRET");
+  const seededB = await seed("B", idB, tokenB, "B-ONLY-SECRET");
+
+  // 1. A reads its own document, and THE MARKER IS THERE. Asserting only the status would pass on a
+  //    200 with an empty array — a locked door proves nothing if the key never worked, and the
+  //    original checked that the key turned rather than that the door opened.
   const ownRead = await client.get(`/rest/v1/documents?select=body&company_id=eq.${idA}`, tokenA);
-  check("A can read A's own document", ownRead.ok, `status ${ownRead.status}`);
+  const ownMarker = Array.isArray(ownRead.body) ? ownRead.body[0]?.body?.marker : undefined;
+  check("A can read A's own document, and it contains A's data",
+    seededA && ownRead.ok && ownMarker === "A-ONLY-SECRET",
+    `status ${ownRead.status}, marker ${JSON.stringify(ownMarker)}`);
 
-  // 2. THE MAIN EVENT. RLS returns ZERO ROWS rather than an error, so an empty array is the pass.
+  // 2. THE MAIN EVENT. RLS returns ZERO ROWS rather than an error, so an empty array is the pass —
+  //    which is why it only means anything once B's document is known to exist.
   const crossRead = await client.get(`/rest/v1/documents?select=body&company_id=eq.${idB}`, tokenA);
   const leaked = Array.isArray(crossRead.body) ? crossRead.body.length : 1;
-  check("A reading B's document returns nothing", crossRead.ok && leaked === 0,
-    `status ${crossRead.status}, rows ${leaked}`);
+  check("A reading B's document returns nothing (and B's document exists)",
+    seededB && crossRead.ok && leaked === 0,
+    `seeded ${seededB}, status ${crossRead.status}, rows ${leaked}`);
+
+  // 3. B's document versions are not readable either. A document body can be denied while its history
+  //    is not — two tables, two policies, and only one of them is the obvious one to remember.
+  const crossVersions = await client.get(
+    `/rest/v1/document_versions?select=body,document_id&limit=50`, tokenA);
+  const foreignVersions = Array.isArray(crossVersions.body)
+    ? crossVersions.body.filter(r => JSON.stringify(r.body ?? {}).includes("B-ONLY-SECRET")).length
+    : 1;
+  check("A cannot read B's document history", seededB && foreignVersions === 0,
+    `status ${crossVersions.status}, rows carrying B's marker ${foreignVersions}`);
 
   // 3. An unfiltered read must not quietly return everything. This is the query a careless client
   //    would actually write, and it is where a missing policy shows up first.

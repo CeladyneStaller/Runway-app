@@ -1,8 +1,14 @@
 // CROSS-TENANT ISOLATION, verified against a REAL project.
 //
 // Every other test in this repo runs against fakes, which is right for logic and useless for this: the
-// question here is not "does my code intend to isolate tenants" but "does the database actually refuse".
+// question is not "does my code intend to isolate tenants" but "does the database actually refuse".
 // Policies that look correct in a migration file are not evidence. This asks Postgres.
+//
+// ONE IMPLEMENTATION, in `scripts/isolation-checks.mjs`. This file used to carry its OWN copy of the
+// probes under its own env var names, so `npm test` and `npm run verify:isolation` asserted DIFFERENT
+// things, and a probe added to one was absent from the other — which is how the QuickBooks connection
+// checks came to exist in the script and not here. The same failure as three hand-written CORS header
+// lists, and the same fix: the probes live in one module and both entry points drive it.
 //
 // SKIPPED unless credentials are present, so `npm test` stays offline and fast. Run it deliberately:
 //
@@ -12,124 +18,55 @@
 //   TEST_USER_B=b@example.com TEST_PASS_B=... \
 //   npm run test:isolation
 //
-// The two accounts must be different people in different companies. Email/password sign-in must be
-// enabled in Supabase (magic links are passwordless and cannot be scripted).
+// The `SUPABASE_URL` / `TEST_A_EMAIL` names the shell runner uses are accepted too, so one env file
+// drives both. The accounts must be two different people, and email/password sign-in must be enabled —
+// magic links are passwordless and cannot be scripted.
+//
+// IT WRITES a marker document into each account's company. Use throwaway accounts.
 import { describe, it, expect, beforeAll } from "vitest";
+import { makeClient, runIsolationChecks } from "../../scripts/isolation-checks.mjs";
 
-const URL = process.env.SUPABASE_TEST_URL;
-const ANON = process.env.SUPABASE_TEST_ANON_KEY;
-const A = { email: process.env.TEST_USER_A, password: process.env.TEST_PASS_A };
-const B = { email: process.env.TEST_USER_B, password: process.env.TEST_PASS_B };
+const env = (...names) => names.map(n => process.env[n]).find(Boolean);
+
+const URL = env("SUPABASE_TEST_URL", "SUPABASE_URL");
+const ANON = env("SUPABASE_TEST_ANON_KEY", "SUPABASE_ANON_KEY");
+const A = { email: env("TEST_USER_A", "TEST_A_EMAIL"), password: env("TEST_PASS_A", "TEST_A_PASSWORD") };
+const B = { email: env("TEST_USER_B", "TEST_B_EMAIL"), password: env("TEST_PASS_B", "TEST_B_PASSWORD") };
 
 const configured = !!(URL && ANON && A.email && A.password && B.email && B.password);
-const base = (URL || "").replace(/\/+$/, "");
 
-async function signIn({ email, password }) {
-  const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: { apikey: ANON, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) throw new Error(`sign-in failed for ${email}: HTTP ${res.status}`);
-  const j = await res.json();
-  return j.access_token;
-}
-
-const authed = (token) => ({ apikey: ANON, Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
-
-async function rpc(token, fn, body = {}) {
-  const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
-    method: "POST", headers: authed(token), body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  let json = null; try { json = JSON.parse(text); } catch { /* not json */ }
-  return { ok: res.ok, status: res.status, json, text };
-}
-
-async function get(token, path) {
-  const res = await fetch(`${base}/rest/v1/${path}`, { headers: authed(token) });
-  const text = await res.text();
-  let json = null; try { json = JSON.parse(text); } catch { /* not json */ }
-  return { ok: res.ok, status: res.status, json, text };
-}
-
-describe.skipIf(!configured)("cross-tenant isolation (live project)", () => {
-  let tokenA, tokenB, companyA, companyB;
+describe.skipIf(!configured)("cross-tenant isolation, against a real database", () => {
+  let results = [];
+  let failure = null;
 
   beforeAll(async () => {
-    tokenA = await signIn(A);
-    tokenB = await signIn(B);
-    const ra = await rpc(tokenA, "current_company");
-    const rb = await rpc(tokenB, "current_company");
-    companyA = typeof ra.json === "string" ? ra.json : ra.json?.[0];
-    companyB = typeof rb.json === "string" ? rb.json : rb.json?.[0];
-    expect(companyA).toBeTruthy();
-    expect(companyB).toBeTruthy();
-  }, 30000);
+    try {
+      const client = makeClient({ url: URL, anonKey: ANON });
+      ({ results } = await runIsolationChecks({ client, a: A, b: B }));
+    } catch (e) {
+      // A SIGN-IN FAILURE IS NOT AN ISOLATION RESULT and must not be reported as one. It means the
+      // accounts or the auth settings are wrong, which is a different conversation from "the database
+      // leaked" — and confusing the two is how somebody concludes the wrong thing at speed.
+      failure = e?.message || String(e);
+    }
+  }, 60_000);
 
-  it("the two accounts really are separate companies", () => {
-    expect(companyA).not.toBe(companyB);   // if this fails nothing below proves anything
+  // ONE TEST, EVERY PROBE. Vitest needs test names at collection time while the probe names live in the
+  // module, so one `it()` per probe would mean listing them here — a second copy of exactly the
+  // knowledge this consolidation removed. The granularity goes into the failure message instead.
+  it("the database refuses every cross-tenant read and write", () => {
+    expect(failure, `could not run the probes: ${failure}`).toBeNull();
+    expect(results.length, "no probes ran").toBeGreaterThan(0);
+
+    const failed = results.filter(r => !r.pass);
+    const report = results.map(r => `${r.pass ? "PASS" : "FAIL"}  ${r.name}` +
+                                    (r.detail ? `  (${r.detail})` : "")).join("\n");
+    expect(failed, `\n${report}\n`).toEqual([]);
   });
-
-  it("each account can save and read back its own document", async () => {
-    const stamp = `iso-${Date.now()}`;
-    const saved = await rpc(tokenA, "save_document", {
-      p_company_id: companyA, p_schema_version: 3,
-      p_body: { schemaVersion: 3, marker: stamp }, p_base_version: null,
-    });
-    // null base_version is only valid on a first write; an existing document returns a conflict, which
-    // is itself correct behaviour and not a failure of isolation.
-    expect([200, 201, 400].includes(saved.status)).toBe(true);
-
-    const mine = await get(tokenA, `documents?company_id=eq.${companyA}&select=company_id`);
-    expect(mine.ok).toBe(true);
-    expect(Array.isArray(mine.json)).toBe(true);
-  }, 30000);
-
-  it("B cannot read A's document", async () => {
-    const probe = await get(tokenB, `documents?company_id=eq.${companyA}&select=body,version`);
-    // RLS denial is ZERO ROWS, not an error — an empty array here is the pass condition.
-    expect(probe.ok).toBe(true);
-    expect(probe.json).toEqual([]);
-  }, 30000);
-
-  it("B cannot read A's document versions", async () => {
-    const probe = await get(tokenB, `document_versions?select=body&limit=5`);
-    expect(probe.ok).toBe(true);
-    for (const row of probe.json || []) expect(row).not.toHaveProperty("__leak");
-    // any rows returned must belong to B; the strong check is that A's company never appears
-    const all = await get(tokenB, `documents?select=company_id`);
-    for (const row of all.json || []) expect(row.company_id).not.toBe(companyA);
-  }, 30000);
-
-  it("B cannot WRITE to A's company, even with a valid session", async () => {
-    const attack = await rpc(tokenB, "save_document", {
-      p_company_id: companyA, p_schema_version: 3,
-      p_body: { schemaVersion: 3, marker: "SHOULD-NEVER-LAND" }, p_base_version: null,
-    });
-    expect(attack.ok).toBe(false);              // can_edit() inside the definer function must refuse
-    expect(attack.text).toMatch(/forbidden|permission|denied/i);
-  }, 30000);
-
-  it("A's document was not modified by that attempt", async () => {
-    const mine = await get(tokenA, `documents?company_id=eq.${companyA}&select=body`);
-    const body = mine.json?.[0]?.body;
-    if (body) expect(JSON.stringify(body)).not.toMatch(/SHOULD-NEVER-LAND/);
-  }, 30000);
-
-  it("nobody can read the memberships table at all — no grant is issued on it", async () => {
-    const probe = await get(tokenA, `memberships?select=company_id`);
-    expect(probe.ok).toBe(false);               // "permission denied", by design
-    expect(probe.text).toMatch(/permission denied/i);
-  }, 30000);
-
-  it("an anonymous caller gets nothing", async () => {
-    const res = await fetch(`${base}/rest/v1/documents?select=body`, { headers: { apikey: ANON } });
-    const rows = res.ok ? await res.json() : null;
-    expect(res.ok ? rows : []).toEqual([]);     // no session => no rows, never a leak
-  }, 30000);
 });
 
+// A VISIBLE REMINDER rather than a silent absence. A suite that is skipped and never mentioned is one
+// nobody remembers to run, and this is the only test in the repo that asks the database anything.
 describe.skipIf(configured)("cross-tenant isolation", () => {
   it("skipped — set SUPABASE_TEST_URL and two test accounts to run it (see the file header)", () => {
     expect(configured).toBe(false);
