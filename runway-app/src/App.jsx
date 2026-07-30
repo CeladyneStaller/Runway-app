@@ -360,7 +360,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
         {/* NAV RAIL */}
         <aside className="rail">
           <div className="brand">
-            <img src={mark} alt="Waterline" width={150} />
+            <img src={mark} alt="Waterline" width={100} />
             <div><b>Waterline</b><span>runway control</span></div>
           </div>
           {SHOWN_NAV.map(([k, label, icon]) => (
