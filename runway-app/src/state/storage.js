@@ -214,9 +214,11 @@ export async function flush() {
     if (_pending === doc) {
       _pending = null;
       emit({ state: "saved", error: null });
-      // A SAVE THAT ACTUALLY LANDED, which is the activation moment worth measuring — not a keystroke,
-      // not an intent, a document in the database. Recorded once per device by `track`.
-      void track("first_save");
+      // A SAVE THAT ACTUALLY LANDED IN THE ACCOUNT. The backend name is checked because the DEMO backend
+      // is a real backend: `activateDemoBackend(demoDoc())` seeds a document, the app autosaves it, and
+      // for a day this counted merely opening the demo as activation. Local-first saves are excluded
+      // for the same reason — nothing was written to an account, so nobody activated.
+      if (backend().name === "supabase") void track("first_save");
     }
     else { emit({ state: "unsaved" }); }
   } catch (e) {

@@ -146,3 +146,54 @@ describe("the allowlist itself", () => {
     expect(Object.isFrozen(FUNNEL_EVENTS)).toBe(true);
   });
 });
+
+describe("first_save counts an account, not a demo", () => {
+  // THE BUG THIS PINS. `first_save` fired on any backend write, and `enterDemo()` seeds a sample
+  // document into the demo backend — so starting the demo recorded activation, making the step a
+  // duplicate of `demo_started` and removing the only signal it carried.
+  const load = async () => {
+    const S = await import("../../src/state/storage.js");
+    const { createFunnel, setFunnel } = await import("../../src/state/funnel.js");
+    const sent = [];
+    setFunnel({ live: true, track: async (e) => { sent.push(e); return true; }, reset() {} });
+    return { S, sent, createFunnel };
+  };
+
+  const backend = (name, store) => ({
+    name,
+    async read() { return store.doc ? { raw: store.doc, meta: { version: 1 } } : null; },
+    async write(raw) { store.doc = raw; return { meta: { version: 2 } }; },
+    async park() {},
+  });
+
+  it("does NOT fire for the demo backend", async () => {
+    const { S, sent } = await load();
+    const store = {};
+    S.setBackend(backend("demo", store));
+    await S.load();
+    S.save({ schemaVersion: 3, cash: 500 });
+    await S.flush();
+    expect(store.doc).toBeTruthy();          // the write really happened
+    expect(sent).not.toContain("first_save"); // and was still not activation
+  });
+
+  it("does NOT fire for the local backend either", async () => {
+    const { S, sent } = await load();
+    const store = {};
+    S.setBackend(backend("local", store));
+    await S.load();
+    S.save({ schemaVersion: 3, cash: 500 });
+    await S.flush();
+    expect(sent).not.toContain("first_save");
+  });
+
+  it("DOES fire for the hosted backend", async () => {
+    const { S, sent } = await load();
+    const store = {};
+    S.setBackend(backend("supabase", store));
+    await S.load();
+    S.save({ schemaVersion: 3, cash: 500 });
+    await S.flush();
+    expect(sent).toContain("first_save");
+  });
+});

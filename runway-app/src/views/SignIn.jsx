@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { siteOrigin, linkDestination } from "../state/siteurl";
 import { SetPassword } from "./SetPassword";
+import { track } from "../state/funnel";
 
 // The landing screen for hosted mode. Local-first builds never reach it — there is nobody to be,
 // because the document lives in this browser.
@@ -54,6 +55,11 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
       error={error}
       onCancel={() => { setChoosing(false); setError(null); }}
       onSubmit={async (pw) => {
+        // HERE, not on the "Get started" button. A click is curiosity — it costs nothing and tells you
+        // nothing. A submitted email and password is an ATTEMPT, which makes signup_started ->
+        // signup_completed a conversion worth reading: a gap between them means accounts are being
+        // created and not reached, which is almost always the confirmation email.
+        void track("signup_started");
         const r = await run("signup", () => session.signUpWithPassword(email, pw, { redirectTo }));
         if (r?.ok) {
           setChoosing(false);

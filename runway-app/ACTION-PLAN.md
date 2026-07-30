@@ -165,6 +165,17 @@ authenticated session rather than a submitted form; `first_save` on a write that
 is a URL the browser could have typed. `trialing` deliberately does not count, since this product's
 trial is computed locally with no card.
 
+**FIRST REAL READING FOUND A BUG IMMEDIATELY.** Opening the demo recorded `first_save`, because
+`first_save` fired on ANY backend write and the demo backend is a real backend —
+`activateDemoBackend(demoDoc())` seeds a sample document, autosave writes it, and activation was
+recorded before the visitor had typed anything. That made the step a duplicate of `demo_started` and
+destroyed the only signal it carried. It is now gated on the HOSTED backend, so local-first saves are
+excluded for the same reason: nothing reached an account, so nobody activated. Three tests, two of
+which fail on reversion.
+
+Worth noting how it was caught: by running the query and reading the numbers, on the first day, against
+real events. No test would have found it — the events were all firing correctly, at the wrong moment.
+
 The allowlist exists in three places on purpose — the client, the CHECK constraint, and
 `funnel_summary`'s step list — and a test reads the migration to keep them from drifting.
 

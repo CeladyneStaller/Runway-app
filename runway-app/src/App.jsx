@@ -1178,7 +1178,7 @@ export default function App() {
       <>
         <LandedOnce />
         <Landing onDemo={() => { void track("demo_started"); enterDemo(); }}
-                 onCreate={() => { void track("signup_started"); setEntry("create"); }}
+                 onCreate={() => setEntry("create")}
                  onSignIn={() => setEntry("signin")} />
       </>
     );
