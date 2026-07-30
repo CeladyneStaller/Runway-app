@@ -7,6 +7,7 @@ import { DeleteCompany } from "./chrome/DeleteCompany";
 import { Members } from "./chrome/Members";
 import { CompanyTabs } from "./chrome/CompanyTabs";
 import { Portfolio } from "./chrome/Portfolio";
+import { AdvisorBilling } from "./chrome/AdvisorBilling";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
 import { PLANS, planSummary, unpaidMessage, TRIAL_DAYS } from "../state/plans";
 
@@ -557,6 +558,8 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
                    role={companies.find(c => c.id === activeId)?.role} />
 
       <BillingSection account={account} companyId={activeId} onError={setErr} />
+
+      <AdvisorBilling account={account} onError={setErr} />
 
       <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />
 

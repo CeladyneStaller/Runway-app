@@ -221,6 +221,23 @@ That presents as "the button does nothing", with clean function logs.
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically —
 do not set them yourself.
 
+**THE ADVISOR PLANS HAVE THEIR OWN MAPS**, and the separation is what routes a webhook event to the
+right table. A company plan lands in `subscriptions` keyed on `company_id`; an advisor plan in
+`advisor_subscriptions` keyed on `user_id`. One map holding both would force the kind to be inferred
+from a plan NAME, and a rename would quietly start writing to the wrong table.
+
+```
+STRIPE_ADVISOR_PRICE_IDS={"advisor":"price_D","advisor_unlimited":"price_E"}
+STRIPE_ADVISOR_PRICE_MAP={"price_D":"advisor","price_E":"advisor_unlimited"}
+```
+
+`stripe-checkout` and `stripe-portal` take a `kind` of `company` (default) or `advisor`. The advisor
+path takes no company and skips the `can_edit` check — you are buying for yourself, so the verified
+caller IS the authorisation.
+
+**A price in BOTH maps is a misconfiguration.** The webhook checks the advisor map first, so it would be
+billed as an advisor plan. Keep them disjoint.
+
 **PRICE MAP KEYS CHANGED IN 024: `advisor` is now `collaborative`.** An advisor became a user attribute
 rather than a plan, so the tier was renamed. Both maps and the Stripe products need the new key, or
 checkout refuses with `not_configured` and the webhook silently files subscriptions as `solo`:

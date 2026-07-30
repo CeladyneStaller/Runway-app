@@ -434,6 +434,58 @@ Both run in `npm run verify:db`. Neither would have existed if I had not made al
 is the honest reason to write down what a scanner covers: I wrote a throwaway version of the first one,
 did not re-run it, and shipped the second failure in the very next migration.
 
+## Advisor billing — 29 Jul 2026
+
+Self-serve, through Stripe, as agreed. `stripe-checkout` and `stripe-portal` take a `kind` of `company`
+or `advisor`; the webhook routes to `apply_advisor_event`; `AdvisorBilling` sells it.
+
+**THE ROUTING DECISION IS THE DESIGN.** Advisor plans get their OWN price maps —
+`STRIPE_ADVISOR_PRICE_IDS` and `STRIPE_ADVISOR_PRICE_MAP` — and which map holds a price is what tells
+the webhook which table the subscription belongs in. A company plan is keyed on the company, an advisor
+plan on the user. One map holding both would force the kind to be inferred from a plan NAME, and a
+rename would quietly start writing to the wrong table.
+
+**The advisor path takes no company and skips `can_edit`.** You are buying for yourself, so the verified
+caller IS the authorisation; a company plan is bought for somebody else's benefit and still needs the
+check.
+
+**A BUG CAUGHT WHILE WIRING IT.** The advisor branch initially sat after the webhook's "no company_id"
+bail-out — and an advisor subscription legitimately has no company, so every one of them would have been
+rejected as unattributable. Routing now happens before the company is required.
+
+**The panel says the consequence out loud.** An advisor whose plan ends stops being exempt and starts
+consuming a seat in every company they are in, which can put several over capacity at once — and their
+owners would see people lose write access without having changed anything. That is 1.7's notification
+question arriving earlier than expected, and until it is built the warning on the panel is the only
+thing that says so.
+
+## Advisor billing — verified rather than rebuilt, 29 Jul 2026
+
+Checkout, the webhook, the portal, `advisor_stripe_customer` and the billing panel were already built.
+The useful work was checking they hang together, which found one thing worth having.
+
+**THE PANEL REPORTED "0 of 3 companies" TO SOMEBODY IN THREE.** `advisor_usage()` returns `companies`;
+`advisorSummary` speaks `used`, because "used of allowed" is what a seat-style limit reads like. The row
+was SPREAD into the summary rather than mapped, so `used` defaulted to zero. A number quietly wrong is
+worse than one absent — nothing looks broken, and the person reading it has no reason to doubt it. The
+boundary is now an explicit mapping and a test pins it.
+
+Also checked: every one of the 32 RPCs the client calls is defined and granted. The panel had no tests
+at all and now has 14, weighted toward WHEN a price is shown — an offer made to somebody it would do
+nothing for reads as an upsell, and the lapse warning ("you will take a seat in each of the 4 companies
+you are in") is the consequence nobody expects, said before it happens rather than after.
+
+**Two secrets still to set, and nothing works until they are:**
+
+```
+STRIPE_ADVISOR_PRICE_IDS={"advisor":"price_D","advisor_unlimited":"price_E"}
+STRIPE_ADVISOR_PRICE_MAP={"price_D":"advisor","price_E":"advisor_unlimited"}
+```
+
+Separate from the company maps ON PURPOSE: that is how the webhook decides which TABLE to write to.
+Carrying every plan in one map would force the kind to be inferred from a plan NAME, and a rename would
+quietly start writing advisor subscriptions into `subscriptions`.
+
 ## Phase 5 — UI polish
 
 Every tab and sub-tab carrying the analytics and the graphics it deserves. Not a rewrite: the engine

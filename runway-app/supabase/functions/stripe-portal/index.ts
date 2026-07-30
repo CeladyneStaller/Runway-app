@@ -24,7 +24,26 @@ Deno.serve(async (req) => {
   // A SUBSCRIPTION BELONGS TO A COMPANY (024), so the portal is opened for one — and the caller must be
   // able to edit it. Without that check, anybody could name any company id and reach the billing
   // account of whoever pays for it.
-  const { company_id: companyId } = await req.json().catch(() => ({}));
+  const { company_id: companyId, kind = "company" } = await req.json().catch(() => ({}));
+  const advisor = kind === "advisor";
+
+  // AN ADVISOR MANAGES THEIR OWN PLAN, so there is no company and nothing to be permitted: the verified
+  // caller IS the subject. The company path below needs the check because it opens somebody else's
+  // billing account.
+  if (advisor) {
+    const row = await fetch(`${SUPABASE_URL}/rest/v1/rpc/advisor_stripe_customer`, {
+      method: "POST",
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`,
+                 "Content-Type": "application/json" },
+      body: JSON.stringify({ p_user_id: userId }),
+    });
+    const customer = row.ok ? await row.json() : null;
+    if (!customer || typeof customer !== "string") {
+      return new Response("no_subscription", { status: 404, headers: cors });
+    }
+    return await openPortal(customer);
+  }
+
   if (!companyId) return new Response("company_required", { status: 400, headers: cors });
 
   const allowed = await fetch(`${SUPABASE_URL}/rest/v1/rpc/can_edit`, {
@@ -55,6 +74,13 @@ Deno.serve(async (req) => {
     return new Response("no_subscription", { status: 404, headers: cors });
   }
 
+  return await openPortal(customer);
+});
+
+/** One place that talks to Stripe, because a company plan and an advisor plan open the SAME portal —
+ *  only the customer differs. Two copies would be two chances for the return URL to drift. */
+async function openPortal(customer: string) {
+  const cors2 = cors;
   const r = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
     method: "POST",
     headers: {
@@ -65,9 +91,9 @@ Deno.serve(async (req) => {
   });
   if (!r.ok) {
     console.error("[stripe] portal failed", await r.text());
-    return new Response("portal_failed", { status: 502, headers: cors });
+    return new Response("portal_failed", { status: 502, headers: cors2 });
   }
   return new Response(JSON.stringify({ url: (await r.json()).url }), {
-    headers: { ...cors, "Content-Type": "application/json" },
+    headers: { ...cors2, "Content-Type": "application/json" },
   });
-});
+}

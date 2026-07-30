@@ -13,20 +13,25 @@ const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173";
 // including the CORS preflight, and the browser reports a CORS error with nothing in the function
 // logs. A JSON typo in a secret then presents as a deployment or CORS problem — three plausible
 // causes for one symptom, distinguishable only by curling the endpoint by hand.
-function readPriceIds(): Record<string, string> {
-  const raw = Deno.env.get("STRIPE_PRICE_IDS");
+function readPriceIds(envName = "STRIPE_PRICE_IDS"): Record<string, string> {
+  const raw = Deno.env.get(envName);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
     return parsed as Record<string, string>;
   } catch (e) {
-    console.error("[checkout] STRIPE_PRICE_IDS is not valid JSON, ignoring it:", (e as Error).message);
+    console.error(`[checkout] ${envName} is not valid JSON, ignoring it:`, (e as Error).message);
     console.error('[checkout] expected: {"solo":"price_123","advisor":"price_456"}');
     return {};
   }
 }
 const PRICE_MAP: Record<string, string> = readPriceIds();
+// SEPARATE FROM THE COMPANY MAP, and that separation is what tells the webhook which TABLE a
+// subscription belongs in. An advisor plan is keyed on the USER; a company plan on the company. One map
+// carrying both would force the kind to be inferred from a plan NAME, and a rename later would quietly
+// start writing to the wrong table.
+const ADVISOR_PRICE_MAP: Record<string, string> = readPriceIds("STRIPE_ADVISOR_PRICE_IDS");
 
 // ONE definition of the CORS rules, shared with the other browser-facing functions and unit-tested
 // in `test/engine/cors.test.js`. Hand-writing this header set per function is what produced three
@@ -51,29 +56,39 @@ Deno.serve(async (req) => {
   const userId = await callerId(req);
   if (!userId) return new Response("unauthorized", { status: 401, headers: cors });
 
-  const { plan, company_id: companyId } = await req.json().catch(() => ({}));
-  if (!companyId) return new Response("company_required", { status: 400, headers: cors });
+  const { plan, company_id: companyId, kind = "company" } = await req.json().catch(() => ({}));
+  const advisor = kind === "advisor";
 
-  // ONLY SOMEBODY WHO COULD USE IT MAY BUY IT. Without this check anyone could open a Checkout session
-  // against any company id and pay for a stranger's subscription — harmless to them and confusing
-  // forever afterwards, since the webhook would attach it and nobody would know why.
-  const allowed = await fetch(`${SUPABASE_URL}/rest/v1/rpc/can_edit`, {
-    method: "POST",
-    headers: { apikey: ANON_KEY, Authorization: req.headers.get("Authorization")!,
-               "Content-Type": "application/json" },
-    body: JSON.stringify({ c: companyId }),
-  });
-  if (!allowed.ok || (await allowed.json()) !== true) {
-    return new Response("forbidden", { status: 403, headers: cors });
+  // AN ADVISOR PLAN IS BOUGHT FOR YOURSELF, so there is no company and nothing to be permitted to do:
+  // the caller's identity, already verified above, IS the authorisation. A company plan is bought for
+  // somebody else's benefit and needs the check below.
+  if (!advisor) {
+    if (!companyId) return new Response("company_required", { status: 400, headers: cors });
+
+    // ONLY SOMEBODY WHO COULD USE IT MAY BUY IT. Without this check anyone could open a Checkout
+    // session against any company id and pay for a stranger's subscription — harmless to them and
+    // confusing forever afterwards, since the webhook would attach it and nobody would know why.
+    const allowed = await fetch(`${SUPABASE_URL}/rest/v1/rpc/can_edit`, {
+      method: "POST",
+      headers: { apikey: ANON_KEY, Authorization: req.headers.get("Authorization")!,
+                 "Content-Type": "application/json" },
+      body: JSON.stringify({ c: companyId }),
+    });
+    if (!allowed.ok || (await allowed.json()) !== true) {
+      return new Response("forbidden", { status: 403, headers: cors });
+    }
   }
+
+  const priceMap = advisor ? ADVISOR_PRICE_MAP : PRICE_MAP;
   // Told apart on purpose. An EMPTY map is a deployment that was never finished; a missing KEY is a
   // plan this deployment does not sell. Reporting both as "unknown plan" sends you to look at the
   // client for a server-side omission.
-  if (Object.keys(PRICE_MAP).length === 0) {
-    console.error("[checkout] STRIPE_PRICE_IDS is unset or empty — no plan can be priced");
+  if (Object.keys(priceMap).length === 0) {
+    console.error(`[checkout] ${advisor ? "STRIPE_ADVISOR_PRICE_IDS" : "STRIPE_PRICE_IDS"} is unset ` +
+                  "or empty — no plan can be priced");
     return new Response("not_configured", { status: 500, headers: cors });
   }
-  const price = PRICE_MAP[plan];
+  const price = priceMap[plan];
   if (!price) return new Response("unknown plan", { status: 400, headers: cors });
 
   const form = new URLSearchParams({
@@ -89,8 +104,11 @@ Deno.serve(async (req) => {
     // THE COMPANY IS WHAT A SUBSCRIPTION BELONGS TO now, so that is what the session and the
     // subscription are both stamped with. `user_id` rides along as WHO PAID, which the billing portal
     // still needs because a Stripe customer is a person rather than a company.
-    client_reference_id: companyId,
-    "subscription_data[metadata][company_id]": companyId,
+    // An advisor plan has no company, so the USER is what it is stamped with. The webhook routes on
+    // which price map holds the price rather than on what is here — metadata says WHO, the maps say
+    // WHAT KIND, and neither has to guess at the other.
+    client_reference_id: advisor ? userId : companyId,
+    ...(advisor ? {} : { "subscription_data[metadata][company_id]": companyId }),
     "subscription_data[metadata][user_id]": userId,
     // Lets Checkout collect a billing address, which Stripe Tax needs if it is ever switched on.
     billing_address_collection: "auto",

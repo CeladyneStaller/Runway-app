@@ -23,20 +23,24 @@ const WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 // Deno.serve is ever reached, so one malformed character in a secret kills the whole function with an
 // opaque WORKER_ERROR — no logs, no signature check, nothing to debug against. A bad map should cost
 // you correct plan names, not the endpoint.
-function readPriceMap(): Record<string, string> {
-  const raw = Deno.env.get("STRIPE_PRICE_MAP");
-  if (!raw) { console.warn("[stripe] STRIPE_PRICE_MAP unset — every plan will read as 'solo'"); return {}; }
+function readPriceMap(envName = "STRIPE_PRICE_MAP"): Record<string, string> {
+  const raw = Deno.env.get(envName);
+  if (!raw) { console.warn(`[stripe] ${envName} unset — every plan will read as 'solo'`); return {}; }
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
     return parsed as Record<string, string>;
   } catch (e) {
-    console.error("[stripe] STRIPE_PRICE_MAP is not valid JSON, ignoring it:", (e as Error).message);
-    console.error('[stripe] expected: {"price_123":"solo","price_456":"advisor"}');
+    console.error(`[stripe] ${envName} is not valid JSON, ignoring it:`, (e as Error).message);
+    console.error('[stripe] expected: {"price_123":"solo","price_456":"collaborative"}');
     return {};
   }
 }
 const PRICE_MAP = readPriceMap();
+// THE ROUTER. Which map holds the price decides which TABLE the subscription belongs in — company
+// plans are keyed on the company, advisor plans on the user, and they are different products with
+// different lifecycles. Inferring the kind from a plan NAME would break the day somebody renames one.
+const ADVISOR_PRICE_MAP = readPriceMap("STRIPE_ADVISOR_PRICE_MAP");
 
 const sql = async (path: string, init: RequestInit = {}) =>
   fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -82,17 +86,55 @@ Deno.serve(async (req) => {
       case "customer.subscription.deleted": {
         const companyId = companyIdOf(obj);
         const userId = userIdOf(obj);
+        const priceId = obj.items?.data?.[0]?.price?.id;
+
+        // ROUTED BY MAP. An advisor plan goes to `advisor_subscriptions`, keyed on the user; a company
+        // plan to `subscriptions`, keyed on the company. Checked first because a price in BOTH maps is
+        // a misconfiguration and treating it as an advisor plan at least writes it somewhere its own
+        // lifecycle understands.
+        if (ADVISOR_PRICE_MAP[priceId]) {
+          if (!userId) {
+            console.error("[stripe] advisor subscription with no user_id", obj.id);
+            break;
+          }
+          const advRes = await sql("rpc/apply_advisor_event", {
+            method: "POST",
+            body: JSON.stringify({
+              p_user_id: userId,
+              p_status: event.type === "customer.subscription.deleted" ? "canceled" : obj.status,
+              p_plan: ADVISOR_PRICE_MAP[priceId],
+              p_period_end: obj.current_period_end
+                ? new Date(obj.current_period_end * 1000).toISOString() : null,
+              // TASK 1.7 DEPENDS ON THIS. Stripe renews by default, so the fact worth storing is the
+              // opposite: a subscription already set to stop.
+              p_cancel_at_period_end: !!obj.cancel_at_period_end,
+              p_customer_id: obj.customer ?? null,
+              p_sub_id: obj.id ?? null,
+              p_event_id: event.id,
+              p_event_at: new Date(event.created * 1000).toISOString(),
+            }),
+          });
+          if (!advRes.ok) {
+            console.error(`[stripe] apply_advisor_event failed: ${advRes.status} ${await advRes.text()}`);
+            return new Response("apply failed", { status: 500 });
+          }
+          console.log(`[stripe] advisor ${ADVISOR_PRICE_MAP[priceId]} for ${userId}: ${obj.status}`);
+          break;
+        }
+
+        // ONLY NOW is a company required. An advisor plan legitimately has none, so checking for one
+        // before routing would reject every advisor subscription as unattributable — which is what the
+        // first version of this branch did.
         if (!companyId) {
           // Nothing to attribute this to. 200 so Stripe stops retrying something that will never
-          // succeed, but loud, because it means Checkout was created without the metadata — or that
-          // this subscription predates the move to company-level billing (024), in which case it needs
-          // attaching by hand rather than guessing which of somebody's companies was meant.
-          console.error("[stripe] subscription with no company_id", obj.id,
+          // succeed, but loud: it means Checkout was created without the metadata, or the price is in
+          // neither map, or the subscription predates company-level billing (024) — in which case it
+          // needs attaching by hand rather than guessing which of somebody's companies was meant.
+          console.error("[stripe] subscription with no company_id and no advisor price", obj.id,
                         userId ? `(user_id ${userId} present — pre-024 subscription?)` : "");
           break;
         }
 
-        const priceId = obj.items?.data?.[0]?.price?.id;
         // An unrecognised price means a product created without updating the map, or an event from
         // a price we do not sell. Falling back silently bills somebody as Solo and looks like it
         // worked; say so instead.

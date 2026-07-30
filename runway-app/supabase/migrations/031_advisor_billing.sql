@@ -200,3 +200,15 @@ $$;
 
 revoke all on function expiring_subscriptions(interval) from public;
 grant execute on function expiring_subscriptions(interval) to service_role;
+
+-- --------------------------------------------------- the advisor's portal --
+/** The Stripe customer paying for an advisor plan. Mirrors `company_stripe_customer`, and exists for
+ *  the same reason: `stripe-portal` should not read a table directly, because a grant removed later
+ *  comes back as an error object that `?.[0]` turns into "no subscription". */
+create or replace function advisor_stripe_customer(p_user_id uuid)
+returns text language sql security definer stable set search_path = public as $$
+  select a.stripe_customer_id from advisor_subscriptions a where a.user_id = p_user_id;
+$$;
+
+revoke all on function advisor_stripe_customer(uuid) from public;
+grant execute on function advisor_stripe_customer(uuid) to service_role;

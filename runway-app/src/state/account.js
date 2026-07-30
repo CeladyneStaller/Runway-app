@@ -96,6 +96,31 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
      *  is a Stripe session that actually exists. `checkout_completed` cannot be recorded from the
      *  browser at all — the browser is told by a redirect it could fabricate — so it is recorded when
      *  the SUBSCRIPTION reads active, which only the webhook can cause. */
+    /** Buy an ADVISOR plan — for yourself, so there is no company and no permission to check. */
+    async checkoutAdvisor(plan) {
+      const r = await doFetch(`${base}/functions/v1/stripe-checkout`, {
+        method: "POST", headers: await headers(),
+        body: JSON.stringify({ plan, kind: "advisor" }),
+      });
+      if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `checkout failed (${r.status})`);
+      void track("checkout_started");
+      return (await r.json()).url;
+    },
+
+    async advisorPortal() {
+      const r = await doFetch(`${base}/functions/v1/stripe-portal`, {
+        method: "POST", headers: await headers(), body: JSON.stringify({ kind: "advisor" }),
+      });
+      if (r.status === 404) throw new BackendError(ERR_FORBIDDEN, "no_subscription");
+      if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `portal failed (${r.status})`);
+      return (await r.json()).url;
+    },
+
+    async advisorPlan() {
+      const rows = await rpc("advisor_usage", {});
+      return unwrapOne(rows) || { companies: 0, allowed: 0 };
+    },
+
     async checkout(companyId, plan) {
       const r = await doFetch(`${base}/functions/v1/stripe-checkout`, {
         method: "POST", headers: await headers(), body: JSON.stringify({ plan, company_id: companyId }),
