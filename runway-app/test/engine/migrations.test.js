@@ -80,6 +80,36 @@ describe("and cannot call a function defined in a later migration", () => {
   });
 });
 
+describe("a function whose return type changes must be dropped first", () => {
+  it("every redefinition either matches the previous signature or drops it", () => {
+    // `create or replace` cannot alter a return type: Postgres answers "Row type defined by OUT
+    // parameters is different" and the migration stops. Every `returns table` function that gains a
+    // column needs an explicit drop, and this is the third ordering mistake in one batch — 022 and 031
+    // referenced columns added later, 032 changed a shape without dropping.
+    const seen = new Map();          // name -> the returns clause it last had
+    const problems = [];
+
+    for (const file of FILES) {
+      const text = read(file);
+      const re = /create\s+(?:or\s+replace\s+)?function\s+(\w+)\s*\(([\s\S]*?)\)\s*\n?\s*returns\s+([\s\S]*?)\s+(?:language|as)\b/gi;
+      let m;
+      while ((m = re.exec(text))) {
+        const [, name, , ret] = m;
+        const shape = ret.replace(/\s+/g, " ").trim().toLowerCase();
+        const replacing = /create\s+or\s+replace/i.test(m[0]);
+        const dropped = new RegExp(`drop function if exists ${name}\\b`, "i").test(text.slice(0, m.index));
+        const before = seen.get(name);
+        if (before && before !== shape && replacing && !dropped) {
+          problems.push(`${file}: ${name}() changes its return type without dropping it first\n` +
+                        `      was: ${before}\n      now: ${shape}`);
+        }
+        seen.set(name, shape);
+      }
+    }
+    expect(problems, `\n${problems.join("\n")}\n`).toEqual([]);
+  });
+});
+
 describe("the scanner itself", () => {
   it("catches the shape that broke 022 and 031", () => {
     // Both failures reduced to this: a function reading a column the same file adds after it.

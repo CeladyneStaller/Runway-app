@@ -15,14 +15,15 @@
     "verify:isolation": "node scripts/verify-isolation.mjs",
     "test:isolation": "vitest run test/security/tenant-isolation.test.js",
     "verify:retention": "node scripts/verify-retention.mjs",
-    "verify:db": "npm run verify:isolation && npm run verify:retention && npm run verify:audit",
+    "verify:db": "npm run verify:isolation && npm run verify:retention && npm run verify:audit && npm run verify:rpc",
     "stats:compute": "node scripts/compute-stats.mjs",
     "stripe:test-event": "node scripts/stripe-test-event.mjs",
     "verify:audit": "node scripts/verify-audit.mjs",
     "qbo:probe": "node scripts/qbo-probe.mjs",
     "qbo:sync": "node scripts/qbo-sync.mjs",
     "qbo:keepalive": "node scripts/qbo-sync.mjs --keepalive",
-    "qbo:keepalive:run": "node scripts/qbo-keepalive.mjs"
+    "qbo:keepalive:run": "node scripts/qbo-keepalive.mjs",
+    "verify:rpc": "node scripts/rpc-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

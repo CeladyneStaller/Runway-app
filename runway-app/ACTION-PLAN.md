@@ -394,6 +394,30 @@ TWO BUGS FOUND WHILE WIRING IT, both mine and both invisible to the type system:
 the membership effect was placed after DocumentHost's early returns, which broke 37 view tests at once
 with "Rendered more hooks than during the previous render". Hooks before returns, always.
 
+## The three migration failures, and what now catches each — 29 Jul 2026
+
+One batch of migrations produced three failures of the same family, none visible to lint, the build, or
+any test that existed:
+
+| Failure | When it fails | Caught by |
+|---|---|---|
+| A `language sql` function reading a column added later in the same file (022, 031) | at CREATE | `test/engine/migrations.test.js` |
+| A `returns table` function gaining a column without a DROP (032) | at CREATE | same |
+| An OUT parameter shadowing a real column (`accept_invitation`) | at CALL | `npm run verify:rpc` |
+
+The split matters: plpgsql resolves names when a function is CALLED, `language sql` when it is CREATED.
+So the same carelessness surfaces at two different moments, and only one of them can be found by reading
+the file.
+
+`verify:rpc` calls all 68 granted functions once with arguments that match nothing. **A refusal is a
+pass** — `forbidden` on a random uuid means the function executed. Eleven are skipped by name with a
+reason each, because a random uuid protects you from a function that takes an id and not from one that
+takes none.
+
+Both run in `npm run verify:db`. Neither would have existed if I had not made all three mistakes, which
+is the honest reason to write down what a scanner covers: I wrote a throwaway version of the first one,
+did not re-run it, and shipped the second failure in the very next migration.
+
 ## Phase 5 — UI polish
 
 Every tab and sub-tab carrying the analytics and the graphics it deserves. Not a rewrite: the engine

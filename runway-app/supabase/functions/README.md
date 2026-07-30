@@ -245,6 +245,22 @@ and quietly downgrade somebody to `solo`.
 
 ---
 
+## After every migration: `npm run verify:rpc`
+
+Calls every RPC the migrations grant to a client role, once, with arguments that reach the body and
+match nothing. **A refusal is a pass** — `delete_company` on a random uuid raising `forbidden` means the
+function parsed, planned and executed, which is the only question. What it is hunting is the other kind
+of answer: `42702` ambiguous column, `42703` undefined column, `42883` undefined function, a 404 meaning
+the migration was never applied.
+
+It exists because `test/engine/migrations.test.js` reads SQL and cannot catch anything that only
+happens when a function RUNS. `accept_invitation` was created without complaint and failed on its first
+call — an OUT parameter shadowing a column — because plpgsql resolves names at call time. Nothing short
+of calling it would have found that.
+
+Eleven functions are skipped by name, each with a reason, because a random uuid does not protect you
+from a function that takes no id.
+
 ## Testing the webhook
 
 **Start with `npm run stripe:test-event`** — it builds the payload this handler expects, signs it the
