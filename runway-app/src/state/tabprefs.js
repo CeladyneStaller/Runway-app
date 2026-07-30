@@ -1,4 +1,5 @@
 import React, { createContext, useContext } from "react";
+import { tabIsVisible } from "../engine/roles";
 
 // Hiding tabs and sub-tabs.
 //
@@ -62,9 +63,22 @@ export function save(prefs, store = globalThis.localStorage, userKey = "") {
   catch { /* private mode or quota — the preference is not worth an error */ }
 }
 
-/** Drop hidden entries from a nav array of `[key, label, icon]`. */
-export const visibleNav = (nav, prefs) =>
-  (nav || []).filter(([k]) => isLocked(k) || !(prefs?.views || []).includes(k));
+/** Drop hidden entries from a nav array of `[key, label, icon]`.
+ *
+ *  THREE LAYERS NOW, and the rule lives in `engine/roles.js` so the same answer is available to the
+ *  settings UI without importing view code:
+ *
+ *    company   — the OWNER decides which tabs this company uses. Company configuration, so it is on
+ *                the company row rather than in the document: an editor can write the document, and a
+ *                setting that editors could change is not an owner's setting.
+ *    personal  — each person hides what they do not want from what remains. Per device, as before.
+ *    role      — what somebody may not see regardless. Currently only Scenarios.
+ *
+ *  `ctx` is optional throughout, so every existing caller keeps its old behaviour. */
+export const visibleNav = (nav, prefs, ctx = {}) =>
+  (nav || []).filter(([k]) => tabIsVisible(k, {
+    ...ctx, locked: isLocked(k), personalHidden: prefs?.views || [],
+  }));
 
 /** Drop hidden entries from a view's `TABS` array of `[key, label, count?]`.
  *
@@ -94,8 +108,9 @@ export function resolveTab(view, routeTab, fallback, prefs) {
 }
 
 /** Where to send someone whose current view has just been hidden. */
-export const landingView = (view, prefs) =>
-  (prefs?.views || []).includes(view) && !isLocked(view) ? "dash" : view;
+export const landingView = (view, prefs, ctx = {}) =>
+  tabIsVisible(view, { ...ctx, locked: isLocked(view), personalHidden: prefs?.views || [] })
+    ? view : "dash";
 
 const Ctx = createContext(EMPTY);
 export const TabPrefsProvider = ({ value, children }) =>

@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ROLES, rank, outranks, canInvite, grantableBy, roleChangeRefusal, removalRefusal, REFUSALS,
-  seatsForPlan, seatsLeft, inviteRefusal, seatSummary, mayGrant,
+  seatsForPlan, seatsLeft, inviteRefusal, seatSummary, mayGrant, canSeeTab, tabIsVisible,
 } from "../../src/engine/roles.js";
 
 describe("rank", () => {
@@ -263,5 +263,67 @@ describe("the seat refusals reach a person", () => {
       expect(sql, `SQL never raises ${code}`).toContain(`'${code}'`);
       expect(REFUSALS[code], `no message for ${code}`).toBeTruthy();
     }
+  });
+});
+
+describe("tab visibility — the first rules that gate READING", () => {
+  const vis = (view, o) => tabIsVisible(view, o);
+
+  it("shows Scenarios to owners and admins, not to editors or viewers", () => {
+    expect(canSeeTab("scn", { role: "owner" })).toBe(true);
+    expect(canSeeTab("scn", { role: "admin" })).toBe(true);
+    expect(canSeeTab("scn", { role: "editor" })).toBe(false);
+    expect(canSeeTab("scn", { role: "viewer" })).toBe(false);
+  });
+
+  it("shows Scenarios to an ADVISOR, who is a viewer", () => {
+    // Modelling "what if we cut two roles" is most of what an advisor is for. Their work lands in
+    // their own layer (028), not the company's document.
+    expect(canSeeTab("scn", { role: "viewer", isAdvisor: true })).toBe(true);
+  });
+
+  it("gates nothing else", () => {
+    for (const view of ["dash", "flow", "pay", "proj", "sales", "inv", "hist", "ms"]) {
+      expect(canSeeTab(view, { role: "viewer" })).toBe(true);
+    }
+  });
+
+  it("the OWNER's company setting removes a tab for everybody", () => {
+    expect(vis("inv", { role: "owner", companyHidden: ["inv"] })).toBe(false);
+    expect(vis("inv", { role: "editor", companyHidden: ["inv"] })).toBe(false);
+  });
+
+  it("a member cannot un-hide what the owner turned off", () => {
+    // The personal layer is subtractive only. There is no personal setting that adds a tab back.
+    expect(vis("sales", { role: "editor", companyHidden: ["sales"], personalHidden: [] })).toBe(false);
+  });
+
+  it("and the owner cannot force a tab onto somebody's own screen", () => {
+    // The two layers answer different questions and neither overrides the other.
+    expect(vis("sales", { role: "owner", companyHidden: [], personalHidden: ["sales"] })).toBe(false);
+  });
+
+  it("a locked tab survives every layer", () => {
+    // The Dashboard is the fallback whenever the current view disappears. A company that hid it would
+    // leave members landing on nothing.
+    expect(vis("dash", { role: "viewer", companyHidden: ["dash"], personalHidden: ["dash"], locked: true }))
+      .toBe(true);
+  });
+
+  it("the role gate wins over both layers, in the direction that hides", () => {
+    expect(vis("scn", { role: "editor", companyHidden: [], personalHidden: [] })).toBe(false);
+  });
+});
+
+describe("an unknown role does not hide anything", () => {
+  it("shows a gated tab when the role has not loaded yet", () => {
+    // Caught by an existing tabprefs test. A tab missing because a role had not arrived is worse than
+    // one briefly present, because this gate protects nothing — it is focus, not access control.
+    for (const role of [undefined, null, ""]) expect(canSeeTab("scn", { role })).toBe(true);
+    expect(tabIsVisible("scn", {})).toBe(true);
+  });
+
+  it("but hides it once the role is actually known", () => {
+    expect(canSeeTab("scn", { role: "editor" })).toBe(false);
   });
 });

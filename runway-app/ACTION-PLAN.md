@@ -278,6 +278,23 @@ ordinary save made by the owner through `save_document` with their own permissio
 audit row. An import that bypassed the normal write path would be a second way into the document, and
 this schema has spent considerable effort having exactly one.
 
+**TAB VISIBILITY IS THREE LAYERS** (030), and the order is the design:
+
+- **company** — the owner decides which tabs this company uses. On the COMPANY ROW, not in the
+  document, because an editor can write the document and a setting an editor can change is not an
+  owner's setting.
+- **personal** — each member hides what they do not want from what remains. Per device, unchanged.
+- **role** — Scenarios is shown to owners, admins and advisors; not to editors or viewers.
+
+Neither of the first two overrides the other: a member cannot un-hide what the owner turned off, and
+the owner cannot force a tab back onto somebody's own screen. The Dashboard survives all three, because
+it is the fallback when a view disappears.
+
+**AND THE ROLE GATE FAILS OPEN WHEN THE ROLE IS UNKNOWN**, caught by an existing test the moment it did
+not. This gate is focus, not access control — the engine ships to the browser, so hiding a tab protects
+nothing — which makes a tab missing because a role had not loaded a worse failure than one briefly
+present. Real read restrictions need 3.8.
+
 **AND AN ADMIN CANNOT REMOVE ANOTHER ADMIN** (029). Left open by 027 as a separate question, now
 answered: an admin who cannot appoint an admin but can remove one has a lateral attack — take out the
 other admins and you are the only one left holding a role you could not have granted yourself. Both

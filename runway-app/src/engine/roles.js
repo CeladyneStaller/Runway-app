@@ -121,3 +121,53 @@ export function seatSummary(usage = {}) {
   const pendingBit = pending ? `, ${pending} held by pending invitation${pending === 1 ? "" : "s"}` : "";
   return `${used} of ${seats} seats used${pendingBit}. ${left} left.`;
 }
+
+// ---- what a role may SEE -----------------------------------------------------
+// The first rules in this product that gate READING rather than writing. Everything before this asked
+// "may you change it"; a tab gate asks "may you look at it", which is a different axis and needs
+// saying out loud: today every member can read the whole document, so this is a UI decision about
+// clutter and focus, NOT access control. The engine ships to the browser and anybody with devtools can
+// run a projection. `plans.js` already carries the same reasoning about features.
+//
+// Enforceable read restrictions need the document split into addressable parts — task 3.8.
+
+/** Tabs that only some roles are shown. Anything not listed is shown to everybody. */
+export const ROLE_GATED_TABS = Object.freeze({
+  // Scenarios is planning, not record. Owners and admins run it; an ADVISOR is a viewer who runs it
+  // too, because modelling "what if we cut two roles" is most of what they are for.
+  scn: ({ role, isAdvisor }) => isAdvisor || atLeast(role, "admin"),
+});
+
+/** May this person see this tab at all?
+ *
+ *  FAILS OPEN WHEN THE ROLE IS UNKNOWN, and that is deliberate. This gate is a UI decision about focus,
+ *  not access control — the engine ships to the browser and anybody with devtools can run a projection,
+ *  so hiding a tab protects nothing. Given that, a tab missing because a role had not loaded yet is a
+ *  worse failure than a tab briefly present: `tabprefs.js` makes the same call for the same reason,
+ *  defaulting to everything visible so a new tab appears for everyone rather than silently vanishing
+ *  for anybody.
+ *
+ *  Real read restrictions need the document split into addressable parts (task 3.8) and will not be
+ *  built on this. */
+export function canSeeTab(view, { role, isAdvisor = false } = {}) {
+  const rule = ROLE_GATED_TABS[view];
+  if (!rule) return true;
+  if (role == null || role === "") return true;
+  return !!rule({ role, isAdvisor });
+}
+
+/** Company-level availability, personal decluttering, and the role gate, applied in that order.
+ *
+ *  THREE LAYERS, and the order is the design. The OWNER decides which tabs this company uses; each
+ *  person then hides what they do not want from what remains; the role gate removes what they may not
+ *  see regardless. A person cannot un-hide something the owner turned off, and the owner cannot force
+ *  a tab back onto somebody's own screen — the two layers answer different questions and neither
+ *  overrides the other.
+ */
+export function tabIsVisible(view, { companyHidden = [], personalHidden = [], role, isAdvisor = false,
+                                     locked = false } = {}) {
+  if (locked) return true;                       // the Dashboard is the fallback and cannot vanish
+  if (!canSeeTab(view, { role, isAdvisor })) return false;
+  if (companyHidden.includes(view)) return false;
+  return !personalHidden.includes(view);
+}
