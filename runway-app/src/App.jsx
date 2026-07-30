@@ -7,6 +7,7 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
          LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
 import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
 import { AcceptInvite } from "./views/chrome/Members";
+import { AdvisorScenarios } from "./views/chrome/AdvisorScenarios";
 import { reportError } from "./state/errors";
 import { TabPrefsProvider, load as loadTabPrefs, save as saveTabPrefs,
          visibleNav, landingView } from "./state/tabprefs";
@@ -43,7 +44,8 @@ import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 
 function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKeepDemo = () => {},
-                    companyName = null, tabPrefs, onSetup = null }) {
+                    companyName = null, tabPrefs, onSetup = null,
+                    membership = null, companyHidden = [] }) {
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -257,16 +259,24 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
   // Hidden tabs are dropped from the NAV only. A hash that points at a hidden view still renders it:
   // this is decluttering, not permissions, and bouncing somebody off their own bookmark would be a
   // worse surprise than a tab they had tidied away showing up when they asked for it by name.
-  const SHOWN_NAV = visibleNav(NAV, tabPrefs);
+  // WHO IS LOOKING, for the tab gate. Absent until it loads, and `tabIsVisible` fails open without it
+  // on purpose: a tab missing while a role arrives is worse than one briefly present, because this gate
+  // is focus rather than access control.
+  const SHOWN_NAV = visibleNav(NAV, tabPrefs, { role: membership?.role, isAdvisor: membership?.is_advisor,
+                                                companyHidden });
 
   const startCtx = useMemo(() => ({ START_Y: startY, START_M: startM }), [startY, startM]);
 
   // If the view you are LOOKING AT gets hidden, you have to end up somewhere. Dashboard is locked
   // against hiding precisely so there is always a destination.
   useEffect(() => {
-    const next = landingView(view, tabPrefs);
+    const next = landingView(view, tabPrefs, { role: membership?.role,
+                                               isAdvisor: membership?.is_advisor, companyHidden });
     if (next !== view) setView(next);
-  }, [view, tabPrefs, setView]);
+    // The membership and the company's tab list belong here too: a role arriving after first render
+    // can hide the view somebody is looking at, and without the dependency they would sit on a tab
+    // that is no longer in the nav.
+  }, [view, tabPrefs, setView, membership?.role, membership?.is_advisor, companyHidden]);
 
 
   // Your entire backup story: a JSON file you own, on a disk you own. It's also the migration test —
@@ -559,7 +569,9 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
           {view === "sales" && <Sales saas={saas} setSaas={setSaas} routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment routeTab={routeTab} setRouteTab={setTab} rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
           {view === "hist" && <History journal={doc.journal} takeSnapshot={takeSnapshot} currentCurve={modelStarts} routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
-          {view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios}
+          {view === "scn" && membership?.is_advisor
+            ? <AdvisorScenarios account={getAccountApi?.()} companyId={getAuthAdapter?.()?.activeCompany?.()} doc={doc} />
+            : view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios}
             // APPLYING A SCENARIO is the one action on that tab that edits the real model. The patched
             // document arrives already built, and goes through the ordinary setDoc path — so it saves,
             // journals and undoes exactly like any other edit, rather than needing its own write route.
@@ -801,6 +813,10 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   // An invitation is answered BEFORE the model loads. Somebody arriving on a link is not here to look
   // at their own numbers, and dropping them into a dashboard with a banner would bury the decision.
   const [inviteToken, clearInvite] = useInviteToken();
+  // WHO AM I HERE, and what does this company use. One call each, after the document is open, because
+  // neither changes while somebody is working and both are needed before the nav can be honest.
+  const [membership, setMembership] = useState(null);
+  const [companyHidden, setCompanyHidden] = useState([]);
   const [doc, setDoc] = useState(null);
   const [loadState, setLoadState] = useState(null);   // LOAD_OK | LOAD_STALE | LOAD_FAILED
   const [conflict, setConflict] = useState(false);
@@ -950,6 +966,25 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     };
   }, []);
 
+  // Fetched once the document is open, and re-fetched on a company switch — `activeCompany()` changes
+  // and both answers belong to the company rather than to the person.
+  useEffect(() => {
+    if (demo || !doc || loadState !== LOAD_OK) return;
+    const account = getAccountApi?.();
+    const cid = getAuthAdapter?.()?.activeCompany?.();
+    if (!account?.myMembership || !cid) return;
+    let alive = true;
+    void Promise.all([
+      account.myMembership(cid).catch(() => null),
+      account.companyTabs?.(cid).catch(() => []) ?? [],
+    ]).then(([m, hidden]) => {
+      if (!alive) return;
+      setMembership(m);
+      setCompanyHidden(Array.isArray(hidden) ? hidden : []);
+    });
+    return () => { alive = false; };
+  }, [demo, doc, loadState, companyName]);
+
   // ANSWERED BEFORE THE MODEL LOADS. Somebody arriving on an invitation link is not here to look at
   // their own numbers, and dropping them into a dashboard with a banner buries the decision.
   if (inviteToken && !demo) return (
@@ -961,7 +996,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
           clearInvite();
           // Joining puts you in a company you were not looking at, so "Open it" should open THAT one.
           if (joined?.company_id) {
-            try { await switchCompany(joined.company_id); }
+            try { await switchCompany(getAuthAdapter(), joined.company_id); }
             catch { /* a failed switch is not a reason to strand somebody on this screen */ }
           }
           globalThis.location?.reload?.();
@@ -1063,6 +1098,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   return <>
     <RunwayApp doc={doc} setDoc={setDoc} demo={demo} onLeaveDemo={onLeaveDemo} onKeepDemo={onKeepDemo}
                companyName={companyName}
+               membership={membership} companyHidden={companyHidden}
                // The prompt exists exactly where the wizard does, so it is keyed on the SAME signal the
                // wizard trigger and the auth gate use: a registered session provider. `enableHostedSync`
                // only registers one when the config is complete, so the provider IS hosted mode. In demo

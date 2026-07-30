@@ -15,13 +15,26 @@ export const SUMMARY_ROWS = [
   ["Last saved", "saved"],
 ];
 
+/** Runway in months, or null when the model never reaches zero inside the horizon.
+ *
+ *  ONE DEFINITION, used by `headline` below, the advisor portfolio and the scenario review screen. Any
+ *  of those three could have projected a document itself in four lines — and then there would be four
+ *  answers to "when do we run out", which is the number this entire product exists to state. */
+export function runwayMonths(doc) {
+  if (!doc) return null;
+  try {
+    const z = zeroInfo(buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {}),
+                       doc.startY, doc.startM);
+    return z ? z.months : null;
+  } catch { return null; }
+}
+
 export function headline(doc) {
   if (!doc) return null;
   try {
-    const rows = buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {});
-    const z = zeroInfo(rows, doc.startY, doc.startM);
+    const m = runwayMonths(doc);
     return {
-      runway: z ? `${z.months.toFixed(1)} mo` : `${HORIZON}+ mo`,
+      runway: m == null ? `${HORIZON}+ mo` : `${m.toFixed(1)} mo`,
       cash: moneyFull(doc.cash || 0),
       people: (doc.employees || []).length,
       lines: (doc.lines || []).length + (doc.projects || []).length + (doc.pos || []).length,

@@ -171,6 +171,73 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       await rpc("remove_member", { p_company_id: companyId, p_user_id: userId });
     },
 
+    /** Which tabs this company does not use. Every member reads it; only an owner may set it. */
+    async companyTabs(companyId) {
+      const out = await rpc("company_tabs", { p_company_id: companyId });
+      return Array.isArray(out) ? out : (Array.isArray(out?.company_tabs) ? out.company_tabs : []);
+    },
+
+    async setCompanyTabs(companyId, hidden) {
+      await rpc("set_company_tabs", { p_company_id: companyId, p_hidden: hidden || [] });
+    },
+
+    /** Every company you are in, for the advisor portfolio. Deliberately carries NO figures — runway is
+     *  computed by the engine from each document, and a server-side projection would be a second answer
+     *  to "when do we run out". */
+    async listAdvisedCompanies() {
+      const rows = await rpc("list_advised_companies");
+      return Array.isArray(rows) ? rows : [];
+    },
+
+    /** Your own advisor plan and how much of it is used. */
+    async advisorUsage() {
+      const out = await rpc("advisor_usage", {});
+      return unwrapOne(out) || { companies: 0, allowed: 0 };
+    },
+
+    /** My own standing in this company: role, advisor, seat. One call, and it is what makes the tab
+     *  gate real — it has been failing open because nothing told it who was looking. */
+    async myMembership(companyId) {
+      const out = await rpc("my_membership", { p_company_id: companyId });
+      return unwrapOne(out) || null;
+    },
+
+    async offeredScenarios(companyId) {
+      const rows = await rpc("offered_scenarios", { p_company_id: companyId });
+      return Array.isArray(rows) ? rows : [];
+    },
+
+    async decideScenario(id, accept) {
+      await rpc("decide_scenario", { p_id: id, p_accept: !!accept });
+    },
+
+    async myScenarios(companyId) {
+      const rows = await rpc("my_scenarios", { p_company_id: companyId });
+      return Array.isArray(rows) ? rows : [];
+    },
+
+    async saveScenario(companyId, name, body, id = null) {
+      const out = await rpc("save_scenario",
+        { p_company_id: companyId, p_name: name, p_body: body, p_id: id });
+      return typeof out === "string" ? out : unwrapOne(out);
+    },
+
+    async shareScenario(id) { await rpc("share_scenario", { p_id: id }); },
+    async unshareScenario(id) { await rpc("unshare_scenario", { p_id: id }); },
+    async deleteScenario(id) { await rpc("delete_scenario", { p_id: id }); },
+
+    /** Another company's document, for the portfolio. A direct read rather than an RPC because RLS on
+     *  `documents` is what makes it safe, and that is the exact property the isolation probes assert —
+     *  a member sees their own companies and zero rows of anybody else's. */
+    async readCompanyDocument(companyId) {
+      const r = await doFetch(
+        `${base}/rest/v1/documents?company_id=eq.${encodeURIComponent(companyId)}&select=body&limit=1`,
+        { headers: await headers() });
+      if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `document read failed (${r.status})`);
+      const rows = await r.json();
+      return Array.isArray(rows) && rows[0] ? rows[0].body : null;
+    },
+
     async listDeletedCompanies() {
       const rows = await rpc("list_deleted_companies");
       return Array.isArray(rows) ? rows : [];

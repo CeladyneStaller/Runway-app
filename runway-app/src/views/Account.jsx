@@ -5,6 +5,8 @@ import { passwordRules, passwordScore } from "../engine/password";
 import { toJSON } from "../state/document";
 import { DeleteCompany } from "./chrome/DeleteCompany";
 import { Members } from "./chrome/Members";
+import { CompanyTabs } from "./chrome/CompanyTabs";
+import { Portfolio } from "./chrome/Portfolio";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
 import { PLANS, planSummary, unpaidMessage, TRIAL_DAYS } from "../state/plans";
 
@@ -542,7 +544,17 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
         onChanged={reload}
       />
 
+      {/* Above the company list, because somebody advising several companies is here to look across
+          them rather than to administer one. It renders nothing below two companies. */}
+      <Portfolio account={account} onOpen={async (id) => {
+        try { await switchCompany(auth, id); onSwitched?.(); }
+        catch (e) { setErr(e?.message || String(e)); }
+      }} />
+
       <Members account={account} companyId={activeId} />
+
+      <CompanyTabs account={account} companyId={activeId}
+                   role={companies.find(c => c.id === activeId)?.role} />
 
       <BillingSection account={account} companyId={activeId} onError={setErr} />
 

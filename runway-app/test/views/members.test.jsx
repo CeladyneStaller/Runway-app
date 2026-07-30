@@ -166,3 +166,48 @@ describe("accepting an invitation", () => {
     expect(a.declineInvitation).toHaveBeenCalledWith("t");
   });
 });
+
+describe("the three facts a member row carries", () => {
+  const withRows = (rows) => api({ listMembers: vi.fn().mockResolvedValue(rows) });
+
+  it("marks an advisor, and says they hold no seat", async () => {
+    const v = await draw(withRows([
+      member(),
+      member({ user_id: "u2", email: "dana@sharpecfo.com", role: "viewer", is_me: false,
+               is_advisor: true, has_seat: true }),
+    ]));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Advisor/));
+    expect(v.container.textContent).toMatch(/holds no seat/i);
+  });
+
+  it("does NOT offer a role dropdown for an advisor", async () => {
+    // 027 forces them to viewer, so every option the control offered would be refused.
+    const v = await draw(withRows([
+      member(),
+      member({ user_id: "u2", email: "dana@sharpecfo.com", role: "viewer", is_me: false,
+               is_advisor: true }),
+    ]));
+    await waitFor(() => expect(v.container.textContent).toMatch(/dana@sharpecfo.com/));
+    expect(v.queryByLabelText("Role for dana@sharpecfo.com")).toBeNull();
+  });
+
+  it("marks a member pushed out of the seats by a downgrade", async () => {
+    const v = await draw(withRows([
+      member({ has_seat: true }),
+      member({ user_id: "u3", email: "sam@acme.com", role: "editor", is_me: false, has_seat: false }),
+    ]));
+    await waitFor(() => expect(v.container.textContent).toMatch(/No seat/));
+  });
+
+  it("does not mark an advisor as seatless — they never had one", async () => {
+    // "No seat" means "pushed out by a downgrade", which is a state to fix. An advisor holding no seat
+    // is the normal case and marking it would read as a problem.
+    const v = await draw(withRows([
+      member(),
+      member({ user_id: "u2", email: "dana@sharpecfo.com", role: "viewer", is_me: false,
+               is_advisor: true, has_seat: false }),
+    ]));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Advisor/));
+    expect(v.container.textContent).not.toMatch(/No seat/);
+  });
+});

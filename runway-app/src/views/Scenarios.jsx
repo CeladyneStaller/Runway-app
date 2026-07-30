@@ -276,7 +276,10 @@ function ScenarioCard({ scn, impact, ctx, baseDoc, comparing, onCompare, onEdit,
         </label>
         <button className="linkbtn" onClick={onEdit}>Edit</button>
         <button className="linkbtn" onClick={onDuplicate}>Duplicate</button>
-        <button className="linkbtn scn-apply" onClick={onApply}>Apply to plan</button>
+        {/* ABSENT WITHOUT A HANDLER, not inert. An advisor works in their own scenario layer and cannot
+            write the company's model at all — a button that quietly did nothing would be worse than
+            one that is not there, because they would keep pressing it. */}
+        {onApply && <button className="linkbtn scn-apply" onClick={onApply}>Apply to plan</button>}
         <button className="iconbtn" onClick={onDelete} aria-label={`Delete ${scn.name}`}>{I.trash}</button>
       </div>
     </div>
@@ -431,7 +434,7 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
               onCompare={() => toggleActive(scn.id)}
               onEdit={() => setEditing(scn.id)}
               onDuplicate={() => duplicate(scn)}
-              onApply={() => setApplying(scn)}
+              onApply={onApplyToPlan ? () => setApplying(scn) : null}
               onDelete={() => remove(scn.id)} />
           ))}
         </div>

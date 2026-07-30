@@ -977,3 +977,32 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   border:1px solid var(--line);border-radius:12px}
 .invite-card h3{font-family:var(--fd);margin:0 0 8px}
 .invite-card p{font-family:var(--fb);font-size:13px;color:var(--muted);line-height:1.6}
+
+/* Advisor is a different axis from role, so it does not share the role palette. */
+.chip-advisor{background:#EEEDFE;color:#3C3489}
+
+/* Which tabs a company uses. A grid, because the list is short and scanning beats scrolling. */
+.tabgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 18px;margin-top:6px}
+.tabtoggle{display:flex;align-items:center;gap:8px;font-family:var(--fb);font-size:13px;cursor:pointer}
+.tabtoggle.is-locked{cursor:default;color:var(--muted)}
+.tabtoggle em{font-style:normal;color:var(--muted-2);font-size:11.5px}
+
+/* An offered scenario: what it changes, and what that does to the date that matters. */
+.offered{padding:14px 0;border-top:1px solid var(--line)}
+.offered-h{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.offered-nums{display:flex;gap:12px;margin:12px 0}
+.offered-nums div{flex:1;background:var(--paper);border-radius:8px;padding:8px 12px}
+.offered-nums span{display:block;font-family:var(--fb);font-size:11.5px;color:var(--muted)}
+.offered-nums b{font-family:var(--fd);font-size:18px}
+.offered-nums b.up{color:var(--signal-ink)} .offered-nums b.down{color:var(--danger)}
+.offered-changes{margin-bottom:12px}
+
+/* The portfolio. A list, not a dashboard — the sort order is the feature. */
+.pf-stats{display:flex;gap:12px;margin:4px 0 12px}
+.pf-stats div{flex:1;background:var(--paper);border-radius:8px;padding:8px 12px}
+.pf-stats span{display:block;font-family:var(--fb);font-size:11.5px;color:var(--muted)}
+.pf-stats b{font-family:var(--fd);font-size:20px}
+.pf-stats b.down{color:var(--danger)}
+.pf-name{font-family:var(--fb);font-size:14px;font-weight:600;padding:0}
+.pf-runway{font-family:var(--fd);font-size:15px;min-width:70px;display:inline-block;text-align:right}
+.pf-runway.down{color:var(--danger)} .pf-runway.warn{color:var(--caution)}

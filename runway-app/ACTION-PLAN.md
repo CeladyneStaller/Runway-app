@@ -351,6 +351,49 @@ have unlimited members. The previous plan anticipated this: "seats become a real
 3, and the shape to reach for then is a seat count on the SUBSCRIPTION, not on membership." Worth
 deciding before it is discovered by a customer with a large team.
 
+## The advisor screens — 29 Jul 2026
+
+Four of five built. `Members` tags, `CompanyTabs`, `OfferedScenarios`, `Portfolio`, plus migration 032
+carrying `is_advisor` and `has_seat` on the member row and `list_advised_companies()`.
+
+**THE REVIEW SCREEN GOT MUCH CHEAPER THAN EITHER OF US EXPECTED**, because the premise was wrong. A
+scenario is not a copy of the model — it is `{ name, patches }`, an overlay (`engine/scenario.js`
+line 6). So the patches ARE the diff, `describePatch` already renders each as a sentence for the
+Scenarios screen, and importing is appending one small object to `doc.scenarios`. The
+`diffDocuments` function proposed for this is not needed and was never written.
+
+**ACCEPTING IS TWO OPERATIONS AND ONE BUTTON**, which is the only part with a real failure mode:
+`decide_scenario` records the answer, then the scenario is saved through the ORDINARY write path by the
+owner. Those can come apart — recorded, then the save conflicts — so the screen says exactly that and
+notes the offer will not reappear, rather than reporting a success that half happened.
+
+**THE PORTFOLIO COMPUTES RUNWAY IN THE BROWSER**, using `runwayMonths` — extracted from
+`docsummary.js` so the dashboard headline, the review screen and the portfolio share ONE answer to
+"when do we run out". Rows appear as each document arrives rather than after the slowest, and a
+company whose model fails to load is marked as unreadable rather than left looking healthy, which is
+the failure the panel exists to prevent arriving from inside the panel.
+
+It renders nothing below two companies: a list of one is a screen that exists to justify a price.
+
+**ALL FIVE BUILT.** The workspace (`AdvisorScenarios`) REUSES the Scenarios view rather than growing a
+second editor — that view was already parameterised on `{ scenarios, setScenarios }`, so what differs is
+only where it reads and writes. Two consequences worth keeping:
+
+- **`Apply to plan` is now ABSENT without a handler, not inert.** An advisor cannot write the company's
+  model at all, and a button that quietly did nothing would be worse than one that is not there.
+- **Edits are DIFFED against what was loaded**, because there is no bulk RPC and saving every scenario
+  on every keystroke would be one request per patch. Local state moves first so the editor stays
+  responsive; a failed write reloads rather than leaving the screen showing something the server refused.
+
+**Migration 033 made the tab gate real.** `tabIsVisible` had been failing open since it was written
+because nothing told it who was looking — `my_membership()` is the one call that answers role, advisor
+and seat together, and it now feeds both the nav and the Scenarios branch.
+
+TWO BUGS FOUND WHILE WIRING IT, both mine and both invisible to the type system: `switchCompany` takes
+`(auth, id)` and I had called it with one argument in two places, including the invite-accept path; and
+the membership effect was placed after DocumentHost's early returns, which broke 37 view tests at once
+with "Rendered more hooks than during the previous render". Hooks before returns, always.
+
 ## Phase 5 — UI polish
 
 Every tab and sub-tab carrying the analytics and the graphics it deserves. Not a rewrite: the engine

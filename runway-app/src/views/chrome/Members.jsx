@@ -82,7 +82,9 @@ export function Members({ account, companyId, canManage }) {
         {members.map(m => {
           const refusal = roleChangeRefusal({ actorRole: mine, subjectRole: m.role,
                                               next: m.role, ownerCount: owners });
-          const mayEdit = manage && !refusal && !m.is_me;
+          // An advisor is always a viewer (027), so the dropdown would be a control whose every option
+          // the server rejects.
+          const mayEdit = manage && !refusal && !m.is_me && !m.is_advisor;
           const mayRemove = !removalRefusal({ actorRole: mine, subjectRole: m.role,
                                               isSelf: m.is_me, ownerCount: owners })
                             && (manage || m.is_me);
@@ -90,9 +92,23 @@ export function Members({ account, companyId, canManage }) {
             <div className="acct-row" key={m.user_id}>
               <div>
                 <div className="acct-row-t">{m.email}{m.is_me && <span className="acct-badge">you</span>}</div>
-                <div className="acct-row-s">Joined {new Date(m.joined_at).toLocaleDateString()}</div>
+                <div className="acct-row-s">
+                  {m.is_advisor
+                    ? "Advisor · holds no seat"
+                    : `Joined ${new Date(m.joined_at).toLocaleDateString()}`}
+                </div>
               </div>
               <div className="acct-row-a">
+                {/* THREE FACTS, THREE SHAPES. Role is one family because the four are the same kind of
+                    thing; advisor is a different axis and gets its own colour, or people read it as a
+                    fifth role ranking above or below Admin; over-capacity is a STATE rather than an
+                    identity, so it sits beside the role instead of replacing it. */}
+                {m.is_advisor && <span className="chip chip-advisor">Advisor</span>}
+                {!m.is_advisor && m.has_seat === false && (
+                  <span className="chip bad" title="This company has more people than seats">
+                    No seat
+                  </span>
+                )}
                 {mayEdit ? (
                   <select className="sel" value={m.role} disabled={busy}
                           aria-label={`Role for ${m.email}`}
