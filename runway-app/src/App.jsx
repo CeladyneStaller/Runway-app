@@ -42,6 +42,7 @@ import { Projects } from "./views/Projects";
 import { Sales } from "./views/Sales";
 import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
+import mark from './assets/waterline-mark.svg';
 
 function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKeepDemo = () => {},
                     companyName = null, tabPrefs, onSetup = null,
@@ -359,7 +360,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
         {/* NAV RAIL */}
         <aside className="rail">
           <div className="brand">
-            <span className="mark"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4"><path d="M3 17 9 9l4 3 8-9" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+            <img src={mark} alt="Waterline" width={150} />
             <div><b>Waterline</b><span>runway control</span></div>
           </div>
           {SHOWN_NAV.map(([k, label, icon]) => (
