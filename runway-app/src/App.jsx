@@ -20,6 +20,7 @@ import { Setup } from "./views/Setup";
 import { hasSubstance } from "./views/chrome/docsummary";
 import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
 import { roundMS, msTarget, msPass, msGap } from "./engine/capital";
+import { track } from "./state/funnel";
 import { money, moneyFull } from "./engine/money";
 import { buildModelFromDoc, buildModelParts } from "./engine/buildmodel";
 import { confidenceBand } from "./engine/band";
@@ -731,6 +732,16 @@ function SyncPill() {
 // account opened in that tab afterwards, and a brand-new account landed on the old empty-model screen
 // instead. It also explains the shape of the report — it worked when first tested and stopped later,
 // because the flag accumulates. Keyed by company, declining for one cannot answer for another.
+/** Records `landed` when the landing screen is genuinely rendered.
+ *
+ *  A component rather than a call inside the render, because an effect fires once per mount while a
+ *  render body fires on every re-render — and `track` deduplicates per device, so the difference would
+ *  be invisible in the numbers and visible in the request log. */
+function LandedOnce() {
+  useEffect(() => { void track("landed"); }, []);
+  return null;
+}
+
 const SETUP_SKIP = "runway:setup-skipped";
 const skipKey = (id) => `${SETUP_SKIP}:${id || "unknown"}`;
 const setupSkipped = (id) => { try { return !!globalThis.sessionStorage?.getItem(skipKey(id)); } catch { return false; } };
@@ -938,6 +949,9 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
         r.readAsText(file);
       }}
       onDone={async (built, typedName) => {
+        // AFTER the wizard's own work below, not here — see the `track` call at the end of this
+        // handler. Firing on entry would count a completion that failed to save.
+
         if (setup === "company") {
           // CREATE THE COMPANY FROM WHAT THE WIZARD COLLECTED, rather than before it ran. Nothing has
           // been written until this moment, so backing out of the wizard leaves no orphan company —
@@ -960,6 +974,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
           setDoc(built);
         }
         skipSetup(currentCompanyId());
+        void track("setup_completed");
         setSetup(null);
       }}
     />
@@ -1160,7 +1175,12 @@ export default function App() {
     // and hanging the demo off the bottom of it was the old arrangement, and it asked people to
     // authenticate to a product they had not yet decided they wanted.
     if (entry === null) return (
-      <Landing onDemo={enterDemo} onCreate={() => setEntry("create")} onSignIn={() => setEntry("signin")} />
+      <>
+        <LandedOnce />
+        <Landing onDemo={() => { void track("demo_started"); enterDemo(); }}
+                 onCreate={() => { void track("signup_started"); setEntry("create"); }}
+                 onSignIn={() => setEntry("signin")} />
+      </>
     );
     return <SignIn session={session} onDemo={enterDemo} onBack={() => setEntry(null)}
                    initialMode={entry === "signin" ? "signin" : "create"} />;

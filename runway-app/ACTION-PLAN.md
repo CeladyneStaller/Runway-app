@@ -14,7 +14,7 @@ engineering**, and a plan that keeps proposing engineering will quietly become a
 
 | | Task | Status |
 |---|---|---|
-| 0.1 | Run the isolation suite against the real project | **STILL NOT DONE.** Called "the single highest-value hour on the entire list" and it is the only Phase 0 item outstanding. The 8 probes are still skipped. |
+| 0.1 | Run the isolation suite against the real project | **DONE 29 Jul 2026 — 15 of 15 probes PASS.** Two throwaway accounts, real database, real refusals. |
 | 0.2 | Version retention | **DONE** — migration 005: last 20 per document plus 5-minute snapshot coalescing. Last-N rather than a time window because a row count is a hard bound and "90 days" is not. |
 | 0.3 | Error monitoring | **DONE** — `state/sentry.js`, wired in `main.jsx` and behind `ViewBoundary`. |
 | 0.4 | `VITE_SITE_URL`, redirect allow-list, deployment protection | **DONE** — auth works end to end in production, including the OAuth callback. |
@@ -81,7 +81,24 @@ position and nothing has addressed it. It belongs with whoever reviews the legal
 
 ## The three things actually outstanding, in order
 
-### 1. Run the isolation suite. One hour. It has been the top item on two consecutive plans.
+### 1. ~~Run the isolation suite.~~ DONE — 15 of 15 pass.
+
+**What it proved, in the results rather than in the intent:** `documents` answers **200 with zero rows**
+(RLS filtering — the query is allowed, the rows are not there), while `memberships`, `qbo_connections`
+and `qbo_refresh_token` answer **403** (no grant at all — refused before RLS is consulted), and the anon
+key answers **401**. That is the "RLS and privileges are two independent gates" claim NOTES has carried
+since migration 001, demonstrated instead of asserted — and it is exactly the distinction that broke
+`qbo-sync` the day before, where a missing grant produced an error in a place expecting zero rows.
+
+The headline probe now reads `seeded true, status 200, rows 0`. Yesterday it could have read `rows 0`
+against an empty table.
+
+**Make it a release step.** It costs seconds now that the harness works, and the thing it guards is the
+one failure that ends a product. It belongs next to 3.7's migration rehearsal.
+
+**The test accounts age.** In 14 days their trials lapse, `save_document` refuses with
+`payment_required`, and the seed checks fail — loudly and by design. The fix then is to recreate the
+users, not to interpret the output.
 
 **PREPARED 29 Jul 2026 — and preparing it found three reasons the hour would have been wasted.**
 
@@ -107,7 +124,7 @@ position and nothing has addressed it. It belongs with whoever reviews the legal
   CRLF, and when something is genuinely missing they name every accepted spelling and where they
   looked. A task that happens once every few months cannot also require remembering how it works.
 
-Net: **14 probes instead of 8 or 12**, one of them new (`document_versions` — a body can be denied while
+Net: **15 probes instead of 8 or 12**, one of them new (`document_versions` — a body can be denied while
 its history is not, two tables and two policies, only one of them obvious).
 
 Two test accounts on the real project, then `npm run test:isolation`. There are now more probes than
@@ -124,7 +141,35 @@ While there: `stripe-portal` still reads `subscriptions` directly over PostgREST
 failed today. It works, so that table's privileges are fine — but it is one revoke away from failing
 the same silent way.
 
-### 2. Analytics — because you cannot currently tell whether anyone finishes onboarding.
+### 2. ~~Analytics~~ BUILT 29 Jul 2026 — eight steps, and deliberately incapable of more.
+
+`state/funnel.js`, migration 020, 15 tests. **Not PostHog, Segment or any SDK**, for the reason
+`.env.example` already gives about error reporting: analytics libraries AUTOCAPTURE by default — click
+targets, DOM text, input values, page URLs, sometimes session replay — and a product asking people to
+trust it with salaries cannot also ship a library whose default behaviour is to record the screen.
+
+**The API takes an event name and nothing else.** No properties bag, no payload, no custom fields — so
+there is no parameter through which a number from somebody's model could arrive even by mistake. A test
+asserts that passing one is ignored. The table has no user id, no company id and no properties column;
+not "unpopulated", absent, because a schema with nowhere to put a runway figure cannot later be used to
+put one there.
+
+**Idempotent by database constraint** (`unique (anon_id, event)`): a funnel step is "did this visitor
+reach it", not how many times, so a reload cannot inflate a count — and it bounds what an abusive caller
+can write, which matters because the insert has to be reachable by `anon`. Instrumenting only
+authenticated users would measure exactly the half that is not the question.
+
+**Every event fires where success is knowable, not where intent is:** `signup_completed` on an
+authenticated session rather than a submitted form; `first_save` on a write that actually landed;
+`checkout_completed` on a subscription reading `active`, never on the redirect back from Stripe, which
+is a URL the browser could have typed. `trialing` deliberately does not count, since this product's
+trial is computed locally with no card.
+
+The allowlist exists in three places on purpose — the client, the CHECK constraint, and
+`funnel_summary`'s step list — and a test reads the migration to keep them from drifting.
+
+Read it with `select * from funnel_summary();` — distinct visitors per step, in funnel order, so the
+drop-off is visible reading down the column.
 
 The previous plan called this "the single most valuable thing to know" and it is more true now: there
 is a landing fork, a demo with a 12-hour window, a promotion path, a setup wizard, a mapping screen and
@@ -186,5 +231,6 @@ now protect is a product that takes money, connects to QuickBooks, and has nobod
 
 ---
 
-*State at revision: 1,002 tests passing, 8 isolation probes skipped, 2 timing-sensitive. 0 lint errors.
+*State at revision: ~1,000 tests passing offline plus 15 isolation probes verified against the real
+database, 2 timing-sensitive. 0 lint errors.
 19 migrations. 9 Edge Functions (plus `_shared`). Golden number 5.6 months, unchanged through all of it.*

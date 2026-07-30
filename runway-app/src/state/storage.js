@@ -14,6 +14,7 @@
 //    held so a failure can be retried rather than lost.
 
 import { emptyDoc, migrate } from "./document";
+import { track } from "./funnel.js";
 import { createLocalBackend, adoptionDismissed, dismissAdoption,
          readActiveCompany, writeActiveCompany, clearActiveCompany } from "./backends/local.js";
 import { createSupabaseBackend } from "./backends/supabase.js";
@@ -210,7 +211,13 @@ export async function flush() {
     _deadline = null;
     _halted = false;
     // Only clear the pending slot if nothing newer arrived while this write was in flight.
-    if (_pending === doc) { _pending = null; emit({ state: "saved", error: null }); }
+    if (_pending === doc) {
+      _pending = null;
+      emit({ state: "saved", error: null });
+      // A SAVE THAT ACTUALLY LANDED, which is the activation moment worth measuring — not a keystroke,
+      // not an intent, a document in the database. Recorded once per device by `track`.
+      void track("first_save");
+    }
     else { emit({ state: "unsaved" }); }
   } catch (e) {
     // Hold the document. Losing an edit because a write blipped is the failure this whole file exists

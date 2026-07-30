@@ -7,6 +7,7 @@ import App from "./App.jsx";
 import { createClient } from "@supabase/supabase-js";
 import { syncConfigured, syncConfigReport, readActiveCompany } from "./state/storage.js";
 import { enableHostedSync } from "./state/sync.js";
+import { createFunnel, setFunnel } from "./state/funnel.js";
 
 // HOSTED SYNC BOOTSTRAP — the one place @supabase/supabase-js is used. Everything else (the auth
 // adapter, the backend, the write cadence, the account API) is dependency-free and tested without a
@@ -34,6 +35,14 @@ if (syncConfigured()) {
   // events too. readActiveCompany() restores which company THIS DEVICE was last looking at.
   // The device's remembered company is read FOR THE SIGNED-IN USER. Without the id it comes back null,
   // and current_company() resolves one properly — which is the right answer, not a degraded one.
+  // THE FUNNEL IS REGISTERED HERE AND NOWHERE ELSE, because this is the only file that reads env — and
+  // because it is only registered in the hosted branch, a local-first user emits nothing at all rather
+  // than emitting into a void. The emitter is a no-op until this call.
+  setFunnel(createFunnel({
+    url: import.meta.env.VITE_SUPABASE_URL,
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  }));
+
   const { data: sess } = await supabase.auth.getSession().catch(() => ({ data: null }));
   enableHostedSync({
     authClient: supabase.auth,

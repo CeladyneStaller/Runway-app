@@ -6,6 +6,7 @@
 // network.
 
 import { BackendError, ERR_FORBIDDEN, ERR_UNREACHABLE } from "./backends/errors.js";
+import { track } from "./funnel.js";
 
 export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
   if (!url || !anonKey) throw new Error("Account API needs a url and an anon key");
@@ -71,18 +72,34 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
 
     /** Plan, status and allowance for the signed-in account. One call, so the billing UI needs no
      *  second round trip to work out what to show. */
+    /** `checkout_completed` is recorded HERE, on a subscription that reads active — not on the redirect
+     *  back from Stripe, which is a URL the browser could have typed. The webhook is the only thing
+     *  that can make this true, so this is the only honest place to count a purchase. */
     async myPlan() {
       const out = await rpc("my_plan", {});
-      return unwrapOne(out) || { plan: "none", status: "none", companies_allowed: 0 };
+      const row = unwrapOne(out) || { plan: "none", status: "none", companies_allowed: 0 };
+      // A LIVE SUBSCRIPTION IS THE ONLY HONEST DEFINITION OF A COMPLETED PURCHASE. Recording it on the
+      // redirect back from Stripe would count a URL the browser could have typed; `active` here can
+      // only have been caused by the webhook, which required Stripe to have charged a card.
+      // `active` or `past_due` only. NOT `trialing`: this product's trial is computed from the signup
+      // timestamp with no card, so counting it would report purchases that never happened. `past_due`
+      // means a card succeeded once and has since failed, which is still a completed checkout.
+      if (row.status === "active" || row.status === "past_due") void track("checkout_completed");
+      return row;
     },
 
     /** Start a hosted Checkout. Returns a URL to send the browser to — we never touch card fields,
      *  which keeps this out of PCI scope entirely. */
+    /** `checkout_started` fires here rather than on the click, because the click is an intent and this
+     *  is a Stripe session that actually exists. `checkout_completed` cannot be recorded from the
+     *  browser at all — the browser is told by a redirect it could fabricate — so it is recorded when
+     *  the SUBSCRIPTION reads active, which only the webhook can cause. */
     async checkout(plan) {
       const r = await doFetch(`${base}/functions/v1/stripe-checkout`, {
         method: "POST", headers: await headers(), body: JSON.stringify({ plan }),
       });
       if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `checkout failed (${r.status})`);
+      void track("checkout_started");
       return (await r.json()).url;
     },
 

@@ -670,8 +670,12 @@ the journal's own Phase 2 and 3 need.
 - [x] Skip-unchanged, coalesce in flight, retry with backoff, flush on hide/unload
 - [x] Conflict prompt with headline diff — and RESOLUTION, which the plan did not ask for: "mine"
       re-reads first so the retry actually lands, "theirs" suppresses the immediate write-back
-- [x] Cross-tenant isolation test against a REAL project (`npm run test:isolation`, 8 probes,
-      skipped offline so `npm test` stays hermetic)
+- [x] Cross-tenant isolation test against a REAL project — **AND ACTUALLY RUN, 29 Jul 2026: 15 of 15
+      pass.** This tick previously meant the probes were WRITTEN, which is not the same claim and was
+      worth being embarrassed about for two revisions of the action plan. Running it required fixing
+      three things first: an unchecked seed that let the headline probe pass against an empty table, an
+      own-read assertion that checked only an HTTP 200, and two separate implementations under two env
+      conventions. Skipped offline so `npm test` stays hermetic.
 - [x] Exit criteria §2.6 green; golden still 5.6
 
 **Still open inside Phase 1 — the plan asked for these and they are not done**

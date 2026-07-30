@@ -6,6 +6,7 @@
 import { createSupabaseAuth } from "./auth.js";
 import { createAccountApi } from "./account.js";
 import { createSession } from "./session.js";
+import { track } from "./funnel.js";
 import { syncConfigured, activateHostedBackend, activateLocalBackend, clearActiveCompany } from "./storage.js";
 
 // The live session provider and company resolver, registered once at start-up so the UI can reach them
@@ -55,7 +56,13 @@ export function enableHostedSync({ authClient, getSession, env = import.meta.env
     // Belt AND braces: `auth.reset()` clears the resolved company in memory, `clearActiveCompany()`
     // clears the copy on disk. The disk copy is also user-keyed, because this handler does not fire
     // for every way a session ends — an expired refresh token, cleared cookies, a tab closed offline.
-    session.onChange((s) => { if (!s) { auth.reset(); void clearActiveCompany(); } });
+    session.onChange((s) => {
+      if (!s) { auth.reset(); void clearActiveCompany(); return; }
+      // AUTHENTICATED, which is the only definition of "signed up" that cannot be faked by submitting a
+      // form. It fires on every sign-in too; `track` records a step once per device, so the funnel
+      // counts the first one and ignores the rest.
+      void track("signup_completed");
+    });
   }
 
   return { enabled: true, auth, session, account: _account };
