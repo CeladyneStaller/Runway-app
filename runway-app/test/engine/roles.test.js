@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ROLES, rank, outranks, canInvite, grantableBy, roleChangeRefusal, removalRefusal, REFUSALS,
-  seatsForPlan, seatsLeft, inviteRefusal, seatSummary,
+  seatsForPlan, seatsLeft, inviteRefusal, seatSummary, mayGrant,
 } from "../../src/engine/roles.js";
 
 describe("rank", () => {
@@ -34,11 +34,17 @@ describe("who may invite, and to what", () => {
     expect(grantableBy("editor")).toEqual([]);
   });
 
-  it("an admin may grant up to admin, never owner", () => {
-    // THE ESCALATION THIS BLOCKS: an admin who can mint owners promotes themselves by inviting their
-    // own second address, and every other check becomes decorative.
-    expect(grantableBy("admin")).toEqual(["viewer", "editor", "admin"]);
-    expect(grantableBy("admin")).not.toContain("owner");
+  it("an admin may grant BELOW admin only — not admin, not owner", () => {
+    // Corrected in 027. An admin who can mint admins can mint one out of their own second address, and
+    // from there every other check in the schema is decorative. Only an owner appoints admins.
+    expect(grantableBy("admin")).toEqual(["viewer", "editor"]);
+  });
+
+  it("an owner may appoint another owner", () => {
+    // The one place equal-rank granting is allowed: a company with a single owner needs some way to
+    // gain a second, and only an owner can be trusted with that.
+    expect(mayGrant("owner", "owner")).toBe(true);
+    expect(mayGrant("admin", "admin")).toBe(false);
   });
 
   it("an owner may grant anything", () => {
@@ -53,9 +59,26 @@ describe("changing a role", () => {
     expect(ok({ actorRole: "owner", subjectRole: "editor", next: "admin", ownerCount: 1 })).toBe(true);
   });
 
-  it("an admin may not create an owner", () => {
-    expect(roleChangeRefusal({ actorRole: "admin", subjectRole: "editor", next: "owner", ownerCount: 1 }))
-      .toBe("role_too_high");
+  it("an admin may not create an owner OR another admin", () => {
+    for (const next of ["owner", "admin"]) {
+      expect(roleChangeRefusal({ actorRole: "admin", subjectRole: "editor", next, ownerCount: 1 }))
+        .toBe("role_too_high");
+    }
+  });
+
+  it("an advisor cannot be given any role but viewer", () => {
+    expect(roleChangeRefusal({ actorRole: "owner", subjectRole: "viewer", next: "editor",
+                               ownerCount: 1, subjectIsAdvisor: true })).toBe("advisor_is_viewer");
+    expect(roleChangeRefusal({ actorRole: "owner", subjectRole: "viewer", next: "viewer",
+                               ownerCount: 1, subjectIsAdvisor: true })).toBeNull();
+  });
+
+  it("agrees with may_grant() in migration 027", async () => {
+    const { readFileSync } = await import("node:fs");
+    const sql = readFileSync("supabase/migrations/027_role_grants.sql", "utf8");
+    const fn = sql.slice(sql.indexOf("function may_grant"), sql.indexOf("$$;", sql.indexOf("function may_grant")));
+    expect(fn).toContain("p_mine = 'owner'");
+    expect(fn).toContain("role_rank(p_target) < role_rank(p_mine)");
   });
 
   it("an admin may not demote an owner", () => {
@@ -91,10 +114,27 @@ describe("removing somebody", () => {
       .toBe("last_owner");
   });
 
-  it("an admin may remove an editor but not an owner", () => {
+  it("an admin may remove an editor but NOT an owner or another admin", () => {
+    // 029. An admin who cannot appoint an admin but can remove one has a lateral attack: take out the
+    // other admins and you are the only one left holding a role you could not have granted yourself.
     expect(ok({ actorRole: "admin", subjectRole: "editor", isSelf: false, ownerCount: 1 })).toBe(true);
-    expect(removalRefusal({ actorRole: "admin", subjectRole: "owner", isSelf: false, ownerCount: 2 }))
-      .toBe("forbidden");
+    for (const subjectRole of ["admin", "owner"]) {
+      expect(removalRefusal({ actorRole: "admin", subjectRole, isSelf: false, ownerCount: 2 }))
+        .toBe("forbidden");
+    }
+  });
+
+  it("an owner may remove an admin", () => {
+    expect(ok({ actorRole: "owner", subjectRole: "admin", isSelf: false, ownerCount: 1 })).toBe(true);
+  });
+
+  it("appointment and removal use the SAME rank rule, so they cannot drift", () => {
+    for (const actorRole of ROLES) for (const subjectRole of ROLES) {
+      const mayAppoint = roleChangeRefusal({ actorRole, subjectRole: "viewer", next: subjectRole,
+                                             ownerCount: 2 }) === null;
+      const mayRemove = removalRefusal({ actorRole, subjectRole, isSelf: false, ownerCount: 2 }) === null;
+      expect(mayRemove, `${actorRole} on ${subjectRole}`).toBe(mayAppoint);
+    }
   });
 
   it("an editor may remove nobody but themselves", () => {

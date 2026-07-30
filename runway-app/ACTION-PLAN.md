@@ -52,6 +52,8 @@ the oldest company you own, computed rather than stored, so `memberships` needed
 | 3.5 | Status page | Not done. |
 | 3.6 | Onboarding email sequence | Not done. |
 | 3.7 | Migration rehearsal as a release step | Not done. |
+| 3.9 | **Project-level visibility.** A project leader may need detail about their project that a general member should not see — and conversely, some company-wide figures should stay out of a project view. Per-project access, granting more within a project and less outside it. | Not done. **Depends on 3.8**: filtering *what* somebody sees requires the document to have addressable parts, which one jsonb blob does not have. It is also the second rule of the form "this role may see that part" — after the scenarios tab — which is the pattern that makes 3.8 structural rather than tidy. Note it inverts the current model: today every member sees the whole document, and roles gate WRITING, not reading. |
+| 3.8 | **Split the document into sections** (`document_sections`, journal to its own table, per-section optimistic concurrency). Phase 3 of `BACKEND-PLAN.md` §4.2. | **Not done, and now BLOCKING a stated product rule.** The document is one jsonb blob written by one RPC, so there is no field-level permission: "an advisor may edit scenarios but not payroll" is not expressible. 028 works around it with a personal layer — the advisor's scenarios live in their own table and are OFFERED to the owner rather than written. That is a better product in its own right, but it is a workaround for a schema limit, and every future rule of the form "this role may change that part" hits the same wall. |
 
 ### Phase 4 — trust layer
 
@@ -256,6 +258,32 @@ it (the only step that can break billing, and it needs another live `4242` run);
 `invite_member`; the members and advisor UI; and `plans.js` renamed from `advisor` to `collaborative`,
 which cannot happen before the Stripe price maps do.
 
+## The role model, corrected — 29 Jul 2026
+
+**ONLY AN OWNER APPOINTS AN ADMIN** (027). 021 let anybody grant up to their own rank, so an admin
+could mint admins — and an admin who can do that can mint one out of their own second address, after
+which every other check in the schema is decorative. The rule is now "strictly below your own, unless
+you are the owner"; an owner may still appoint another owner, because a company with one owner needs
+some way to gain a second.
+
+**AN ADVISOR IS A VIEWER, ALWAYS.** The attribute exists so somebody can be in a company without
+occupying a seat. A seat-free editor would be the seat model with a hole in it — and a free advisor
+tier would be that hole with a price of nothing, which is why there is no free advisor tier either.
+The floor is arbitrage: the cheapest marginal seat is Solo→Collaborative at about $30 a seat, so
+advisor has to sit clearly above that or it becomes the cheap seat.
+
+**ADVISOR SCENARIOS ARE A PERSONAL LAYER** (028), not a permission. Sharing is an OFFER: an advisor
+cannot write the company's document at all, an owner accepts or declines, and accepting is then an
+ordinary save made by the owner through `save_document` with their own permissions, version check and
+audit row. An import that bypassed the normal write path would be a second way into the document, and
+this schema has spent considerable effort having exactly one.
+
+**AND AN ADMIN CANNOT REMOVE ANOTHER ADMIN** (029). Left open by 027 as a separate question, now
+answered: an admin who cannot appoint an admin but can remove one has a lateral attack — take out the
+other admins and you are the only one left holding a role you could not have granted yourself. Both
+rules now call the same `may_grant`, and a test asserts appointment and removal agree for every pair of
+roles, so they cannot drift apart again.
+
 ## Team invitations — what was decided, 29 Jul 2026
 
 **NO EMAIL IS SENT.** An invite produces a LINK, once, and the inviter sends it however they already
@@ -290,6 +318,22 @@ difference is exactly what somebody probing tokens would want.
 have unlimited members. The previous plan anticipated this: "seats become a real question again at Phase
 3, and the shape to reach for then is a seat count on the SUBSCRIPTION, not on membership." Worth
 deciding before it is discovered by a customer with a large team.
+
+## Phase 5 — UI polish
+
+Every tab and sub-tab carrying the analytics and the graphics it deserves. Not a rewrite: the engine
+already computes more than the screens show, so most of this is surfacing numbers that exist rather
+than calculating new ones.
+
+Deliberately last, and worth saying why: polish is the work that always *feels* productive, so it is
+the easiest thing to do instead of finding a customer. It also has a dependency the earlier phases do
+not — **you cannot tell which screens deserve the attention until somebody is using them.** The funnel
+shipped today is the instrument for that: it will say where people stop, and that is a better
+prioritiser than taste.
+
+Two things to carry into it when it starts. The engine ships to the browser, so nothing here is gated —
+polish is not a tier. And the golden number is the contract: any chart that restates the runway must
+agree with 5.6, or it is a second implementation of the projection wearing a nicer hat.
 
 ## What I would still NOT do
 

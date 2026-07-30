@@ -61,6 +61,14 @@ describe("the invite form offers only what the server will accept", () => {
     expect([...sel.options].map(o => o.value)).toEqual(["viewer", "editor", "admin", "owner"]);
   });
 
+  it("an ADMIN is offered neither owner NOR admin", async () => {
+    // 027: only an owner appoints admins. Offering it and letting the server refuse would be a
+    // dropdown that lies.
+    const v = await draw(api({ listMembers: vi.fn().mockResolvedValue([member({ role: "admin" })]) }));
+    const sel = v.getByLabelText("Role to invite as");
+    expect([...sel.options].map(o => o.value)).toEqual(["viewer", "editor"]);
+  });
+
   it("an ADMIN is not offered owner", async () => {
     // The escalation this blocks: an admin who can mint owners promotes themselves by inviting their
     // own second address. Offering it and letting the server refuse would be a dropdown that lies.

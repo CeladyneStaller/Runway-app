@@ -24,15 +24,28 @@ export const atLeast = (role, floor) => rank(role) >= rank(floor);
 /** May this role invite anybody at all? Admin and above, matching `invite_member`. */
 export const canInvite = (role) => atLeast(role, "admin");
 
-/** The roles this role may hand out — never above its own. An admin able to mint owners can promote
- *  themselves by inviting their own second address, which makes every other check decorative. */
-export const grantableBy = (role) => (canInvite(role) ? ROLES.filter(r => rank(r) <= rank(role)) : []);
+/** May this role hand out that one? STRICTLY BELOW YOUR OWN, unless you are the owner.
+ *
+ *  An owner may appoint another owner, because a company with a single owner needs some way to gain a
+ *  second and only an owner can be trusted with that. Everybody else grants strictly downwards: an
+ *  admin who can mint admins can mint one out of their own second address, and from there every other
+ *  check is decorative. Mirrors `may_grant()` in migration 027. */
+export const mayGrant = (mine, target) => mine === "owner" || rank(target) < rank(mine);
+
+export const grantableBy = (role) => (canInvite(role) ? ROLES.filter(r => mayGrant(role, r)) : []);
+
+/** An advisor is a viewer, always. The attribute exists so somebody can be in a company without
+ *  occupying a seat; a seat-free editor would be the seat model with a hole in it. */
+export const roleForAdvisor = () => "viewer";
 
 /** May `actor` change `subject`'s role, and to `next`? Mirrors `set_member_role`.
  *  Returns null when allowed, or a reason code matching the SQL's SQLSTATEs. */
-export function roleChangeRefusal({ actorRole, subjectRole, next, ownerCount }) {
+export function roleChangeRefusal({ actorRole, subjectRole, next, ownerCount, subjectIsAdvisor = false }) {
+  // An advisor's role is not a choice — refused rather than quietly ignored, so a UI offering the
+  // dropdown at all is told why.
+  if (subjectIsAdvisor && next !== "viewer") return "advisor_is_viewer";
   if (!canInvite(actorRole)) return "forbidden";
-  if (rank(next) > rank(actorRole)) return "role_too_high";
+  if (!mayGrant(actorRole, next)) return "role_too_high";
   // An admin may not touch an owner. Otherwise the junior role can take the company.
   if (rank(subjectRole) > rank(actorRole)) return "forbidden";
   // The last owner cannot be demoted: a company with no owner cannot invite, cannot be deleted, and
@@ -45,8 +58,10 @@ export function roleChangeRefusal({ actorRole, subjectRole, next, ownerCount }) 
  *  last owner, because nobody should need permission to stop being in a company. */
 export function removalRefusal({ actorRole, subjectRole, isSelf, ownerCount }) {
   if (!isSelf) {
-    if (!canInvite(actorRole)) return "forbidden";
-    if (rank(subjectRole) > rank(actorRole)) return "forbidden";
+    // SAME RANK RULE AS GRANTING (029). An admin who cannot appoint an admin but can remove one has a
+    // lateral attack: take out the other admins and you are the only one left holding a role you could
+    // not have granted yourself. The two rules only work as a pair.
+    if (!canInvite(actorRole) || !mayGrant(actorRole, subjectRole)) return "forbidden";
   }
   if (subjectRole === "owner" && (ownerCount ?? 0) <= 1) return "last_owner";
   return null;
@@ -54,6 +69,8 @@ export function removalRefusal({ actorRole, subjectRole, isSelf, ownerCount }) {
 
 /** What to put on screen. The SQLSTATE names are the server's; these are the sentences. */
 export const REFUSALS = Object.freeze({
+  advisor_is_viewer: "Advisors are always viewers — they hold no seat, and plan in their own scenarios " +
+                     "rather than in the company's model.",
   no_seats_left: "Every seat on this plan is taken, including any pending invitations. " +
                  "Remove somebody, cancel an invitation, or move to a larger plan.",
   no_seat: "This company's seats are all taken, so you can read it but not save changes. " +
