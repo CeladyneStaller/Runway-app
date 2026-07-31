@@ -41,7 +41,7 @@ export const LENSES = Object.freeze({
   },
   inv: {
     stack: { chart: "inv.ownership" },
-    goals: { chart: "inv.milestones" },
+    goals: { chart: "inv.goals" },
   },
   hist: {
     burn: { chart: "hist.rolling" },

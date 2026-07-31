@@ -13,11 +13,18 @@ const parts = (doc) => {
 };
 
 describe("the registry", () => {
-  it("offers three per tab, for six tabs", () => {
+  it("offers three on every tab that has a picker", () => {
     for (const tab of ["flow", "pay", "proj", "sales", "inv", "hist"]) {
       expect(chartsForTab(tab), tab).toHaveLength(3);
     }
-    expect(CHARTS).toHaveLength(18);
+  });
+
+  it("gives Milestones one, and that is not a gap to fill", () => {
+    // `ms.runway` moved here from Investment, where cash-at-each-critical-date was answering a
+    // milestones question on the wrong tab. One chart is the right number until a second one has a
+    // question of its own — inventing two more so the row matches the others would be padding.
+    expect(chartsForTab("ms").map(c => c.id)).toEqual(["ms.runway"]);
+    expect(CHARTS).toHaveLength(19);
   });
 
   it("defaults to the first, because most people never open a picker", () => {

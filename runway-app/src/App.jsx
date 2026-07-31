@@ -9,7 +9,7 @@ import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync"
 import { AcceptInvite } from "./views/chrome/Members";
 import { AdvisorScenarios } from "./views/chrome/AdvisorScenarios";
 import { StaleProjects } from "./views/chrome/StaleProjects";
-import { InsightProvider } from "./views/chrome/TabInsights";
+import { InsightProvider, TabInsights } from "./views/chrome/TabInsights";
 import { reportError } from "./state/errors";
 import { TabPrefsProvider, load as loadTabPrefs, save as saveTabPrefs,
          visibleNav, landingView } from "./state/tabprefs";
@@ -588,6 +588,9 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
             // document arrives already built, and goes through the ordinary setDoc path — so it saves,
             // journals and undoes exactly like any other edit, rather than needing its own write route.
             onApplyToPlan={(next) => setDoc(next)} />}
+          {/* Milestones has no sub-tabs and no tile row of its own, so the insights block goes here
+              rather than inside the view. Same order regardless: alerts, chart, then the table. */}
+          {view === "ms" && <TabInsights tab="ms" subtab="all" />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
           </ViewBoundary>
         </main>

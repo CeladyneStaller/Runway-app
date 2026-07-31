@@ -399,7 +399,62 @@ const invOwnership = (doc) => {
   return { kind: "hbars", rows, format: "percent", note: "Founder share after each raise." };
 };
 
+/** Goals against the runway that has to survive long enough to hit them.
+ *
+ *  THE QUESTION THIS SUB-TAB ACTUALLY ASKS. A round is not raised on a date, it is raised on evidence —
+ *  "5 kW stack running", "$1m booked" — and the thing worth seeing is whether the money lasts until
+ *  that evidence exists. `roundMS` already derives the close date from the round; the goals hang off it
+ *  with `dueMonth`, and `Investment.jsx` already flags the ones due AFTER the close as late.
+ *
+ *  SPECULATIVE, DELIBERATELY. The committed projection assumes the round lands; the whole point here is
+ *  the runway you have if it does not, so the toggles are forced to committed-only and the round's own
+ *  inflow is excluded. Reading it against the optimistic line would answer a question nobody is asking.
+ */
+const invGoals = (doc) => {
+  const equity = (doc.rounds || []).filter(r => r.kind === "equity" && r.status !== "closed");
+  const goals = equity.flatMap(r => (r.goals || []).map(g => ({ ...g, round: r })));
+  if (!goals.length) return { empty: "No goals set against a round yet." };
+
+  // The runway WITHOUT the round: committed only, and the rounds themselves removed.
+  const bare = { ...doc, rounds: [], settings: { ...(doc.settings || {}),
+    toggles: { committed: true, expected: false, speculative: false, financing: false } } };
+  let cash = [];
+  try {
+    cash = buildProjection(buildModelFromDoc(bare), bare.settings.toggles).map(r => clean(r.end));
+  } catch { cash = []; }
+  const z = cash.findIndex(v => v < 0);
+  const runsOut = z < 0 ? null : z;
+
+  const sorted = [...goals].sort((a, b) => clean(a.dueMonth) - clean(b.dueMonth)).slice(0, 8);
+
+  return {
+    kind: "goals",
+    rows: sorted.map(g => {
+      const due = clean(g.dueMonth);
+      const close = clean(g.round.closeMonth);
+      return {
+        id: g.id, label: g.label || "Goal", kind: g.kind, status: g.status,
+        due, close, round: g.round.name,
+        // Two different problems, and they need telling apart: a goal due after the money runs out
+        // cannot be reached at all, and a goal due after the close was supposed to justify a round
+        // that will already have happened.
+        beyondCash: runsOut != null && due > runsOut,
+        afterClose: due > close,
+      };
+    }),
+    runsOut,
+    horizon: Math.max(MONTHS_SHOWN, ...sorted.map(g => clean(g.dueMonth) + 2)),
+    format: "count",
+    note: runsOut == null
+      ? "Cash lasts past every goal without the round."
+      : `Without this round the cash runs out at month ${runsOut}.`,
+  };
+};
+
 const invMilestones = (doc, parts) => {
+  // `msWithBal` is assembled in App, where the balances and the round-derived dates are both in hand.
+  // Recomputing it here would be a second definition of what a milestone's balance is, and the whole
+  // reason `msPass`/`msGap` moved into the engine was to have exactly one.
   const ms = parts?.msWithBal || [];
   if (!ms.length) return { empty: "No critical dates set yet." };
   return {
@@ -535,8 +590,16 @@ export const CHARTS = Object.freeze([
     build: invSlip },
   { id: "inv.ownership", tab: "inv", name: "Ownership across rounds",
     why: "Founder share after each raise — the number people discover too late.", build: invOwnership },
-  { id: "inv.milestones", tab: "inv", name: "Runway at each milestone",
-    why: "Cash left when each critical date arrives.", build: invMilestones },
+  { id: "inv.goals", tab: "inv", name: "Goals against the runway",
+    why: "Whether the money lasts long enough to reach the evidence the round is being raised on.",
+    build: invGoals },
+
+  // MOVED OFF INVESTMENT. Cash at each critical date is a milestones question, and it was the third
+  // Investment chart mostly because milestones had no chart of its own — which is a reason to give
+  // milestones one, not a reason to leave it on the wrong tab.
+  { id: "ms.runway", tab: "ms", name: "Runway at each milestone",
+    why: "Cash left when each critical date arrives, against the target set for it.",
+    build: invMilestones },
 
   { id: "hist.planvsactual", tab: "hist", name: "Planned against actual",
     why: "Bars leaning the same way for months mean the model needs re-basing.", build: histPlanVsActual },

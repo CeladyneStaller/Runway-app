@@ -244,7 +244,58 @@ function Pace({ spec }) {
   );
 }
 
-const SHAPES = { lines: Lines, stack: Stack, bars: Bars, hbars: HBars, diverging: Diverging, pace: Pace };
+/** Goals on a timeline, against the month the cash runs out without the round.
+ *
+ *  A TIMELINE RATHER THAN BARS, because the question is ordering — does the evidence exist before the
+ *  money stops — and ordering is what a shared axis shows and a bar chart does not.
+ */
+function Goals({ spec }) {
+  const rows = spec.rows || [];
+  const H2 = Math.max(90, rows.length * 26 + 46);
+  const span = Math.max(1, spec.horizon || 18);
+  const x = (m) => PAD.l + (Math.max(0, Math.min(span, m)) / span) * PW;
+  const cliff = spec.runsOut == null ? null : x(spec.runsOut);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H2}`} role="img" aria-label={spec.aria || "goals against the runway"}>
+      {/* Everything past the cliff is time the company does not have without the round. Shading it is
+          the whole chart: a goal sitting in the shaded region is one the money will not reach. */}
+      {cliff != null && (
+        <>
+          <rect x={cliff} y={PAD.t} width={Math.max(0, W - PAD.r - cliff)} height={H2 - PAD.t - 22}
+                fill="var(--danger)" opacity="0.07" />
+          <line x1={cliff} y1={PAD.t} x2={cliff} y2={H2 - 22} stroke="var(--danger)" strokeWidth="1.5" />
+          <text x={cliff + 5} y={PAD.t + 9} className="ch-l" fill="var(--danger)">cash runs out</text>
+        </>
+      )}
+      <line x1={PAD.l} y1={H2 - 22} x2={W - PAD.r} y2={H2 - 22} stroke="var(--line)" />
+
+      {rows.map((r, i) => {
+        const y = PAD.t + 20 + i * 26;
+        const cx = x(r.due);
+        const colour = r.beyondCash ? TONE.danger : r.afterClose ? TONE.caution : TONE.signal;
+        return (
+          <g key={r.id}>
+            {/* The round's close, so "due after the close" is visible as a position rather than only
+                as a colour. */}
+            <line x1={x(r.close)} y1={y - 7} x2={x(r.close)} y2={y + 7}
+                  stroke="var(--muted-2)" strokeDasharray="2 2" />
+            <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.5" opacity="0.35" />
+            <circle cx={cx} cy={y} r="4" fill={colour} />
+            <text x={cx + 8} y={y + 3.5} className="ch-l" fill={colour}>
+              {String(r.label).slice(0, 34)}
+            </text>
+          </g>
+        );
+      })}
+      <text x={PAD.l} y={H2 - 6} className="ch-t">month 0</text>
+      <text x={W - PAD.r} y={H2 - 6} textAnchor="end" className="ch-t">month {span}</text>
+    </svg>
+  );
+}
+
+const SHAPES = { lines: Lines, stack: Stack, bars: Bars, hbars: HBars, diverging: Diverging,
+                 pace: Pace, goals: Goals };
 
 export function Chart({ spec }) {
   const Shape = useMemo(() => SHAPES[spec?.kind], [spec?.kind]);

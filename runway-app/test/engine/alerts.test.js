@@ -158,3 +158,69 @@ describe("applying a lens", () => {
     expect(out.rows).toHaveLength(1);
   });
 });
+
+describe("the goals chart — what the Investment goals sub-tab actually asks", () => {
+  const doc = demoDoc();
+  const p = parts(doc);
+
+  it("draws goals rather than milestone balances", () => {
+    // "Runway at each milestone" answered a milestones question on an investment tab. The question
+    // this sub-tab asks is whether the money lasts long enough to reach the EVIDENCE the round is
+    // being raised on — 5 kW stack, $1m booked — which is what the goals are.
+    const spec = buildChart("inv.goals", doc, p);
+    expect(spec.kind).toBe("goals");
+    expect(spec.rows.length).toBeGreaterThan(0);
+    expect(spec.rows[0].label).toBeTruthy();
+  });
+
+  it("measures against the runway WITHOUT the round", () => {
+    // The committed projection assumes the round lands; the point here is the runway if it does not.
+    // Reading goals against the optimistic line would answer a question nobody is asking.
+    const spec = buildChart("inv.goals", doc, p);
+    expect(spec.runsOut == null || Number.isFinite(spec.runsOut)).toBe(true);
+    if (spec.runsOut != null) {
+      for (const r of spec.rows) {
+        expect(r.beyondCash).toBe(r.due > spec.runsOut);
+      }
+    }
+  });
+
+  it("tells two different problems apart", () => {
+    // A goal past the cash cannot be reached at all. A goal past the CLOSE was meant to justify a
+    // round that will already have happened. Different fixes, so different flags.
+    const spec = buildChart("inv.goals", doc, p);
+    for (const r of spec.rows) {
+      expect(typeof r.beyondCash).toBe("boolean");
+      expect(r.afterClose).toBe(r.due > r.close);
+    }
+  });
+
+  it("orders them by when they are due", () => {
+    const dues = buildChart("inv.goals", doc, p).rows.map(r => r.due);
+    expect([...dues].sort((a, b) => a - b)).toEqual(dues);
+  });
+
+  it("says so when no goals are set", () => {
+    expect(buildChart("inv.goals", { rounds: [{ kind: "equity", status: "planning" }] }, {}).empty)
+      .toMatch(/No goals/);
+  });
+});
+
+describe("the milestone chart moved to the milestones tab", () => {
+  it("is registered under ms, not inv", async () => {
+    const { chartsForTab } = await import("../../src/engine/charts.js");
+    expect(chartsForTab("ms").map(c => c.id)).toContain("ms.runway");
+    expect(chartsForTab("inv").map(c => c.id)).not.toContain("inv.milestones");
+  });
+
+  it("draws when the app supplies the milestone balances", () => {
+    // `msWithBal` is assembled in App, where the balances and the round-derived dates are both in
+    // hand. Recomputing it here would be a second definition of a milestone's balance.
+    const spec = buildChart("ms.runway", demoDoc(), {
+      msWithBal: [{ label: "Series A close", bal: 250000, pass: true },
+                  { label: "Board meeting", bal: -12000, pass: false }],
+    });
+    expect(spec.kind).toBe("bars");
+    expect(spec.series[0].tones).toEqual(["signal", "danger"]);
+  });
+});
