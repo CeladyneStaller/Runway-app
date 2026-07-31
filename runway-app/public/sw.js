@@ -13,13 +13,17 @@
 // set of routing rules that are easy to adopt without reading, and the failure mode here is silently
 // serving stale financial data.
 
-const VERSION = "v1";
+const VERSION = "v2";   // bumped: the shell now precaches /site.webmanifest, not the old one
 const SHELL = `waterline-shell-${VERSION}`;
 
 self.addEventListener("install", (e) => {
   // Only the entry point is precached. The hashed asset files are picked up on first fetch, which
   // avoids maintaining a build-time manifest for very little benefit at this size.
-  e.waitUntil(caches.open(SHELL).then(c => c.addAll(["/", "/index.html", "/manifest.webmanifest"])));
+  // `/site.webmanifest`, not `/manifest.webmanifest`. The page carried BOTH for a while and browsers
+  // take the first `<link rel="manifest">`, so the old one won and the new PNG icon set — the whole
+  // reason for the brand assets — was never read. Precaching the wrong name would have kept a dead
+  // file alive in the shell cache long after the page stopped asking for it.
+  e.waitUntil(caches.open(SHELL).then(c => c.addAll(["/", "/index.html", "/site.webmanifest"])));
   self.skipWaiting();
 });
 
