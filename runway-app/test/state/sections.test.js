@@ -3,7 +3,7 @@
 // the identical object it receives today and nothing downstream — engine, projection, export, golden
 // number — can tell that storage changed underneath it.
 import { describe, it, expect } from "vitest";
-import { splitDocument, assembleDocument, roundTrips, unaddressable, COLLECTIONS, stableStringify }
+import { splitDocument, assembleDocument, roundTrips, unaddressable, COLLECTIONS, stableStringify, assembleFromStorage }
   from "../../src/state/sections.js";
 import { emptyDoc, demoDoc, migrate } from "../../src/state/document.js";
 
@@ -173,5 +173,58 @@ describe("comparing two documents", () => {
   it("handles nesting and the shapes a document actually contains", () => {
     const doc = demoDoc();
     expect(stableStringify(doc)).toBe(stableStringify(JSON.parse(JSON.stringify(doc))));
+  });
+});
+
+describe("assembling from storage — stage 3", () => {
+  const blobWith = (projects) => ({ cash: 100, employees: [{ id: "e1" }], projects });
+  const P = (id) => ({ id, name: id.toUpperCase() });
+
+  it("prefers the ROWS, which is the whole point of the flip", () => {
+    const doc = assembleFromStorage(blobWith([P("stale")]), { projects: [P("fresh"), P("newer")] });
+    expect(doc.projects.map(p => p.id)).toEqual(["fresh", "newer"]);
+  });
+
+  it("keeps everything that is not a collection from the blob", () => {
+    const doc = assembleFromStorage(blobWith([P("a")]), { projects: [P("a")] });
+    expect(doc.cash).toBe(100);
+    expect(doc.employees).toEqual([{ id: "e1" }]);
+  });
+
+  it("FALLS BACK TO THE BLOB when the rows are empty but the blob is not", () => {
+    // The failure this exists for: a company whose backfill never ran, a failed sync, a restore from
+    // before the split. Taking the empty rows would delete every project from the model, on load, with
+    // no error anywhere.
+    const seen = [];
+    const doc = assembleFromStorage(blobWith([P("a"), P("b")]), { projects: [] },
+                                    { onFallback: (e) => seen.push(e) });
+    expect(doc.projects.map(p => p.id)).toEqual(["a", "b"]);
+    expect(seen).toEqual([{ collection: "projects", inBlob: 2 }]);
+  });
+
+  it("says nothing when both are legitimately empty", () => {
+    const seen = [];
+    const doc = assembleFromStorage(blobWith([]), { projects: [] }, { onFallback: (e) => seen.push(e) });
+    expect(doc.projects).toEqual([]);
+    expect(seen).toEqual([]);
+  });
+
+  it("does not invent the field for a document that never had it", () => {
+    const doc = assembleFromStorage({ cash: 5 }, {});
+    expect("projects" in doc).toBe(false);
+  });
+
+  it("produces exactly what a plain load would, once the rows agree", () => {
+    // The property stage 3 rests on: after the flip, the assembled document is the document.
+    const doc = demoDoc();
+    const fromStorage = assembleFromStorage(doc, { projects: doc.projects });
+    expect(fromStorage).toEqual(doc);
+  });
+
+  it("and the engine agrees", async () => {
+    const { buildModelFromDoc } = await import("../../src/engine/buildmodel.js");
+    const doc = demoDoc();
+    expect(buildModelFromDoc(assembleFromStorage(doc, { projects: doc.projects })))
+      .toEqual(buildModelFromDoc(doc));
   });
 });

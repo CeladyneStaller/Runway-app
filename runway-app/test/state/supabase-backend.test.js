@@ -30,11 +30,14 @@ describe("reading", () => {
   });
 
   it("sends the anon key and the user's token, scoped to the company", async () => {
+    // The read moved from a direct table select to `load_document` (036), so the company travels in
+    // the body rather than the query string. One RPC, because fetching the blob and the project rows
+    // separately would put a save between them.
     let seen;
     const b = make(async (u, i) => { seen = { u, i }; return ok([]); });
     await b.read();
-    expect(seen.u).toContain("/rest/v1/documents");
-    expect(seen.u).toContain("company_id=eq.co-1");
+    expect(seen.u).toContain("/rest/v1/rpc/load_document");
+    expect(JSON.parse(seen.i.body).p_company_id).toBe("co-1");
     expect(seen.i.headers.apikey).toBe("anon-key");
     expect(seen.i.headers.Authorization).toBe("Bearer jwt-abc");
   });
@@ -49,7 +52,9 @@ describe("writing", () => {
   it("goes through the RPC carrying the version it loaded", async () => {
     let sent;
     const b = make(async (u, i) => {
-      if (u.includes("/documents")) return ok([{ body: {}, schema_version: 3, version: 4 }]);
+      if (u.includes("load_document")) {
+        return ok([{ body: {}, schema_version: 3, version: 4, projects: [] }]);
+      }
       sent = JSON.parse(i.body);
       return ok([{ out_version: 5, out_updated_at: "2026-07-23T00:00:00Z" }]);
     });
@@ -126,5 +131,39 @@ describe("syncConfigured", () => {
     expect(syncConfigured({ VITE_SUPABASE_URL: "u", VITE_SUPABASE_ANON_KEY: "k" })).toBe(false);
     expect(syncConfigured({ VITE_SYNC_ENABLED: "true", VITE_SUPABASE_URL: "u" })).toBe(false);
     expect(syncConfigured({ VITE_SYNC_ENABLED: "true", VITE_SUPABASE_URL: "u", VITE_SUPABASE_ANON_KEY: "k" })).toBe(true);
+  });
+});
+
+describe("reading, after the split (stage 3)", () => {
+  it("takes projects from the ROWS, not from the blob", async () => {
+    const b = make(async () => ok([{
+      body: { cash: 10, projects: [{ id: "stale" }] }, schema_version: 3, version: 1,
+      projects: [{ id: "fresh", name: "Fresh" }],
+    }]));
+    const r = await b.read();
+    expect(r.raw.projects.map(p => p.id)).toEqual(["fresh"]);
+    expect(r.raw.cash).toBe(10);
+  });
+
+  it("FALLS BACK to the blob when the rows are empty and the blob is not", async () => {
+    // The load-time data loss this guards against: a company whose backfill never ran would otherwise
+    // open with every project silently gone, and nothing would say so.
+    const b = make(async () => ok([{
+      body: { cash: 10, projects: [{ id: "a" }, { id: "b" }] }, schema_version: 3, version: 1,
+      projects: [],
+    }]));
+    const r = await b.read();
+    expect(r.raw.projects.map(p => p.id)).toEqual(["a", "b"]);
+  });
+
+  it("treats a genuinely empty document as empty, not as a fallback", async () => {
+    const b = make(async () => ok([{ body: { cash: 10, projects: [] }, schema_version: 3,
+                                     version: 1, projects: [] }]));
+    expect((await b.read()).raw.projects).toEqual([]);
+  });
+
+  it("still reports no document at all as null", async () => {
+    const b = make(async () => ok([]));
+    expect(await b.read()).toBeNull();
   });
 });

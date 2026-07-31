@@ -110,3 +110,50 @@ export function roundTrips(doc) {
     return stableStringify(assembleDocument(splitDocument(doc))) === stableStringify(doc);
   } catch { return false; }
 }
+
+/** Rebuild a document from what storage returned: the blob, plus a row set per collection.
+ *
+ *  THE FALLBACK IS THE POINT, and it exists only for stage 3. Until the blob stops carrying `projects`
+ *  (stage 4), both copies are present — so if the rows are EMPTY while the blob has projects, something
+ *  is wrong: a company whose backfill never ran, a failed sync, a restore from before the split. Taking
+ *  the rows in that situation would silently delete every project from somebody's model, on load, with
+ *  no error anywhere.
+ *
+ *  So: prefer the rows, fall back to the blob, and SAY SO. `onFallback` is how the caller reports it —
+ *  a fallback that happens quietly is a bug that gets discovered by its consequences.
+ *
+ *  DELETE THIS AT STAGE 4. Once the blob no longer carries the field, an empty row set is the truth
+ *  rather than a symptom, and a fallback to a field that is not there would be dead code pretending to
+ *  be a safety net.
+ */
+export function assembleFromStorage(body, collections = {}, { onFallback } = {}) {
+  const { core } = splitDocument(body || {});
+  const parts = { core, collections: {} };
+
+  for (const c of COLLECTIONS) {
+    const rows = collections[c.key];
+    const fromRows = Array.isArray(rows) ? rows : null;
+    const fromBlob = Array.isArray(body?.[c.key]) ? body[c.key] : null;
+
+    if (fromRows && fromRows.length > 0) {
+      parts.collections[c.key] = fromRows.map((item, position) => ({
+        id: c.idOf(item) ?? null, body: item, position,
+      }));
+      continue;
+    }
+
+    // Rows empty and the blob is not: trust the blob and report it.
+    if (fromBlob && fromBlob.length > 0) {
+      onFallback?.({ collection: c.key, inBlob: fromBlob.length });
+      parts.collections[c.key] = fromBlob.map((item, position) => ({
+        id: c.idOf(item) ?? null, body: item, position,
+      }));
+      continue;
+    }
+
+    // Both empty. Absent stays absent — a document that never had the field must not gain one.
+    if (fromRows || fromBlob) parts.collections[c.key] = [];
+  }
+
+  return assembleDocument(parts);
+}

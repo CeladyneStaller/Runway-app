@@ -18,6 +18,8 @@ import {
   BackendError, ERR_COMPANY_DELETED, ERR_CONFLICT, ERR_FORBIDDEN, ERR_NO_SEAT, ERR_PAYMENT_REQUIRED,
   ERR_STALE_CLIENT, ERR_UNREACHABLE,
 } from "./errors.js";
+import { assembleFromStorage } from "../sections.js";
+import { reportError } from "../errors.js";
 
 // PostgREST surfaces a raised exception's SQLSTATE, which is how the RPC's three refusals are told
 // apart from an ordinary failure. The message is a fallback for gateways that drop the code.
@@ -89,16 +91,37 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
 
     async read() {
       const companyId = await auth.getCompanyId();
-      const rows = await call(
-        `/rest/v1/documents?company_id=eq.${encodeURIComponent(companyId)}&select=body,schema_version,version&limit=1`,
-        { method: "GET", headers: await headers() },
-      );
-      if (!Array.isArray(rows) || rows.length === 0) {
+      // ONE RPC, NOT TWO READS (migration 036). Fetching the blob and then the project rows separately
+      // puts a save in between them — the document from one moment and its projects from another,
+      // assembled into a model nobody ever had. One statement is one snapshot of the database.
+      const rows = await call(`/rest/v1/rpc/load_document`, {
+        method: "POST", headers: await headers(),
+        body: JSON.stringify({ p_company_id: companyId }),
+      });
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      if (!row || row.body == null) {
         version = null;
         return null;                       // no document yet — a new company, not a failure
       }
-      version = rows[0].version ?? null;
-      return { raw: rows[0].body, meta: { version, schemaVersion: rows[0].schema_version } };
+      version = row.version ?? null;
+
+      // STAGE 3 SAFETY NET. The blob still carries `projects`, so empty rows beside a non-empty blob
+      // means something is wrong rather than that there are no projects — a backfill that never ran,
+      // a failed sync, a restore from before the split. Falling back is not optional: taking the empty
+      // rows would delete every project from somebody's model, on load, with no error anywhere.
+      const raw = assembleFromStorage(row.body, { projects: row.projects }, {
+        onFallback: ({ collection, inBlob }) => {
+          // `reportError` FROM state/errors.js, imported explicitly. Calling it bare would have hit
+          // the BROWSER GLOBAL of the same name — a real Web API that reports to the platform's error
+          // handler and never reaches Sentry. `no-undef` cannot catch that, because the global exists.
+          reportError(new Error(
+            `[storage] ${collection}: 0 rows but ${inBlob} in the document body — using the body. ` +
+            "project_docs is behind for this company."
+          ), { kind: "section_fallback", companyId, collection, inBlob });
+        },
+      });
+
+      return { raw, meta: { version, schemaVersion: row.schema_version } };
     },
 
     async write(raw) {
