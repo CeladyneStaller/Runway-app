@@ -110,6 +110,33 @@ describe("a function whose return type changes must be dropped first", () => {
   });
 });
 
+describe("an insert's column list must match its values", () => {
+  it("every simple `insert into t (...) values (...)` balances", () => {
+    // Caught while writing 035: a column added to the list and not to the values. plpgsql plans SQL
+    // when a function is CALLED, so this fails at runtime rather than at create time — the same blind
+    // spot `verify:rpc` exists for, and cheap enough to catch here first.
+    const problems = [];
+    for (const file of FILES) {
+      const text = read(file);
+      const re = /insert\s+into\s+(\w+)\s*\(([^;()]*?)\)\s*\n?\s*values\s*\(([^;]*?)\)\s*(?:returning|on\s+conflict|;)/gis;
+      let m;
+      while ((m = re.exec(text))) {
+        const [, table, cols, vals] = m;
+        if (/select/i.test(vals)) continue;                 // insert ... select, different shape
+        const nCols = cols.split(",").length;
+        // Commas inside a function call are not separators. Strip balanced parens first.
+        let flat = vals, prev;
+        do { prev = flat; flat = flat.replace(/\([^()]*\)/g, "_"); } while (flat !== prev);
+        const nVals = flat.split(",").length;
+        if (nCols !== nVals) {
+          problems.push(`${file}: insert into ${table} has ${nCols} columns and ${nVals} values`);
+        }
+      }
+    }
+    expect(problems, `\n${problems.join("\n")}\n`).toEqual([]);
+  });
+});
+
 describe("the scanner itself", () => {
   it("catches the shape that broke 022 and 031", () => {
     // Both failures reduced to this: a function reading a column the same file adds after it.
