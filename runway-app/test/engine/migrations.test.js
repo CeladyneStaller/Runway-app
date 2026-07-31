@@ -137,6 +137,27 @@ describe("an insert's column list must match its values", () => {
   });
 });
 
+describe("the conflict check stays conditional on the blob", () => {
+  it("the latest save_document only conflicts when the body would be overwritten", () => {
+    // 038 added a short circuit so a project-only save leaves `documents.version` alone, and placed it
+    // AFTER the conflict check — which raises first. Two people editing different projects still
+    // collided, which was the entire point of the change. The fix is in the conflict test itself, and
+    // reverting it to the bare version comparison would silently undo stage 5.
+    // COMMENTS STRIPPED FIRST. 039's header quotes the OLD broken check to explain it, so searching
+    // the raw text finds the comment rather than the code — which made this test fail against a
+    // correct migration. A scanner that reads prose as though it were SQL is worse than none.
+    const code = (f) => read(f).split("\n").filter(l => !/^\s*--/.test(l)).join("\n");
+    const withSave = FILES.filter(f => /create (or replace )?function save_document/.test(code(f)));
+    const latest = withSave[withSave.length - 1];
+    const sql = code(latest);
+    const check = sql.slice(sql.indexOf("cur.version <> p_base_version"));
+    const line = check.slice(0, check.indexOf("then"));
+
+    expect(latest, "no migration defines save_document").toBeTruthy();
+    expect(line, `${latest} conflicts on a stale version alone`).toMatch(/is distinct from/);
+  });
+});
+
 describe("the scanner itself", () => {
   it("catches the shape that broke 022 and 031", () => {
     // Both failures reduced to this: a function reading a column the same file adds after it.

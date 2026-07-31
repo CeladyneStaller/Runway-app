@@ -1401,6 +1401,41 @@ nothing downstream can tell that storage changed.
   `ERR_PROJECT_CONFLICT` is distinct from `ERR_CONFLICT`: "somebody changed Catalyst while you had it
   open" locates the problem, "the document changed" does not.
 
+**AND THEN 040, BECAUSE THE CHECK CONFLICTED ON PROJECTS NOBODY EDITED.** Structural, not a slip: the
+client sends the WHOLE document on every save, so B's payload carries its stale copy of a project A
+just edited. The server saw a differing body, checked its version, and raised `project_conflict` for a
+project B never opened.
+
+The check was RIGHT to fire — without it B's stale copy would have overwritten A's edit. What was wrong
+is that the server cannot tell "B did not touch X" from "B changed X": it holds X's version, not the
+body B loaded. Only the client knows, so the client now sends `p_changed_projects`, computed by keeping
+each project's `stableStringify` at load and diffing at write. A project off that list is left alone
+however stale the copy in the payload.
+
+Three things that had to be right about it: absence still means deletion, so the list is of CHANGED ids
+rather than of everything present; POSITION is applied for untouched projects too, or dragging one to
+the top would conflict on all the others; and null means "treat everything as changed" — the older,
+noisier, safe behaviour — rather than "nothing moved", which would be a false claim.
+
+**038 SHIPPED THE FIX AND IT DID NOT WORK, because of ordering.** The short circuit that stops a
+project-only save from bumping `documents.version` was placed AFTER the conflict check, which raises
+first — so two people editing different projects still collided, which was the whole point. The code
+was correct and unreachable.
+
+**039 fixes it by asking a better question.** A stale base version only matters if the write would
+overwrite what somebody else put in the BLOB, and after 037 the blob holds no projects:
+
+    if cur.version <> p_base_version and cur.body is distinct from blob_new then
+
+Right in every case — a stale cash edit still conflicts, a project-only edit does not, and two
+project-only edits are decided by their own per-project checks. `migrations.test.js` now asserts the
+latest `save_document` conflicts conditionally, so reverting it to a bare version comparison fails.
+
+That test needed fixing too: it searched the raw SQL and found 039's HEADER, which quotes the old broken
+check to explain it. A scanner that reads prose as though it were code is worse than none — comments
+are stripped first now. Caught only because the test was run before the reversion as well as after; the
+reversion alone would have looked like success.
+
 **AND THE CLASSIFIER SWALLOWED IT.** `classify()`'s first line is `msg.includes("conflict")`, and
 `project_conflict` contains `conflict`, so the specific answer lost to the generic one. Every other
 specific check in that function sits above the general one it would lose to; this one had to go above

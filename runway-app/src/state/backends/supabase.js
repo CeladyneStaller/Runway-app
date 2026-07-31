@@ -18,7 +18,7 @@ import {
   BackendError, ERR_COMPANY_DELETED, ERR_CONFLICT, ERR_FORBIDDEN, ERR_NO_SEAT, ERR_PAYMENT_REQUIRED, ERR_PROJECT_CONFLICT,
   ERR_STALE_CLIENT, ERR_UNREACHABLE,
 } from "./errors.js";
-import { assembleFromStorage } from "../sections.js";
+import { assembleFromStorage, stableStringify } from "../sections.js";
 import { reportError } from "../errors.js";
 
 // PostgREST surfaces a raised exception's SQLSTATE, which is how the RPC's three refusals are told
@@ -63,6 +63,23 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
   // the RPC refuses rather than overwriting whatever the other device wrote.
   let version = null;
   let projectVersions = null;
+  let loadedProjects = null;
+
+  /** Which projects this client changed since it loaded, by id.
+   *
+   *  Null when there is nothing to compare against — a fresh company, or the second write after a load
+   *  — and null means "treat everything as changed", which is the older, noisier, still-safe behaviour
+   *  rather than a claim nothing moved. */
+  const changedProjects = (raw) => {
+    if (!loadedProjects) return null;
+    const out = [];
+    for (const p of raw?.projects || []) {
+      if (!p?.id) continue;
+      const before = loadedProjects.get(p.id);
+      if (before === undefined || before !== stableStringify(p)) out.push(p.id);
+    }
+    return out;
+  };
 
   async function headers() {
     const token = await auth.getAccessToken();
@@ -109,6 +126,7 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
       if (!row || row.body == null) {
         version = null;
         projectVersions = null;
+        loadedProjects = null;
         return null;                       // no document yet — a new company, not a failure
       }
       version = row.version ?? null;
@@ -116,6 +134,12 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
       // checked on its own. Without it the server cannot tell an edit to a stale project from an edit
       // to a fresh one, and cannot tell a project the client never saw from one it deleted.
       projectVersions = row.project_versions ?? {};
+      // WHAT EACH PROJECT LOOKED LIKE WHEN IT ARRIVED, so the next write can say which ones this
+      // client actually changed. Without it the server sees every project in the payload as an edit —
+      // including stale copies of ones somebody else moved on — and conflicts on projects the person
+      // never opened.
+      loadedProjects = new Map(
+        (row.projects || []).filter(p => p?.id).map(p => [p.id, stableStringify(p)]));
 
       // STAGE 3 SAFETY NET. The blob still carries `projects`, so empty rows beside a non-empty blob
       // means something is wrong rather than that there are no projects — a backfill that never ran,
@@ -147,6 +171,7 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
           p_body: raw,
           p_base_version: version,
           p_known_projects: projectVersions,
+          p_changed_projects: changedProjects(raw),
         }),
       });
       // The RPC returns a single row: the new version and when it landed.
@@ -156,6 +181,7 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
       // than guess them, forget them: the next write with a stale map is refused by name, and the next
       // LOAD repopulates it. Guessing would be inventing a precondition nobody checked.
       projectVersions = null;
+      loadedProjects = null;
       return { meta: { version } };
     },
 

@@ -254,3 +254,70 @@ describe("the classifier's specific answers beat its general ones", () => {
     await expect(b.write({ schemaVersion: 3 })).rejects.toMatchObject({ kind: ERR_PROJECT_CONFLICT });
   });
 });
+
+describe("only the projects this client changed (stage 5, fixed)", () => {
+  const P = (id, name) => ({ id, name });
+  const loadedWith = (projects, versions) => ok([{
+    body: { cash: 10 }, schema_version: 3, version: 4, projects, project_versions: versions,
+  }]);
+
+  const sending = async (loaded, versions, toWrite) => {
+    let sent;
+    const b = make(async (u, i) => {
+      if (u.includes("load_document")) return loadedWith(loaded, versions);
+      sent = JSON.parse(i.body);
+      return ok([{ out_version: 5 }]);
+    });
+    await b.read();
+    await b.write({ schemaVersion: 3, cash: 10, projects: toWrite });
+    return sent;
+  };
+
+  it("names only the edited one, not the whole list", async () => {
+    // THE BUG THIS FIXES. The client sends every project on every save, so a stale copy of one somebody
+    // else edited looked like an edit and conflicted on a project this person never opened.
+    const sent = await sending([P("x", "X"), P("y", "Y")], { x: 1, y: 1 },
+                               [P("x", "X"), P("y", "Y EDITED")]);
+    expect(sent.p_changed_projects).toEqual(["y"]);
+  });
+
+  it("names nothing when only the document body moved", async () => {
+    const sent = await sending([P("x", "X")], { x: 1 }, [P("x", "X")]);
+    expect(sent.p_changed_projects).toEqual([]);
+  });
+
+  it("names a project that did not exist at load", async () => {
+    const sent = await sending([P("x", "X")], { x: 1 }, [P("x", "X"), P("new", "New")]);
+    expect(sent.p_changed_projects).toEqual(["new"]);
+  });
+
+  it("says nothing about one that was deleted — absence is the signal", async () => {
+    // A removed project is not "changed"; it is missing from the body, which with `p_known` is what
+    // tells the server to delete the row.
+    const sent = await sending([P("x", "X"), P("y", "Y")], { x: 1, y: 1 }, [P("x", "X")]);
+    expect(sent.p_changed_projects).toEqual([]);
+    expect(sent.p_known_projects).toEqual({ x: 1, y: 1 });
+  });
+
+  it("ignores key order, so a re-serialised project is not an edit", async () => {
+    // The document is rebuilt on every render. If key order counted, every save would claim every
+    // project changed and the fix would achieve nothing.
+    const sent = await sending([{ id: "x", name: "X", budget: 10 }], { x: 1 },
+                               [{ budget: 10, name: "X", id: "x" }]);
+    expect(sent.p_changed_projects).toEqual([]);
+  });
+
+  it("sends NULL rather than an empty list when there is nothing to compare against", async () => {
+    // Null means "treat everything as changed" — the older, noisier, still-safe behaviour. An empty
+    // list would claim nothing moved, which is a different and false statement.
+    let sent;
+    const b = make(async (u, i) => {
+      if (u.includes("load_document")) return ok([]);      // no document yet
+      sent = JSON.parse(i.body);
+      return ok([{ out_version: 1 }]);
+    });
+    await b.read();
+    await b.write({ schemaVersion: 3, projects: [P("a", "A")] });
+    expect(sent.p_changed_projects).toBeNull();
+  });
+});
