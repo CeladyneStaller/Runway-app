@@ -224,3 +224,85 @@ describe("the milestone chart moved to the milestones tab", () => {
     expect(spec.series[0].tones).toEqual(["signal", "danger"]);
   });
 });
+
+describe("the calendar axis", () => {
+  it("labels STANDARD quarters — Jan, Apr, Jul, Oct", async () => {
+    // Not quarters counted from whenever the model happens to begin. Nobody reads "Q2" as "the second
+    // three months after my start date", and a chart that means something private by a public word is
+    // worse than one with no labels at all.
+    const { axisTicks } = await import("../../src/engine/charts.js");
+    const ticks = axisTicks({ startY: 2026, startM: 7 }, 12);   // starts in August
+    const quarters = ticks.filter(t => t.quarter);
+    expect(quarters.map(t => t.q)).toEqual(["Q4", "Q1", "Q2", "Q3"]);
+    expect(quarters[0].label).toMatch(/Oct 26/);
+    expect(quarters[1].label).toMatch(/Jan 27/);
+  });
+
+  it("gives every month a tick and only quarters a name", async () => {
+    const { axisTicks } = await import("../../src/engine/charts.js");
+    const ticks = axisTicks({ startY: 2026, startM: 0 }, 12);
+    expect(ticks).toHaveLength(12);
+    expect(ticks.filter(t => t.quarter)).toHaveLength(4);
+    expect(ticks.filter(t => t.label)).toHaveLength(4);
+  });
+
+  it("is carried by every month-indexed chart", async () => {
+    const { CHARTS, buildChart } = await import("../../src/engine/charts.js");
+    const doc = demoDoc(), p = parts(doc);
+    for (const c of CHARTS) {
+      const spec = buildChart(c.id, doc, p);
+      if (spec.empty || !spec.x) continue;
+      // A chart with month labels must carry ticks too, or its axis silently falls back to labelling
+      // only the ends and the reader is left interpolating.
+      const monthly = /\w{3} \d{2}/.test(String(spec.x[0] ?? ""));
+      if (monthly) expect(spec.ticks, `${c.id} has month labels but no ticks`).toBeTruthy();
+    }
+  });
+
+  it("survives a document with no start date", async () => {
+    const { axisTicks } = await import("../../src/engine/charts.js");
+    expect(() => axisTicks({}, 6)).not.toThrow();
+    expect(axisTicks(undefined, 6)).toHaveLength(6);
+  });
+});
+
+describe("the goals chart, on real dates", () => {
+  const doc = demoDoc();
+  const p = parts(doc);
+
+  it("states a day for the cash running out, not a month", () => {
+    // `zeroInfo` interpolates within the crossing month — that is where "5.6 months" comes from — so
+    // rounding to a month boundary here would lose precision the model already has.
+    const spec = buildChart("inv.goals", doc, p);
+    if (spec.runsOutAt) {
+      expect(spec.runsOutLabel).toMatch(/\w{3} \d+, \d{2}/);
+      expect(spec.runsOutAt.getDate()).toBeGreaterThan(0);
+    }
+  });
+
+  it("gives every goal a date and, when late, a number of days", () => {
+    const spec = buildChart("inv.goals", doc, p);
+    for (const r of spec.rows) {
+      expect(r.dueLabel, r.label).toMatch(/\w{3} \d+, \d{2}/);
+      if (r.beyondCash) expect(r.lateBy, r.label).toBeGreaterThan(0);
+      else expect(r.lateBy).toBeNull();
+    }
+  });
+
+  it("counts days from the cash-out DATE, not from a month index", () => {
+    const spec = buildChart("inv.goals", doc, p);
+    const late = spec.rows.filter(r => r.lateBy);
+    if (late.length > 1) {
+      // Consecutive monthly goals are ~28-31 days apart, which a month-index subtraction could not
+      // produce.
+      const gaps = late.slice(1).map((r, i) => r.lateBy - late[i].lateBy);
+      for (const g of gaps) expect(g).toBeGreaterThan(20);
+    }
+  });
+
+  it("ends a quarter past the last goal, so nothing is pinned to the edge", () => {
+    const spec = buildChart("inv.goals", doc, p);
+    const last = Math.max(...spec.rows.map(r => r.due));
+    expect(spec.span).toBeGreaterThanOrEqual(last + 3);
+  });
+});

@@ -34,6 +34,43 @@ const elapsedShare = (p, doc) => {
   return Math.max(0, Math.min(1, (now - start) / (end - start)));
 };
 
+/** Ticks for a month-indexed axis: one per month, LABELLED AT CALENDAR QUARTER STARTS.
+ *
+ *  Standard quarters — Jan, Apr, Jul, Oct — not quarters counted from whenever the model happens to
+ *  begin. A company's own fiscal year may differ, but nobody reads "Q2" as "the second three months
+ *  after my start date", and a chart that means something private by a public word is worse than one
+ *  with no labels at all.
+ *
+ *  EVERY MONTH GETS A TICK, only quarters get a name. Twelve month names on a 670-pixel axis is a
+ *  smear at any font size that fits; the ticks keep the resolution and lose the noise.
+ */
+export function axisTicks(doc, n = MONTHS_SHOWN) {
+  const y0 = doc?.startY ?? new Date().getFullYear();
+  const m0 = doc?.startM ?? 0;
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(y0, m0 + i, 1);
+    const m = d.getMonth();
+    const quarter = m % 3 === 0;
+    return {
+      i,
+      quarter,
+      label: quarter ? d.toLocaleString("en-US", { month: "short", year: "2-digit" }) : null,
+      q: quarter ? `Q${Math.floor(m / 3) + 1}` : null,
+    };
+  });
+}
+
+/** A real date for a month offset, and the day within it. */
+const dateAt = (doc, i, day = 1) =>
+  new Date(doc?.startY ?? new Date().getFullYear(), (doc?.startM ?? 0) + i, day);
+
+const shortDate = (d) =>
+  d instanceof Date && !Number.isNaN(d.getTime())
+    ? d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "2-digit" })
+    : "";
+
+const DAY = 86400000;
+
 /** Month labels from the document's start, for the horizon a chart shows. */
 const months = (doc, n = MONTHS_SHOWN) =>
   Array.from({ length: n }, (_, i) => monthLabel(doc.startY ?? new Date().getFullYear(),
@@ -70,7 +107,7 @@ const flowRunway = (doc) => {
   const z = band.expected?.zero;
   return {
     kind: "lines",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     band: { lo: take(band.floor?.rows), hi: take(band.ceiling?.rows) },
     series: [{ id: "balance", label: "Cash balance", values: mid, tone: "signal" }],
     refLine: { y: 0 },
@@ -99,7 +136,7 @@ const flowComposition = (doc, parts) => {
 
   return {
     kind: "stack",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [
       { id: "payroll", label: "Payroll", values: pay, tone: "signal" },
       { id: "other", label: "Everything else", values: other, tone: "muted" },
@@ -114,7 +151,7 @@ const flowInOut = (doc, parts) => {
   if (!rows.length) return { empty: "No projection yet." };
   return {
     kind: "bars",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [
       { id: "in", label: "Money in", values: rows.map(r => clean(r.in)), tone: "signal" },
       { id: "out", label: "Money out", values: rows.map(r => -Math.abs(clean(r.out))), tone: "danger" },
@@ -145,7 +182,7 @@ const payTimeline = (doc, parts) => {
 
   return {
     kind: "stack",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [{ id: "payroll", label: "Payroll", values, tone: "signal" }],
     markers: markers.slice(0, 4),
     format: "money",
@@ -166,7 +203,7 @@ const payHeadcount = (doc, parts) => {
 
   return {
     kind: "lines",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [
       { id: "heads", label: "People", values: heads, tone: "signal", axis: "right" },
       { id: "each", label: "Cost each", values: each, tone: "muted", dashed: true },
@@ -281,7 +318,7 @@ const projLoad = (doc, parts) => {
 
   return {
     kind: "stack",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: perProject,
     refLine: { y: (doc.employees || []).length, label: "team size" },
     format: "count",
@@ -307,7 +344,7 @@ const salesForecast = (doc, parts) => {
 
   return {
     kind: "lines",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [
       { id: "forecast", label: "Forecast", values: forecast, tone: "muted", dashed: true },
       { id: "booked", label: "Booked", values: booked, tone: "signal" },
@@ -327,7 +364,7 @@ const salesMrr = (doc) => {
   if (!values.some(v => v > 0)) return { empty: "No subscription revenue yet." };
   return {
     kind: "stack",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [{ id: "mrr", label: "MRR", values, tone: "signal" }],
     format: "money",
   };
@@ -342,7 +379,7 @@ const salesCover = (doc, parts) => {
   });
   return {
     kind: "stack",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [{ id: "cover", label: "Revenue ÷ burn", values, tone: "signal" }],
     refLine: { y: 1, label: "breakeven" },
     format: "ratio",
@@ -371,7 +408,7 @@ const invSlip = (doc) => {
 
   return {
     kind: "lines",
-    x: months(doc),
+    x: months(doc), ticks: axisTicks(doc),
     series: [
       { id: "plan", label: "On plan", values: onPlan, tone: "signal" },
       { id: "late", label: "Three months late", values: late, tone: "danger", dashed: true },
@@ -418,36 +455,56 @@ const invGoals = (doc) => {
   // The runway WITHOUT the round: committed only, and the rounds themselves removed.
   const bare = { ...doc, rounds: [], settings: { ...(doc.settings || {}),
     toggles: { committed: true, expected: false, speculative: false, financing: false } } };
-  let cash = [];
+  let zero = null;
   try {
-    cash = buildProjection(buildModelFromDoc(bare), bare.settings.toggles).map(r => clean(r.end));
-  } catch { cash = []; }
-  const z = cash.findIndex(v => v < 0);
-  const runsOut = z < 0 ? null : z;
+    const rows = buildProjection(buildModelFromDoc(bare), bare.settings.toggles);
+    zero = zeroInfo(rows, bare.startY, bare.startM);
+  } catch { zero = null; }
+
+  // A DAY, NOT A MONTH. `zeroInfo` already interpolates within the month it crosses zero — the
+  // dashboard has always said "5.6 months" rather than "month 5" — so rounding to a month boundary
+  // here would be inventing a precision the model never had, in the wrong direction.
+  const runsOutAt = zero?.date instanceof Date ? zero.date : null;
 
   const sorted = [...goals].sort((a, b) => clean(a.dueMonth) - clean(b.dueMonth)).slice(0, 8);
 
+  const rows = sorted.map(g => {
+    const due = clean(g.dueMonth);
+    const closeM = clean(g.round.closeMonth);
+    const dueAt = dateAt(doc, due);
+    // The close is the END of its month, matching `roundMS` — a round does not close on the 1st.
+    const closeAt = dateAt(doc, closeM + 1, 0);
+    const lateBy = runsOutAt ? Math.round((dueAt - runsOutAt) / DAY) : null;
+    return {
+      id: g.id, label: g.label || "Goal", kind: g.kind, status: g.status,
+      due, close: closeM, round: g.round.name,
+      dueAt, dueLabel: shortDate(dueAt),
+      closeAt, closeLabel: shortDate(closeAt),
+      // Two different problems needing different fixes: past the cash means unreachable at all; past
+      // the close means the goal was meant to justify a round that will already have happened.
+      beyondCash: lateBy != null && lateBy > 0,
+      afterClose: dueAt > closeAt,
+      lateBy: lateBy != null && lateBy > 0 ? lateBy : null,
+    };
+  });
+
+  // A quarter past the last goal, so the final marker is not pinned to the edge.
+  const span = Math.max(MONTHS_SHOWN, ...rows.map(r => r.due + 3));
+
   return {
     kind: "goals",
-    rows: sorted.map(g => {
-      const due = clean(g.dueMonth);
-      const close = clean(g.round.closeMonth);
-      return {
-        id: g.id, label: g.label || "Goal", kind: g.kind, status: g.status,
-        due, close, round: g.round.name,
-        // Two different problems, and they need telling apart: a goal due after the money runs out
-        // cannot be reached at all, and a goal due after the close was supposed to justify a round
-        // that will already have happened.
-        beyondCash: runsOut != null && due > runsOut,
-        afterClose: due > close,
-      };
-    }),
-    runsOut,
-    horizon: Math.max(MONTHS_SHOWN, ...sorted.map(g => clean(g.dueMonth) + 2)),
+    rows,
+    ticks: axisTicks(doc, span),
+    runsOut: zero?.months ?? null,
+    runsOutAt,
+    runsOutLabel: shortDate(runsOutAt),
+    closeAt: rows[0]?.closeAt ?? null,
+    closeLabel: rows[0]?.closeLabel ?? "",
+    span,
     format: "count",
-    note: runsOut == null
+    note: !runsOutAt
       ? "Cash lasts past every goal without the round."
-      : `Without this round the cash runs out at month ${runsOut}.`,
+      : `Without this round the cash runs out on ${shortDate(runsOutAt)}.`,
   };
 };
 

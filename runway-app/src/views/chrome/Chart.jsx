@@ -11,8 +11,8 @@
 import React, { useMemo } from "react";
 import { money } from "../../engine/money";
 
-const W = 720, H = 240;
-const PAD = { l: 52, r: 16, t: 14, b: 26 };
+const W = 720, H = 252;
+const PAD = { l: 52, r: 16, t: 14, b: 38 };
 const PW = W - PAD.l - PAD.r, PH = H - PAD.t - PAD.b;
 
 const TONE = {
@@ -44,19 +44,53 @@ function scale(values) {
 const clean = (n) => (Number.isFinite(n) ? n : 0);
 const xAt = (i, n) => PAD.l + (n <= 1 ? PW / 2 : (i / (n - 1)) * PW);
 
-const Axes = ({ s, xs, format }) => (
+/** The time axis, shared by every month-indexed chart.
+ *
+ *  A TICK PER MONTH, A NAME PER CALENDAR QUARTER. Eighteen month names along this axis is a smear at
+ *  any font size that fits, and labelling only the ends makes the reader interpolate. Quarters are
+ *  Jan/Apr/Jul/Oct — `axisTicks` decides that; this only draws it.
+ */
+const TimeAxis = ({ ticks, n, y }) => {
+  if (!ticks?.length) return null;
+  const step = Math.max(1, Math.ceil(ticks.filter(t => t.quarter).length / 7));
+  let shown = -1;
+  return (
+    <g>
+      {ticks.map((t, i) => {
+        const x = xAt(i, n);
+        if (!t.quarter) return <line key={i} x1={x} y1={y} x2={x} y2={y + 3} stroke="var(--line-2)" />;
+        shown += 1;
+        // Thinned when the span is long, so a three-year model does not stack labels on top of one
+        // another — the ticks stay, so nothing is lost but the words.
+        const label = shown % step === 0;
+        return (
+          <g key={i}>
+            <line x1={x} y1={y} x2={x} y2={y + 6} stroke="var(--muted-2)" />
+            {label && <text x={x} y={y + 16} className="ch-t" textAnchor="middle">{t.label}</text>}
+            {label && <text x={x} y={y + 25} className="ch-t" textAnchor="middle"
+                            opacity=".75">{t.q}</text>}
+          </g>
+        );
+      })}
+    </g>
+  );
+};
+
+const Axes = ({ s, xs, ticks, format }) => (
   <>
     <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH} stroke="var(--line)" />
     <line x1={PAD.l} y1={s.zero} x2={W - PAD.r} y2={s.zero} stroke="var(--line)" />
     <text x={PAD.l - 6} y={s.zero + 3} textAnchor="end" className="ch-t">{fmt(0, format)}</text>
     <text x={PAD.l - 6} y={PAD.t + 8} textAnchor="end" className="ch-t">{fmt(s.hi, format)}</text>
-    {/* Only the ends and the middle are labelled: eighteen month names along an axis is a smear. */}
-    {xs?.length > 0 && (
-      <>
-        <text x={PAD.l} y={H - 8} className="ch-t">{xs[0]}</text>
-        <text x={W - PAD.r} y={H - 8} textAnchor="end" className="ch-t">{xs[xs.length - 1]}</text>
-      </>
-    )}
+    {ticks?.length
+      ? <TimeAxis ticks={ticks} n={ticks.length} y={PAD.t + PH} />
+      : xs?.length > 0 && (
+          // Charts whose x-axis is not months — periods, milestone names — keep the ends only.
+          <>
+            <text x={PAD.l} y={H - 8} className="ch-t">{xs[0]}</text>
+            <text x={W - PAD.r} y={H - 8} textAnchor="end" className="ch-t">{xs[xs.length - 1]}</text>
+          </>
+        )}
   </>
 );
 
@@ -80,7 +114,7 @@ function Lines({ spec }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
-      <Axes s={s} xs={spec.x} format={spec.format} />
+      <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.band && (
         // The band is drawn first and lightly: it is context for the line, not a third series.
         <path d={`${path(spec.band.hi)} ${spec.band.lo.map((v, i) =>
@@ -110,7 +144,7 @@ function Stack({ spec }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
-      <Axes s={s} xs={spec.x} format={spec.format} />
+      <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {bands.map(({ sr, lo, hi }) => (
         <path key={sr.id} fill={tone(sr.tone)} opacity="0.5"
               d={hi.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ") + " " +
@@ -139,7 +173,7 @@ function Bars({ spec }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
-      <Axes s={s} xs={spec.x} format={spec.format} />
+      <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.series.map((sr, si) => sr.values.map((v, i) => {
         const x = PAD.l + i * groupW + groupW * 0.15 + si * barW;
         const y = Math.min(s.y(v), s.zero);
@@ -244,52 +278,82 @@ function Pace({ spec }) {
   );
 }
 
-/** Goals on a timeline, against the month the cash runs out without the round.
+/** Goals on a calendar, against the day the cash runs out without the round.
  *
  *  A TIMELINE RATHER THAN BARS, because the question is ordering — does the evidence exist before the
- *  money stops — and ordering is what a shared axis shows and a bar chart does not.
+ *  money stops — and ordering is what a shared axis shows.
+ *
+ *  EVERY GOAL STATES ITS OWN DATE, so nothing depends on reading a position against an axis. That is
+ *  also what lets this degrade: on a narrow screen the labels cannot sit beside the dots, and the
+ *  chart becomes rows with the date in the label — the same information, because the axis was never
+ *  carrying it.
  */
 function Goals({ spec }) {
   const rows = spec.rows || [];
-  const H2 = Math.max(90, rows.length * 26 + 46);
-  const span = Math.max(1, spec.horizon || 18);
-  const x = (m) => PAD.l + (Math.max(0, Math.min(span, m)) / span) * PW;
-  const cliff = spec.runsOut == null ? null : x(spec.runsOut);
+  const ROW = 26;
+  const top = PAD.t + 24;
+  const base = top + rows.length * ROW + 4;
+  const H2 = base + 34;
+  const n = spec.span || spec.ticks?.length || 18;
+  const x = (m) => PAD.l + (Math.max(0, Math.min(n, m)) / n) * PW;
+
+  // A DAY, NOT A MONTH BOUNDARY. `zeroInfo` interpolates within the crossing month, which is where
+  // "5.6 months" comes from — rounding it here would lose precision the model already has.
+  const cliff = Number.isFinite(spec.runsOut) ? x(spec.runsOut) : null;
+  const close = rows[0] ? x(rows[0].close + 1) : null;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H2}`} role="img" aria-label={spec.aria || "goals against the runway"}>
-      {/* Everything past the cliff is time the company does not have without the round. Shading it is
-          the whole chart: a goal sitting in the shaded region is one the money will not reach. */}
+    <svg viewBox={`0 0 ${W} ${H2}`} role="img"
+         aria-label={`${rows.length} goals on a calendar` +
+           (spec.runsOutLabel ? `, with cash running out on ${spec.runsOutLabel}` : "")}>
+      {/* Everything right of the cliff is time the company does not have without the round. Shading it
+          is the whole chart: a goal in the shaded region is one the money will not reach. */}
       {cliff != null && (
         <>
-          <rect x={cliff} y={PAD.t} width={Math.max(0, W - PAD.r - cliff)} height={H2 - PAD.t - 22}
-                fill="var(--danger)" opacity="0.07" />
-          <line x1={cliff} y1={PAD.t} x2={cliff} y2={H2 - 22} stroke="var(--danger)" strokeWidth="1.5" />
-          <text x={cliff + 5} y={PAD.t + 9} className="ch-l" fill="var(--danger)">cash runs out</text>
+          <rect x={cliff} y={PAD.t} width={Math.max(0, W - PAD.r - cliff)} height={base - PAD.t}
+                fill="var(--danger)" opacity="0.06" />
+          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.6" />
+          <text x={cliff + 5} y={PAD.t + 9} className="ch-f" fill="var(--danger)">
+            Cash out · {spec.runsOutLabel}
+          </text>
         </>
       )}
-      <line x1={PAD.l} y1={H2 - 22} x2={W - PAD.r} y2={H2 - 22} stroke="var(--line)" />
+
+      {close != null && (
+        <>
+          <line x1={close} y1={PAD.t} x2={close} y2={base} stroke="var(--muted-2)"
+                strokeWidth="1.2" strokeDasharray="4 3" />
+          <text x={close - 5} y={PAD.t + 9} className="ch-f" textAnchor="end" fill="var(--muted)">
+            Closes · {rows[0].closeLabel}
+          </text>
+        </>
+      )}
+
+      <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} />
 
       {rows.map((r, i) => {
-        const y = PAD.t + 20 + i * 26;
+        const y = top + i * ROW;
         const cx = x(r.due);
         const colour = r.beyondCash ? TONE.danger : r.afterClose ? TONE.caution : TONE.signal;
         return (
           <g key={r.id}>
-            {/* The round's close, so "due after the close" is visible as a position rather than only
-                as a colour. */}
-            <line x1={x(r.close)} y1={y - 7} x2={x(r.close)} y2={y + 7}
-                  stroke="var(--muted-2)" strokeDasharray="2 2" />
-            <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.5" opacity="0.35" />
-            <circle cx={cx} cy={y} r="4" fill={colour} />
-            <text x={cx + 8} y={y + 3.5} className="ch-l" fill={colour}>
-              {String(r.label).slice(0, 34)}
+            <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.4" opacity="0.3" />
+            <circle cx={cx} cy={y} r="4.5" fill={colour} />
+            {/* A goal past the close as WELL as past the cash gets a ring: two problems needing two
+                different fixes should not look like one problem. */}
+            {r.afterClose && (
+              <circle cx={cx} cy={y} r="7.5" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
+            )}
+            <text x={cx + 12} y={y - 2} className="ch-g">{String(r.label).slice(0, 38)}</text>
+            <text x={cx + 12} y={y + 9} className="ch-d" fill={colour}>
+              {r.dueLabel}
+              {r.lateBy ? ` · ${r.lateBy} days past the cash` : ""}
+              {!r.lateBy && r.afterClose ? " · after the close" : ""}
             </text>
           </g>
         );
       })}
-      <text x={PAD.l} y={H2 - 6} className="ch-t">month 0</text>
-      <text x={W - PAD.r} y={H2 - 6} textAnchor="end" className="ch-t">month {span}</text>
     </svg>
   );
 }
