@@ -17,17 +17,29 @@ const entry = (over = {}) => ({
   updated_by: "dana@sharpecfo.com", ...over,
 });
 
-/** Drive the channel the backend publishes on, rather than mocking the component's insides. */
-const push = async (map) => {
-  await act(async () => {
-    for (const fn of listeners) fn(map);
-  });
-};
+/** A stand-in for the module-level store the real one keeps, so the component is exercised the way it
+ *  actually runs: seeded on mount, told on change, and clearing through the same store. */
 let listeners = [];
+let store = {};
+const publish = () => { for (const fn of listeners) fn(store); };
+
+vi.spyOn(storage, "staleProjects").mockImplementation(() => store);
 vi.spyOn(storage, "onStaleProjects").mockImplementation((fn) => {
   listeners.push(fn);
+  fn(store);
   return () => { listeners = listeners.filter(f => f !== fn); };
 });
+vi.spyOn(storage, "clearStaleProject").mockImplementation((id) => {
+  const { [id]: _gone, ...rest } = store;
+  store = rest;
+  publish();
+});
+
+const push = async (map) => {
+  await act(async () => { store = { ...store, ...map }; publish(); });
+};
+
+afterEach(() => { store = {}; listeners = []; });
 
 describe("when nothing has changed", () => {
   it("renders nothing at all", () => {
@@ -115,5 +127,36 @@ describe("degrading", () => {
     await push({ p1: { version: 2, body: { id: "p1", name: "Catalyst" } } });
     expect(v.container.textContent).toMatch(/Somebody/);
     expect(v.container.textContent).toMatch(/Catalyst/);
+  });
+});
+
+describe("surviving a tab change", () => {
+  it("shows what is outstanding when it MOUNTS, not only what arrives after", async () => {
+    // THE BUG. This lives on the Projects tab and unmounts the moment somebody looks at Payroll. With
+    // the notices in component state, a glance elsewhere silently answered them — and the next save
+    // overwrote the other person's work with no warning ever having been visible.
+    store = { p1: entry() };
+    const v = render(<StaleProjects doc={doc} onLoad={() => {}} />);
+    expect(v.container.textContent).toMatch(/Catalyst/);
+  });
+
+  it("still shows it after unmounting and remounting", async () => {
+    const first = render(<StaleProjects doc={doc} onLoad={() => {}} />);
+    await push({ p1: entry() });
+    expect(first.container.textContent).toMatch(/Catalyst/);
+
+    cleanup();                                     // the tab changed
+    const second = render(<StaleProjects doc={doc} onLoad={() => {}} />);
+    expect(second.container.textContent).toMatch(/Catalyst/);
+  });
+
+  it("and stays gone once answered", async () => {
+    const first = render(<StaleProjects doc={doc} onLoad={() => {}} />);
+    await push({ p1: entry() });
+    fireEvent.click(first.getByText("Keep mine"));
+
+    cleanup();
+    const second = render(<StaleProjects doc={doc} onLoad={() => {}} />);
+    expect(second.container.textContent).toBe("");
   });
 });

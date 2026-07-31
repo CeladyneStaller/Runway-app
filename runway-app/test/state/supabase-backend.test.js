@@ -188,19 +188,39 @@ describe("per-project concurrency (stage 5)", () => {
     expect(sent.p_known_projects).toEqual({ a: 2, b: 7 });
   });
 
-  it("FORGETS them after a write rather than guessing the new ones", async () => {
-    // The write bumped rows to versions this client does not know. Inventing them would be asserting a
-    // precondition nobody checked; forgetting means the next stale write is refused by name.
+  it("KEEPS the map after a write, taking the new versions from the response", async () => {
+    // REVERSED, AND THE ORIGINAL ASSERTION WAS A DATA-LOSS BUG. This used to assert the map was
+    // discarded, reasoning that guessing the new versions would assert a precondition nobody checked.
+    // True — but a null map does not mean "check nothing" on the server, it means the pre-040
+    // behaviour: no version checks and every project treated as changed. So the second save after a
+    // load rewrote every project from this client's own copy, including stale ones somebody else had
+    // edited. Observed in the wild: A edits project 1, B edits project 2 twice, A's work is gone.
     let sent;
     const b = make(async (u, i) => {
       if (u.includes("load_document")) return loaded([{ id: "a" }], { a: 2 });
       sent = JSON.parse(i.body);
-      return ok([{ out_version: 5 }]);
+      return ok([{ out_version: 5, out_project_versions: { a: 3 } }]);
     });
     await b.read();
     await b.write({ schemaVersion: 3, cash: 1 });
     await b.write({ schemaVersion: 3, cash: 2 });
-    expect(sent.p_known_projects).toBeNull();
+    expect(sent.p_known_projects).toEqual({ a: 3 });
+  });
+
+  it("does NOT adopt the version of a project somebody else changed", async () => {
+    // Adopting it would say "my copy is based on their version" about a copy this client has never
+    // seen — and the next edit to that project would overwrite them with no conflict and no question.
+    let sent;
+    const b = make(async (u, i) => {
+      if (u.includes("load_document")) return loaded([{ id: "a" }, { id: "b" }], { a: 1, b: 1 });
+      sent = JSON.parse(i.body);
+      return ok([{ out_version: 5, out_project_versions: { b: 2 },
+                   out_stale_projects: { a: { version: 7, body: { id: "a" } } } }]);
+    });
+    await b.read();
+    await b.write({ schemaVersion: 3, cash: 1 });
+    await b.write({ schemaVersion: 3, cash: 2 });
+    expect(sent.p_known_projects).toEqual({ a: 1, b: 2 });   // a stays at 1, so editing it conflicts
   });
 
   it("sends an empty map for a company with no projects, not null", async () => {

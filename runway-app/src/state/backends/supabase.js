@@ -187,17 +187,30 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
       // against a copy known to be behind; the bodies are handed up, because deciding whether to load
       // somebody else's version is the person's call and not this layer's.
       const stale = row?.out_stale_projects ?? null;
-      if (stale && projectVersions) {
-        for (const [id, info] of Object.entries(stale)) projectVersions[id] = info.version;
-      }
+
+      // THE VERSIONS THIS WRITE PRODUCED, merged into the map already held. Projects it did not write
+      // keep the version THIS CLIENT'S COPY IS BASED ON — which is what makes a later edit to a stale
+      // project raise a conflict instead of silently winning.
+      //
+      // The stale versions are deliberately NOT adopted. Doing so would say "my copy is based on their
+      // version" about a copy this client has never seen, and the next edit to that project would
+      // overwrite them with no conflict and no question asked. That was the bug.
+      const wrote = row?.out_project_versions ?? null;
+      if (wrote) projectVersions = { ...(projectVersions || {}), ...wrote };
       // The rows this write created or bumped are now at versions this client does not know. Rather
       // than guess them, forget them: the next write with a stale map is refused by name, and the next
       // LOAD repopulates it. Guessing would be inventing a precondition nobody checked.
-      // The projects this write touched are at versions this client does not know, so the map is no
-      // longer usable as a precondition and the next write falls back to treating everything as
-      // changed. The stale set is reported regardless, because it was computed before the write.
-      projectVersions = null;
-      loadedProjects = null;
+      // WHAT THIS CLIENT NOW BELIEVES IS STORED, for the projects it just wrote. Everything else keeps
+      // its earlier baseline, so an untouched project is still untouched next time.
+      //
+      // NEITHER MAP IS EVER SET TO NULL AGAIN. Null does not mean "check nothing" — on the server it
+      // means the pre-040 behaviour: no version checks and every project treated as changed. Clearing
+      // them after a write is what let a second save overwrite somebody else's project.
+      if (loadedProjects && Array.isArray(raw?.projects)) {
+        for (const pr of raw.projects) {
+          if (pr?.id && wrote && pr.id in wrote) loadedProjects.set(pr.id, stableStringify(pr));
+        }
+      }
       return { meta: { version, staleProjects: stale && Object.keys(stale).length ? stale : null } };
     },
 

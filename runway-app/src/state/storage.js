@@ -100,6 +100,9 @@ const RETRY_MS = [400, 1500, 4000];
 export const saveDebounceMs = () => backend().saveDebounceMs ?? SAVE_DEBOUNCE_MS;
 
 export async function load() {
+  // A LOAD ANSWERS EVERY OUTSTANDING NOTICE, because it fetches their versions of everything. Leaving
+  // them would tell somebody a project is stale immediately after they refreshed it.
+  clearStaleProjects();
   let found;
   try {
     found = await backend().read();
@@ -173,17 +176,47 @@ function emit(next) {
 // It exists because per-project concurrency removed the only thing that used to report a concurrent
 // edit: the conflict. That conflict obstructed the save, which was wrong — but it was also, by
 // accident, the notification.
+//
+// THE STATE LIVES HERE, NOT IN THE COMPONENT. The notice is rendered on the Projects tab, which
+// unmounts the moment somebody looks at Payroll — and a warning that disappears because you glanced
+// elsewhere is worse than no warning, because you now believe you have seen everything there is.
 const _staleSubs = new Set();
+let _stale = {};
+
+/** Everything reported since the last load, minus what has been answered. */
+export function staleProjects() { return _stale; }
 
 export function onStaleProjects(fn) {
   _staleSubs.add(fn);
+  fn(_stale);                      // whatever is already outstanding, so a remount sees it
   return () => _staleSubs.delete(fn);
 }
 
-function notifyStale(map) {
+/** Answered — loaded or kept. Removed so it stops being reported, not marked. */
+export function clearStaleProject(id) {
+  if (!(id in _stale)) return;
+  const { [id]: _gone, ...rest } = _stale;
+  _stale = rest;
+  publishStale();
+}
+
+export function clearStaleProjects() {
+  if (!Object.keys(_stale).length) return;
+  _stale = {};
+  publishStale();
+}
+
+function publishStale() {
   for (const fn of _staleSubs) {
-    try { fn(map); } catch { /* a bad subscriber must not break a save that already succeeded */ }
+    try { fn(_stale); } catch { /* a bad subscriber must not break a save that already succeeded */ }
   }
+}
+
+function notifyStale(map) {
+  // MERGED. Two saves a minute apart can each report a different project, and replacing would drop a
+  // notice nobody has answered yet.
+  _stale = { ..._stale, ...map };
+  publishStale();
 }
 
 export function status() { return _status; }

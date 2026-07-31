@@ -1401,6 +1401,29 @@ nothing downstream can tell that storage changed.
   `ERR_PROJECT_CONFLICT` is distinct from `ERR_CONFLICT`: "somebody changed Catalyst while you had it
   open" locates the problem, "the document changed" does not.
 
+**042 FIXED A DATA-LOSS BUG I SHIPPED IN 038 AND DEFENDED IN A TEST.** After a successful write the
+client discarded its version map, reasoning that guessing the new versions would assert a precondition
+nobody checked. The reasoning was right and the consequence was not: **a null map does not mean "check
+nothing"** — on the server it means the pre-040 behaviour, no version checks and every project treated
+as changed. So the SECOND save after a load rewrote every project from this client's own copy,
+including stale ones somebody else had edited.
+
+Found by testing it: A edits project 1, B edits project 2 and saves, B changes tab, B edits project 2
+again — and A's project 1 is gone. There was a test asserting the discard was correct; it is now
+reversed with the reason recorded.
+
+The answer was not to guess the versions but to be TOLD them. `sync_project_docs` returns
+`{id: version}` for the rows it wrote, and the client merges that in. **Stale versions are deliberately
+NOT adopted** — doing so would claim "my copy is based on their version" about a copy this client has
+never seen, and the next edit would overwrite them with no conflict and no question. Neither map is
+ever set to null again.
+
+**AND THE NOTICE VANISHED ON A TAB CHANGE**, which is what made the overwrite invisible. `StaleProjects`
+renders on the Projects tab and unmounts the moment somebody looks at Payroll, so notices held in
+component state were silently answered by a glance elsewhere. The state lives in `storage.js` now, the
+component seeds from it on mount, and "Keep mine" is recorded there too. A warning that disappears
+because you looked away is worse than no warning, because you then believe you have seen everything.
+
 **041 GAVE BACK WHAT THE CONFLICT USED TO PROVIDE BY ACCIDENT.** Once B's save stops colliding with A's
 edit to a different project, nothing tells B it happened — B's screen shows A's project as it was at
 load, indefinitely. The obstruction was wrong; it was also the only notification.

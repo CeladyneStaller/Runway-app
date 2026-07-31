@@ -11,7 +11,7 @@
 // people quote to boards. The new body is already in hand, so loading it is one click and no round
 // trip; taking that click is the person's decision.
 import React, { useEffect, useState } from "react";
-import { onStaleProjects } from "../../state/storage";
+import { onStaleProjects, staleProjects, clearStaleProject } from "../../state/storage";
 
 const ago = (iso) => {
   const ms = Date.now() - new Date(iso).getTime();
@@ -26,13 +26,13 @@ const ago = (iso) => {
 const who = (email) => (email ? email.split("@")[0] : "Somebody");
 
 export function StaleProjects({ doc, onLoad }) {
-  const [stale, setStale] = useState({});
+  // SEEDED FROM STORAGE, not from an empty object. This component lives on the Projects tab and unmounts
+  // the moment somebody looks at Payroll; holding the notices in component state meant a glance
+  // elsewhere silently answered them, and the next save overwrote the other person's work with no
+  // warning ever having been visible. The merging happens in `storage.js` now, for the same reason.
+  const [stale, setStale] = useState(staleProjects);
 
-  useEffect(() => onStaleProjects((map) => {
-    // MERGED, NOT REPLACED. Two saves a minute apart can each report a different project, and dropping
-    // the first would lose a notice the person had not acted on yet.
-    setStale(prev => ({ ...prev, ...map }));
-  }), []);
+  useEffect(() => onStaleProjects(setStale), []);
 
   const ids = Object.keys(stale);
   if (!ids.length) return null;
@@ -43,10 +43,12 @@ export function StaleProjects({ doc, onLoad }) {
   const load = (id) => {
     const body = stale[id]?.body;
     if (body) onLoad?.(id, body);
-    setStale(({ [id]: _gone, ...rest }) => rest);
+    clearStaleProject(id);
   };
 
-  const dismiss = (id) => setStale(({ [id]: _gone, ...rest }) => rest);
+  // KEPT MINE IS A DECISION, and it is recorded where the notice lives so it survives a tab change in
+  // the same way the notice does.
+  const dismiss = (id) => clearStaleProject(id);
 
   return (
     <div className="stale-note">
