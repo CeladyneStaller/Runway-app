@@ -73,7 +73,13 @@ describe("nothing in the fast project secretly needs a browser", () => {
       // teaches people to ignore it, which is worse than not having it.
       const src = readFileSync(f, "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, " ")
-        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+        .replace(/(^|[^:])\/\/.*$/gm, "$1")
+        // IMPORT PATHS TOO. `from "../../src/state/document.js"` contains `document.` and has nothing
+        // to do with the DOM — it failed a test that touches no browser API at all. Same lesson as the
+        // comment stripping above: a guard that fires on something innocent teaches people to ignore
+        // it, which is worse than not having the guard.
+        .replace(/^\s*import[\s\S]*?from\s+["'][^"']+["'];?/gm, " ")
+        .replace(/\bimport\(["'][^"']+["']\)/g, " ");
       return /@testing-library|\bdocument\.|\bwindow\./.test(src);
     });
     expect(offenders).toEqual([]);

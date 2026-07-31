@@ -1013,3 +1013,22 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   padding:9px 12px;margin-bottom:6px;border-radius:8px;
   background:#FBF3E4;border:1px solid #E8D3A8;font-family:var(--fb);font-size:12.5px;color:var(--ink-2)}
 .stale-actions{display:flex;gap:12px;white-space:nowrap}
+
+/* Tab charts. One per overview, chosen per device. */
+.ch-panel .panel-h p{max-width:64ch}
+.ch svg{display:block;width:100%;height:auto}
+.ch-t{font-family:var(--fm);font-size:8.5px;fill:var(--muted-2)}
+.ch-l{font-family:var(--fb);font-size:9.5px;fill:var(--muted)}
+.ch-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;
+  font-family:var(--fb);font-size:11.5px;color:var(--muted)}
+.ch-legend span{display:inline-flex;align-items:center;gap:5px}
+.ch-legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.ch-note{margin-top:6px;font-family:var(--fb);font-size:11.5px;color:var(--muted-2);line-height:1.5}
+.ch-empty{padding:26px 4px;font-family:var(--fb);font-size:12.5px;color:var(--muted-2)}
+.ch-err{color:var(--caution);cursor:help}
+.ch-pick{display:grid;gap:6px;margin-top:4px}
+.ch-opt{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:8px;cursor:pointer}
+.ch-opt.on{background:var(--paper)}
+.ch-opt input{margin-top:3px;accent-color:var(--signal)}
+.ch-opt-n{display:block;font-family:var(--fb);font-size:13px;font-weight:600}
+.ch-opt-w{display:block;font-family:var(--fb);font-size:11.5px;color:var(--muted)}
