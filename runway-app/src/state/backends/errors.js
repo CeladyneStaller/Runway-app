@@ -17,6 +17,10 @@ export const ERR_COMPANY_DELETED = "company_deleted";
 // "ask somebody in this company for a seat, or add one". Collapsing it into `payment_required` would
 // tell a member to buy a subscription their company already has.
 export const ERR_NO_SEAT = "no_seat";
+// A SINGLE PROJECT moved on while you were editing it — distinct from `ERR_CONFLICT`, which means the
+// document as a whole did. The difference is what somebody can act on: "somebody changed Catalyst
+// while you had it open" locates the problem, "the document changed" does not.
+export const ERR_PROJECT_CONFLICT = "project_conflict";
 
 export class BackendError extends Error {
   constructor(kind, message, cause) {

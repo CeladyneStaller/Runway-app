@@ -15,7 +15,7 @@
 // blind-write over a newer document, because this file cannot issue one.
 
 import {
-  BackendError, ERR_COMPANY_DELETED, ERR_CONFLICT, ERR_FORBIDDEN, ERR_NO_SEAT, ERR_PAYMENT_REQUIRED,
+  BackendError, ERR_COMPANY_DELETED, ERR_CONFLICT, ERR_FORBIDDEN, ERR_NO_SEAT, ERR_PAYMENT_REQUIRED, ERR_PROJECT_CONFLICT,
   ERR_STALE_CLIENT, ERR_UNREACHABLE,
 } from "./errors.js";
 import { assembleFromStorage } from "../sections.js";
@@ -26,6 +26,12 @@ import { reportError } from "../errors.js";
 function classify(status, payload) {
   const code = payload?.code || "";
   const msg = String(payload?.message || "");
+  // FIRST, because the generic conflict branch below matches on the SUBSTRING "conflict" and
+  // "project_conflict" contains it. Every other specific check in this function sits above the generic
+  // one it would lose to; this one has to sit above the very first line, which is where the general
+  // case happens to live. A loose substring fallback is only safe while nothing more specific shares
+  // the word.
+  if (code === "P0018" || msg.includes("project_conflict")) return ERR_PROJECT_CONFLICT;
   if (code === "P0002" || msg.includes("conflict")) return ERR_CONFLICT;
   if (code === "P0001" || msg.includes("stale_client")) return ERR_STALE_CLIENT;
   // Checked BEFORE the 403 branch: PostgREST reports a raised exception as 400 with the SQLSTATE, but
@@ -56,6 +62,7 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
   // The version this client last saw. It is the precondition on every write: if the row has moved on,
   // the RPC refuses rather than overwriting whatever the other device wrote.
   let version = null;
+  let projectVersions = null;
 
   async function headers() {
     const token = await auth.getAccessToken();
@@ -101,9 +108,14 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
       const row = Array.isArray(rows) ? rows[0] : rows;
       if (!row || row.body == null) {
         version = null;
+        projectVersions = null;
         return null;                       // no document yet — a new company, not a failure
       }
       version = row.version ?? null;
+      // WHAT THIS CLIENT LOADED, sent back on the next write so each project's precondition can be
+      // checked on its own. Without it the server cannot tell an edit to a stale project from an edit
+      // to a fresh one, and cannot tell a project the client never saw from one it deleted.
+      projectVersions = row.project_versions ?? {};
 
       // STAGE 3 SAFETY NET. The blob still carries `projects`, so empty rows beside a non-empty blob
       // means something is wrong rather than that there are no projects — a backfill that never ran,
@@ -134,11 +146,16 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
           p_schema_version: raw.schemaVersion,
           p_body: raw,
           p_base_version: version,
+          p_known_projects: projectVersions,
         }),
       });
       // The RPC returns a single row: the new version and when it landed.
       const row = Array.isArray(out) ? out[0] : out;
       version = row?.out_version ?? row?.version ?? version;
+      // The rows this write created or bumped are now at versions this client does not know. Rather
+      // than guess them, forget them: the next write with a stale map is refused by name, and the next
+      // LOAD repopulates it. Guessing would be inventing a precondition nobody checked.
+      projectVersions = null;
       return { meta: { version } };
     },
 

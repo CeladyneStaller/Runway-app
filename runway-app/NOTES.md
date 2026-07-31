@@ -1387,6 +1387,26 @@ independently reversible and gated on the golden number plus the round-trip prop
 `buildModelParts` is the ONLY consumer of the document's shape, so if it receives the identical object
 nothing downstream can tell that storage changed.
 
+**STAGE 5 (038) CLOSED THE CONCURRENCY GAP** and fixed a data-loss path found while doing it:
+
+- **`sync_project_docs` was deleting rows the client had never seen.** A loads six projects, B adds a
+  seventh, A saves with six — and B's project was deleted, no conflict raised, because the check was on
+  the DOCUMENT version and A's edit was legitimate. Deletion now requires the project to be in the
+  version map the client sent: a client cannot intend to delete something it does not know exists. Live
+  since stage 2, and worse than the problem it sat beside.
+- **An unchanged blob is no longer a write.** `save_document` bumped `documents.version` on every save,
+  so A editing project X invalidated B's base version even though neither touched the blob — which
+  would have made per-project checking pointless. A project-only edit now leaves the document alone.
+- **Each changed project checks its own version**, and a stale one raises `project_conflict:<id>`.
+  `ERR_PROJECT_CONFLICT` is distinct from `ERR_CONFLICT`: "somebody changed Catalyst while you had it
+  open" locates the problem, "the document changed" does not.
+
+**AND THE CLASSIFIER SWALLOWED IT.** `classify()`'s first line is `msg.includes("conflict")`, and
+`project_conflict` contains `conflict`, so the specific answer lost to the generic one. Every other
+specific check in that function sits above the general one it would lose to; this one had to go above
+the very first line. A substring fallback is only safe while nothing more specific shares the word —
+now pinned by a test.
+
 **WHAT IT DID NOT BUY, and this was worth measuring before promising it:** lazy loading. Compiling a
 project needs `employees` for rates and `pos` for fulfilment stage, so any projection needs essentially
 the whole document. And no concurrency win either — the client still sends one `p_base_version`, so two

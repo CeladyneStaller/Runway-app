@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createSupabaseBackend } from "../../src/state/backends/supabase.js";
 import {
-  BackendError, ERR_CONFLICT, ERR_FORBIDDEN, ERR_STALE_CLIENT, ERR_UNREACHABLE, isRetryable,
+  BackendError, ERR_CONFLICT, ERR_FORBIDDEN, ERR_PROJECT_CONFLICT, ERR_STALE_CLIENT, ERR_UNREACHABLE, isRetryable,
 } from "../../src/state/backends/errors.js";
 
 const auth = { getAccessToken: async () => "jwt-abc", getCompanyId: async () => "co-1" };
@@ -165,5 +165,92 @@ describe("reading, after the split (stage 3)", () => {
   it("still reports no document at all as null", async () => {
     const b = make(async () => ok([]));
     expect(await b.read()).toBeNull();
+  });
+});
+
+describe("per-project concurrency (stage 5)", () => {
+  const loaded = (projects, versions) => ok([{
+    body: { cash: 10 }, schema_version: 3, version: 4,
+    projects, project_versions: versions,
+  }]);
+
+  it("sends back the project versions it loaded", async () => {
+    // Without this the server cannot tell an edit to a stale project from an edit to a fresh one — and
+    // cannot tell a project the client never saw from one it deleted.
+    let sent;
+    const b = make(async (u, i) => {
+      if (u.includes("load_document")) return loaded([{ id: "a" }, { id: "b" }], { a: 2, b: 7 });
+      sent = JSON.parse(i.body);
+      return ok([{ out_version: 5 }]);
+    });
+    await b.read();
+    await b.write({ schemaVersion: 3, cash: 1 });
+    expect(sent.p_known_projects).toEqual({ a: 2, b: 7 });
+  });
+
+  it("FORGETS them after a write rather than guessing the new ones", async () => {
+    // The write bumped rows to versions this client does not know. Inventing them would be asserting a
+    // precondition nobody checked; forgetting means the next stale write is refused by name.
+    let sent;
+    const b = make(async (u, i) => {
+      if (u.includes("load_document")) return loaded([{ id: "a" }], { a: 2 });
+      sent = JSON.parse(i.body);
+      return ok([{ out_version: 5 }]);
+    });
+    await b.read();
+    await b.write({ schemaVersion: 3, cash: 1 });
+    await b.write({ schemaVersion: 3, cash: 2 });
+    expect(sent.p_known_projects).toBeNull();
+  });
+
+  it("sends an empty map for a company with no projects, not null", async () => {
+    // Null means "this client does not do per-project checking" and keeps the OLD behaviour, including
+    // deleting rows it never saw. An empty map means "I loaded, there were none" — a different claim.
+    let sent;
+    const b = make(async (u, i) => {
+      if (u.includes("load_document")) return loaded([], {});
+      sent = JSON.parse(i.body);
+      return ok([{ out_version: 5 }]);
+    });
+    await b.read();
+    await b.write({ schemaVersion: 3, cash: 1 });
+    expect(sent.p_known_projects).toEqual({});
+  });
+
+  it("classifies a project conflict as its own kind, not a document conflict", async () => {
+    const b = make(async (u) => {
+      if (u.includes("load_document")) return loaded([{ id: "a" }], { a: 2 });
+      return { ok: false, status: 409,
+               json: async () => ({ code: "P0018", message: "project_conflict:a" }) };
+    });
+    await b.read();
+    await expect(b.write({ schemaVersion: 3, cash: 1 }))
+      .rejects.toMatchObject({ kind: ERR_PROJECT_CONFLICT });
+  });
+});
+
+describe("the classifier's specific answers beat its general ones", () => {
+  // `project_conflict` contains the substring `conflict`, so it was being classified as a whole-
+  // document conflict by the generic fallback on the first line. Every refusal that shares a word with
+  // a broader one is checked here, because a substring fallback is only safe while nothing more
+  // specific shares the word.
+  const raise = (code, message) => make(async (u) =>
+    u.includes("load_document")
+      ? ok([{ body: {}, schema_version: 3, version: 1, projects: [], project_versions: {} }])
+      : ({ ok: false, status: 409, json: async () => ({ code, message }) }));
+
+  it.each([
+    ["P0018", "project_conflict:abc", ERR_PROJECT_CONFLICT],
+    ["P0002", "conflict", ERR_CONFLICT],
+  ])("%s -> %s", async (code, message, kind) => {
+    const b = raise(code, message);
+    await b.read();
+    await expect(b.write({ schemaVersion: 3 })).rejects.toMatchObject({ kind });
+  });
+
+  it("falls back on the MESSAGE correctly too, when a gateway drops the code", async () => {
+    const b = raise("", "project_conflict:abc");
+    await b.read();
+    await expect(b.write({ schemaVersion: 3 })).rejects.toMatchObject({ kind: ERR_PROJECT_CONFLICT });
   });
 });
