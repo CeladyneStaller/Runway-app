@@ -9,7 +9,7 @@ import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync"
 import { AcceptInvite } from "./views/chrome/Members";
 import { AdvisorScenarios } from "./views/chrome/AdvisorScenarios";
 import { StaleProjects } from "./views/chrome/StaleProjects";
-import { TabChart } from "./views/chrome/TabChart";
+import { InsightProvider } from "./views/chrome/TabInsights";
 import { reportError } from "./state/errors";
 import { TabPrefsProvider, load as loadTabPrefs, save as saveTabPrefs,
          visibleNav, landingView } from "./state/tabprefs";
@@ -402,6 +402,10 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
         </aside>
 
         {/* MAIN */}
+        {/* THE DOCUMENT AND ITS COMPILED PARTS, once. `TabInsights` needs both and lives inside six
+            different views; threading them through six signatures would be six prop chains maintained
+            forever. `tabprefs.js` established this pattern for the same reason. */}
+        <InsightProvider doc={doc} parts={{ ...parts, rows, msWithBal }} onGo={(v) => setView(v)}>
         <main className="main">
           <div className="topbar">
             <div>
@@ -568,11 +572,6 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
             navigate({ view: "sales", tab: "subs" });
           }} routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
           {view === "pay" && <Payroll routeTab={routeTab} setRouteTab={setTab} baseDoc={doc} employees={employees} setEmployees={setEmployees} fringeConfig={fringeConfig} setFringe={setFringe} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
-          {/* THE OVERVIEW CHART. `parts` is what `buildModelParts` already produced for this render, so
-              nothing is projected twice — a chart that ran its own projection would be a second answer
-              to the question this product exists to answer. */}
-          <TabChart tab={view} doc={doc} parts={{ ...parts, rows, msWithBal }} />
-
           {view === "proj" && (
             <StaleProjects doc={doc} onLoad={(id, body) => setDoc(d => ({
               ...d, projects: (d.projects || []).map(p => (p.id === id ? body : p)),
@@ -592,6 +591,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
           </ViewBoundary>
         </main>
+        </InsightProvider>
       </div>
     </div>
     </StartCtx.Provider>

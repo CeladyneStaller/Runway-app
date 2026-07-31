@@ -1,0 +1,160 @@
+// Alerts and lenses. The interesting assertions are about restraint: an alert module that fires
+// generously becomes wallpaper within a week, and a lens that invents a difference is worse than no
+// lens at all.
+import { describe, it, expect } from "vitest";
+import { alertsFor, ALL_RULES } from "../../src/engine/alerts.js";
+import { LENSES, lensFor, chartIdFor, applyLens } from "../../src/engine/lenses.js";
+import { buildChart, defaultChartFor } from "../../src/engine/charts.js";
+import { buildModelParts } from "../../src/engine/buildmodel.js";
+import { demoDoc, emptyDoc } from "../../src/state/document.js";
+
+const TABS = ["flow", "pay", "proj", "sales", "inv", "hist"];
+const parts = (doc) => buildModelParts(doc);
+
+describe("alerts — restraint first", () => {
+  it("never shows more than two on a tab", () => {
+    // Four amber boxes on every screen becomes wallpaper within a week, and then the real one is
+    // invisible. The cap is enforced in `alertsFor`, not left to judgement at each call site.
+    const doc = demoDoc();
+    for (const tab of [...TABS, "dash"]) {
+      expect(alertsFor(tab, doc, parts(doc)).length, tab).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("shows the worst first", () => {
+    const doc = demoDoc();
+    for (const tab of TABS) {
+      const order = { bad: 0, warn: 1, info: 2 };
+      const tones = alertsFor(tab, doc, parts(doc)).map(a => order[a.tone]);
+      expect([...tones].sort((a, b) => a - b), tab).toEqual(tones);
+    }
+  });
+
+  it("says nothing at all about an empty document", () => {
+    // A new company should not open under a pile of warnings about things it has not done yet.
+    const doc = emptyDoc();
+    for (const tab of TABS) {
+      expect(alertsFor(tab, doc, parts(doc)), tab).toEqual([]);
+    }
+  });
+
+  it("gives every alert something to DO, and somewhere to do it", () => {
+    // "Runway is short" is a fact and belongs on a tile. A rule that cannot finish the sentence
+    // "so you should…" does not belong here.
+    const doc = demoDoc();
+    for (const tab of TABS) {
+      for (const a of alertsFor(tab, doc, parts(doc))) {
+        expect(a.text.length, `${tab}/${a.id}`).toBeGreaterThan(24);
+        expect(a.action, `${tab}/${a.id} has no action`).toBeTruthy();
+        expect(TABS, `${tab}/${a.id} points nowhere`).toContain(a.to);
+      }
+    }
+  });
+
+  it("does not repeat itself within a tab", () => {
+    const doc = demoDoc();
+    for (const tab of TABS) {
+      const ids = alertsFor(tab, doc, parts(doc)).map(a => a.id);
+      expect(new Set(ids).size, tab).toBe(ids.length);
+    }
+  });
+});
+
+describe("alerts — never throwing", () => {
+  const wrecked = [
+    {}, { history: [{}] }, { employees: [{}] }, { projects: [{ id: "p" }] },
+    { rounds: [{ amount: 1 }] }, { history: null, codeMap: null },
+    { startY: undefined, startM: undefined },
+  ];
+
+  it.each([...TABS, "dash"])("%s survives a malformed document", (tab) => {
+    // These are documents somebody is midway through editing. A rule that throws would take a whole
+    // tab down over an advisory message.
+    for (const doc of wrecked) {
+      expect(() => alertsFor(tab, doc, {})).not.toThrow();
+      expect(Array.isArray(alertsFor(tab, doc, {}))).toBe(true);
+    }
+  });
+
+  it("an unknown tab is empty, not an exception", () => {
+    expect(alertsFor("nope", demoDoc(), {})).toEqual([]);
+  });
+
+  it("every tab in the registry is one the app actually has", () => {
+    for (const tab of Object.keys(ALL_RULES)) {
+      expect([...TABS, "dash"]).toContain(tab);
+    }
+  });
+});
+
+describe("lenses", () => {
+  it("declares nothing for most sub-tabs", () => {
+    // Fourteen of twenty-four are absent, and that is the design working. A lens should exist only
+    // where a sub-tab genuinely means something different for the picture.
+    const declared = Object.values(LENSES).reduce((n, t) => n + Object.keys(t).length, 0);
+    expect(declared).toBeLessThan(16);
+  });
+
+  it("only names charts that exist", () => {
+    for (const [tab, subs] of Object.entries(LENSES)) {
+      for (const [sub, lens] of Object.entries(subs)) {
+        if (lens?.chart) {
+          expect(buildChart(lens.chart, demoDoc(), {}), `${tab}/${sub}`).toBeTruthy();
+          expect(chartIdFor(tab, sub, null, defaultChartFor(tab))).toBe(lens.chart);
+        }
+      }
+    }
+  });
+
+  it("lets an explicit choice beat the sub-tab", () => {
+    // Picking a chart is a decision; clicking a sub-tab is navigation. Letting navigation override a
+    // decision would make the picker appear broken the moment somebody browsed.
+    expect(chartIdFor("proj", "proposals", "proj.pace", "proj.pace")).toBe("proj.pace");
+    expect(chartIdFor("proj", "proposals", null, "proj.pace")).toBe("proj.budget");
+  });
+
+  it("ignores a saved choice that no longer exists", () => {
+    expect(chartIdFor("flow", "net", "flow.deleted", "flow.runway")).toBe("flow.runway");
+  });
+});
+
+describe("applying a lens", () => {
+  const doc = demoDoc();
+  const p = parts(doc);
+
+  it("keeps only the named series", () => {
+    const spec = buildChart("flow.composition", doc, p);
+    const out = applyLens(spec, lensFor("flow", "costs"), doc);
+    expect(out.series.map(s => s.id).sort()).toEqual(["other", "payroll"]);
+  });
+
+  it("DROPS THE BAND when it filters, because the band is not filterable", () => {
+    // It is computed for the whole projection. Keeping it beside one filtered series would be drawing
+    // a confidence interval around something nobody computed one for.
+    const spec = buildChart("flow.runway", doc, p);
+    expect(spec.band).toBeTruthy();
+    expect(applyLens(spec, lensFor("flow", "revenue"), doc).band).toBeUndefined();
+  });
+
+  it("keeps the band when the lens does not filter", () => {
+    const spec = buildChart("flow.runway", doc, p);
+    expect(applyLens(spec, null, doc).band).toBeTruthy();
+  });
+
+  it("says WHICH lens emptied it, rather than drawing an empty axis", () => {
+    const spec = { kind: "lines", series: [{ id: "x", values: [1] }] };
+    const out = applyLens(spec, { label: "Grants", keep: ["nothing"] }, doc);
+    expect(out.empty).toMatch(/Nothing under Grants/);
+  });
+
+  it("leaves an already-empty spec alone", () => {
+    const out = applyLens({ empty: "No projection yet." }, lensFor("flow", "costs"), doc);
+    expect(out.empty).toBe("No projection yet.");
+  });
+
+  it("filters rows as well as series", () => {
+    const spec = { kind: "pace", rows: [{ id: "a" }, { id: "b" }] };
+    const out = applyLens(spec, { label: "Half", rows: (r) => r.id === "a" }, doc);
+    expect(out.rows).toHaveLength(1);
+  });
+});

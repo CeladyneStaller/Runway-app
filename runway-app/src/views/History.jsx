@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useState } from "react";
+import { TabInsights } from "./chrome/TabInsights";
 import { grantPaymentsAt } from "../engine/grant";
 import { burnStats } from "../engine/history";
 import { monthTotal, codedActuals, overheadByMonth, codesInLedger, unmappedCodes, unmappedCustomers, lineCustomer, OVERHEAD } from "../engine/coding";
@@ -102,6 +103,7 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
           <div className="stat"><div className="accent" style={{ background: baselineOpex > 0.5 ? "var(--caution)" : "var(--line)" }} /><div className="lab">Untracked baseline</div><div className="big">{money(baselineOpex)}</div><div className="meta">{covered ? "lines cover measured spend" : "carried as an extra line"}</div></div>
           <div className="stat hero"><div className="lab">Cash drift</div><div className="big" style={{ color: !latest ? "#fff" : latest.varc >= 0 ? "var(--signal-2)" : "var(--danger)" }}>{latest ? <>{latest.varc >= 0 ? "+" : "−"}{money(Math.abs(latest.varc))}</> : "—"}</div><div className="meta">{latest ? `${latest.pct}% vs model at ${monthLabel(START_Y, START_M, latest.m)}` : "no actuals recorded"}</div></div>
         </div>
+        <TabInsights tab="hist" subtab={tab} />
 
         <div className="panel" style={{ marginBottom: 18 }}>
           <div className="panel-h">
@@ -440,3 +442,4 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
     </>
   );
 }
+

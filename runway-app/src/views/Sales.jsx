@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useState } from "react";
+import { TabInsights } from "./chrome/TabInsights";
 import { money, moneyFull } from "../engine/money";
 import { TIERS, lineSpan } from "../engine/projection";
 import { BINDING, FLEX, poBeyondHorizon, poDeposit, poDevNeeded, poNeedsReview, poPaidMonth, targetStatus, targetText } from "../engine/sales";
@@ -71,6 +72,7 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
           <div className="stat"><div className="accent" style={{ background: "var(--signal-2)" }} /><div className="lab">Subscriptions</div><div className="big">{money(mrrNow)}</div><div className="meta">MRR this month{includedSaas.length ? ` \u00b7 ${includedSaas.length} product${includedSaas.length !== 1 ? "s" : ""}` : ""}</div></div>
           <div className="stat hero"><div className="lab">Targets at risk</div><div className="big" style={{ color: atRisk.length ? "var(--caution)" : "#fff" }}>{atRisk.length}</div><div className="meta">of {allTargets.length} committed</div></div>
         </div>
+        <TabInsights tab="sales" subtab={tab} />
 
         {unfulfilled.length > 0 && (
           <div className="callout" style={{ borderLeftColor: "var(--danger)", background: "rgba(188,59,42,.05)" }}>
@@ -211,6 +213,7 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
           <div className="stat"><div className="accent" style={{ background: "var(--caution)" }} /><div className="lab">At risk or missed</div><div className="big" style={{ color: atRisk.length ? "var(--caution)" : undefined }}>{atRisk.length}</div><div className="meta">need attention</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--ink-2)" }} /><div className="lab">Needing development</div><div className="big">{devPOs.length}</div><div className="meta">order{devPOs.length !== 1 ? "s" : ""} not shippable today</div></div>
         </div>
+        <TabInsights tab="sales" subtab={tab} />
         <div className="callout" style={{ borderLeftColor: atRisk.length ? "var(--caution)" : "var(--signal)" }}>
           These are the specs you're contractually on the hook for. A missed target is a delivery slip, and a delivery slip moves the balance payment — which is why they belong next to the runway rather than in a spec doc.
         </div>
@@ -249,3 +252,4 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
     </>
   );
 }
+

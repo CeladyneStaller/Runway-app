@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useState } from "react";
+import { TabInsights } from "./chrome/TabInsights";
 import { GOAL_KINDS, GOAL_STATUS, INST_KINDS, INST_KIND_LABEL, INST_STATUS, STATUS_LABEL, accrued, compileInstrument, convOwnership, convertsAt, covenantBreach, dilution, instConf, instLabel, isApprox, postMoney, royaltyVerdict } from "../engine/capital";
 import { money, moneyFull } from "../engine/money";
 import { lineSpan } from "../engine/projection";
@@ -82,6 +83,7 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
                 <div className="stat"><div className="accent" style={{ background: thin ? "var(--caution)" : "var(--signal)" }} /><div className="lab">Runway when you start</div><div className="big" style={{ color: thin ? "var(--caution)" : undefined }}>{start === Infinity ? "—" : `${start.toFixed(1)} mo`}</div><div className="meta">at {monthLabel(START_Y, START_M, r.startMonth)}</div></div>
                 <div className="stat hero"><div className="lab">Margin at close</div><div className="big" style={{ color: dead ? "var(--danger)" : "var(--signal-2)" }}>{gap === Infinity ? "—" : `${gap >= 0 ? "+" : "−"}${Math.abs(gap).toFixed(1)} mo`}</div><div className="meta">vs {monthLabel(START_Y, START_M, r.closeMonth)} close</div></div>
               </div>
+              <TabInsights tab="inv" subtab={tab} />
 
               {dead ? (
                 <div className="callout" style={{ borderLeftColor: "var(--danger)", background: "rgba(188,59,42,.06)" }}>
@@ -279,6 +281,7 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
           <div className="stat"><div className="accent" style={{ background: "var(--caution)" }} /><div className="lab">Not yet safe</div><div className="big" style={{ color: slipping.length ? "var(--caution)" : undefined }}>{slipping.length}</div><div className="meta">at risk or not started</div></div>
           <div className="stat hero"><div className="lab">Land after close</div><div className="big" style={{ color: lateGoals.length ? "var(--danger)" : "#fff" }}>{lateGoals.length}</div><div className="meta">can't price this round</div></div>
         </div>
+        <TabInsights tab="inv" subtab={tab} />
         <div className="callout" style={{ borderLeftColor: "var(--signal)" }}>
           These are the proofs the valuation rests on. A goal is only worth something if it lands <b>before</b> the close — an investor prices what you've shown them, not what you're about to show them.
         </div>
@@ -321,3 +324,4 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
    Internal projects draw internal funds; grants bring external
    funding (milestone- or budget-period / SF-424A-based).
    ============================================================ */
+

@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useState } from "react";
+import { TabInsights } from "./chrome/TabInsights";
 import { money, moneyFull } from "../engine/money";
 import { empCostAt, empTitleAt } from "../engine/payroll";
 import { TIERS, lineSpan } from "../engine/projection";
@@ -135,6 +136,7 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
           <div className="stat"><div className="accent" style={{ background: "var(--danger)" }} /><div className="lab">Recurring costs</div><div className="big">{money(costMo)}</div><div className="meta">opex + payroll + baseline</div></div>
           <div className="stat hero"><div className="lab">Net per month</div><div className="big" style={{ color: recRev - costMo >= 0 ? "var(--signal-2)" : "#fff" }}>{recRev - costMo >= 0 ? "+" : "−"}{money(Math.abs(recRev - costMo))}</div><div className="meta">run-rate, before one-offs</div></div>
         </div>
+        <TabInsights tab="flow" subtab={tab} />
         <div className="panel">
           <div className="panel-h">
             <div><h3>Everything in the projection</h3><p>Every line the runway counts, wherever it's owned. Edit company lines under <b>Revenue</b> and <b>Costs</b>; payroll and projects belong to their own tabs.</p></div>
@@ -172,6 +174,7 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
           <div className="stat"><div className="lab">One-time revenue</div><div className="big">{money(oneSum("revenue"))}</div><div className="meta">across the horizon</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--signal-2)" }} /><div className="lab">Grant payments</div><div className="big">{money(grantTotal)}</div><div className="meta">from Projects, {grantIn.length} payment{grantIn.length !== 1 ? "s" : ""}</div></div>
         </div>
+        <TabInsights tab="flow" subtab={tab} />
         {editPanel("revenue")}
 
         {/* THE FUNNEL, made visible. Subscription revenue is entered under Sales — recurring revenue
@@ -197,6 +200,7 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
           <div className="stat"><div className="lab">Untracked baseline</div><div className="big">{money(baselineOpex)}</div><div className="meta">per month, derived</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--caution)" }} /><div className="lab">Project & grant costs</div><div className="big">{money(projTotal)}</div><div className="meta">across the horizon</div></div>
         </div>
+        <TabInsights tab="flow" subtab={tab} />
         {editPanel("cost")}
         {roTable("Payroll", `${empCount} on the roster — salary plus ${Math.round(fringePct * 1000) / 10}% employer burden, itemized per person in the Payroll tab.`,
           employees.map(e => ({ label: e.name, src: empTitleAt(e, 0), amount: empCostAt(e, 0, fringePct), per: true,
@@ -212,3 +216,4 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
     </>
   );
 }
+

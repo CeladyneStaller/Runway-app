@@ -1032,3 +1032,13 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .ch-opt input{margin-top:3px;accent-color:var(--signal)}
 .ch-opt-n{display:block;font-family:var(--fb);font-size:13px;font-weight:600}
 .ch-opt-w{display:block;font-family:var(--fb);font-size:11.5px;color:var(--muted)}
+
+/* Alerts: above the chart, because the thing to act on must not sit under a picture. */
+.alerts{margin-bottom:14px}
+.alert{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding:9px 12px;border-radius:8px;margin-bottom:6px;
+  font-family:var(--fb);font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.alert.warn{background:#FBF3E4;border:1px solid #E8D3A8}
+.alert.bad{background:#FBEAE7;border:1px solid #EFC5BD}
+.alert.info{background:#EDF4F2;border:1px solid #CFE0DA}
+.alert .linkbtn{white-space:nowrap}

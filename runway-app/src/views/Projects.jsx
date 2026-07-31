@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { TabInsights } from "./chrome/TabInsights";
 import { MS_STATUS, TIMING_LABEL, computeGrant, isMsBilled, msPaid, msTier } from "../engine/grant";
 import { tripCost } from "../engine/history";
 import { money, moneyFull } from "../engine/money";
@@ -92,34 +93,38 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
         ))}
       </div>
 
-      {tab === "all" && (
+      {tab === "all" && (<>
         <div className="stats">
           <div className="stat"><div className="lab">Initiatives</div><div className="big">{projects.length}</div><div className="meta">{internals.length} internal · {grants.length} grant{grants.length !== 1 ? "s" : ""}{proposals.length ? ` · ${proposals.length} proposal${proposals.length !== 1 ? "s" : ""}` : ""}</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--ink-2)" }} /><div className="lab">Internal cash draw</div><div className="big">{money(internalDraw)}</div><div className="meta">from your own funds</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--signal)" }} /><div className="lab">Grant funding inbound</div><div className="big">{money(grantFunding)}</div><div className="meta">awarded, net of cost-share</div></div>
           <div className="stat hero"><div className="lab">Runway impact</div><div className="big">−{projWeeks} wks</div><div className="meta">active initiatives, net</div></div>
         </div>
-      )}
-      {tab === "internal" && (
+        <TabInsights tab="proj" subtab={tab} />
+      </>)}
+      {tab === "internal" && (<>
         <div className="stats">
           <div className="stat"><div className="lab">Internal projects</div><div className="big">{internals.length}</div><div className="meta">funded from your own cash</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--ink-2)" }} /><div className="lab">Internal cash draw</div><div className="big">{money(internalDraw)}</div><div className="meta">total across the horizon</div></div>
         </div>
-      )}
-      {tab === "grants" && (
+        <TabInsights tab="proj" subtab={tab} />
+      </>)}
+      {tab === "grants" && (<>
         <div className="stats">
           <div className="stat"><div className="lab">Awarded grants</div><div className="big">{grants.length}</div><div className="meta">under contract</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--signal)" }} /><div className="lab">Funding inbound</div><div className="big">{money(grantFunding)}</div><div className="meta">across the horizon</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--danger)" }} /><div className="lab">Cost-share owed</div><div className="big">{money(grantCostShare)}</div><div className="meta">your non-federal match</div></div>
         </div>
-      )}
-      {tab === "proposals" && (
+        <TabInsights tab="proj" subtab={tab} />
+      </>)}
+      {tab === "proposals" && (<>
         <div className="stats">
           <div className="stat"><div className="accent" style={{ background: "var(--caution)" }} /><div className="lab">In flight</div><div className="big">{proposals.length}</div><div className="meta">{nIncluded} modeled in the runway</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--signal)" }} /><div className="lab">Funding at stake</div><div className="big">{money(prospectFunding)}</div><div className="meta">if every grant proposal lands</div></div>
           {prospectDraw > 0 && <div className="stat"><div className="accent" style={{ background: "var(--ink-2)" }} /><div className="lab">Internal spend at stake</div><div className="big">{money(prospectDraw)}</div><div className="meta">if approved, drawn from cash</div></div>}
         </div>
-      )}
+        <TabInsights tab="proj" subtab={tab} />
+      </>)}
 
       {tab === "all" && (
         <div className="callout" style={{ borderLeftColor: "var(--caution)" }}>
@@ -1017,3 +1022,4 @@ function CollapsedProject({ p, pos, hist, codeMap, customerMap, onExpand }) {
     </div>
   );
 }
+

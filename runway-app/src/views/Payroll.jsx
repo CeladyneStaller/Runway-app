@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useMemo, useState } from "react";
+import { TabInsights } from "./chrome/TabInsights";
 import { money, moneyFull } from "../engine/money";
 import { itemizedFringeRate, itemizedIsEmpty } from "../engine/fringe";
 import { HRS_YR, empCostAt, empMonthlyOf, empSalaryAt, empSalaryMoAt, empTitleAt } from "../engine/payroll";
@@ -128,6 +129,7 @@ export function Payroll({ routeTab, setRouteTab = () => {}, baseDoc, employees, 
         <div className="stat"><div className="accent" style={{ background: "var(--signal)" }} /><div className="lab">Annual run-rate</div><div className="big">{money(totalNow * 12)}</div><div className="meta">current × 12</div></div>
         <div className="stat hero"><div className="lab">Peak monthly</div><div className="big">{money(peak)}</div><div className="meta">over the horizon</div></div>
       </div>
+      <TabInsights tab="pay" subtab={tab} />
 
       <div className="panel" style={{ marginBottom: 18 }}>
         <div className="panel-h"><div><h3>Monthly payroll over horizon</h3><p>{hasRamp ? "Steps up and down as hires start, raises land, and roles end." : "Flat while comp is constant — add a hire or a raise to see it move."}</p></div></div>
@@ -245,6 +247,7 @@ export function Payroll({ routeTab, setRouteTab = () => {}, baseDoc, employees, 
           <div className="stat"><div className="accent" style={{ background: "var(--ink-2)" }} /><div className="lab">Committed hours</div><div className="big">{Math.round(Object.values(load).reduce((a, r) => a + r.items.reduce((x, i) => x + i.hours, 0), 0)).toLocaleString()}</div><div className="meta">across grants &amp; fulfillment</div></div>
           <div className="stat hero"><div className="lab">Over-allocated</div><div className="big" style={{ color: overCount ? "var(--danger)" : "#fff" }}>{overCount}</div><div className="meta">people past 100% in a month</div></div>
         </div>
+        <TabInsights tab="pay" subtab={tab} />
         <div className="callout" style={{ borderLeftColor: overCount ? "var(--danger)" : "var(--signal)" }}>
           Grant personnel and fulfillment labour are charged to real people. None of it draws cash twice — payroll already paid for it — but capacity is finite, and this is where you find out that two projects booked the same engineer.
         </div>
@@ -380,3 +383,4 @@ export function Payroll({ routeTab, setRouteTab = () => {}, baseDoc, employees, 
     </>
   );
 }
+
