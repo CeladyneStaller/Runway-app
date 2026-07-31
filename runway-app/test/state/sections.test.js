@@ -228,3 +228,47 @@ describe("assembling from storage — stage 3", () => {
       .toEqual(buildModelFromDoc(doc));
   });
 });
+
+describe("what must survive projects leaving the blob — stage 4", () => {
+  it("the EXPORT still contains projects", async () => {
+    // The export is the backup story AND the migration test. It serialises the in-memory document,
+    // which is assembled — so it is unaffected. Asserted anyway, because losing projects from an export
+    // would be discovered by somebody restoring one.
+    const { toJSON, fromJSON } = await import("../../src/state/document.js");
+    // A REAL document, because `fromJSON` migrates and a fixture without a `schemaVersion` cannot be
+    // migrated. Stripped and reassembled, which is what stage 4 makes every load do.
+    const doc = demoDoc();
+    const stripped = { ...doc };
+    delete stripped.projects;
+    const round = fromJSON(toJSON(assembleFromStorage(stripped, { projects: doc.projects })));
+    expect(round.projects).toEqual(doc.projects);
+    expect(round.projects.length).toBeGreaterThan(0);
+  });
+
+  it("a stripped blob plus rows equals the document it came from", () => {
+    // Exactly what stage 4 makes true on the server: `body - 'projects'` stored, rows the only copy.
+    const doc = demoDoc();
+    const stripped = { ...doc };
+    delete stripped.projects;
+    expect(assembleFromStorage(stripped, { projects: doc.projects })).toEqual(doc);
+  });
+
+  it("and the runway is unchanged by it", async () => {
+    const { runwayMonths } = await import("../../src/views/chrome/docsummary.js");
+    const doc = demoDoc();
+    const stripped = { ...doc };
+    delete stripped.projects;
+    expect(runwayMonths(assembleFromStorage(stripped, { projects: doc.projects })))
+      .toBe(runwayMonths(doc));
+  });
+
+  it("a stripped blob with NO rows is a document with no projects, not a fallback", () => {
+    // After 037 the blob never carries projects, so an empty row set is the truth. The fallback cannot
+    // fire here, which is why it must not be removed until every blob has been rewritten — a company
+    // that has not saved since 037 still has its copy and still needs protecting.
+    const seen = [];
+    const doc = assembleFromStorage({ cash: 1 }, { projects: [] }, { onFallback: e => seen.push(e) });
+    expect(doc.projects).toEqual([]);
+    expect(seen).toEqual([]);
+  });
+});

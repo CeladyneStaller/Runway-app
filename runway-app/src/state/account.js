@@ -7,6 +7,7 @@
 
 import { BackendError, ERR_FORBIDDEN, ERR_UNREACHABLE } from "./backends/errors.js";
 import { track } from "./funnel.js";
+import { assembleFromStorage } from "./sections.js";
 
 export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
   if (!url || !anonKey) throw new Error("Account API needs a url and an anon key");
@@ -251,16 +252,20 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
     async unshareScenario(id) { await rpc("unshare_scenario", { p_id: id }); },
     async deleteScenario(id) { await rpc("delete_scenario", { p_id: id }); },
 
-    /** Another company's document, for the portfolio. A direct read rather than an RPC because RLS on
-     *  `documents` is what makes it safe, and that is the exact property the isolation probes assert —
-     *  a member sees their own companies and zero rows of anybody else's. */
+    /** Another company's document, for the portfolio.
+     *
+     *  THROUGH `load_document`, NOT A DIRECT READ. It was a direct select on `documents.body`, which
+     *  was correct until migration 037 took `projects` out of the blob — after which this would have
+     *  computed every client's runway from a document missing 44% of its model and reported the answer
+     *  with no indication anything was wrong. On the one screen whose entire purpose is to be trusted.
+     *
+     *  Nothing would have caught it: the read still succeeds, the document still parses, the engine
+     *  still projects, and the number is simply wrong. */
     async readCompanyDocument(companyId) {
-      const r = await doFetch(
-        `${base}/rest/v1/documents?company_id=eq.${encodeURIComponent(companyId)}&select=body&limit=1`,
-        { headers: await headers() });
-      if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `document read failed (${r.status})`);
-      const rows = await r.json();
-      return Array.isArray(rows) && rows[0] ? rows[0].body : null;
+      const rows = await rpc("load_document", { p_company_id: companyId });
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      if (!row || row.body == null) return null;
+      return assembleFromStorage(row.body, { projects: row.projects });
     },
 
     async listDeletedCompanies() {

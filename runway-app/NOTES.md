@@ -1376,6 +1376,41 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Projects moved out of the document — 3.8, four migrations
+
+`documents.body` no longer carries `projects`. They live one row each in `project_docs`, ordered by
+`position`, with history in `project_versions` and every write grouped by a `snapshot_id`.
+
+**034 add and backfill · 035 dual write · 036 flip reads · 037 projects leave the blob.** Each stage was
+independently reversible and gated on the golden number plus the round-trip property:
+`assemble(split(doc))` deep-equals `doc`. That property is the whole safety argument —
+`buildModelParts` is the ONLY consumer of the document's shape, so if it receives the identical object
+nothing downstream can tell that storage changed.
+
+**WHAT IT DID NOT BUY, and this was worth measuring before promising it:** lazy loading. Compiling a
+project needs `employees` for rates and `pos` for fulfilment stage, so any projection needs essentially
+the whole document. And no concurrency win either — the client still sends one `p_base_version`, so two
+people editing different projects still collide. **Per-project concurrency is a fifth step**, where the
+client tracks a version per project. The four stages delivered the storage substrate, nothing more.
+
+**THE BUG STAGE 4 WOULD HAVE SHIPPED SILENTLY.** `readCompanyDocument`, which feeds the advisor
+portfolio, was a direct select on `documents.body` — correct until 037 took `projects` out of it. After
+that it would have computed every client's runway from a document missing 44% of its model and reported
+the answer with no indication anything was wrong, on the one screen whose entire purpose is to be
+trusted. The read still succeeds, the document still parses, the engine still projects, and the number
+is simply wrong. Nothing in the suite would have caught it; grepping every reader of
+`rest/v1/documents` did.
+
+**The stage-3 fallback is still live and must stay.** `assembleFromStorage` prefers rows and falls back
+to the blob when rows are empty, reporting through `reportError`. A company that has not saved since 037
+still has `projects` in its blob. Retire it when `documents_still_carrying_projects()` returns zero —
+not before, and not because it looks like dead code.
+
+**History changed meaning.** From 037 a `document_versions` row is a document with no projects.
+Reconstructing a whole one means that row PLUS the `project_versions` rows carrying the same
+`snapshot_id`. There is no restore path built yet; when one is, that is its shape, and it is why the
+snapshot was defined at 034 rather than retrofitted later.
+
 ## Critical dates became editable, and gained a target
 
 Reported as: milestone details cannot be altered at all. Correct — `Milestones.jsx` had `add` and
