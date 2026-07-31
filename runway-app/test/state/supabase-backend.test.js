@@ -321,3 +321,34 @@ describe("only the projects this client changed (stage 5, fixed)", () => {
     expect(sent.p_changed_projects).toBeNull();
   });
 });
+
+describe("reporting what somebody else changed", () => {
+  it("hands the stale set up, and adopts the versions it names", async () => {
+    // The versions are adopted so the NEXT write is checked against reality rather than against a copy
+    // already known to be behind; the bodies go up because whether to load somebody else's version is
+    // the person's decision, not this layer's.
+    let sent;
+    const b = make(async (u, i) => {
+      if (u.includes("load_document")) {
+        return ok([{ body: { cash: 1 }, schema_version: 3, version: 4,
+                     projects: [{ id: "a" }], project_versions: { a: 1 } }]);
+      }
+      sent = JSON.parse(i.body);
+      return ok([{ out_version: 5, out_stale_projects: {
+        a: { version: 9, body: { id: "a", name: "Theirs" }, updated_by: "dana@x.com" } } }]);
+    });
+    await b.read();
+    const res = await b.write({ schemaVersion: 3, cash: 2, projects: [{ id: "a" }] });
+    expect(res.meta.staleProjects.a.body.name).toBe("Theirs");
+    expect(sent.p_known_projects).toEqual({ a: 1 });
+  });
+
+  it("reports nothing when nothing moved", async () => {
+    const b = make(async (u) =>
+      u.includes("load_document")
+        ? ok([{ body: {}, schema_version: 3, version: 4, projects: [], project_versions: {} }])
+        : ok([{ out_version: 5, out_stale_projects: {} }]));
+    await b.read();
+    expect((await b.write({ schemaVersion: 3 })).meta.staleProjects).toBeNull();
+  });
+});

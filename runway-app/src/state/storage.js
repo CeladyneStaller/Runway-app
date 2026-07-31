@@ -165,6 +165,27 @@ function emit(next) {
   for (const fn of _subs) { try { fn(_status); } catch { /* a bad subscriber must not break saving */ } }
 }
 
+// ---- other people's edits ----------------------------------------------------
+// Separate from `status`, which is about THIS client's save. A listener is told which projects moved on
+// underneath it, WITH their bodies, so a view can offer to load them rather than fetching again and
+// finding a third state.
+//
+// It exists because per-project concurrency removed the only thing that used to report a concurrent
+// edit: the conflict. That conflict obstructed the save, which was wrong — but it was also, by
+// accident, the notification.
+const _staleSubs = new Set();
+
+export function onStaleProjects(fn) {
+  _staleSubs.add(fn);
+  return () => _staleSubs.delete(fn);
+}
+
+function notifyStale(map) {
+  for (const fn of _staleSubs) {
+    try { fn(map); } catch { /* a bad subscriber must not break a save that already succeeded */ }
+  }
+}
+
 export function status() { return _status; }
 
 export function subscribe(fn) {
@@ -205,7 +226,11 @@ export async function flush() {
   emit({ state: "saving" });
 
   try {
-    await backend().write(doc);
+    const res = await backend().write(doc);
+    // SOMEBODY ELSE'S EDITS, reported on their own channel rather than through `status`. A save that
+    // succeeded is a save that succeeded; folding "and three projects moved" into the save indicator
+    // would make a normal outcome look like a problem.
+    if (res?.meta?.staleProjects) notifyStale(res.meta.staleProjects);
     _lastWritten = body;
     _attempt = 0;
     _deadline = null;

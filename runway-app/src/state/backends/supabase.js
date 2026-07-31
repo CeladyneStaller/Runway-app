@@ -177,12 +177,28 @@ export function createSupabaseBackend({ url, anonKey, auth, fetchImpl }) {
       // The RPC returns a single row: the new version and when it landed.
       const row = Array.isArray(out) ? out[0] : out;
       version = row?.out_version ?? row?.version ?? version;
+
+      // WHAT SOMEBODY ELSE CHANGED WHILE THIS CLIENT HELD ITS COPY. Per-project concurrency means those
+      // edits no longer collide — which is the point, and which also means nothing would otherwise tell
+      // this person about them. The conflict that used to obstruct was also, accidentally, the
+      // notification.
+      //
+      // The versions are adopted immediately so the NEXT write is checked against reality rather than
+      // against a copy known to be behind; the bodies are handed up, because deciding whether to load
+      // somebody else's version is the person's call and not this layer's.
+      const stale = row?.out_stale_projects ?? null;
+      if (stale && projectVersions) {
+        for (const [id, info] of Object.entries(stale)) projectVersions[id] = info.version;
+      }
       // The rows this write created or bumped are now at versions this client does not know. Rather
       // than guess them, forget them: the next write with a stale map is refused by name, and the next
       // LOAD repopulates it. Guessing would be inventing a precondition nobody checked.
+      // The projects this write touched are at versions this client does not know, so the map is no
+      // longer usable as a precondition and the next write falls back to treating everything as
+      // changed. The stale set is reported regardless, because it was computed before the write.
       projectVersions = null;
       loadedProjects = null;
-      return { meta: { version } };
+      return { meta: { version, staleProjects: stale && Object.keys(stale).length ? stale : null } };
     },
 
     // Nothing to park: a document the client cannot read is still intact on the server, and

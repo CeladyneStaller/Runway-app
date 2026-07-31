@@ -1006,3 +1006,10 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .pf-name{font-family:var(--fb);font-size:14px;font-weight:600;padding:0}
 .pf-runway{font-family:var(--fd);font-size:15px;min-width:70px;display:inline-block;text-align:right}
 .pf-runway.down{color:var(--danger)} .pf-runway.warn{color:var(--caution)}
+
+/* Somebody else changed a project you have open. Amber: a thing to know, not a thing that went wrong. */
+.stale-note{margin-bottom:14px}
+.stale-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  padding:9px 12px;margin-bottom:6px;border-radius:8px;
+  background:#FBF3E4;border:1px solid #E8D3A8;font-family:var(--fb);font-size:12.5px;color:var(--ink-2)}
+.stale-actions{display:flex;gap:12px;white-space:nowrap}

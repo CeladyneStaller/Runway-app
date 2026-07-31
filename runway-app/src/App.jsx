@@ -8,6 +8,7 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
 import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
 import { AcceptInvite } from "./views/chrome/Members";
 import { AdvisorScenarios } from "./views/chrome/AdvisorScenarios";
+import { StaleProjects } from "./views/chrome/StaleProjects";
 import { reportError } from "./state/errors";
 import { TabPrefsProvider, load as loadTabPrefs, save as saveTabPrefs,
          visibleNav, landingView } from "./state/tabprefs";
@@ -566,6 +567,11 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
             navigate({ view: "sales", tab: "subs" });
           }} routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
           {view === "pay" && <Payroll routeTab={routeTab} setRouteTab={setTab} baseDoc={doc} employees={employees} setEmployees={setEmployees} fringeConfig={fringeConfig} setFringe={setFringe} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
+          {view === "proj" && (
+            <StaleProjects doc={doc} onLoad={(id, body) => setDoc(d => ({
+              ...d, projects: (d.projects || []).map(p => (p.id === id ? body : p)),
+            }))} />
+          )}
           {view === "proj" && <Projects routeTab={routeTab} setRouteTab={setTab} projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales saas={saas} setSaas={setSaas} routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment routeTab={routeTab} setRouteTab={setTab} rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}

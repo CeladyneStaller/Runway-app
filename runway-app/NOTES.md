@@ -1401,6 +1401,24 @@ nothing downstream can tell that storage changed.
   `ERR_PROJECT_CONFLICT` is distinct from `ERR_CONFLICT`: "somebody changed Catalyst while you had it
   open" locates the problem, "the document changed" does not.
 
+**041 GAVE BACK WHAT THE CONFLICT USED TO PROVIDE BY ACCIDENT.** Once B's save stops colliding with A's
+edit to a different project, nothing tells B it happened — B's screen shows A's project as it was at
+load, indefinitely. The obstruction was wrong; it was also the only notification.
+
+`save_document` now returns `out_stale_projects`: the projects in the client's version map whose stored
+version has moved, WITH bodies, author email and timestamp. **Computed BEFORE the sync** — afterwards
+the projects this client just edited have also moved past what it knew, and reporting those would tell
+somebody their own edit was made by somebody else. It returns the body rather than a flag because a
+flag makes the client fetch, which is a second round trip and a second moment for things to change
+underneath it.
+
+Surfaced on its own channel (`onStaleProjects`), not through `status`: a save that succeeded is a save
+that succeeded, and folding "three projects moved" into the save indicator would make a normal outcome
+look like a failure. `StaleProjects` shows one line per project with "Load their version" and "Keep
+mine", and CHANGES NOTHING BY ITSELF — replacing a project on screen while somebody reads it is how a
+number moves under a cursor mid-sentence, and this application's whole output is a number people quote
+to boards.
+
 **AND THEN 040, BECAUSE THE CHECK CONFLICTED ON PROJECTS NOBODY EDITED.** Structural, not a slip: the
 client sends the WHOLE document on every save, so B's payload carries its stale copy of a project A
 just edited. The server saw a differing body, checked its version, and raised `project_conflict` for a
