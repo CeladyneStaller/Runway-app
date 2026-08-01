@@ -278,82 +278,109 @@ function Pace({ spec }) {
   );
 }
 
-/** Goals on a calendar, against the day the cash runs out without the round.
+/** Goals on a calendar, in two phases, against two runways.
  *
- *  A TIMELINE RATHER THAN BARS, because the question is ordering — does the evidence exist before the
- *  money stops — and ordering is what a shared axis shows.
+ *  ONE TIMELINE, TWO BANDS, THE CLOSE AS THE BOUNDARY — before it you are spending your own money,
+ *  after it you are spending theirs. Splitting into two charts would lose the thing worth seeing:
+ *  whether the gating evidence exists before the money stops.
  *
  *  EVERY GOAL STATES ITS OWN DATE, so nothing depends on reading a position against an axis. That is
- *  also what lets this degrade: on a narrow screen the labels cannot sit beside the dots, and the
- *  chart becomes rows with the date in the label — the same information, because the axis was never
- *  carrying it.
+ *  what lets it degrade on a narrow screen into rows with the date in the label.
  */
 function Goals({ spec }) {
-  const rows = spec.rows || [];
-  const ROW = 26;
-  const top = PAD.t + 24;
-  const base = top + rows.length * ROW + 4;
+  const pre = spec.pre || [];
+  const post = spec.post || [];
+  const ROW = 26, GAP = 26;
+  const top = PAD.t + 22;
+  const preBottom = top + pre.length * ROW;
+  const postTop = preBottom + (post.length ? GAP : 0);
+  const base = postTop + post.length * ROW + 6;
   const H2 = base + 34;
+
   const n = spec.span || spec.ticks?.length || 18;
   const x = (m) => PAD.l + (Math.max(0, Math.min(n, m)) / n) * PW;
+  const cliff = Number.isFinite(spec.cashOut) ? x(spec.cashOut) : null;
+  const close = Number.isFinite(spec.closeM) ? x(spec.closeM + 1) : null;
+  const later = Number.isFinite(spec.afterRound) ? x(spec.afterRound) : null;
 
-  // A DAY, NOT A MONTH BOUNDARY. `zeroInfo` interpolates within the crossing month, which is where
-  // "5.6 months" comes from — rounding it here would lose precision the model already has.
-  const cliff = Number.isFinite(spec.runsOut) ? x(spec.runsOut) : null;
-  const close = rows[0] ? x(rows[0].close + 1) : null;
+  const band = (rows, y0, phase) => rows.map((r, i) => {
+    const y = y0 + i * ROW;
+    const cx = x(r.due);
+    const colour = r.beyondCash ? TONE.danger : r.misfiled ? TONE.caution : TONE.signal;
+    return (
+      <g key={r.id}>
+        <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.4" opacity="0.28" />
+        <circle cx={cx} cy={y} r="4.5" fill={colour} />
+        {/* Filed in the wrong phase gets a ring, because it is a DIFFERENT problem from being late:
+            a pre-raise goal after the close cannot gate the round, and a post-raise goal before it
+            spends money that has not arrived. */}
+        {r.misfiled && (
+          <circle cx={cx} cy={y} r="8" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
+        )}
+        <text x={cx + 12} y={y - 2} className="ch-g">{String(r.label).slice(0, 36)}</text>
+        <text x={cx + 12} y={y + 9} className="ch-d" fill={colour}>
+          {r.dueLabel}
+          {r.lateBy ? ` · ${r.lateBy} days past the cash` : ""}
+          {!r.lateBy && r.misfiled
+            ? (phase === "pre" ? " · after the close" : " · before the close") : ""}
+        </text>
+      </g>
+    );
+  });
 
   return (
     <svg viewBox={`0 0 ${W} ${H2}`} role="img"
-         aria-label={`${rows.length} goals on a calendar` +
-           (spec.runsOutLabel ? `, with cash running out on ${spec.runsOutLabel}` : "")}>
-      {/* Everything right of the cliff is time the company does not have without the round. Shading it
-          is the whole chart: a goal in the shaded region is one the money will not reach. */}
-      {cliff != null && (
-        <>
-          <rect x={cliff} y={PAD.t} width={Math.max(0, W - PAD.r - cliff)} height={base - PAD.t}
-                fill="var(--danger)" opacity="0.06" />
-          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.6" />
-          <text x={cliff + 5} y={PAD.t + 9} className="ch-f" fill="var(--danger)">
-            Cash out · {spec.runsOutLabel}
-          </text>
-        </>
+         aria-label={`${pre.length} pre-raise and ${post.length} post-raise goals on a calendar` +
+           (spec.cashOutLabel ? `, cash running out on ${spec.cashOutLabel}` : "")}>
+      {/* The two runways, each shaded only under its own phase. Shading the whole width would claim
+          the pre-raise cash cliff applies to post-raise goals, which is the confusion this split
+          exists to remove. */}
+      {cliff != null && pre.length > 0 && (
+        <rect x={cliff} y={PAD.t} width={Math.max(0, W - PAD.r - cliff)}
+              height={preBottom - PAD.t + 4} fill="var(--danger)" opacity="0.06" />
+      )}
+      {later != null && post.length > 0 && (
+        <rect x={later} y={postTop - 14} width={Math.max(0, W - PAD.r - later)}
+              height={base - postTop + 14} fill="var(--danger)" opacity="0.06" />
       )}
 
-      {close != null && (
+      {pre.length > 0 && (
+        <text x={PAD.l} y={PAD.t + 8} className="ch-p" fill="var(--raise)">
+          Pre-raise · your money
+        </text>
+      )}
+      {post.length > 0 && (
+        <text x={PAD.l} y={postTop - 8} className="ch-p" fill="var(--signal-ink)">
+          Post-raise · their money
+        </text>
+      )}
+
+      {cliff != null && (
         <>
-          <line x1={close} y1={PAD.t} x2={close} y2={base} stroke="var(--muted-2)"
-                strokeWidth="1.2" strokeDasharray="4 3" />
-          <text x={close - 5} y={PAD.t + 9} className="ch-f" textAnchor="end" fill="var(--muted)">
-            Closes · {rows[0].closeLabel}
+          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.6" />
+          <text x={cliff + 5} y={base - 4} className="ch-f" fill="var(--danger)">
+            Cash out · {spec.cashOutLabel}
           </text>
         </>
       )}
+      {close != null && (
+        <>
+          <line x1={close} y1={PAD.t} x2={close} y2={base} stroke="var(--raise)" strokeWidth="2" />
+          <text x={close + 5} y={PAD.t + 8} className="ch-f" fill="var(--raise)">
+            Closes · {spec.closeLabel}
+          </text>
+        </>
+      )}
+      {later != null && (
+        <line x1={later} y1={postTop - 14} x2={later} y2={base} stroke="var(--danger)"
+              strokeWidth="1.4" strokeDasharray="4 3" />
+      )}
+
+      {band(pre, top, "pre")}
+      {band(post, postTop, "post")}
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
       <TimeAxis ticks={spec.ticks} n={n} y={base} />
-
-      {rows.map((r, i) => {
-        const y = top + i * ROW;
-        const cx = x(r.due);
-        const colour = r.beyondCash ? TONE.danger : r.afterClose ? TONE.caution : TONE.signal;
-        return (
-          <g key={r.id}>
-            <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.4" opacity="0.3" />
-            <circle cx={cx} cy={y} r="4.5" fill={colour} />
-            {/* A goal past the close as WELL as past the cash gets a ring: two problems needing two
-                different fixes should not look like one problem. */}
-            {r.afterClose && (
-              <circle cx={cx} cy={y} r="7.5" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
-            )}
-            <text x={cx + 12} y={y - 2} className="ch-g">{String(r.label).slice(0, 38)}</text>
-            <text x={cx + 12} y={y + 9} className="ch-d" fill={colour}>
-              {r.dueLabel}
-              {r.lateBy ? ` · ${r.lateBy} days past the cash` : ""}
-              {!r.lateBy && r.afterClose ? " · after the close" : ""}
-            </text>
-          </g>
-        );
-      })}
     </svg>
   );
 }

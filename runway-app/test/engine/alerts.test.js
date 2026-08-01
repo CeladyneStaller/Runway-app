@@ -186,12 +186,13 @@ describe("the goals chart — what the Investment goals sub-tab actually asks", 
   });
 
   it("tells two different problems apart", () => {
-    // A goal past the cash cannot be reached at all. A goal past the CLOSE was meant to justify a
-    // round that will already have happened. Different fixes, so different flags.
+    // A goal past the cash cannot be reached at all. A goal on the wrong side of the CLOSE is filed in
+    // the wrong phase. Different fixes, so different flags — and `afterClose` became `misfiled` when
+    // the phase split arrived, because "after the close" is only an error for a PRE-raise goal.
     const spec = buildChart("inv.goals", doc, p);
     for (const r of spec.rows) {
       expect(typeof r.beyondCash).toBe("boolean");
-      expect(r.afterClose).toBe(r.due > r.close);
+      expect(typeof r.misfiled).toBe("boolean");
     }
   });
 
@@ -263,6 +264,63 @@ describe("the calendar axis", () => {
     const { axisTicks } = await import("../../src/engine/charts.js");
     expect(() => axisTicks({}, 6)).not.toThrow();
     expect(axisTicks(undefined, 6)).toHaveLength(6);
+  });
+});
+
+describe("the goals chart — two kinds of goal", () => {
+  const doc = demoDoc();
+  const p = parts(doc);
+
+  it("splits pre-raise from post-raise", () => {
+    // A round has goals pointing in both directions and the model treated them as one list, which is
+    // why the chart read oddly: it measured both against the same runway and flagged the wrong half
+    // as late.
+    const spec = buildChart("inv.goals", doc, p);
+    expect(Array.isArray(spec.pre)).toBe(true);
+    expect(Array.isArray(spec.post)).toBe(true);
+    expect(spec.pre.every(r => r.phase === "pre")).toBe(true);
+    expect(spec.post.every(r => r.phase === "post")).toBe(true);
+  });
+
+  it("measures each phase against ITS OWN runway", () => {
+    // Pre-raise against the money you already have — the round cannot fund the proof the round
+    // depends on. Post-raise against the runway the round creates.
+    const spec = buildChart("inv.goals", doc, p);
+    expect(spec.cashOutLabel).toBeTruthy();
+    expect(spec.afterRoundLabel).toBeTruthy();
+    // A $6m round should not leave the two runways identical; that was the bug where `financing` was
+    // forced off for both and the chart quietly said the round changes nothing.
+    if (spec.cashOut != null && spec.afterRound != null) {
+      expect(spec.afterRound).toBeGreaterThan(spec.cashOut);
+    } else {
+      expect(spec.afterRoundEndless).toBe(true);
+    }
+  });
+
+  it("says 'beyond the horizon' rather than leaving a date blank", () => {
+    const spec = buildChart("inv.goals", doc, p);
+    if (spec.afterRoundEndless) expect(spec.afterRoundLabel).toMatch(/beyond/i);
+  });
+
+  it("flags the two OPPOSITE filing mistakes", () => {
+    // A pre-raise goal after the close cannot gate a round that already happened. A post-raise goal
+    // before the close spends money that has not arrived. Same field, opposite tests.
+    const spec = buildChart("inv.goals", doc, p);
+    for (const r of spec.pre) expect(r.misfiled).toBe(r.dueAt > r.closeAt);
+    for (const r of spec.post) expect(r.misfiled).toBe(r.dueAt <= r.closeAt);
+  });
+
+  it("does not call a goal late when the cash never runs out", () => {
+    // A null date means the runway outlasts the horizon, which is the opposite of a problem —
+    // colouring those goals red would report a healthy round as a failing one.
+    const rich = { ...demoDoc(), cash: 500_000_000 };
+    const spec = buildChart("inv.goals", rich, buildModelParts(rich));
+    for (const r of spec.post) expect(r.lateBy).toBeNull();
+  });
+
+  it("says when nobody has written down what the round buys", () => {
+    const spec = buildChart("inv.goals", doc, p);
+    if (!spec.post.length) expect(spec.postNote).toMatch(/what the round buys/i);
   });
 });
 

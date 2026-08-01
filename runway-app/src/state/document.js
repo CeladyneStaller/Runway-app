@@ -4,7 +4,7 @@
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 const settings = () => ({
   fringePct: 0.30,
@@ -85,6 +85,25 @@ export const demoDoc = () => ({
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.
 const MIGRATIONS = {
+  // v3 -> v4: a round's goals gain a PHASE. A round has goals pointing in both directions and the
+  // model was treating them as one list — "5 kW stack at 92%" is evidence needed to CLOSE the round,
+  // "scale to 50 kW" is what the round BUYS, and they are measured against two different runways.
+  //
+  // INFERRED FROM THE DUE DATE, which is right for every goal written before this field existed: a
+  // goal due on or before the close was gating it, and one due after it was not. A goal already filed
+  // correctly does not move.
+  4: (d) => ({
+    ...d,
+    schemaVersion: 4,
+    rounds: (d.rounds || []).map(r => ({
+      ...r,
+      goals: (r.goals || []).map(g => ({
+        ...g,
+        phase: g.phase || ((g.dueMonth ?? 0) <= (r.closeMonth ?? 0) ? "pre" : "post"),
+      })),
+    })),
+  }),
+
   // v1 -> v2: a spend month was a single total { mo, v, note }. It becomes a one-line ledger so the
   // old data keeps working and can be coded later. `v` is preserved as a derived getter in the engine.
   // v2 -> v3: ledger lines gain optional dimensions (kind/category/period). No line data changes —

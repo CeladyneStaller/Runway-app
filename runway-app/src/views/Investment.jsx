@@ -24,7 +24,7 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
     : { id: uid(), kind, name: kind === "safe" ? "New SAFE" : "New note", status: "planning", amount: 500000, closeMonth: 2, capType: "post", cap: 15000000, discount: 0.2, interestPct: kind === "note" ? 8 : 0, maturityMonths: 24, atMaturity: "repay", confAuto: true, goals: [] }]);
   const upG = (rid, gid, patch) => up(rid, { goals: (rounds.find(r => r.id === rid).goals || []).map(g => g.id === gid ? { ...g, ...patch } : g) });
   const delG = (rid, gid) => up(rid, { goals: (rounds.find(r => r.id === rid).goals || []).filter(g => g.id !== gid) });
-  const addG = (rid) => up(rid, { goals: [...(rounds.find(r => r.id === rid).goals || []), { id: uid(), kind: "technical", label: "New goal", dueMonth: 4, status: "not-started" }] });
+  const addG = (rid) => up(rid, { goals: [...(rounds.find(r => r.id === rid).goals || []), { id: uid(), kind: "technical", label: "New goal", dueMonth: 4, status: "not-started", phase: "pre" }] });
 
   const sorted = [...rounds].sort((a, b) => (a.closeMonth ?? 0) - (b.closeMonth ?? 0));
   const equity = sorted.filter(r => r.kind === "equity" && r.status !== "closed");
@@ -292,24 +292,41 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
               <button className="addbtn ghost" onClick={() => addG(r.id)}>{I.plus} Goal</button>
             </div>
             <table className="tbl">
-              <thead><tr><th>Goal</th><th>Kind</th><th>Due</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Goal</th><th>Phase</th><th>Kind</th><th>Due</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 {(r.goals || []).map(g => {
-                  const late = (g.dueMonth ?? 0) > (r.closeMonth ?? 0);
+                  // MISFILED, NOT LATE, and the two phases fail in OPPOSITE directions: a pre-raise
+                  // goal after the close cannot gate a round that will already have happened, and a
+                  // post-raise goal before it spends money that has not arrived. The old test flagged
+                  // everything after the close, which was backwards for half of them.
+                  const phase = g.phase === "post" ? "post" : "pre";
+                  const after = (g.dueMonth ?? 0) > (r.closeMonth ?? 0);
+                  const misfiled = phase === "pre" ? after : !after;
                   return (
                     <tr key={g.id}>
                       <td><input className="inp" style={{ width: 300, textAlign: "left" }} value={g.label} onChange={e => upG(r.id, g.id, { label: e.target.value })} /></td>
+                      <td><select className="sel" value={phase} aria-label={`Phase for ${g.label}`}
+                                  onChange={e => upG(r.id, g.id, { phase: e.target.value })}>
+                        <option value="pre">Pre-raise · closes it</option>
+                        <option value="post">Post-raise · what it buys</option>
+                      </select></td>
                       <td><select className="sel" value={g.kind} onChange={e => upG(r.id, g.id, { kind: e.target.value })}>{GOAL_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                       <td><div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <select className="sel" value={g.dueMonth} onChange={e => upG(r.id, g.id, { dueMonth: +e.target.value })}>{MOPTS(START_Y, START_M)}</select>
-                        {late && <span className="devchip on">after close</span>}
+                        {misfiled && (
+                          <span className="devchip on" title={phase === "pre"
+                            ? "A pre-raise goal after the close cannot gate this round"
+                            : "A post-raise goal before the close spends money that has not arrived"}>
+                            {phase === "pre" ? "after close" : "before close"}
+                          </span>
+                        )}
                       </div></td>
                       <td><select className="sel" value={g.status} onChange={e => upG(r.id, g.id, { status: e.target.value })}>{Object.keys(GOAL_STATUS).map(k => <option key={k} value={k}>{GOAL_STATUS[k][0]}</option>)}</select></td>
                       <td style={{ textAlign: "right" }}><button className="iconbtn" onClick={() => delG(r.id, g.id)} aria-label="Delete goal">{I.trash}</button></td>
                     </tr>
                   );
                 })}
-                {(r.goals || []).length === 0 && <tr><td colSpan={5} style={{ color: "var(--muted-2)", textAlign: "center", padding: 16 }}>No goals yet — what has to be true for this round to price?</td></tr>}
+                {(r.goals || []).length === 0 && <tr><td colSpan={6} style={{ color: "var(--muted-2)", textAlign: "center", padding: 16 }}>No goals yet — what has to be true for this round to price?</td></tr>}
               </tbody>
             </table>
           </div>

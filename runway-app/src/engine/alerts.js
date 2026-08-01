@@ -175,6 +175,50 @@ const slipRisk = (doc, parts) => {
   };
 };
 
+const preRaiseUnreachable = (doc) => {
+  const equity = (doc.rounds || []).filter(r => r.kind === "equity" && r.status !== "closed");
+  const pre = equity.flatMap(r => (r.goals || []).filter(g => g.phase !== "post"));
+  if (!pre.length) return null;
+
+  // Against the money already in hand: the round cannot fund the proof the round depends on.
+  const bare = { ...doc, rounds: [] };
+  const toggles = { committed: true, expected: false, speculative: false, financing: false };
+  let z = null;
+  try {
+    z = zeroInfo(buildProjection(buildModelFromDoc({ ...bare, settings: { ...(doc.settings || {}), toggles } }),
+                                 toggles), doc.startY, doc.startM);
+  } catch { return null; }
+  if (!z) return null;
+
+  const past = pre.filter(g => clean(g.dueMonth) > z.months).length;
+  if (!past) return null;
+  return {
+    id: "pre-raise", tone: "bad",
+    text: `${past} of ${plural(pre.length, "pre-raise goal", "pre-raise goals")} fall after the cash ` +
+          "runs out. The round cannot fund the evidence the round depends on.",
+    action: "Re-plan", to: "inv",
+  };
+};
+
+const misfiledGoal = (doc) => {
+  const equity = (doc.rounds || []).filter(r => r.kind === "equity" && r.status !== "closed");
+  for (const r of equity) {
+    // A pre-raise goal after the close cannot gate a round that will already have happened. Until the
+    // phase existed this looked identical to a post-raise goal.
+    const bad = (r.goals || []).filter(g => g.phase !== "post" && clean(g.dueMonth) > clean(r.closeMonth));
+    if (bad.length) {
+      return {
+        id: "misfiled", tone: "warn",
+        text: `${plural(bad.length, "pre-raise goal is", "pre-raise goals are")} due after ` +
+              `${r.name || "the round"} closes, so ${bad.length === 1 ? "it cannot" : "they cannot"} ` +
+              "gate it.",
+        action: "Move to post-raise", to: "inv",
+      };
+    }
+  }
+  return null;
+};
+
 const covenant = (doc, parts) => {
   try {
     const breach = covenantBreach(doc, rowsOf(doc, parts));
@@ -221,7 +265,7 @@ const RULES = {
   pay: [hiresAhead, unallocated],
   proj: [aheadOfPace, overspent, unallocated],
   sales: [forecastHot, noHistory],
-  inv: [slipRisk, covenant],
+  inv: [preRaiseUnreachable, slipRisk, misfiledGoal, covenant],
   hist: [overPlan, staleLedger, unmapped, unresolved],
   dash: [overPlan, hiresAhead, slipRisk],
 };

@@ -17,6 +17,7 @@ import { buildProjection, zeroInfo } from "./projection.js";
 import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, monthRevenue, isCost, lineAmount, lineCode, resolveLine, OVERHEAD } from "./coding.js";
+import { instConf } from "./capital.js";
 import { spentToDate } from "./summary.js";
 import { saasSeries } from "./saas.js";
 import { HORIZON, monthLabel } from "./time.js";
@@ -447,64 +448,119 @@ const invOwnership = (doc) => {
  *  the runway you have if it does not, so the toggles are forced to committed-only and the round's own
  *  inflow is excluded. Reading it against the optimistic line would answer a question nobody is asking.
  */
+/** Goals against the runway, split by which money pays for them.
+ *
+ *  A ROUND HAS GOALS POINTING IN BOTH DIRECTIONS and the model treated them as one list, which is why
+ *  this chart read oddly before: it measured both against the same runway and flagged the wrong half
+ *  as late.
+ *
+ *    PRE-RAISE   the evidence investors need before they wire — 5 kW stack, $1m booked. Must land
+ *                before the close, on the money you ALREADY HAVE. The round cannot fund the proof the
+ *                round depends on, so these are measured against the runway with rounds removed.
+ *
+ *    POST-RAISE  what the money is for — scale to 50 kW, hire twelve. After the close by definition,
+ *                and measured against the runway the round CREATES.
+ *
+ *  So `lateGoals` in the Investment view was exactly backwards for half of them: a post-raise goal
+ *  SHOULD be after the close. What is actually wrong is a PRE-RAISE goal filed after it — it cannot
+ *  gate a round that will already have happened, and until the phase existed it looked identical to a
+ *  post-raise goal.
+ */
 const invGoals = (doc) => {
   const equity = (doc.rounds || []).filter(r => r.kind === "equity" && r.status !== "closed");
   const goals = equity.flatMap(r => (r.goals || []).map(g => ({ ...g, round: r })));
   if (!goals.length) return { empty: "No goals set against a round yet." };
 
-  // The runway WITHOUT the round: committed only, and the rounds themselves removed.
-  const bare = { ...doc, rounds: [], settings: { ...(doc.settings || {}),
-    toggles: { committed: true, expected: false, speculative: false, financing: false } } };
-  let zero = null;
-  try {
-    const rows = buildProjection(buildModelFromDoc(bare), bare.settings.toggles);
-    zero = zeroInfo(rows, bare.startY, bare.startM);
-  } catch { zero = null; }
+  // TWO RUNWAYS, and the difference between them is the ROUND — so `financing` has to be ON for the
+  // second one. Forcing it off for both produced two identical dates and a chart that silently said
+  // the round changes nothing, which is the opposite of what it exists to show.
+  const zeroOf = (d, toggles) => {
+    try {
+      const doc2 = { ...d, settings: { ...(d.settings || {}), toggles } };
+      return zeroInfo(buildProjection(buildModelFromDoc(doc2), toggles), doc2.startY, doc2.startM);
+    } catch { return null; }
+  };
 
-  // A DAY, NOT A MONTH. `zeroInfo` already interpolates within the month it crosses zero — the
-  // dashboard has always said "5.6 months" rather than "month 5" — so rounding to a month boundary
-  // here would be inventing a precision the model never had, in the wrong direction.
-  const runsOutAt = zero?.date instanceof Date ? zero.date : null;
+  // THE ROUND'S OWN CONFIDENCE TIER DECIDES WHICH TOGGLES SHOW IT. A round at `planning` is
+  // SPECULATIVE (`INST_CONF`), so a committed-only projection excludes it — and computing the
+  // post-close runway that way produced two identical dates and a chart quietly claiming the round
+  // changes nothing. The tier the round actually sits in has to be switched on, or this measures the
+  // wrong thing and looks like it measured something.
+  const tiers = new Set(equity.map(instConf));
+  const withRoundToggles = {
+    committed: true,
+    expected: tiers.has("expected") || tiers.has("speculative"),
+    speculative: tiers.has("speculative"),
+    financing: true,
+  };
 
-  const sorted = [...goals].sort((a, b) => clean(a.dueMonth) - clean(b.dueMonth)).slice(0, 8);
+  // Pre-raise is always committed-only with the rounds removed: the round cannot fund the proof the
+  // round depends on, whatever tier it sits in.
+  const withoutRound = zeroOf({ ...doc, rounds: [] },
+                              { committed: true, expected: false, speculative: false, financing: false });
+  const withRound = zeroOf(doc, withRoundToggles);
 
-  const rows = sorted.map(g => {
+  const cashOutAt = withoutRound?.date instanceof Date ? withoutRound.date : null;
+  const afterRoundAt = withRound?.date instanceof Date ? withRound.date : null;
+
+  const row = (g) => {
     const due = clean(g.dueMonth);
     const closeM = clean(g.round.closeMonth);
     const dueAt = dateAt(doc, due);
     // The close is the END of its month, matching `roundMS` — a round does not close on the 1st.
     const closeAt = dateAt(doc, closeM + 1, 0);
-    const lateBy = runsOutAt ? Math.round((dueAt - runsOutAt) / DAY) : null;
-    return {
-      id: g.id, label: g.label || "Goal", kind: g.kind, status: g.status,
-      due, close: closeM, round: g.round.name,
-      dueAt, dueLabel: shortDate(dueAt),
-      closeAt, closeLabel: shortDate(closeAt),
-      // Two different problems needing different fixes: past the cash means unreachable at all; past
-      // the close means the goal was meant to justify a round that will already have happened.
-      beyondCash: lateBy != null && lateBy > 0,
-      afterClose: dueAt > closeAt,
-      lateBy: lateBy != null && lateBy > 0 ? lateBy : null,
-    };
-  });
+    const phase = g.phase === "post" ? "post" : "pre";
+    // A NULL DATE MEANS THE CASH NEVER RUNS OUT inside the horizon, which is the opposite of a
+    // problem — so nothing is late against it. Treating null as "no answer" and colouring the goal
+    // red would report a healthy round as a failing one.
+    const against = phase === "pre" ? cashOutAt : afterRoundAt;
+    const lateBy = against ? Math.round((dueAt - against) / DAY) : null;
 
-  // A quarter past the last goal, so the final marker is not pinned to the edge.
-  const span = Math.max(MONTHS_SHOWN, ...rows.map(r => r.due + 3));
+    return {
+      id: g.id, label: g.label || "Goal", kind: g.kind, status: g.status, phase,
+      due, close: closeM, round: g.round.name,
+      dueAt, dueLabel: shortDate(dueAt), closeAt, closeLabel: shortDate(closeAt),
+      beyondCash: lateBy != null && lateBy > 0,
+      lateBy: lateBy != null && lateBy > 0 ? lateBy : null,
+      // FILED IN THE WRONG PHASE, and the two errors are opposites. A pre-raise goal after the close
+      // cannot gate the round; a post-raise goal before it is spending money that has not arrived.
+      misfiled: phase === "pre" ? dueAt > closeAt : dueAt <= closeAt,
+    };
+  };
+
+  const pre = goals.filter(g => g.phase !== "post").map(row).sort((a, b) => a.due - b.due);
+  const post = goals.filter(g => g.phase === "post").map(row).sort((a, b) => a.due - b.due);
+
+  const lastDue = Math.max(0, ...[...pre, ...post].map(r => r.due));
+  const span = Math.max(MONTHS_SHOWN, lastDue + 3,
+                        Number.isFinite(withRound?.months) ? Math.ceil(withRound.months) + 2 : 0);
+
+  const unreachable = pre.filter(r => r.beyondCash).length;
 
   return {
     kind: "goals",
-    rows,
+    pre, post,
+    rows: [...pre, ...post],                       // for anything that wants a flat list
     ticks: axisTicks(doc, span),
-    runsOut: zero?.months ?? null,
-    runsOutAt,
-    runsOutLabel: shortDate(runsOutAt),
-    closeAt: rows[0]?.closeAt ?? null,
-    closeLabel: rows[0]?.closeLabel ?? "",
     span,
+    closeM: pre[0]?.close ?? post[0]?.close ?? null,
+    closeLabel: pre[0]?.closeLabel ?? post[0]?.closeLabel ?? "",
+    cashOut: withoutRound?.months ?? null,
+    cashOutLabel: shortDate(cashOutAt),
+    afterRound: withRound?.months ?? null,
+    // Said in words rather than left blank: "beyond the horizon" is an answer, an empty date is a bug.
+    afterRoundLabel: afterRoundAt ? shortDate(afterRoundAt) : `beyond ${HORIZON} months`,
+    afterRoundEndless: !afterRoundAt,
     format: "count",
-    note: !runsOutAt
-      ? "Cash lasts past every goal without the round."
-      : `Without this round the cash runs out on ${shortDate(runsOutAt)}.`,
+    note: !pre.length
+      ? "No pre-raise goals set, so nothing is gating this round."
+      : unreachable
+        ? `${unreachable} of ${pre.length} pre-raise goals fall after the cash runs out on ` +
+          `${shortDate(cashOutAt)}. The round cannot fund the evidence the round depends on.`
+        : `All ${pre.length} pre-raise goals land before the cash runs out.`,
+    // A round with no post-raise goals is a use of funds nobody has written down. Worth saying, and
+    // not the same as having none to show.
+    postNote: post.length ? null : "No post-raise goals yet — nothing says what the round buys.",
   };
 };
 

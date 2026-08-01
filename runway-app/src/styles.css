@@ -3,7 +3,7 @@
   --ink:#0C1A22; --ink-2:#16323E; --ink-3:#22454F;
   --paper:#E9EEEC; --card:#FDFEFE; --line:#D4DCD8; --line-2:#E3E9E6;
   --signal:#10876B; --signal-2:#4FB79A; --signal-ink:#0B5F4B;
-  --caution:#C9821B; --danger:#BC3B2A;
+  --caution:#C9821B; --danger:#BC3B2A; --raise:#275281;
   --ink-txt:#0C1A22; --muted:#5E7076; --muted-2:#8698A0; --on-dark:#DCE7E7; --on-dark-mute:#7E979D;
   --fd:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
   --fb:'Hanken Grotesk',ui-sans-serif,system-ui,sans-serif;
@@ -1045,3 +1045,4 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .ch-f{font-family:var(--fb);font-size:9px;font-weight:600}
 .ch-g{font-family:var(--fb);font-size:10.5px;fill:var(--ink)}
 .ch-d{font-family:var(--fm);font-size:9px}
+.ch-p{font-family:var(--fb);font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}

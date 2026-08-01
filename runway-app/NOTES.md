@@ -1376,6 +1376,41 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Investment goals have a PHASE — schema v4
+
+A round has goals pointing in **both directions**, and the model was treating them as one list. That is
+why the goals chart read oddly: it measured both against the same runway and flagged the wrong half as
+late.
+
+- **Pre-raise** — the evidence investors need before they wire. 5 kW stack, $1m booked. Must land
+  before the close, on the money you ALREADY HAVE, because the round cannot fund the proof the round
+  depends on. Measured against the runway with rounds removed.
+- **Post-raise** — what the money is for. Scale to 50 kW, hire twelve. After the close by definition,
+  measured against the runway the round CREATES.
+
+**`lateGoals` was exactly backwards for half of them.** It flagged anything due after the close; a
+post-raise goal SHOULD be after it. What is actually wrong is a PRE-raise goal filed after the close —
+it cannot gate a round that will already have happened, and until the phase existed it looked identical
+to a post-raise goal. Both errors are now `misfiled`, tested in opposite directions.
+
+**Migration infers the phase** from `dueMonth <= closeMonth`, which is right for every goal written
+before the field existed and moves nothing already filed correctly.
+
+**TWO BUGS FOUND BY RUNNING IT, both of which produced a plausible-looking chart:**
+
+1. **Both runways came out identical**, because I forced `financing: false` for both — which strips the
+   round's own inflow from the "with round" case. The chart silently claimed the round changes nothing.
+2. **The round is `status: "planning"`, which is a SPECULATIVE tier** (`INST_CONF`), so a
+   committed-only projection excludes it entirely. The post-close runway has to be computed at the
+   round's own tier, or it measures the wrong thing and looks like it measured something.
+
+**A null cash-out date means the runway outlasts the horizon** — the opposite of a problem. Treating it
+as "no answer" and colouring those goals red would report a healthy round as a failing one.
+
+**`ledger.test.jsx` broke on the schema bump** because it asserted `schemaVersion === 3` as a literal.
+Now pinned to `SCHEMA_VERSION`: the assertion means "it walked the whole chain", and a literal made it
+fail for a reason that had nothing to do with ledgers.
+
 ## Projects moved out of the document — 3.8, four migrations
 
 `documents.body` no longer carries `projects`. They live one row each in `project_docs`, ordered by

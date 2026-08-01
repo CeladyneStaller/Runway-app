@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc, migrate } from "../../src/state/document";
+import { demoDoc, migrate, SCHEMA_VERSION } from "../../src/state/document";
 
 function open(doc) {
   let d = doc;
@@ -33,7 +33,10 @@ describe("the spend ledger", () => {
   it("a v1 document migrates to a ledger without losing its totals", () => {
     const v1 = { schemaVersion: 1, cash: 100000, history: [{ mo: "Jan", v: 50000, note: "x" }], settings: {} };
     const d = migrate(v1);
-    expect(d.schemaVersion).toBe(3);   // migrates through the full chain, not just to v2
+    // THE CURRENT VERSION, not a hard-coded number that has to be edited on every schema bump — the
+    // point of the assertion is "it walked the whole chain", and pinning a literal made it fail when
+    // v4 arrived for a reason that had nothing to do with ledgers.
+    expect(d.schemaVersion).toBe(SCHEMA_VERSION);
     expect(d.history[0].lines).toEqual([{ code: "", amount: 50000, note: "x" }]);
   });
 });
