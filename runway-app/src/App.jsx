@@ -31,7 +31,7 @@ import { confidenceBand } from "./engine/band";
 import { makeSnapshot, dueForSnapshot, appendSnapshot, worthSnapshotting } from "./engine/journal";
 import { useHashRoute } from "./state/hashroute";
 import { Scenarios } from "./views/Scenarios";
-import { anchorToActuals, balanceAtDate, buildProjection, zeroInfo } from "./engine/projection";
+import { anchorToActuals, balanceAtDate, buildProjection, solvency, zeroInfo } from "./engine/projection";
 import { blankFulfillment, devLines, poDevNeeded, poNeedsReview } from "./engine/sales";
 import { HORIZON, dateLong, dateShort, dateStamp, monthLong, uid } from "./engine/time";
 import { StartCtx } from "./state/StartCtx";
@@ -222,11 +222,22 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
   // `pass` and `gap` are computed HERE, once, and read everywhere. The dashboard used to re-derive
   // `bal >= 0` in three places; with targets in play that would let the headline call a date green
   // while the panel below called it a shortfall.
+  // ONE SOLVENCY READING, shared by every milestone. A projection can dip below zero and recover when
+  // a receipt lands, and the arithmetic does not know that a company with no cash in January never
+  // reaches March — so a date judged only on its own balance reads green while being unreachable.
+  const solv = useMemo(() => solvency(rows, startY, startM), [rows, startY, startM]);
+
   const msWithBal = [...milestones, ...roundMS(rounds, startY, startM)].map(ms => {
     const b = balanceAtDate(rows, startY, startM, ms.y, ms.m, ms.day);
     const bal = b?.bal ?? 0;
-    return { ...ms, bal, t: b?.t ?? 0, date: new Date(ms.y, ms.m, ms.day),
-             target: msTarget(ms), pass: msPass(bal, ms), gap: msGap(bal, ms) };
+    const t = b?.t ?? 0;
+    // TWO SEPARATE FACTS, kept separate. `pass` is about the balance on the day against its target;
+    // `stranded` is about whether the company survives to see it. Collapsing them into one boolean is
+    // what produced a green chip on a milestone the company never reaches.
+    const stranded = !!solv?.strandedAt(t);
+    return { ...ms, bal, t, date: new Date(ms.y, ms.m, ms.day),
+             target: msTarget(ms), pass: msPass(bal, ms), gap: msGap(bal, ms),
+             stranded, bridge: stranded ? solv.bridgeTo(t) : 0 };
   }).sort((a, b) => a.t - b.t);
 
   const netBurn = rows.slice(0, 3).reduce((a, r) => a + r.net, 0) / 3;

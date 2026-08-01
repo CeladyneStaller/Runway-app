@@ -432,3 +432,174 @@ describe("the milestones chart", () => {
     expect(spec([]).empty).toMatch(/No critical dates/);
   });
 });
+
+describe("solvency — cash crosses zero and comes back", () => {
+  const rowsOf = (ends) => ends.map((end, m) => ({
+    m, start: m === 0 ? 100 : ends[m - 1], end, net: 0, in: 0, out: 0, cost: 0,
+  }));
+
+  it("returns null when the balance never goes negative", async () => {
+    // The common case, and the one where this must cost nothing and change nothing.
+    const { solvency } = await import("../../src/engine/projection.js");
+    expect(solvency(rowsOf([100, 90, 80, 70]), 2026, 0)).toBeNull();
+  });
+
+  it("names the hole, its depth and when it recovers", async () => {
+    const { solvency } = await import("../../src/engine/projection.js");
+    const s = solvency(rowsOf([100, -50, -80, -20, 40, 60]), 2026, 0);
+    expect(s).toBeTruthy();
+    expect(s.deepest).toBe(80);
+    expect(s.recoversT).not.toBeNull();
+    expect(s.daysUnderwater).toBeGreaterThan(0);
+  });
+
+  it("says recoversAt is NULL when it never comes back", async () => {
+    // A different statement from a long hole, and it must not render as one.
+    const { solvency } = await import("../../src/engine/projection.js");
+    const s = solvency(rowsOf([100, -50, -80, -120]), 2026, 0);
+    expect(s.recoversAt).toBeNull();
+    expect(s.daysUnderwater).toBeNull();
+  });
+
+  it("handles TWO holes, taking the worst as `deepest`", async () => {
+    const { solvency } = await import("../../src/engine/projection.js");
+    const s = solvency(rowsOf([100, -30, 20, 50, -90, -60, 10]), 2026, 0);
+    expect(s.holes).toHaveLength(2);
+    expect(s.deepest).toBe(90);
+  });
+
+  it("bridges to a DATE, not to the worst hole overall", async () => {
+    // The reason this is per-date: with one global number every date after the first crossing looks
+    // equally doomed and the chart stops discriminating between a $200 dip and a $188k hole.
+    const { solvency } = await import("../../src/engine/projection.js");
+    const s = solvency(rowsOf([100, -30, 20, 50, -90, -60, 10]), 2026, 0);
+    expect(s.bridgeTo(2)).toBe(30);      // only the first hole is behind us
+    expect(s.bridgeTo(6)).toBe(90);      // both
+    expect(s.bridgeTo(6)).toBeGreaterThan(s.bridgeTo(2));
+  });
+
+  it("marks anything past the FIRST crossing as stranded, however healthy its own balance", async () => {
+    // THE WHOLE POINT. A company with no cash in January does not reach March, and the arithmetic does
+    // not know that. Judging a date on its own balance was a false green.
+    const { solvency } = await import("../../src/engine/projection.js");
+    const s = solvency(rowsOf([100, -50, -80, -20, 40, 60]), 2026, 0);
+    expect(s.strandedAt(5)).toBe(true);   // positive balance, still stranded
+    expect(s.strandedAt(0)).toBe(false);
+  });
+
+  it("flags a shallow brief dip too, but the NUMBER carries the severity", async () => {
+    // Zero is zero, so it is flagged — but $200 for four days and $188k for four months must be
+    // distinguishable, and the colour cannot do that. The number can.
+    const { solvency } = await import("../../src/engine/projection.js");
+    const s = solvency(rowsOf([1000, -200, 800, 900]), 2026, 0);
+    expect(s).toBeTruthy();
+    expect(s.deepest).toBe(200);
+  });
+
+  it("survives empty and malformed input", async () => {
+    const { solvency } = await import("../../src/engine/projection.js");
+    expect(solvency([], 2026, 0)).toBeNull();
+    expect(solvency(null, 2026, 0)).toBeNull();
+  });
+});
+
+describe("the milestones chart, with solvency", () => {
+  const doc = demoDoc();
+  const base = (over = {}) => ({
+    id: "m1", label: "Product launch", t: 14, date: new Date(2027, 0, 15),
+    bal: 16080, target: 0, pass: true, gap: 16080, ...over,
+  });
+  const spec = (rows) => buildChart("ms.runway", doc, { ...parts(doc), msWithBal: rows });
+
+  it("rings a date that is SOLVENT on the day but stranded before it", () => {
+    // The case that started all of this: $16,080 in the bank, and the company does not get there.
+    const s = spec([base({ stranded: true, bridge: 37851 })]);
+    expect(s.rows[0].stranded).toBe(true);
+    expect(s.rows[0].negative).toBe(false);
+    expect(s.rows[0].bridge).toBe(37851);
+  });
+
+  it("keeps the dot green while the ring is red", () => {
+    // Two facts, two marks. `negative` drives the fill; `stranded` drives the ring.
+    const s = spec([base({ stranded: true, bridge: 1000 })]);
+    expect(s.rows[0].negative).toBe(false);
+  });
+
+  it("does not call a stranded date 'short of target'", () => {
+    // Two verdicts on one row. A date the company never reaches is not short, it is not happening.
+    const s = spec([base({ stranded: true, bridge: 500, target: 250000, gap: -233920 })]);
+    expect(s.rows[0].short).toBe(false);
+  });
+
+  it("leaves everything alone when nothing is stranded", () => {
+    const s = spec([base({ stranded: false, bridge: 0 })]);
+    expect(s.rows[0].stranded).toBe(false);
+    expect(s.rows[0].bridge).toBeNull();
+    expect(s.note).toMatch(/Every date is reached|short of the target/);
+  });
+});
+
+describe("goals — each phase against its own solvency", () => {
+  const doc = demoDoc();
+  const withPost = (over = {}) => ({
+    ...doc,
+    rounds: (doc.rounds || []).map(r => (r.kind === "equity" && r.status !== "closed"
+      ? { ...r, goals: [...(r.goals || []), {
+          id: "pg1", label: "Scale to 50 kW", kind: "technical",
+          dueMonth: (r.closeMonth ?? 8) + 6, status: "not-started", phase: "post", ...over,
+        }] }
+      : r)),
+  });
+
+  it("measures post-raise goals against the FINANCING-INCLUDED speculative runway", () => {
+    // The money the round creates is what pays for them, so excluding it would judge them against a
+    // runway that was never the plan. With a $6m round the financed runway outlasts the horizon, so a
+    // post-raise goal well after the close is not stranded.
+    const d = withPost();
+    const s = buildChart("inv.goals", d, parts(d));
+    expect(s.post).toHaveLength(1);
+    expect(s.post[0].stranded).toBe(false);
+    expect(s.afterRoundEndless || s.afterRound > s.cashOut).toBe(true);
+  });
+
+  it("still strands PRE-raise goals against the unfinanced runway", () => {
+    const d = withPost();
+    const s = buildChart("inv.goals", d, parts(d));
+    const stranded = s.pre.filter(r => r.stranded);
+    expect(stranded.length).toBeGreaterThan(0);
+    for (const r of stranded) expect(r.bridge).toBeGreaterThan(0);
+  });
+
+  it("grows the bridge with distance, so goals are not all equally doomed", () => {
+    // One global number would make every goal after the crossing look the same. Per-goal, a goal two
+    // months out and one six months out are different problems.
+    const d = withPost();
+    const s = buildChart("inv.goals", d, parts(d));
+    const bridges = s.pre.filter(r => r.bridge).map(r => r.bridge);
+    if (bridges.length > 1) {
+      expect(bridges[bridges.length - 1]).toBeGreaterThanOrEqual(bridges[0]);
+    }
+  });
+
+  it("says when a post-raise goal is stranded by a PRE-ROUND hole", () => {
+    // A different sentence: the money that pays for it never arrives, because the company does not
+    // reach the close. Same flag would have read as "the round was not enough".
+    const d = withPost();
+    const s = buildChart("inv.goals", d, parts(d));
+    for (const r of s.post) {
+      if (r.strandedBeforeRound) expect(r.stranded).toBe(true);
+      expect(typeof r.strandedBeforeRound).toBe("boolean");
+    }
+  });
+
+  it("keeps misfiling separate from stranding", () => {
+    // A goal can be filed in the wrong phase AND unreachable; they are different fixes and must not
+    // collapse into one mark.
+    const d = withPost();
+    const s = buildChart("inv.goals", d, parts(d));
+    for (const r of s.rows) {
+      expect(typeof r.misfiled).toBe("boolean");
+      expect(typeof r.stranded).toBe("boolean");
+    }
+  });
+});

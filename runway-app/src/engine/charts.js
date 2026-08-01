@@ -13,7 +13,7 @@
 // `empty` is a SENTENCE, not a flag. A chart with nothing to draw should say what is missing — "no
 // spend history yet" — rather than render an empty box that looks like a bug.
 
-import { buildProjection, zeroInfo } from "./projection.js";
+import { buildProjection, zeroInfo, solvency } from "./projection.js";
 import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, monthRevenue, isCost, lineAmount, lineCode, resolveLine, OVERHEAD } from "./coding.js";
@@ -107,6 +107,11 @@ const flowRunway = (doc) => {
   // fell back to its empty state — while the tests passed, because they accepted "said why not" as an
   // outcome without checking that the DEFAULT charts actually draw.
   const z = band.expected?.zero;
+  let solv = null;
+  try {
+    solv = solvency(buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {}),
+                    doc.startY, doc.startM);
+  } catch { solv = null; }
   return {
     kind: "lines",
     x: months(doc), ticks: axisTicks(doc),
@@ -116,6 +121,12 @@ const flowRunway = (doc) => {
     markers: Number.isFinite(z) && z < MONTHS_SHOWN
       ? [{ x: z, label: `${z.toFixed(1)} mo`, tone: "danger" }] : [],
     format: "money",
+    // THE HOLE, so a recovery stops reading as good news. The line already dips; naming the gap is
+    // what stops somebody seeing the far side and thinking the money is there.
+    underwater: solv ? {
+      fromT: solv.zeroT, toT: solv.recoversT,
+      deepest: solv.deepest, days: solv.daysUnderwater,
+    } : null,
     // THE POINT OF THIS CHART. A single line says 5.6 months and invites a plan built on it; the band
     // says where the answer actually sits, using how wrong past forecasts have been.
     note: Number.isFinite(band.floor?.zero) && band.ceiling?.zeroNull
@@ -475,11 +486,18 @@ const invGoals = (doc) => {
   // TWO RUNWAYS, and the difference between them is the ROUND — so `financing` has to be ON for the
   // second one. Forcing it off for both produced two identical dates and a chart that silently said
   // the round changes nothing, which is the opposite of what it exists to show.
-  const zeroOf = (d, toggles) => {
+  // BOTH RUNWAYS GET A FULL SOLVENCY READING, not just a zero date. A goal on the far side of a hole
+  // is unreachable however healthy the balance looks on its own day — the same rule the milestones
+  // chart follows — and each phase needs the bridge that would close ITS hole.
+  const readOf = (d, toggles) => {
     try {
       const doc2 = { ...d, settings: { ...(d.settings || {}), toggles } };
-      return zeroInfo(buildProjection(buildModelFromDoc(doc2), toggles), doc2.startY, doc2.startM);
-    } catch { return null; }
+      const rows = buildProjection(buildModelFromDoc(doc2), toggles);
+      return {
+        zero: zeroInfo(rows, doc2.startY, doc2.startM),
+        solv: solvency(rows, doc2.startY, doc2.startM),
+      };
+    } catch { return { zero: null, solv: null }; }
   };
 
   // THE ROUND'S OWN CONFIDENCE TIER DECIDES WHICH TOGGLES SHOW IT. A round at `planning` is
@@ -497,9 +515,14 @@ const invGoals = (doc) => {
 
   // Pre-raise is always committed-only with the rounds removed: the round cannot fund the proof the
   // round depends on, whatever tier it sits in.
-  const withoutRound = zeroOf({ ...doc, rounds: [] },
-                              { committed: true, expected: false, speculative: false, financing: false });
-  const withRound = zeroOf(doc, withRoundToggles);
+  const preRead = readOf({ ...doc, rounds: [] },
+                         { committed: true, expected: false, speculative: false, financing: false });
+  // POST-RAISE GOALS ARE MEASURED AGAINST THE FINANCING-INCLUDED SPECULATIVE RUNWAY — the money the
+  // round creates is what pays for them, so excluding it would judge them against a runway that was
+  // never the plan.
+  const postRead = readOf(doc, withRoundToggles);
+  const withoutRound = preRead.zero;
+  const withRound = postRead.zero;
 
   const cashOutAt = withoutRound?.date instanceof Date ? withoutRound.date : null;
   const afterRoundAt = withRound?.date instanceof Date ? withRound.date : null;
@@ -511,21 +534,37 @@ const invGoals = (doc) => {
     // The close is the END of its month, matching `roundMS` — a round does not close on the 1st.
     const closeAt = dateAt(doc, closeM + 1, 0);
     const phase = g.phase === "post" ? "post" : "pre";
+    // EACH PHASE AGAINST ITS OWN PROJECTION. Pre-raise against the money already in hand; post-raise
+    // against the financing-included speculative runway, because that is what pays for them.
+    const read = phase === "pre" ? preRead : postRead;
+
     // A NULL DATE MEANS THE CASH NEVER RUNS OUT inside the horizon, which is the opposite of a
-    // problem — so nothing is late against it. Treating null as "no answer" and colouring the goal
-    // red would report a healthy round as a failing one.
+    // problem — so nothing is late against it. Treating null as "no answer" and colouring the goal red
+    // would report a healthy round as a failing one.
     const against = phase === "pre" ? cashOutAt : afterRoundAt;
     const lateBy = against ? Math.round((dueAt - against) / DAY) : null;
+
+    // STRANDED IS THE REAL TEST, not the date arithmetic. A goal after a hole is unreachable even if
+    // its own day looks solvent, and the bridge is the deficit standing between now and it.
+    const stranded = !!read.solv?.strandedAt(due);
+    const bridge = stranded ? clean(read.solv.bridgeTo(due)) : 0;
+    // A POST-RAISE GOAL CAN BE STRANDED BY A PRE-ROUND HOLE, which is a different sentence: the money
+    // that pays for it never arrives because the company does not reach the close.
+    const beforeClose = dueAt <= closeAt;
+    const strandedBeforeRound = stranded && phase === "post" &&
+      Number.isFinite(read.solv?.zeroT) && read.solv.zeroT <= clean(g.round.closeMonth);
 
     return {
       id: g.id, label: g.label || "Goal", kind: g.kind, status: g.status, phase,
       due, close: closeM, round: g.round.name,
       dueAt, dueLabel: shortDate(dueAt), closeAt, closeLabel: shortDate(closeAt),
-      beyondCash: lateBy != null && lateBy > 0,
+      beyondCash: stranded || (lateBy != null && lateBy > 0),
+      stranded, strandedBeforeRound,
+      bridge: bridge > 0 ? bridge : null,
       lateBy: lateBy != null && lateBy > 0 ? lateBy : null,
       // FILED IN THE WRONG PHASE, and the two errors are opposites. A pre-raise goal after the close
       // cannot gate the round; a post-raise goal before it is spending money that has not arrived.
-      misfiled: phase === "pre" ? dueAt > closeAt : dueAt <= closeAt,
+      misfiled: phase === "pre" ? !beforeClose : beforeClose,
     };
   };
 
@@ -586,20 +625,27 @@ const invMilestones = (doc, parts) => {
   if (!ms.length) return { empty: "No critical dates set yet." };
 
   const rows = parts?.rows || [];
-  let zero = null;
-  try { zero = zeroInfo(rows, doc.startY, doc.startM); } catch { zero = null; }
+  let zero = null, solv = null;
+  try {
+    zero = zeroInfo(rows, doc.startY, doc.startM);
+    solv = solvency(rows, doc.startY, doc.startM);
+  } catch { zero = null; solv = null; }
   const cashOutAt = zero?.date instanceof Date ? zero.date : null;
 
   const row = (m) => {
     const at = m.date instanceof Date ? m.date : dateAt(doc, clean(m.t));
-    // JUDGED ON ITS OWN BALANCE, NOT ON THE CLIFF. `zeroInfo` reports the FIRST crossing, and cash can
-    // dip below zero and recover when a receipt lands — so a date after the cliff can still have money
-    // in the bank. Reading it off the cliff produced "29 days past the cash" beside a balance of
-    // +$16,080, which is a chart contradicting itself in the same sentence.
+    // TWO FACTS, KEPT SEPARATE, because collapsing them is what got this wrong twice. The balance on
+    // the day says whether there is money; `stranded` says whether the company survives to see it.
+    // A date can be solvent on its own and unreachable — +$16,080 in the bank, and insolvent since
+    // December — and a single boolean cannot hold that.
     //
-    // `balanceAtDate` already gives the exact figure for that day. The cliff stays as context.
-    const beyondCash = clean(m.bal) < 0;
-    const lateBy = beyondCash && cashOutAt ? Math.round((at - cashOutAt) / DAY) : null;
+    // Judging on the balance alone was a FALSE GREEN; judging on the cliff alone printed "29 days past
+    // the cash" beside a positive balance. Both facts, both shown.
+    const stranded = !!m.stranded;
+    const negative = clean(m.bal) < 0;
+    const beyondCash = stranded || negative;
+    const bridge = clean(m.bridge);
+    const lateBy = stranded && cashOutAt ? Math.round((at - cashOutAt) / DAY) : null;
     const target = clean(m.target);
     const gap = clean(m.gap);
     return {
@@ -607,10 +653,16 @@ const invMilestones = (doc, parts) => {
       due: clean(m.t), dueAt: at, dueLabel: shortDate(at),
       bal: clean(m.bal), target, pass: !!m.pass, gap,
       fromRound: !!m.fromRound,
-      beyondCash,
+      beyondCash, stranded, negative,
+      // THE BRIDGE IS THE DEEPEST DEFICIT BEFORE THIS DATE, not the worst overall — otherwise every
+      // date after the first crossing looks equally doomed and the chart stops discriminating between
+      // a $200 dip and a $188k hole.
+      bridge: bridge > 0 ? bridge : null,
       lateBy: lateBy && lateBy > 0 ? lateBy : null,
       // REACHED BUT SHORT — the case only milestones have. Only meaningful when the date is actually
       // reachable: a milestone past the cash is not "short of target", it is not happening.
+      // "Short of target" is a shortfall to close. A date the company never reaches is not short, it
+      // is not happening — and saying both would be two verdicts on one row.
       short: !beyondCash && target > 0 && gap < 0,
       shortBy: !beyondCash && target > 0 && gap < 0 ? Math.abs(gap) : null,
     };
@@ -622,7 +674,8 @@ const invMilestones = (doc, parts) => {
   const last = Math.max(0, ...[...mine, ...fromRound].map(r => r.due));
   const span = Math.max(MONTHS_SHOWN, Math.ceil(last) + 3);
 
-  const missed = [...mine, ...fromRound].filter(r => r.beyondCash).length;   // negative on the day
+  const missed = [...mine, ...fromRound].filter(r => r.beyondCash).length;
+  const biggestBridge = Math.max(0, ...[...mine, ...fromRound].map(r => clean(r.bridge)));
   const shortOf = [...mine, ...fromRound].filter(r => r.short).length;
 
   return {
@@ -634,10 +687,22 @@ const invMilestones = (doc, parts) => {
     cashOut: zero?.months ?? null,
     cashOutLabel: cashOutAt ? shortDate(cashOutAt) : `beyond ${HORIZON} months`,
     cashOutEndless: !cashOutAt,
+    // The hole is BOUNDED where cash recovers. Shading to the edge would make a 61-day gap and a
+    // permanent one look identical, and they are different conversations.
+    recoversT: solv?.recoversT ?? null,
+    recoversLabel: solv?.recoversAt ? shortDate(solv.recoversAt) : null,
+    deepest: solv?.deepest ?? null,
+    deepestAt: solv?.deepestAt ?? null,
+    deepestLabel: solv?.deepestAt ? shortDate(solv.deepestAt) : null,
+    daysUnderwater: solv?.daysUnderwater ?? null,
+    biggestBridge: biggestBridge > 0 ? biggestBridge : null,
     format: "money",
     note: missed
-      ? `${plural(missed, "date arrives", "dates arrive")} with no money in the bank` +
-        (cashOutAt ? `; cash first runs out on ${shortDate(cashOutAt)}.` : ".")
+      ? `${plural(missed, "date is", "dates are")} unreachable without bridging` +
+        (cashOutAt ? `; cash runs out on ${shortDate(cashOutAt)}` : "") +
+        // NO CURRENCY FORMATTING IN THE ENGINE. `money` is a view concern and importing it here would
+        // put a locale decision in a pure module. The renderer formats `biggestBridge`.
+        "."
       : shortOf
         ? `${plural(shortOf, "date is", "dates are")} reached but short of the target set for it.`
         : "Every date is reached with its target met.",

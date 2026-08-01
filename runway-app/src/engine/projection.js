@@ -61,6 +61,83 @@ export function zeroInfo(rows, startY, startM) {
   return null;
 }
 
+/** When the company is insolvent, how deep, and for how long.
+ *
+ *  A PROJECTION CAN DIP BELOW ZERO AND COME BACK — a grant draw lands, an invoice clears — and the
+ *  arithmetic does not know that a company with no cash in January does not reach March. Anything
+ *  reading the balance ON A DATE rather than the first crossing will call that March date healthy.
+ *  This is the one place that knows otherwise, so nothing computes "when do we die" twice.
+ *
+ *  `deepest` IS THE BRIDGE. The worst balance during a hole is exactly the money that has to be found
+ *  to cross it, which is what turns a colour into something somebody can act on. Held as a positive
+ *  number: it is an amount required, not a balance.
+ *
+ *  Returns null when the balance never goes negative — the common case, and the one where this must
+ *  cost nothing and change nothing.
+ */
+export function solvency(rows, startY, startM) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+
+  const zero = zeroInfo(rows, startY, startM);
+  if (!zero) return null;
+
+  // Every stretch below zero, not just the first: a model can cross, recover and cross again, and the
+  // bridge to a date in the second hole has nothing to do with the first one.
+  const holes = [];
+  let open = null;
+  rows.forEach((r, i) => {
+    const low = Math.min(r.start, r.end);
+    if (low < 0) {
+      if (!open) open = { fromT: i, deepest: 0, deepestT: i };
+      if (-low > open.deepest) { open.deepest = -low; open.deepestT = i; }
+    } else if (open) {
+      open.toT = i;
+      holes.push(open);
+      open = null;
+    }
+  });
+  if (open) { open.toT = null; holes.push(open); }        // still underwater at the horizon
+  if (!holes.length) return null;
+
+  const atT = (t) => (t == null ? null
+    : new Date(startY, startM + Math.floor(t), Math.max(1, Math.round((t % 1) * 28) + 1)));
+
+  const first = holes[0];
+  const deepest = Math.max(...holes.map(h => h.deepest));
+  const worst = holes.find(h => h.deepest === deepest);
+  const recoversT = first.toT;
+
+  return {
+    zeroT: zero.t,
+    zeroAt: zero.date,
+    deepest,
+    deepestAt: atT(worst.deepestT),
+    recoversT,
+    recoversAt: atT(recoversT),
+    // Null means it never comes back inside the horizon, which is a different statement from a long
+    // hole and must not be rendered as one.
+    daysUnderwater: recoversT == null ? null : Math.round((recoversT - zero.t) * 30.44),
+    holes: holes.map(h => ({ fromT: h.fromT, toT: h.toT, deepest: h.deepest })),
+
+    /** The bridge needed to REACH a given month offset: the worst deficit before it, not the worst
+     *  overall. Using one global number would make every date after the first crossing look equally
+     *  doomed, and the chart would stop discriminating between a $200 dip and a $188k hole. */
+    bridgeTo(t) {
+      if (!Number.isFinite(t)) return 0;
+      let need = 0;
+      for (const r of rows) {
+        if (r.m > t) break;
+        const low = Math.min(r.start, r.end);
+        if (low < 0) need = Math.max(need, -low);
+      }
+      return need;
+    },
+
+    /** Is this month offset on the far side of the first crossing? */
+    strandedAt(t) { return Number.isFinite(t) && t > zero.t; },
+  };
+}
+
 export function balanceAtDate(rows, startY, startM, y, m, day) {
   const idx = (y - startY) * 12 + (m - startM);
   if (idx < 0 || idx >= rows.length) return null;

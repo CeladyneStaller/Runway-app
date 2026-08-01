@@ -1376,6 +1376,54 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Cash crossing zero and recovering — `solvency()`
+
+A projection can dip below zero in January and be positive again in March, because a receipt lands. The
+arithmetic does not know that **a company with no cash in January does not reach March**. Anything
+reading the balance ON A DATE, rather than the first crossing, calls that March date healthy.
+
+**I got this wrong in both directions before getting it right.** First the milestones chart judged each
+date against the first crossing and printed "29 days past the cash" beside a balance of +$16,080 — I
+read that as a bug in the VERDICT and changed it to judge on the balance alone, which was a false green.
+The verdict had been right; the EXPLANATION was wrong.
+
+**`solvency(rows, startY, startM)`** in `engine/projection.js`, beside `zeroInfo`, is now the only thing
+that computes this: `zeroAt`, `deepest`, `deepestAt`, `recoversAt`, `daysUnderwater`, `holes[]`,
+`bridgeTo(t)`, `strandedAt(t)`. Returns null when the balance never goes negative, so the common case
+costs nothing.
+
+**Two facts, kept separate, because collapsing them is what failed twice.** `bal` says whether there is
+money on the day; `stranded` says whether the company survives to see it. The dot is the balance, the
+ring is reachability — a green dot in a red ring is "solvent that day, insolvent before it", which no
+single colour can hold.
+
+**The bridge is per-date, not global.** `bridgeTo(t)` is the worst deficit BEFORE that date. One global
+number would make every date after the crossing look equally doomed; per-date, Product launch needs
+$37,851 and Series A close needs $107,511, which are different problems.
+
+**`msPass` gained a third state at the view**, not a second boolean: reachable / needs bridging / not
+reachable. "Pass or fail" cannot hold "solvent that day but dead before it".
+
+**POST-RAISE GOALS NOW USE THE FINANCING-INCLUDED SPECULATIVE RUNWAY**, and both phases get a full
+`solvency` reading rather than a date comparison. The money the round creates is what pays for
+post-raise goals, so measuring them against anything else judges them against a runway that was never
+the plan. Each phase brings its own bridge: a pre-raise goal's bridge closes the hole before the close,
+a post-raise goal's closes whatever hole remains in the financed projection.
+
+**A post-raise goal stranded by a PRE-ROUND hole gets its own sentence** — "the round never lands" —
+because the money that pays for it never arrives. The same flag would have read as "the round was not
+enough", which is a different problem with a different fix.
+
+**FALSE-GREEN SITES FOUND BY THE AUDIT:** `invMilestones`, `msPass`/`msGap`, `Milestones.jsx`,
+`msWithBal`, and `invGoals` post-raise. Everything asking "when do we run out" — dashboard, portfolio,
+alerts, bands, labor, scenarios, stats — was already correct. The fix went into `msWithBal`, where the
+two meet, so one flag serves the chart, the view and the chips.
+
+**A LINT ERROR CAUGHT AN EDIT LANDING IN THE WRONG FUNCTION.** `Goals` and `Milestones` share nearly
+identical markup, so the recovery-marker anchor matched `Goals` first — where `spec.recoversT` does not
+exist. It would not have thrown at runtime (the guard is falsy, so the JSX never evaluates), and the
+marker would simply never have appeared in either chart.
+
 ## Milestones became a timeline, matching the goals chart
 
 Same shape — one calendar, two bands, dates on every row — because they are the same question asked

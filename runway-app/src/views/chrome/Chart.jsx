@@ -121,6 +121,28 @@ function Lines({ spec }) {
                    `L${xAt(spec.band.lo.length - 1 - i, n)} ${s.y(spec.band.lo[spec.band.lo.length - 1 - i])}`).join(" ")} Z`}
               fill="var(--signal-2)" opacity="0.18" />
       )}
+      {/* THE UNDERWATER STRETCH, filled and hatched. The line already dips below zero; without this
+          the recovery on the far side reads as good news rather than as a gap somebody has to cross
+          with money they do not yet have. */}
+      {spec.underwater && Number.isFinite(spec.underwater.fromT) && (() => {
+        const u = spec.underwater;
+        const x0 = xAt(u.fromT, n);
+        const x1 = u.toT == null ? W - PAD.r : xAt(u.toT, n);
+        return (
+          <g>
+            <rect x={x0} y={s.zero} width={Math.max(0, x1 - x0)}
+                  height={Math.max(0, PAD.t + PH - s.zero)} fill="var(--danger)" opacity="0.14" />
+            <line x1={x0} y1={PAD.t} x2={x0} y2={PAD.t + PH} stroke="var(--danger)" strokeWidth="1.4" />
+            {u.deepest != null && (
+              <text x={(x0 + x1) / 2} y={PAD.t + PH - 4} textAnchor="middle" className="ch-d"
+                    fill="var(--danger)">
+                {u.days != null ? `${u.days} days underwater · ` : "underwater · "}
+                deepest {fmt(u.deepest, "money")}
+              </text>
+            )}
+          </g>
+        );
+      })()}
       {spec.series.map(sr => (
         <path key={sr.id} d={path(sr.values)} fill="none" stroke={tone(sr.tone)} strokeWidth="2"
               strokeDasharray={sr.dashed ? "4 3" : undefined} />
@@ -306,22 +328,31 @@ function Goals({ spec }) {
   const band = (rows, y0, phase) => rows.map((r, i) => {
     const y = y0 + i * ROW;
     const cx = x(r.due);
-    const colour = r.beyondCash ? TONE.danger : r.misfiled ? TONE.caution : TONE.signal;
+    // Same two marks as the milestones chart: the DOT is the goal's own standing, the RING is whether
+    // the company gets there. Learning one chart should teach the other.
+    const colour = r.misfiled ? TONE.caution : r.beyondCash ? TONE.danger : TONE.signal;
     return (
       <g key={r.id}>
         <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.4" opacity="0.28" />
         <circle cx={cx} cy={y} r="4.5" fill={colour} />
-        {/* Filed in the wrong phase gets a ring, because it is a DIFFERENT problem from being late:
-            a pre-raise goal after the close cannot gate the round, and a post-raise goal before it
-            spends money that has not arrived. */}
-        {r.misfiled && (
+        {r.stranded && (
+          <circle cx={cx} cy={y} r="9.5" fill="none" stroke="var(--danger)" strokeWidth="1.6" />
+        )}
+        {/* Filed in the wrong phase gets its own ring: a pre-raise goal after the close cannot gate the
+            round, and a post-raise goal before it spends money that has not arrived. */}
+        {!r.stranded && r.misfiled && (
           <circle cx={cx} cy={y} r="8" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
         )}
         <text x={cx + 12} y={y - 2} className="ch-g">{String(r.label).slice(0, 36)}</text>
-        <text x={cx + 12} y={y + 9} className="ch-d" fill={colour}>
+        <text x={cx + 14} y={y + 9} className="ch-d" fill={colour}>
           {r.dueLabel}
-          {r.lateBy ? ` · ${r.lateBy} days past the cash` : ""}
-          {!r.lateBy && r.misfiled
+          {/* A post-raise goal stranded by a PRE-ROUND hole is a different sentence: the money that
+              pays for it never arrives, because the company does not reach the close. */}
+          {r.strandedBeforeRound ? ` · the round never lands${r.bridge ? `; needs ${money(r.bridge)} first` : ""}` : ""}
+          {!r.strandedBeforeRound && r.stranded && r.bridge ? ` · needs ${money(r.bridge)} to reach` : ""}
+          {!r.strandedBeforeRound && r.stranded && !r.bridge ? " · unreachable without bridging" : ""}
+          {!r.stranded && r.lateBy ? ` · ${r.lateBy} days past the cash` : ""}
+          {!r.stranded && !r.lateBy && r.misfiled
             ? (phase === "pre" ? " · after the close" : " · before the close") : ""}
         </text>
       </g>
@@ -357,8 +388,8 @@ function Goals({ spec }) {
 
       {cliff != null && (
         <>
-          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.6" />
-          <text x={cliff + 5} y={base - 4} className="ch-f" fill="var(--danger)">
+          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.8" />
+          <text x={cliff + 5} y={PAD.t + 8} className="ch-f" fill="var(--danger)">
             Cash out · {spec.cashOutLabel}
           </text>
         </>
@@ -405,25 +436,38 @@ function Milestones({ spec }) {
   const n = spec.span || spec.ticks?.length || 18;
   const x = (m) => PAD.l + (Math.max(0, Math.min(n, m)) / n) * PW;
   const cliff = Number.isFinite(spec.cashOut) ? x(spec.cashOut) : null;
+  // BOUNDED WHERE CASH RECOVERS. Shading to the edge would make a 61-day gap and a permanent one look
+  // identical, and they are different conversations.
+  const back = Number.isFinite(spec.recoversT) ? x(spec.recoversT) : (W - PAD.r);
 
   const band = (rows, y0) => rows.map((r, i) => {
     const y = y0 + i * ROW;
     const cx = x(r.due);
-    const colour = r.beyondCash ? TONE.danger : r.short ? TONE.caution : TONE.signal;
+    // THE DOT IS THE BALANCE ON THE DAY. THE RING IS WHETHER THE COMPANY GETS THERE. A green dot in a
+    // red ring says "solvent that day, insolvent before it" — the truth in two marks, which is what a
+    // single colour could not hold.
+    const colour = r.negative ? TONE.danger : r.short ? TONE.caution : TONE.signal;
     return (
       <g key={r.id}>
         <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.4" opacity="0.28" />
         <circle cx={cx} cy={y} r="4.5" fill={colour} />
-        {/* REACHED BUT SHORT gets a ring, because it is a different problem from not getting there:
-            the date arrives, the cash is positive, and it is below what was set for it. */}
-        {r.short && <circle cx={cx} cy={y} r="8" fill="none" stroke="var(--caution)" strokeWidth="1.5" />}
-        <text x={cx + 12} y={y - 2} className="ch-g">{String(r.label).slice(0, 36)}</text>
-        <text x={cx + 12} y={y + 9} className="ch-d" fill={colour}>
+        {r.stranded && (
+          <circle cx={cx} cy={y} r="9.5" fill="none" stroke="var(--danger)" strokeWidth="1.6" />
+        )}
+        {!r.stranded && r.short && (
+          <circle cx={cx} cy={y} r="8" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
+        )}
+        <text x={cx + 14} y={y - 2} className="ch-g">{String(r.label).slice(0, 34)}</text>
+        <text x={cx + 14} y={y + 9} className="ch-d"
+              fill={r.stranded ? TONE.danger : colour}>
           {r.dueLabel}
-          {r.beyondCash ? ` · ${money(r.bal)}${r.lateBy ? `, ${r.lateBy} days past the cash` : ""}` : ""}
-          {!r.beyondCash && r.short ? ` · ${money(r.bal)}, ${money(r.shortBy)} short` : ""}
-          {!r.beyondCash && !r.short && r.target > 0 ? ` · ${money(r.bal)}, target ${money(r.target)}` : ""}
-          {!r.beyondCash && !r.short && !r.target ? ` · ${money(r.bal)}` : ""}
+          {` · ${money(r.bal)}`}
+          {/* The bridge is what turns a colour into something to do: $84k and $188k are different
+              problems, and without the number every date after the crossing looks equally doomed. */}
+          {r.stranded && r.bridge ? ` · needs ${money(r.bridge)} to reach` : ""}
+          {r.stranded && !r.bridge ? " · unreachable without bridging" : ""}
+          {!r.stranded && r.short ? `, ${money(r.shortBy)} short` : ""}
+          {!r.stranded && !r.short && r.target > 0 ? `, target ${money(r.target)}` : ""}
         </text>
       </g>
     );
@@ -434,8 +478,16 @@ function Milestones({ spec }) {
          aria-label={`${mine.length + fromRound.length} milestones on a calendar` +
            (spec.cashOutEndless ? "" : `, cash running out on ${spec.cashOutLabel}`)}>
       {cliff != null && (
-        <rect x={cliff} y={PAD.t} width={Math.max(0, W - PAD.r - cliff)} height={base - PAD.t}
-              fill="var(--danger)" opacity="0.06" />
+        <>
+          <rect x={cliff} y={PAD.t} width={Math.max(0, back - cliff)} height={base - PAD.t}
+                fill="var(--danger)" opacity="0.09" />
+          {spec.daysUnderwater != null && spec.deepest != null && (
+            <text x={(cliff + back) / 2} y={base - 5} textAnchor="middle" className="ch-d"
+                  fill="var(--danger)">
+              {spec.daysUnderwater} days · deepest {money(spec.deepest)}
+            </text>
+          )}
+        </>
       )}
 
       {mine.length > 0 && (
@@ -449,10 +501,19 @@ function Milestones({ spec }) {
 
       {cliff != null && (
         <>
-          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.6" />
-          <text x={cliff + 5} y={base - 4} className="ch-f" fill="var(--danger)">
+          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.8" />
+          <text x={cliff + 5} y={PAD.t + 8} className="ch-f" fill="var(--danger)">
             Cash out · {spec.cashOutLabel}
           </text>
+          {spec.recoversLabel && (
+            <>
+              <line x1={back} y1={PAD.t} x2={back} y2={base} stroke="var(--muted-2)"
+                    strokeWidth="1.2" strokeDasharray="4 3" />
+              <text x={back - 5} y={PAD.t + 8} textAnchor="end" className="ch-f" fill="var(--muted)">
+                Recovers · {spec.recoversLabel}
+              </text>
+            </>
+          )}
         </>
       )}
 

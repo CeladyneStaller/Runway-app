@@ -48,7 +48,11 @@ export function Milestones({ ms, setMilestones }) {
       <div>
         {ms.map((m) => {
           const target = m.target ?? msTarget(m);
-          const pass = m.pass ?? (m.bal >= target);
+          // THREE STATES, NOT A BOOLEAN. `pass` is the balance against its target; `stranded` is
+          // whether the company survives to see the date. A milestone can be solvent on the day and
+          // unreachable — $16k in the bank, insolvent since December — and pass/fail cannot hold that.
+          const stranded = !!m.stranded;
+          const pass = !stranded && (m.pass ?? (m.bal >= target));
           const gap = m.gap ?? (m.bal - target);
           const w = (Math.abs(m.bal) / maxAbs) * 100;
           return (
@@ -61,7 +65,13 @@ export function Milestones({ ms, setMilestones }) {
                     ? <>{m.label}<span className="chip" style={{ background: "var(--line-2)", color: "var(--muted)" }}>from Investment</span></>
                     : <input className="inp ms-name" value={m.label} aria-label="Milestone name"
                              onChange={e => upd(m.id, { label: e.target.value })} />}
-                  <span className={"chip " + (pass ? "ok" : "bad")}>{pass ? "on track" : "shortfall"}</span>
+                  {/* "Needs bridging" is a THIRD answer, not a worse shortfall: the money on the day
+                      may be fine and the company still does not get there. */}
+                  <span className={"chip " + (stranded ? "bad" : pass ? "ok" : "bad")}>
+                    {stranded
+                      ? (m.bridge > 0 ? `needs ${money(m.bridge)}` : "unreachable")
+                      : pass ? "on track" : "shortfall"}
+                  </span>
                 </div>
                 <div className="mdate">
                   {m.fromRound
