@@ -26,6 +26,7 @@ const MONTHS_SHOWN = 18;
 
 const sum = (xs) => xs.reduce((a, b) => a + (Number(b) || 0), 0);
 const clean = (n) => (Number.isFinite(n) ? n : 0);
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /** How far through its period a project is, when it does not carry the figure itself. */
 const elapsedShare = (p, doc) => {
@@ -564,24 +565,82 @@ const invGoals = (doc) => {
   };
 };
 
+/** Milestones on a calendar, against the cash on the day and the target set for it.
+ *
+ *  SAME SHAPE AS THE GOALS CHART, DIFFERENT FAILURE MODES. A goal can only be past the cash; a
+ *  MILESTONE CARRIES A TARGET, so it can be reached and still fail — the date arrives, the balance is
+ *  positive, and it is below what was set for it. The bar chart this replaces could show the balance
+ *  and not the shortfall, because the target was not a quantity it knew about.
+ *
+ *  TWO BANDS, because one half you can move and the other you cannot: dates you set, and dates derived
+ *  from the capital stack. `Milestones.jsx` already refuses to edit the second kind, so the split
+ *  reflects a rule that exists rather than inventing one.
+ *
+ *  NOTHING NEW IS COMPUTED. `bal`, `target`, `pass`, `gap` and `date` all arrive in `msWithBal`, which
+ *  App assembles because that is where the balances and the round-derived dates are both in hand. A
+ *  second definition of a milestone's balance is exactly what moving `msPass`/`msGap` into the engine
+ *  was meant to prevent.
+ */
 const invMilestones = (doc, parts) => {
-  // `msWithBal` is assembled in App, where the balances and the round-derived dates are both in hand.
-  // Recomputing it here would be a second definition of what a milestone's balance is, and the whole
-  // reason `msPass`/`msGap` moved into the engine was to have exactly one.
   const ms = parts?.msWithBal || [];
   if (!ms.length) return { empty: "No critical dates set yet." };
+
+  const rows = parts?.rows || [];
+  let zero = null;
+  try { zero = zeroInfo(rows, doc.startY, doc.startM); } catch { zero = null; }
+  const cashOutAt = zero?.date instanceof Date ? zero.date : null;
+
+  const row = (m) => {
+    const at = m.date instanceof Date ? m.date : dateAt(doc, clean(m.t));
+    // JUDGED ON ITS OWN BALANCE, NOT ON THE CLIFF. `zeroInfo` reports the FIRST crossing, and cash can
+    // dip below zero and recover when a receipt lands — so a date after the cliff can still have money
+    // in the bank. Reading it off the cliff produced "29 days past the cash" beside a balance of
+    // +$16,080, which is a chart contradicting itself in the same sentence.
+    //
+    // `balanceAtDate` already gives the exact figure for that day. The cliff stays as context.
+    const beyondCash = clean(m.bal) < 0;
+    const lateBy = beyondCash && cashOutAt ? Math.round((at - cashOutAt) / DAY) : null;
+    const target = clean(m.target);
+    const gap = clean(m.gap);
+    return {
+      id: m.id || m.label, label: m.label || "Milestone",
+      due: clean(m.t), dueAt: at, dueLabel: shortDate(at),
+      bal: clean(m.bal), target, pass: !!m.pass, gap,
+      fromRound: !!m.fromRound,
+      beyondCash,
+      lateBy: lateBy && lateBy > 0 ? lateBy : null,
+      // REACHED BUT SHORT — the case only milestones have. Only meaningful when the date is actually
+      // reachable: a milestone past the cash is not "short of target", it is not happening.
+      short: !beyondCash && target > 0 && gap < 0,
+      shortBy: !beyondCash && target > 0 && gap < 0 ? Math.abs(gap) : null,
+    };
+  };
+
+  const mine = ms.filter(m => !m.fromRound).map(row).sort((a, b) => a.due - b.due);
+  const fromRound = ms.filter(m => m.fromRound).map(row).sort((a, b) => a.due - b.due);
+
+  const last = Math.max(0, ...[...mine, ...fromRound].map(r => r.due));
+  const span = Math.max(MONTHS_SHOWN, Math.ceil(last) + 3);
+
+  const missed = [...mine, ...fromRound].filter(r => r.beyondCash).length;   // negative on the day
+  const shortOf = [...mine, ...fromRound].filter(r => r.short).length;
+
   return {
-    kind: "bars",
-    x: ms.map(m => m.label),
-    series: [{
-      id: "bal", label: "Cash at that date",
-      values: ms.map(m => clean(m.bal)),
-      tones: ms.map(m => (m.pass ? "signal" : "danger")),
-      tone: "signal",
-    }],
-    refLine: { y: 0 },
+    kind: "milestones",
+    mine, fromRound,
+    rows: [...mine, ...fromRound],
+    ticks: axisTicks(doc, span),
+    span,
+    cashOut: zero?.months ?? null,
+    cashOutLabel: cashOutAt ? shortDate(cashOutAt) : `beyond ${HORIZON} months`,
+    cashOutEndless: !cashOutAt,
     format: "money",
-    note: "Cash left when each critical date arrives.",
+    note: missed
+      ? `${plural(missed, "date arrives", "dates arrive")} with no money in the bank` +
+        (cashOutAt ? `; cash first runs out on ${shortDate(cashOutAt)}.` : ".")
+      : shortOf
+        ? `${plural(shortOf, "date is", "dates are")} reached but short of the target set for it.`
+        : "Every date is reached with its target met.",
   };
 };
 

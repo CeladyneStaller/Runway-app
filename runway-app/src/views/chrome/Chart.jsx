@@ -385,8 +385,88 @@ function Goals({ spec }) {
   );
 }
 
+
+/** Milestones on a calendar: two bands, cash on the day, target where there is one.
+ *
+ *  SHARES ITS LAYOUT WITH `Goals` on purpose — same bands, same cliff, same axis — because they are
+ *  the same question asked about two different things, and a reader who has learned one should not
+ *  have to learn the other.
+ */
+function Milestones({ spec }) {
+  const mine = spec.mine || [];
+  const fromRound = spec.fromRound || [];
+  const ROW = 26, GAP = 26;
+  const top = PAD.t + 22;
+  const mineBottom = top + mine.length * ROW;
+  const roundTop = mineBottom + (fromRound.length ? GAP : 0);
+  const base = roundTop + fromRound.length * ROW + 6;
+  const H2 = base + 34;
+
+  const n = spec.span || spec.ticks?.length || 18;
+  const x = (m) => PAD.l + (Math.max(0, Math.min(n, m)) / n) * PW;
+  const cliff = Number.isFinite(spec.cashOut) ? x(spec.cashOut) : null;
+
+  const band = (rows, y0) => rows.map((r, i) => {
+    const y = y0 + i * ROW;
+    const cx = x(r.due);
+    const colour = r.beyondCash ? TONE.danger : r.short ? TONE.caution : TONE.signal;
+    return (
+      <g key={r.id}>
+        <line x1={PAD.l} y1={y} x2={cx} y2={y} stroke={colour} strokeWidth="1.4" opacity="0.28" />
+        <circle cx={cx} cy={y} r="4.5" fill={colour} />
+        {/* REACHED BUT SHORT gets a ring, because it is a different problem from not getting there:
+            the date arrives, the cash is positive, and it is below what was set for it. */}
+        {r.short && <circle cx={cx} cy={y} r="8" fill="none" stroke="var(--caution)" strokeWidth="1.5" />}
+        <text x={cx + 12} y={y - 2} className="ch-g">{String(r.label).slice(0, 36)}</text>
+        <text x={cx + 12} y={y + 9} className="ch-d" fill={colour}>
+          {r.dueLabel}
+          {r.beyondCash ? ` · ${money(r.bal)}${r.lateBy ? `, ${r.lateBy} days past the cash` : ""}` : ""}
+          {!r.beyondCash && r.short ? ` · ${money(r.bal)}, ${money(r.shortBy)} short` : ""}
+          {!r.beyondCash && !r.short && r.target > 0 ? ` · ${money(r.bal)}, target ${money(r.target)}` : ""}
+          {!r.beyondCash && !r.short && !r.target ? ` · ${money(r.bal)}` : ""}
+        </text>
+      </g>
+    );
+  });
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H2}`} role="img"
+         aria-label={`${mine.length + fromRound.length} milestones on a calendar` +
+           (spec.cashOutEndless ? "" : `, cash running out on ${spec.cashOutLabel}`)}>
+      {cliff != null && (
+        <rect x={cliff} y={PAD.t} width={Math.max(0, W - PAD.r - cliff)} height={base - PAD.t}
+              fill="var(--danger)" opacity="0.06" />
+      )}
+
+      {mine.length > 0 && (
+        <text x={PAD.l} y={PAD.t + 8} className="ch-p" fill="var(--muted)">Dates you set</text>
+      )}
+      {fromRound.length > 0 && (
+        <text x={PAD.l} y={roundTop - 8} className="ch-p" fill="var(--raise)">
+          From rounds · not editable here
+        </text>
+      )}
+
+      {cliff != null && (
+        <>
+          <line x1={cliff} y1={PAD.t} x2={cliff} y2={base} stroke="var(--danger)" strokeWidth="1.6" />
+          <text x={cliff + 5} y={base - 4} className="ch-f" fill="var(--danger)">
+            Cash out · {spec.cashOutLabel}
+          </text>
+        </>
+      )}
+
+      {band(mine, top)}
+      {band(fromRound, roundTop)}
+
+      <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} />
+    </svg>
+  );
+}
+
 const SHAPES = { lines: Lines, stack: Stack, bars: Bars, hbars: HBars, diverging: Diverging,
-                 pace: Pace, goals: Goals };
+                 pace: Pace, goals: Goals, milestones: Milestones };
 
 export function Chart({ spec }) {
   const Shape = useMemo(() => SHAPES[spec?.kind], [spec?.kind]);

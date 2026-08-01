@@ -1376,6 +1376,32 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Milestones became a timeline, matching the goals chart
+
+Same shape — one calendar, two bands, dates on every row — because they are the same question asked
+about two different things, and a reader who has learned one should not have to learn the other.
+
+**What differs is what can go wrong.** A goal can only be past the cash. A MILESTONE CARRIES A TARGET,
+so the date can arrive with money in the bank and still fail: reached, and short. The bar chart this
+replaces could show the balance and not the shortfall, because the target was not a quantity it knew
+about — a milestone $64k short of its target rendered as a perfectly healthy green bar.
+
+**Two bands: dates you set, and dates derived from rounds.** `Milestones.jsx` already refuses to edit
+the second kind, so the split reflects a rule that exists rather than inventing one. Round-derived dates
+usually carry no target and so never read as short — marking them amber would report every capital event
+as a miss.
+
+**A CONTRADICTION CAUGHT BY READING THE OUTPUT.** The first version judged each row against
+`zeroInfo`'s cliff, which is the FIRST zero crossing — and cash can dip below zero and recover when a
+receipt lands. It printed "Product launch · 29 days past the cash" beside a balance of **+$16,080**, a
+chart disagreeing with itself in one sentence. Each row is now judged on its own `balanceAtDate` figure,
+which is exact and already computed; the cliff stays as context only.
+
+**"Short" and "past the cash" are exclusive.** A date with no money behind it is not short of its
+target, it is not happening — saying both would be two verdicts on one row.
+
+Nothing new is computed: `bal`, `target`, `pass`, `gap` and `date` all arrive in `msWithBal`.
+
 ## Investment goals have a PHASE — schema v4
 
 A round has goals pointing in **both directions**, and the model was treating them as one list. That is

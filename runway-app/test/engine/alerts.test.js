@@ -217,12 +217,16 @@ describe("the milestone chart moved to the milestones tab", () => {
   it("draws when the app supplies the milestone balances", () => {
     // `msWithBal` is assembled in App, where the balances and the round-derived dates are both in
     // hand. Recomputing it here would be a second definition of a milestone's balance.
+    //
+    // It became a TIMELINE rather than bars, so the shape assertion moved with it: bars could show the
+    // balance and not the target, which is the thing a milestone exists to carry.
     const spec = buildChart("ms.runway", demoDoc(), {
-      msWithBal: [{ label: "Series A close", bal: 250000, pass: true },
-                  { label: "Board meeting", bal: -12000, pass: false }],
+      msWithBal: [{ id: "a", label: "Series A close", bal: 250000, pass: true, t: 8, fromRound: true },
+                  { id: "b", label: "Board meeting", bal: -12000, pass: false, t: 2 }],
     });
-    expect(spec.kind).toBe("bars");
-    expect(spec.series[0].tones).toEqual(["signal", "danger"]);
+    expect(spec.kind).toBe("milestones");
+    expect(spec.mine.map(r => r.id)).toEqual(["b"]);
+    expect(spec.fromRound.map(r => r.id)).toEqual(["a"]);
   });
 });
 
@@ -362,5 +366,69 @@ describe("the goals chart, on real dates", () => {
     const spec = buildChart("inv.goals", doc, p);
     const last = Math.max(...spec.rows.map(r => r.due));
     expect(spec.span).toBeGreaterThanOrEqual(last + 3);
+  });
+});
+
+describe("the milestones chart", () => {
+  const doc = demoDoc();
+  const ms = (over = {}) => ({
+    id: "m1", label: "Board review", t: 2, date: new Date(2026, 8, 30),
+    bal: 250000, target: 0, pass: true, gap: 250000, ...over,
+  });
+  const spec = (rows, extra = {}) =>
+    buildChart("ms.runway", doc, { ...parts(doc), msWithBal: rows, ...extra });
+
+  it("splits dates you set from dates derived from rounds", () => {
+    // `Milestones.jsx` already refuses to edit `fromRound` milestones, so the split reflects a rule
+    // that exists rather than inventing one.
+    const s = spec([ms(), ms({ id: "m2", label: "Series A close", fromRound: true, t: 8 })]);
+    expect(s.mine.map(r => r.id)).toEqual(["m1"]);
+    expect(s.fromRound.map(r => r.id)).toEqual(["m2"]);
+  });
+
+  it("JUDGES EACH DATE ON ITS OWN BALANCE, not on the cliff", () => {
+    // THE BUG THIS CAUGHT. `zeroInfo` reports the FIRST crossing, and cash can dip below zero and
+    // recover when a receipt lands — so a date after the cliff can still have money in the bank.
+    // Reading it off the cliff produced "29 days past the cash" beside a balance of +$16,080.
+    const s = spec([ms({ t: 14, bal: 16080, date: new Date(2027, 0, 15) })]);
+    expect(s.rows[0].beyondCash).toBe(false);
+    expect(s.rows[0].lateBy).toBeNull();
+  });
+
+  it("flags a date that genuinely has no money", () => {
+    const s = spec([ms({ t: 12, bal: -104494 })]);
+    expect(s.rows[0].beyondCash).toBe(true);
+  });
+
+  it("flags REACHED BUT SHORT — the case only milestones have", () => {
+    // A goal can only be past the cash. A milestone carries a target, so the date can arrive with
+    // money in the bank and still fail. The bar chart this replaces showed the balance and not the
+    // shortfall, because the target was not a quantity it knew about.
+    const s = spec([ms({ bal: 186000, target: 250000, pass: false, gap: -64000 })]);
+    expect(s.rows[0].short).toBe(true);
+    expect(s.rows[0].shortBy).toBe(64000);
+  });
+
+  it("does not call a date short when it has no target", () => {
+    // Round-derived dates mostly carry none, and marking them amber would report every capital event
+    // as a miss.
+    const s = spec([ms({ fromRound: true, target: 0, bal: 400000 })]);
+    expect(s.fromRound[0].short).toBe(false);
+  });
+
+  it("does not call a date short when it is not reachable at all", () => {
+    // "Short of target" is a shortfall to close. A date with no money behind it is not short, it is
+    // not happening, and saying both would be two verdicts on one row.
+    const s = spec([ms({ bal: -5000, target: 250000, pass: false, gap: -255000 })]);
+    expect(s.rows[0].beyondCash).toBe(true);
+    expect(s.rows[0].short).toBe(false);
+  });
+
+  it("says so when everything lands", () => {
+    expect(spec([ms()]).note).toMatch(/Every date is reached/);
+  });
+
+  it("still reports no dates at all", () => {
+    expect(spec([]).empty).toMatch(/No critical dates/);
   });
 });
