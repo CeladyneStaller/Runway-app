@@ -81,28 +81,18 @@ describe("a new company's first model", () => {
     fireEvent.click(btn(container, /^Next$/));
     fireEvent.click(btn(container, /^Done$/));
 
+    // The rail's name field is gone; the subtitle reads the COMPANY name, which is now the only name.
     await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
-    expect(container.querySelector(".docname").value).toBe("Celadyne Energy");
   });
 
-  it("and still seeds the name for anybody who skips the wizard entirely", async () => {
-    // The seed is the backstop for the skip path — the wizard is not the only way into a model.
-    // NOTE the route: cancelling used to land on the empty-model SCREEN and its cash box, which hosted
-    // mode no longer has. Cash now goes in where it lives for every other model, which is a better test
-    // of the same rule: the seed fires when the document gains substance, by whatever path.
+  it("needs no seeding at all, because nothing copies the company name into the document", async () => {
+    // WAS: "still seeds the name for anybody who skips the wizard". The seed existed so the rail's
+    // name field had something to show; the display reads the company name directly now, so there is
+    // nothing to seed and one fewer render-triggered write to the document.
     goHosted();
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Set up your company/i));
     fireEvent.click(btn(container, /^Cancel$/));
-    await waitFor(() => expect(container.textContent).toMatch(/This model is empty/i));
-
-    fireEvent.click(btn(container, /Spend history/i));
-    const field = await waitFor(() => {
-      const l = [...container.querySelectorAll(".startcfg label")].find(x => /Cash on hand at start/i.test(x.textContent));
-      if (!l) throw new Error("no cash field");
-      return l.querySelector("input");
-    });
-    fireEvent.change(field, { target: { value: "250000" } });
     await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
   });
 
@@ -116,11 +106,14 @@ describe("a new company's first model", () => {
 });
 
 describe("what it must not overwrite", () => {
-  it("leaves a name somebody actually chose", async () => {
+  it("NEVER REWRITES the document just to display a name", async () => {
+    // The old effect copied the company name into `doc.name` whenever the model name looked like a
+    // default — a write triggered by a render, on data nobody asked to change. The display reads the
+    // company name directly now, so there is nothing to seed and nothing to upload.
     serverDoc = { ...docs.demoDoc(), name: "Acme Holdings" };
     goHosted();
     const { container } = render(<App />);
-    await waitFor(() => expect(sub(container)).toMatch(/^Acme Holdings ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
     await new Promise(r => setTimeout(r, 400));
     expect(uploaded).toEqual([]);   // no unrequested rewrite of real data
   });
@@ -138,34 +131,43 @@ describe("what it must not overwrite", () => {
   });
 });
 
-describe("the display falls back in order", () => {
-  it("chosen name, then the company's, then a placeholder", async () => {
+describe("the model name is gone", () => {
+  // EVERY COMPANY HAS A NAME, and the model name was a SECOND string for the same object with its own
+  // fallback chain — chosen name, then company name, then a placeholder. Two names for one thing is a
+  // question nobody should have to answer, and the sidebar was already falling back to the company
+  // name whenever it could. `doc.name` stays in the document so old exports still import; nothing
+  // reads it.
+  it("shows the COMPANY name, whatever the document happens to carry", async () => {
     const { RunwayApp } = await import("../../src/App.jsx");
     const withCash = { ...docs.emptyDoc(), cash: 100000 };
 
-    const a = render(<RunwayApp doc={{ ...withCash, name: "Chosen" }} setDoc={() => {}} companyName="Celadyne" />);
-    expect(sub(a.container)).toMatch(/^Chosen ·/);
+    const a = render(<RunwayApp doc={{ ...withCash, name: "A stale model name" }} setDoc={() => {}}
+                                companyName="Celadyne" />);
+    expect(sub(a.container)).toMatch(/^Celadyne ·/);
     a.unmount();
 
-    const b = render(<RunwayApp doc={{ ...withCash, name: "Untitled" }} setDoc={() => {}} companyName="Celadyne" />);
-    expect(sub(b.container)).toMatch(/^Celadyne ·/);
-    b.unmount();
-
-    const c = render(<RunwayApp doc={{ ...withCash, name: "" }} setDoc={() => {}} />);
-    expect(sub(c.container)).toMatch(/^Untitled model ·/);
+    const b = render(<RunwayApp doc={{ ...withCash, name: "" }} setDoc={() => {}} />);
+    expect(sub(b.container)).toMatch(/^Untitled model ·/);
   });
 
-  it("keeps the rail input's value RAW so typing still works", async () => {
+  it("offers no name field in the rail", async () => {
     const { RunwayApp } = await import("../../src/App.jsx");
-    let doc = { ...docs.emptyDoc(), cash: 100000, name: "" };
     const { container } = render(
-      <RunwayApp doc={doc} setDoc={(v) => { doc = typeof v === "function" ? v(doc) : v; }} companyName="Celadyne" />);
-    const input = container.querySelector(".docname");
-    // The company name is the PLACEHOLDER, not the value — a value would make the field un-clearable.
-    expect(input.value).toBe("");
-    expect(input.placeholder).toBe("Celadyne");
-    fireEvent.change(input, { target: { value: "Typed" } });
-    expect(doc.name).toBe("Typed");
+      <RunwayApp doc={{ ...docs.emptyDoc(), cash: 100000 }} setDoc={() => {}} companyName="Celadyne" />
+    );
+    expect(container.querySelector(".docname")).toBeNull();
+  });
+
+  it("offers no export or import in the rail", async () => {
+    // Import replaces the model every member of the company sees. One click from every screen, beside
+    // the navigation, was the most destructive control in the product in the least guarded place.
+    const { RunwayApp } = await import("../../src/App.jsx");
+    const { container } = render(
+      <RunwayApp doc={{ ...docs.emptyDoc(), cash: 100000 }} setDoc={() => {}} companyName="Celadyne" />
+    );
+    const rail = container.querySelector(".rail");
+    expect(rail.textContent).not.toMatch(/Export|Import/);
+    expect(rail.querySelector('input[type="file"]')).toBeNull();
   });
 });
 

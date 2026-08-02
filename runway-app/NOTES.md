@@ -1376,6 +1376,36 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Import/export moved, model name deleted, avatar placed
+
+**Company settings -> Data, owner-only.** Import replaces the model every member of the company sees;
+it was one click from every screen in the rail footer — the most destructive control in the product in
+the least guarded place. Export followed it because the two belong together, and because an export is a
+complete copy of the company's payroll, grants and cash position: reading it on screen and walking out
+with the file are different acts.
+
+The import confirmation states the COUNTS — "6 projects, 9 people's payroll, 14 months of history" —
+because "this will replace your model" is a sentence people click past and a list of what they are
+about to lose is not.
+
+**The model name is gone.** Every company has a name; `doc.name` was a second string for the same
+object with its own fallback chain, and the sidebar already fell back to the company name whenever it
+could. The field is removed, the subtitle reads `companyName`, and the effect that copied the company
+name into the document on render is deleted — that was a write triggered by a render, on data nobody
+asked to change. `doc.name` stays in the document so old exports still import; only DEMO mode reads it,
+because a demo has no company to take a name from.
+
+**The avatar sits where the email pill was**, in the header. It was beside the runway readout, which
+put an account control inside the reading of a number and left TWO entries to the same settings. On
+mobile it was worse: `.railfoot{display:none}` at <=900px was hiding the whole footer, which also took
+**Company settings** with it — unreachable on a phone entirely.
+
+**TEN TESTS ASSERTED THE OLD ARRANGEMENT** and were reversed rather than deleted, each recording why:
+export/import in the rail, the demo-mode guard that only made sense while they were there, the name
+field, the fallback chain, and the seeding effect. The demo guard is the clearest case — the rule was
+"withhold import in demo mode because it would drop a real model into a store that wipes itself", and
+that rule stopped protecting anybody the moment import left the rail.
+
 ## Settings split in two — profile and company
 
 One Account page held password, billing, layout, companies and data, with no way to tell which was

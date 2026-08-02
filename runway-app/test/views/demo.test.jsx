@@ -159,13 +159,17 @@ describe("what a demo must not touch", () => {
     expect(btn(container, /Keep this model/)).toBeTruthy();
   });
 
-  it("still offers export and import when NOT in a demo", async () => {
-    // The guard has to be scoped to demo mode; withholding them everywhere would remove the app's
-    // only backup from real users.
+  it("keeps export and import out of the rail entirely, demo or not", async () => {
+    // REVERSED. The rule was "withhold them in demo mode", because they lived in the rail and import
+    // would drop a real model into a store that wipes itself. They have moved to Company settings →
+    // Data, owner-only — so the rail carries neither in any mode, and the demo guard is not the thing
+    // protecting anybody any more. The demo has no company settings to reach.
     idb.set("runway:doc", doc.demoDoc());
     const { container } = render(<App />);
-    await waitFor(() => expect(btn(container, /^Export$/)).toBeTruthy());
-    expect([...container.querySelectorAll("label")].some(l => /^Import/.test(l.textContent))).toBe(true);
+    await waitFor(() => expect(container.querySelector(".rail")).toBeTruthy());
+    const rail = container.querySelector(".rail");
+    expect(rail.textContent).not.toMatch(/Export|Import/);
+    expect(rail.querySelector('input[type="file"]')).toBeNull();
   });
 });
 

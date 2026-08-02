@@ -385,8 +385,19 @@
   .shell{grid-template-columns:1fr}
   .rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px}
   .brand{padding:2px 8px 2px 4px;width:100%}
+  /* The footer holds the name field and the export buttons, which are gone — but COMPANY SETTINGS is
+     in the rail now and must survive. Hiding the whole footer took the settings button with it, which
+     is why it could not be reached on a phone at all. */
   .railfoot{display:none}
   .nav{width:auto}
+  .nav.navset{margin-top:0}
+  /* THE AVATAR MUST NOT WRAP UNDER THE RUNWAY READOUT. `.topbar` wraps at this width, and without a
+     rule the profile menu ended up below the fold on a phone — present in the DOM, invisible in
+     practice, which is exactly how it was reported. */
+  .topbar{align-items:center}
+  .statuspill{flex:1;min-width:0}
+  /* Anchored to the right edge rather than to the avatar, which is now flush with it. */
+  .pdrop{right:0;left:auto;max-width:calc(100vw - 32px)}
   .stats{grid-template-columns:repeat(2,1fr)}
   .tiers,.methods,.prow{grid-template-columns:1fr}
   .main{padding:20px 16px 50px}
@@ -1084,6 +1095,5 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .setlock{background:#EDF4F2;border:1px solid #CFE0DA;border-radius:9px;padding:10px 13px;
   font-size:12.5px;color:var(--ink-2);margin-bottom:12px}
 .chip.pro{background:#E4EDF6;color:#274F7D}
-.topright{display:flex;align-items:center;gap:12px}
 .panel.danger{border-color:#EFC5BD;background:#FEF8F7}
 .addbtn.ghost.danger{color:var(--danger);border-color:#EFC5BD}

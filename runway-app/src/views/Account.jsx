@@ -9,6 +9,7 @@ import { CompanyTabs } from "./chrome/CompanyTabs";
 import { QuickBooks } from "./chrome/QuickBooks";
 import { SettingsShell, LockedNotice } from "./chrome/SettingsShell";
 import { CompanyGeneral } from "./chrome/CompanyGeneral";
+import { CompanyData } from "./chrome/CompanyData";
 import { Portfolio } from "./chrome/Portfolio";
 import { AdvisorBilling } from "./chrome/AdvisorBilling";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
@@ -490,10 +491,13 @@ export const COMPANY_PAGES = [
   { id: "people", label: "People" },
   { id: "tabs", label: "Tabs", owner: true },
   { id: "connections", label: "Connections", owner: true },
+  // OWNER-ONLY, INCLUDING EXPORT. An export is a complete copy of this company's payroll, grants and
+  // cash position — reading it on screen and walking out with the file are different acts.
+  { id: "data", label: "Data", owner: true },
 ];
 
 export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTabPrefs,
-                          scope = "profile", page = null, onGo }) {
+                          scope = "profile", page = null, onGo, onExport, onImport }) {
   const account = getAccountApi();
   const session = getSessionProvider();
   const auth = getAuthAdapter();
@@ -632,6 +636,10 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
       {at === "people" && <Members account={account} companyId={activeId} />}
       {at === "tabs" && <CompanyTabs account={account} companyId={activeId} role={myRole} />}
       {at === "connections" && <QuickBooks account={account} companyId={activeId} mode="settings" />}
+      {at === "data" && (
+        <CompanyData company={activeCo} doc={doc} canWrite={isOwner}
+                     onExport={onExport} onImport={onImport} />
+      )}
     </>);
   }
 
@@ -651,24 +659,10 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
     )}
     {at === "data" && (
       <>
-      <div className="acct-card">
-        <h3>Your data</h3>
-        <div className="acct-row">
-          <div>
-            <div className="acct-row-t">Download your model</div>
-            <div className="acct-row-s">JSON, re-importable</div>
-          </div>
-          <button className="linkbtn" onClick={exportModel}>Export</button>
-        </div>
-        <div className="acct-row">
-          <div>
-            <div className="acct-row-t">Sign out</div>
-            <div className="acct-row-s">Unsaved work is saved first</div>
-          </div>
-          <button className="linkbtn" onClick={async () => { await flush(); await session.signOut(); }}>Sign out</button>
-        </div>
-      </div>
-
+      {/* EXPORT AND IMPORT OF A COMPANY'S MODEL MOVED TO COMPANY SETTINGS. Importing replaces what
+          every member of a company sees, and a company picker on a page called "Your data" is a page
+          title lying about the blast radius. What stays here is account-level: the companies you have,
+          and deleting the account. */}
       <CompaniesSection
         account={account} companies={companies} activeId={activeId}
         onReload={reload} onSwitched={doSwitch} onDeleted={doDelete} doc={doc}

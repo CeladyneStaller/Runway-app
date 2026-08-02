@@ -389,8 +389,10 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
             </button>
           )}
           <div className="railfoot">
-            <input className="docname" value={doc.name} onChange={e => setDoc(d => ({ ...d, name: e.target.value }))}
-              aria-label="Model name" placeholder={companyName || "Untitled model"} />
+            {/* THE MODEL NAME IS GONE. Every company has a name; the model name was a SECOND string for the
+                same object, and the sidebar already fell back to the company name whenever it could.
+                Two names for one thing is a question nobody should have to answer. The field is
+                removed from the UI; `doc.name` stays in the document so old exports still import. */}
             <div className="railmeta">Projection start · {monthLong(startY, startM)}<br />{HORIZON}-month horizon</div>
             {/* EXPORT AND IMPORT ARE BOTH WITHHELD IN DEMO MODE, for different reasons.
                 Import is the dangerous one: it drops a REAL model into a store that wipes itself, so a
@@ -409,13 +411,11 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
                   <div className="docacts-fine">Create an account and this becomes your real model.</div>
                 </>
               ) : (
-                <>
-                  <button className="addbtn ghost" onClick={doExport} title="Download this model as JSON — your only backup">Export</button>
-                  <label className="addbtn ghost" title="Replace this model with a JSON file">Import
-                    <input type="file" accept="application/json,.json" style={{ display: "none" }}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) doImport(f); e.target.value = ""; }} />
-                  </label>
-                </>
+                // EXPORT AND IMPORT MOVED TO COMPANY SETTINGS -> DATA, owner-only. Import replaces
+                // the model every member of the company sees; one click from every screen, beside the
+                // navigation, was the most destructive control in the product in the least guarded
+                // place. Export followed it because the two belong together.
+                null
               )}
             </div>
           </div>
@@ -430,15 +430,19 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
           <div className="topbar">
             <div>
               <span className="eyebrow">Startup runway</span>
-              {demo ? <DemoPill onLeave={onLeaveDemo} onKeep={() => onKeepDemo(doc)} /> : <><SyncPill /><SessionPill onOpenAccount={onOpenAccount} /></>}
+              {demo
+                ? <DemoPill onLeave={onLeaveDemo} onKeep={() => onKeepDemo(doc)} />
+                : <><SyncPill />
+                    {/* THE AVATAR REPLACES THE EMAIL PILL, in the header where that pill was. It was
+                        beside the runway readout, which put an account control inside the reading of a
+                        number — and left TWO entry points to the same settings, the email button and
+                        the avatar. One thing, one place. */}
+                    <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} /></>}
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
-              <p className="sub">{isDefaultName(doc.name) ? (companyName || "Untitled model") : doc.name} · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
+              {/* THE DEMO HAS NO COMPANY to take a name from, so it is the one place the document's own name is
+                  still read — `demoDoc()` sets it, and there is no account behind it that could. */}
+              <p className="sub">{companyName || (demo ? doc.name : null) || "Untitled model"} · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
-            {/* OUTSIDE the runway pill. It was placed inside `.statuspill`, which is the runway readout
-                — a bordered flex row with its own type rules — so the avatar inherited them and the
-                dropdown was clipped by it. The avatar is a sibling of the pill, not part of the
-                reading. */}
-            <div className="topright">
             <div className="statuspill">
               <span>Runway</span>
               <b className="num" style={specInRunway ? { color: "var(--caution)" } : null}>{zero ? zero.months.toFixed(1) + " mo" : `${HORIZON}+ mo`}</b>
@@ -448,8 +452,6 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
                   <i />incl. speculative
                 </span>
               )}
-            </div>
-              {!demo && <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />}
             </div>
           </div>
 
@@ -986,7 +988,9 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     if (!seedName || demo || !doc || loadState !== LOAD_OK || !companyName) return;
     if (!hasSubstance(doc)) return;
     setSeedName(false);
-    setDoc(d => (isDefaultName(d.name) ? { ...d, name: companyName } : d));
+    // WAS: copy the company name into `doc.name` so the sidebar had something to show. The sidebar
+    // shows the company name directly now, so this only wrote a duplicate that could drift.
+    void companyName;
   }, [seedName, demo, doc, loadState, companyName]);
 
   // A conflict is a question, so it gets asked once and stays asked until answered.
@@ -1114,6 +1118,28 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     />
   );
 
+  // EXPORT AND IMPORT LIVE HERE, not in `RunwayApp`, because both the settings page and the empty-model
+  // bar need them and only this component owns `doc`. They were defined inside `RunwayApp` and passing
+  // them to `Account` — mounted from here — silently referenced nothing.
+  const exportDoc = () => {
+    const blob = new Blob([toJSON(doc)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(companyName || "runway").replace(/[^\w.-]+/g, "-").toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importDoc = (file) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      try { setDoc(fromJSON(String(r.result))); resolve(); }
+      catch (e) { reject(new Error(`That file isn't a Waterline document: ${e.message}`)); }
+    };
+    r.onerror = () => reject(new Error("That file could not be read."));
+    r.readAsText(file);
+  });
+
   if (showAccount) return (
     <Account
       doc={doc}
@@ -1123,6 +1149,8 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
       scope={showAccount.scope || "profile"}
       page={showAccount.page || null}
       onGo={(scope, page) => setShowAccount({ scope, page })}
+      onExport={exportDoc}
+      onImport={importDoc}
       onClose={() => setShowAccount(null)}
       // Adding a company opens the WIZARD, not a name box. Nothing is created until it finishes.
       onNewCompany={() => { setShowAccount(null); setSetup("company"); }}

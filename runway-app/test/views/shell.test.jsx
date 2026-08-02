@@ -52,8 +52,11 @@ describe("the rail foot", () => {
     // It used to read `Northwind Labs / Projection start · Jul 2026` — hardcoded. Someone else's
     // company name, in the chrome, on every screen, forever.
     const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Celadyne", startY: 2029, startM: 3 }} setDoc={() => {}} />);
+    // The name FIELD is gone — every company has a name and the model name was a second string for
+    // the same object. What the footer still carries is the projection start, which is the one thing
+    // there that helps you read the charts above it.
     const foot = container.querySelector(".railfoot");
-    expect(foot.querySelector(".docname").value).toBe("Celadyne");
+    expect(foot.querySelector(".docname")).toBeNull();
     expect(foot.textContent).toContain("April 2029");
     expect(foot.textContent).not.toContain("Northwind Labs");
   });
@@ -62,8 +65,15 @@ describe("the rail foot", () => {
     // The rail-foot fix above was correct and its test was scoped to `.railfoot`, so an identical
     // hardcoded "Northwind Labs" two elements away in the topbar survived it untouched. The narrow
     // assertion is what let it hide: a guard against a string appearing ANYWHERE has to look everywhere.
-    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Celadyne" }} setDoc={() => {}} />);
+    // The subtitle reads the COMPANY name now, not the document's. The original point stands and is
+    // worth keeping: a guard against a hardcoded string has to look everywhere, not just where the
+    // last one was found.
+    const { container } = render(
+      <RunwayApp doc={{ ...demoDoc(), name: "a stale model name" }} setDoc={() => {}}
+                 companyName="Celadyne" />
+    );
     expect(container.querySelector(".sub").textContent).toMatch(/^Celadyne ·/);
+    expect(container.textContent).not.toMatch(/Northwind Labs/);
   });
 
   it("no chrome anywhere names a company the document doesn't", () => {
@@ -75,11 +85,14 @@ describe("the rail foot", () => {
     const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "" }} setDoc={() => {}} />);
     expect(container.querySelector(".sub").textContent).toMatch(/^Untitled model ·/);
   });
-  it("keeps Export and Import in the rail, not floating in a horizontal bar", () => {
-    // .docbar was `display:flex; margin-left:auto` inside a 200px sticky COLUMN — frozen, wherever.
+  it("keeps Export and Import OUT of the rail entirely", () => {
+    // REVERSED. They were in the rail footer, one click from every screen — and import replaces the
+    // model every member of the company sees. The most destructive control in the product, in the
+    // least guarded place. Both moved to Company settings → Data, owner-only.
     const { container } = render(<RunwayApp doc={demoDoc()} setDoc={() => {}} />);
     expect(container.querySelectorAll(".docbar")).toHaveLength(0);
-    const acts = [...container.querySelectorAll(".railfoot .addbtn")].map(b => b.textContent);
-    expect(acts).toEqual(["Export", "Import"]);
+    const rail = container.querySelector(".rail");
+    expect(rail.textContent).not.toMatch(/Export|Import/);
+    expect(rail.querySelector('input[type="file"]')).toBeNull();
   });
 });

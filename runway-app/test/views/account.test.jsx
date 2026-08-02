@@ -121,7 +121,9 @@ const start = async (session = { access_token: "jwt", user: { id: TEST_USER_ID, 
   // satisfies "not checking your session", which let the assertions run against a half-rendered tree
   if (seed) {
     await waitFor(() => expect(
-      [...view.container.querySelectorAll("button")].some(b => /corey@acme\.com/.test(b.textContent))
+      // THE EMAIL PILL BECAME THE AVATAR. It was the only entry to settings and sat in the header; the
+      // avatar replaced it in the same place, so the wait is for that rather than for an email string.
+      !!view.container.querySelector(".avatar")
     ).toBe(true), { timeout: 3000 });
   }
   return { ...view, client, auth };
@@ -136,7 +138,10 @@ const btn = (c, re) => [...c.querySelectorAll("button")].find(b => re.test(b.tex
  *  data with no way to tell which of them were about you and which about the company.
  */
 const openAccount = async (container, page = "profile") => {
-  fireEvent.click([...container.querySelectorAll("button")].find(b => /corey@acme\.com/.test(b.textContent)));
+  fireEvent.click(container.querySelector(".avatar"));
+  // The avatar opens a MENU; the pages are behind it.
+  await waitFor(() => expect(container.querySelector(".pdrop")).toBeTruthy());
+  fireEvent.click([...container.querySelectorAll(".pitem")].find(b => /^Profile/.test(b.textContent)));
   await waitFor(() => expect(container.textContent).toMatch(/Your account|This company|Back/));
   await goTo(container, page);
 };

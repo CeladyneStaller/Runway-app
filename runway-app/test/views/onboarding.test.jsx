@@ -153,7 +153,9 @@ describe("the wizard", () => {
     fireEvent.click(btn(container, /^Next$/));
     fireEvent.click(btn(container, /^Done$/));
 
-    await waitFor(() => expect(container.querySelector(".sub")?.textContent).toMatch(/^Acme Robotics ·/));
+    // The subtitle reads the COMPANY name, not the model's — the model name is gone, so what the
+    // wizard typed into it no longer surfaces here. The saved document is still asserted below, which
+    // is the part that matters: the wizard's answers reached the store.
     await waitFor(() => expect(uploaded.length).toBeGreaterThan(0));
     const saved = uploaded[uploaded.length - 1];
     expect(saved.cash).toBe(600000);
