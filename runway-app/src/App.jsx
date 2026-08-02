@@ -434,8 +434,12 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
               <p className="sub">{isDefaultName(doc.name) ? (companyName || "Untitled model") : doc.name} · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
+            {/* OUTSIDE the runway pill. It was placed inside `.statuspill`, which is the runway readout
+                — a bordered flex row with its own type rules — so the avatar inherited them and the
+                dropdown was clipped by it. The avatar is a sibling of the pill, not part of the
+                reading. */}
+            <div className="topright">
             <div className="statuspill">
-              {!demo && <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />}
               <span>Runway</span>
               <b className="num" style={specInRunway ? { color: "var(--caution)" } : null}>{zero ? zero.months.toFixed(1) + " mo" : `${HORIZON}+ mo`}</b>
               <em className="num">{zero ? dateShort(zero.date) : "positive"}</em>
@@ -444,6 +448,8 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
                   <i />incl. speculative
                 </span>
               )}
+            </div>
+              {!demo && <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />}
             </div>
           </div>
 

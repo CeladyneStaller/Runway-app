@@ -22,19 +22,24 @@ const api = (over = {}) => ({
   ...over,
 });
 
-const mount = (account, onGrid = () => {}) =>
-  render(<QuickBooks account={account} companyId="co-1" onGrid={onGrid} />);
+const mount = (account, onGrid = () => {}, mode = "import") =>
+  // MODE MATTERS NOW. Connecting moved to Company settings and syncing stayed on Spend history, so a
+  // test has to say which job it is about — `settings` has no Sync button and `import` has no Connect.
+  render(<QuickBooks account={account} companyId="co-1" onGrid={onGrid} mode={mode} />);
 
-describe("when nothing is connected", () => {
+describe("when nothing is connected — Company settings", () => {
+  // CONNECTING IS CONFIGURATION and moved to Company settings → Connections. Syncing stayed on Spend
+  // history, because the grid a sync produces has to land in the import screen. So these tests name
+  // `settings` and the sync tests below name `import`.
   it("offers to connect and nothing else", async () => {
-    const v = mount(api());
+    const v = mount(api(), () => {}, "settings");
     await waitFor(() => expect(v.container.textContent).toMatch(/Connect QuickBooks/));
     expect(v.container.textContent).not.toMatch(/Sync now|Disconnect/);
   });
 
   it("sends the browser to the URL the server signed", async () => {
     const a = api();
-    const v = mount(a);
+    const v = mount(a, () => {}, "settings");
     await waitFor(() => expect(v.container.textContent).toMatch(/Connect QuickBooks/));
     fireEvent.click(v.getByText(/Connect QuickBooks/));
     await waitFor(() => expect(a.qboConnect).toHaveBeenCalledWith("co-1"));
@@ -122,7 +127,24 @@ describe("degrading without a server", () => {
   });
 
   it("shows the disconnected state when the status call fails", async () => {
-    const v = mount(api({ qboStatus: vi.fn().mockRejectedValue(new Error("offline")) }));
+    // A failed status call must not look like "connected" — the Connect button is the safe answer, and
+    // it lives in settings mode.
+    const v = mount(api({ qboStatus: vi.fn().mockRejectedValue(new Error("offline")) }),
+                    () => {}, "settings");
     await waitFor(() => expect(v.container.textContent).toMatch(/Connect QuickBooks/));
+  });
+
+  it("points at settings rather than offering a second Connect on the import screen", async () => {
+    // Two places to authorise one integration is how a half-finished OAuth round trip gets abandoned:
+    // somebody starts it from the wrong screen, comes back, and cannot tell whether it worked.
+    const v = mount(api(), () => {}, "import");
+    await waitFor(() => expect(v.container.textContent).toMatch(/Company settings/));
+    expect(v.container.textContent).not.toMatch(/Connect QuickBooks/);
+  });
+
+  it("offers no Sync on the settings page, because the grid would have nowhere to go", async () => {
+    const v = mount(api({ qboStatus: vi.fn().mockResolvedValue(connected()) }), () => {}, "settings");
+    await waitFor(() => expect(v.container.textContent).toMatch(/Disconnect/));
+    expect(v.container.textContent).not.toMatch(/Sync now/);
   });
 });

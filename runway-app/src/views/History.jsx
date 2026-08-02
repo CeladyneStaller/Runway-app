@@ -314,7 +314,10 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
             </div>
           )}
 
+          {/* SYNC ONLY. Connecting moved to Company settings → Connections; what stays here is the
+              pull, because the grid it produces lands in the import screen directly below. */}
           <QuickBooks
+            mode="import"
             account={getAccountApi?.()}
             companyId={getAuthAdapter?.()?.activeCompany?.()}
             onGrid={(grid, label) => { setSynced({ grid, label }); setImporting(true); }}

@@ -1376,6 +1376,42 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Settings split in two — profile and company
+
+One Account page held password, billing, layout, companies and data, with no way to tell which was
+about YOU and which about THIS COMPANY. The rule that decides is one question: **does changing it affect
+anybody else?**
+
+- **Profile**, from the avatar top right: profile, appearance, advisor plan, your data.
+- **Company settings**, from the rail: general, plan & seats, people, tabs, connections. In the rail
+  because it is scoped to the active company and the switcher is already there — a company-scoped page
+  inside a person-scoped menu is the confusion this removes.
+
+**Two panels SPLIT rather than moved.** Billing is two products sold to two people: the company plan to
+Company → Plan, the advisor plan to Profile → Advisor. Migration 024 split those tables for exactly this
+reason and the UI never followed. Companies split too: switching is navigation and stays in the rail;
+renaming and deleting this company are settings.
+
+**QUICKBOOKS SPLIT BY JOB, NOT BY PAGE.** Connecting is configuration and moved to Connections; SYNCING
+stayed on Spend history, because the grid a sync produces has to land in the import screen beside the
+CSV import it is the sibling of. A `mode` prop decides: `settings` has no Sync (a button producing data
+with nowhere to go loses it), `import` has no Connect and points at settings instead — two places to
+authorise one integration is how a half-finished OAuth round trip gets abandoned.
+
+**Owner-only pages are shown and disabled, not hidden**, with the reason. A member who cannot find
+billing assumes it is broken; one who sees it greyed knows who to ask. THIS REVERSES `CompanyTabs`,
+which rendered nothing for non-owners — a change of position, not a refinement.
+
+**Settings is a ROUTE, not a modal**, so a link can name a page: `{ scope, page }` rather than a
+boolean.
+
+**THE SPLIT BROKE 29 TESTS AND THAT WAS THE SIGNAL** — they asserted one flat page where everything
+rendered at once, which is the arrangement being removed. Three real mistakes surfaced while fixing
+them: I invented prop names for `PasswordSection` and `CompaniesSection` instead of reading their
+signatures; I dropped the export and delete-account block entirely; and I placed delete-account above
+the company list, which changed button order. It belongs last anyway — the most destructive control on
+the page goes after everything somebody came to do.
+
 ## Visual defect audit — five fixed, geometry now tested
 
 Measured rather than eyeballed: label positions and text extents computed against each chart's viewBox

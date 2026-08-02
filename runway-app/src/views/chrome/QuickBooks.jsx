@@ -31,7 +31,21 @@ const fmtDay = (iso) => {
     : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 };
 
-export function QuickBooks({ account, companyId, onGrid }) {
+/** The QuickBooks panel, in one of two modes.
+ *
+ *  CONNECTING AND SYNCING ARE DIFFERENT JOBS and belong in different places. Authorising an
+ *  integration is configuration and lives in Company settings; pulling a report is an IMPORT, and the
+ *  grid it produces has to land in the import screen — which is on Spend history, beside the CSV
+ *  import it is the sibling of.
+ *
+ *    mode="settings"  connect, disconnect, reconnect, status. No sync: there is nowhere for the grid
+ *                     to go from a settings page, and a button that produces data with no destination
+ *                     is a button that loses it.
+ *    mode="import"    sync only, and only when connected. Somebody who has not connected is pointed
+ *                     at settings rather than given a second Connect button — two places to authorise
+ *                     one integration is how a half-finished OAuth round trip gets abandoned.
+ */
+export function QuickBooks({ account, companyId, onGrid, mode = "settings" }) {
   // THREE STATES, NOT TWO. `undefined` = not looked yet; `false` = QuickBooks is not available here
   // at all (local mode, no hosted account); `null` = available and not connected. Collapsing the last
   // two put a Connect button in front of local-mode users that could never do anything.
@@ -93,17 +107,23 @@ export function QuickBooks({ account, companyId, onGrid }) {
           {conn && <span className="qbo-co">{conn.qbo_company_name || `realm ${conn.realm_id}`}</span>}
         </div>
         <div className="qbo-actions">
-          {conn && !needsReauth && (
+          {mode === "import" && conn && !needsReauth && (
             <button className="linkbtn" disabled={busy} onClick={sync}>{I.download} Sync now</button>
           )}
-          {conn
+          {mode === "settings" && (conn
             ? <button className="linkbtn" disabled={busy} onClick={disconnect}>Disconnect</button>
-            : <button className="addbtn ghost" disabled={busy} onClick={connect}>Connect QuickBooks</button>}
+            : <button className="addbtn ghost" disabled={busy} onClick={connect}>Connect QuickBooks</button>)}
         </div>
       </div>
 
       {/* THE REASON IS PART OF THE MESSAGE. A reconnect prompt with no explanation reads as "this app
           broke", and the customer's next move is support rather than the button. */}
+      {mode === "import" && !conn && (
+        <div className="qbo-note">
+          Not connected. QuickBooks is set up in <b>Company settings → Connections</b>.
+        </div>
+      )}
+
       {needsReauth && (
         <div className="qbo-note bad">
           <b>Reconnect QuickBooks.</b> QuickBooks requires apps to be re-authorized every five years.

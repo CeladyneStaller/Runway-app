@@ -501,6 +501,7 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
   const [profile, setProfile] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState(null);
+  const [deletingCo, setDeletingCo] = useState(null);
 
   const reload = async () => {
     if (!account) return;
@@ -553,15 +554,21 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
   if (!account || !session) return null;
 
   // Which page, defaulting to the first in the chosen scope.
+  const purgeWindow = 30;
   const pages = scope === "company" ? COMPANY_PAGES : PROFILE_PAGES;
   const at = pages.some(p => p.id === page) ? page : pages[0].id;
   const myRole = companies.find(c => c.id === activeId)?.role;
+  // KNOWN, NOT ASSUMED. Before the company list loads — or if it fails — `myRole` is undefined, and
+  // treating that as "not the owner" made every page show "only the owner can change this". That is a
+  // false and unhelpful answer to a load failure: it tells somebody to go and ask a person who cannot
+  // help them. Locking only when the role is KNOWN and not owner.
+  const roleKnown = !!myRole;
   const isOwner = myRole === "owner";
   const activeCo = companies.find(c => c.id === activeId);
 
   // OWNER-ONLY PAGES ARE SHOWN AND DISABLED, NOT HIDDEN. A member who cannot find billing assumes it is
   // broken; one who sees it greyed with a reason knows who to ask.
-  const marked = pages.map(p => ({ ...p, locked: !!p.owner && !isOwner }));
+  const marked = pages.map(p => ({ ...p, locked: !!p.owner && roleKnown && !isOwner }));
   const locked = !!marked.find(p => p.id === at)?.locked;
 
   const shell = (children) => (
@@ -578,16 +585,53 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
 
   if (scope === "company") {
     return shell(<>
-      {at === "general" && (
+      {at === "general" && activeCo && (
         <>
           <CompanyGeneral company={activeCo} account={account} onRenamed={reload} />
-          <DeleteCompany company={activeCo} onDeleted={doDelete} />
+
+          {/* A TRIGGER AND A MODAL, not a panel. `DeleteCompany` is the confirmation dialog — it takes
+              `onConfirm`/`onCancel` and renders only while a deletion is pending. Dropping it inline as
+              though it were a section threw on `company.name` before the company list had loaded,
+              which is why this page came up blank rather than half-drawn. */}
+          <section className="panel danger">
+            <div className="panel-h">
+              <div>
+                <h3>Delete this company</h3>
+                <p>
+                  Recoverable for {purgeWindow} days, then permanently removed. Everybody here loses
+                  access immediately.
+                </p>
+              </div>
+            </div>
+            <div className="acct-row">
+              <div>
+                <div className="acct-row-t">{activeCo.name}</div>
+                <div className="acct-row-s">Export first if you want a copy of the model</div>
+              </div>
+              <div className="acct-row-a">
+                <button className="addbtn ghost danger" onClick={() => setDeletingCo(activeCo)}>
+                  Delete company
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {deletingCo && (
+            <DeleteCompany
+              company={deletingCo}
+              isActive={deletingCo.id === activeId}
+              isLast={companies.length === 1}
+              doc={doc}
+              onCancel={() => setDeletingCo(null)}
+              onConfirm={async () => { await doDelete(deletingCo); setDeletingCo(null); }}
+            />
+          )}
         </>
       )}
       {at === "plan" && <BillingSection account={account} companyId={activeId} onError={setErr} />}
       {at === "people" && <Members account={account} companyId={activeId} />}
       {at === "tabs" && <CompanyTabs account={account} companyId={activeId} role={myRole} />}
-      {at === "connections" && <QuickBooks companyId={activeId} />}
+      {at === "connections" && <QuickBooks account={account} companyId={activeId} mode="settings" />}
     </>);
   }
 
