@@ -255,6 +255,8 @@ const payAllocation = (doc, parts) => {
                  ...(r.unfunded > 0.01
                    ? [{ label: "Not charged", value: r.unfunded, tone: "danger" }] : [])],
     })),
+    legend: [{ label: "Charged to a project", tone: "signal" },
+             { label: "Not charged", tone: "danger" }],
     format: "percent",
     note: "Time in red is not charged to any project.",
   };
@@ -286,6 +288,8 @@ const projPace = (doc, parts) => {
   return {
     kind: "pace",
     rows,
+    legend: [{ label: "On pace", tone: "signal" }, { label: "Slightly ahead", tone: "caution" },
+             { label: "Ahead of pace", tone: "danger" }],
     format: "percent",
     note: "Above the diagonal is ahead of pace.",
   };
@@ -309,6 +313,7 @@ const projBudget = (doc, parts) => {
         ],
       };
     }),
+    legend: [{ label: "Spent", tone: "signal" }, { label: "Unspent", tone: "line" }],
     format: "percent",
     note: "How much of each award is still unspent.",
   };
@@ -446,7 +451,11 @@ const invOwnership = (doc) => {
       { label: "Investors", value: 1 - held, tone: "muted" },
     ] };
   });
-  return { kind: "hbars", rows, format: "percent", note: "Founder share after each raise." };
+  return {
+    kind: "hbars", rows, format: "percent",
+    legend: [{ label: "Founders", tone: "signal" }, { label: "Investors", tone: "muted" }],
+    note: "Founder share after each raise.",
+  };
 };
 
 /** Goals against the runway that has to survive long enough to hit them.
@@ -591,7 +600,16 @@ const invGoals = (doc) => {
     // Said in words rather than left blank: "beyond the horizon" is an answer, an empty date is a bug.
     afterRoundLabel: afterRoundAt ? shortDate(afterRoundAt) : `beyond ${HORIZON} months`,
     afterRoundEndless: !afterRoundAt,
-    format: "count",
+    // MONEY, NOT COUNT. The bridges and balances are currency; `count` would have printed them as
+    // `123456.0`. It never showed because the renderer called `money()` directly — a declared field
+    // that lies and is ignored is worse than one that is missing, because something will eventually
+    // believe it.
+    legend: [
+      { label: "Within its runway", tone: "signal" },
+      { label: "Unreachable without bridging", tone: "danger", ring: true },
+      { label: "Filed in the wrong phase", tone: "caution", ring: true },
+    ],
+    format: "money",
     note: !pre.length
       ? "No pre-raise goals set, so nothing is gating this round."
       : unreachable
@@ -696,6 +714,12 @@ const invMilestones = (doc, parts) => {
     deepestLabel: solv?.deepestAt ? shortDate(solv.deepestAt) : null,
     daysUnderwater: solv?.daysUnderwater ?? null,
     biggestBridge: biggestBridge > 0 ? biggestBridge : null,
+    legend: [
+      { label: "Reachable", tone: "signal" },
+      { label: "Negative on the day", tone: "danger" },
+      { label: "Unreachable without bridging", tone: "danger", ring: true },
+      { label: "Reached but short of target", tone: "caution", ring: true },
+    ],
     format: "money",
     note: missed
       ? `${plural(missed, "date is", "dates are")} unreachable without bridging` +
@@ -757,6 +781,7 @@ const histVariance = (doc, parts) => {
   return {
     kind: "diverging",
     rows: top.map(([code, v]) => ({ label: String(code), value: v })),
+    legend: [{ label: "Over plan", tone: "danger" }, { label: "Under plan", tone: "signal" }],
     format: "money",
     note: "Right of centre is over plan. Turns a number into somewhere to look.",
   };

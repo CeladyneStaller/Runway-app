@@ -1376,6 +1376,34 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Visual defect audit — five fixed, geometry now tested
+
+Measured rather than eyeballed: label positions and text extents computed against each chart's viewBox
+with real data. That catches arithmetic — overflow, collisions, format mismatches — and cannot catch
+anything depending on real glyph rendering or narrow viewports.
+
+1. **Timeline labels ran off the right edge.** Every row drew its text to the RIGHT of its dot, so a
+   goal at month 20 of a 23-month span ended 109px past the viewBox. Labels now flip to the left past
+   60% of the plot; the connector line already runs back to the axis, so the association survives.
+2. **The band heading collided with the first row beneath it at EVERY row count** — 8px apart with a
+   ~10px line box. `GAP` 26 -> 34 and the heading raised to `-16`.
+3. **Six charts emitted an EMPTY legend.** It was built from `spec.series`, and the row-based shapes
+   carry `rows`. The charts whose entire meaning is colour had nothing explaining it. A spec can now
+   declare `legend: [{label, tone, ring}]`, and the legend renders only when non-empty.
+4. **`inv.goals` declared `format: "count"` on currency values.** It never showed because the renderer
+   called `money()` directly — which is its own smell: a declared field that lies and is ignored will
+   eventually be believed by something.
+5. **Purchase-order labels overflowed the hbar gutter** — the 22-character cap was ~115px against a
+   110px usable gutter. Gutter to 132, cap to 20, and a `<title>` so the full name is on hover.
+
+**Five geometry tests now pin this**, computing positions the same way the audit did. And a lint
+warning caught the Goals label flip not applying: the anchor expected `cx + 14` and the markup said
+`cx + 12`, so `tx` was computed and unused. Silent at runtime; the labels would simply not have moved.
+
+**STILL NEEDS A BROWSER:** narrow viewports (the timelines have no responsive behaviour below ~620px
+and the row fallback from the mockup was never built), long names in tiles and headings, `.ms-name`'s
+fixed 190px, print styles, and focus order through the pickers and alert buttons.
+
 ## Cash crossing zero and recovering — `solvency()`
 
 A projection can dip below zero in January and be positive again in March, because a receipt lands. The

@@ -6,6 +6,9 @@ import { toJSON } from "../state/document";
 import { DeleteCompany } from "./chrome/DeleteCompany";
 import { Members } from "./chrome/Members";
 import { CompanyTabs } from "./chrome/CompanyTabs";
+import { QuickBooks } from "./chrome/QuickBooks";
+import { SettingsShell, LockedNotice } from "./chrome/SettingsShell";
+import { CompanyGeneral } from "./chrome/CompanyGeneral";
 import { Portfolio } from "./chrome/Portfolio";
 import { AdvisorBilling } from "./chrome/AdvisorBilling";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
@@ -468,7 +471,29 @@ function DeleteAccount({ account, session, companies, doc }) {
   );
 }
 
-export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTabPrefs }) {
+/** Which pages live under which entry point.
+ *
+ *  THE RULE IS ONE QUESTION: does changing it affect anybody else? Password, appearance, your advisor
+ *  plan and your data follow YOU across every company. Name, plan, people, tabs and connections belong
+ *  to THIS company and are shared.
+ */
+export const PROFILE_PAGES = [
+  { id: "profile", label: "Profile" },
+  { id: "appearance", label: "Appearance" },
+  { id: "advisor", label: "Advisor plan" },
+  { id: "data", label: "Your data" },
+];
+
+export const COMPANY_PAGES = [
+  { id: "general", label: "General", owner: true },
+  { id: "plan", label: "Plan & seats", owner: true },
+  { id: "people", label: "People" },
+  { id: "tabs", label: "Tabs", owner: true },
+  { id: "connections", label: "Connections", owner: true },
+];
+
+export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTabPrefs,
+                          scope = "profile", page = null, onGo }) {
   const account = getAccountApi();
   const session = getSessionProvider();
   const auth = getAuthAdapter();
@@ -527,48 +552,61 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
 
   if (!account || !session) return null;
 
-  return (
-    <div className="rw acct-page">
-      <div className="acct-head">
-        <div>
-          <span className="eyebrow">Account</span>
-          <h2>{email}</h2>
-        </div>
-        <button className="addbtn ghost" onClick={onClose}>Back to your model</button>
-      </div>
+  // Which page, defaulting to the first in the chosen scope.
+  const pages = scope === "company" ? COMPANY_PAGES : PROFILE_PAGES;
+  const at = pages.some(p => p.id === page) ? page : pages[0].id;
+  const myRole = companies.find(c => c.id === activeId)?.role;
+  const isOwner = myRole === "owner";
+  const activeCo = companies.find(c => c.id === activeId);
 
+  // OWNER-ONLY PAGES ARE SHOWN AND DISABLED, NOT HIDDEN. A member who cannot find billing assumes it is
+  // broken; one who sees it greyed with a reason knows who to ask.
+  const marked = pages.map(p => ({ ...p, locked: !!p.owner && !isOwner }));
+  const locked = !!marked.find(p => p.id === at)?.locked;
+
+  const shell = (children) => (
+    <SettingsShell
+      section={scope === "company" ? (activeCo?.name || "This company") : "Your account"}
+      title={pages.find(p => p.id === at)?.label || "Settings"}
+      badge={scope === "company" && isOwner ? <span className="chip pro">You are the owner</span> : null}
+      pages={marked} active={at} onGo={(id) => onGo?.(scope, id)} onBack={onClose}>
       {err && <div className="signin-error" role="alert">{err}</div>}
+      {locked && <LockedNotice what={pages.find(p => p.id === at)?.label.toLowerCase()} />}
+      <fieldset className="setfields" disabled={locked}>{children}</fieldset>
+    </SettingsShell>
+  );
 
-      <PasswordSection
-        account={account} session={session} email={email}
-        hasPassword={!!profile?.password_set_at}
-        onChanged={reload}
-      />
+  if (scope === "company") {
+    return shell(<>
+      {at === "general" && (
+        <>
+          <CompanyGeneral company={activeCo} account={account} onRenamed={reload} />
+          <DeleteCompany company={activeCo} onDeleted={doDelete} />
+        </>
+      )}
+      {at === "plan" && <BillingSection account={account} companyId={activeId} onError={setErr} />}
+      {at === "people" && <Members account={account} companyId={activeId} />}
+      {at === "tabs" && <CompanyTabs account={account} companyId={activeId} role={myRole} />}
+      {at === "connections" && <QuickBooks companyId={activeId} />}
+    </>);
+  }
 
-      {/* Above the company list, because somebody advising several companies is here to look across
-          them rather than to administer one. It renders nothing below two companies. */}
-      <Portfolio account={account} onOpen={async (id) => {
-        try { await switchCompany(auth, id); onSwitched?.(); }
-        catch (e) { setErr(e?.message || String(e)); }
-      }} />
-
-      <Members account={account} companyId={activeId} />
-
-      <CompanyTabs account={account} companyId={activeId}
-                   role={companies.find(c => c.id === activeId)?.role} />
-
-      <BillingSection account={account} companyId={activeId} onError={setErr} />
-
-      <AdvisorBilling account={account} onError={setErr} />
-
-      <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />
-
-      <CompaniesSection
-        account={account} companies={companies} activeId={activeId}
-        onReload={reload} onSwitched={doSwitch} onDeleted={doDelete} doc={doc}
-        onNewCompany={onNewCompany}
-      />
-
+  return shell(<>
+    {at === "profile" && (
+      <PasswordSection account={account} session={session} email={email}
+                       hasPassword={!!profile?.password_set_at} onChanged={reload} />
+    )}
+    {at === "appearance" && <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />}
+    {at === "advisor" && (
+      <>
+        <AdvisorBilling account={account} onError={setErr} />
+        <Portfolio account={account} onOpen={async (id) => {
+          try { await doSwitch(id); onSwitched?.(); } catch (e) { setErr(e?.message || String(e)); }
+        }} />
+      </>
+    )}
+    {at === "data" && (
+      <>
       <div className="acct-card">
         <h3>Your data</h3>
         <div className="acct-row">
@@ -585,8 +623,20 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
           </div>
           <button className="linkbtn" onClick={async () => { await flush(); await session.signOut(); }}>Sign out</button>
         </div>
+      </div>
+
+      <CompaniesSection
+        account={account} companies={companies} activeId={activeId}
+        onReload={reload} onSwitched={doSwitch} onDeleted={doDelete} doc={doc}
+        onNewCompany={onNewCompany} />
+
+      {/* LAST ON THE PAGE, deliberately. Deleting the account is the most destructive control in the
+          product and belongs at the end, after everything somebody might have come here to do. */}
+      <div className="acct-card">
         <DeleteAccount account={account} session={session} companies={companies} doc={doc} />
       </div>
-    </div>
-  );
+      </>
+    )}
+  </>);
+
 }

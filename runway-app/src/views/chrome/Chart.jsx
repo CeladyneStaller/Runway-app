@@ -213,7 +213,10 @@ function Bars({ spec }) {
 function HBars({ spec }) {
   const rows = spec.rows || [];
   const rowH = Math.min(26, Math.max(14, PH / Math.max(rows.length, 1)));
-  const labelW = 118;
+  // 132, AND THE CAP LOWERED TO MATCH. At 118px with a 22-character cap, "Northwind Energy —
+  // PO-2026-0142" measured 115px against a 110px usable gutter and overlapped its own bar. The cap was
+  // set above what the gutter could hold.
+  const labelW = 132;
 
   return (
     <svg viewBox={`0 0 ${W} ${Math.max(60, rows.length * rowH + 24)}`} role="img"
@@ -223,8 +226,9 @@ function HBars({ spec }) {
         const total = r.segments.reduce((a, sg) => a + Math.max(0, clean(sg.value)), 0) || 1;
         return (
           <g key={i}>
-            <text x={labelW - 8} y={i * rowH + rowH * 0.68} textAnchor="end" className="ch-l">
-              {String(r.label).slice(0, 22)}
+            <title>{r.label}</title>
+            <text x={labelW - 10} y={i * rowH + rowH * 0.68} textAnchor="end" className="ch-l">
+              {String(r.label).slice(0, 20)}
             </text>
             {r.segments.map((sg, j) => {
               const w = (Math.max(0, clean(sg.value)) / total) * (W - labelW - PAD.r);
@@ -312,7 +316,10 @@ function Pace({ spec }) {
 function Goals({ spec }) {
   const pre = spec.pre || [];
   const post = spec.post || [];
-  const ROW = 26, GAP = 26;
+  // GAP 34, NOT 26. The band heading sits above the first row of its band, and at 26 the heading's
+  // baseline and the row's name text were 8px apart with a ~10px line box — they overlapped at every
+  // row count, not just crowded ones.
+  const ROW = 26, GAP = 34;
   const top = PAD.t + 22;
   const preBottom = top + pre.length * ROW;
   const postTop = preBottom + (post.length ? GAP : 0);
@@ -328,6 +335,12 @@ function Goals({ spec }) {
   const band = (rows, y0, phase) => rows.map((r, i) => {
     const y = y0 + i * ROW;
     const cx = x(r.due);
+    // LABELS FLIP AT 60% OF THE PLOT. Every row draws its text to the right of its dot, so a date late
+    // in the span ran past the viewBox — measured at 109px clipped for a goal at month 20 of 23. The
+    // connector line still runs back to the axis, so the association survives the flip.
+    const flip = cx > PAD.l + PW * 0.6;
+    const tx = flip ? cx - 13 : cx + 14;
+    const anchor = flip ? "end" : "start";
     // Same two marks as the milestones chart: the DOT is the goal's own standing, the RING is whether
     // the company gets there. Learning one chart should teach the other.
     const colour = r.misfiled ? TONE.caution : r.beyondCash ? TONE.danger : TONE.signal;
@@ -343,8 +356,11 @@ function Goals({ spec }) {
         {!r.stranded && r.misfiled && (
           <circle cx={cx} cy={y} r="8" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
         )}
-        <text x={cx + 12} y={y - 2} className="ch-g">{String(r.label).slice(0, 36)}</text>
-        <text x={cx + 14} y={y + 9} className="ch-d" fill={colour}>
+        <title>{r.label}</title>
+        <text x={tx} y={y - 2} textAnchor={anchor} className="ch-g">
+          {String(r.label).slice(0, 36)}
+        </text>
+        <text x={tx} y={y + 9} textAnchor={anchor} className="ch-d" fill={colour}>
           {r.dueLabel}
           {/* A post-raise goal stranded by a PRE-ROUND hole is a different sentence: the money that
               pays for it never arrives, because the company does not reach the close. */}
@@ -381,7 +397,7 @@ function Goals({ spec }) {
         </text>
       )}
       {post.length > 0 && (
-        <text x={PAD.l} y={postTop - 8} className="ch-p" fill="var(--signal-ink)">
+        <text x={PAD.l} y={postTop - 16} className="ch-p" fill="var(--signal-ink)">
           Post-raise · their money
         </text>
       )}
@@ -426,7 +442,8 @@ function Goals({ spec }) {
 function Milestones({ spec }) {
   const mine = spec.mine || [];
   const fromRound = spec.fromRound || [];
-  const ROW = 26, GAP = 26;
+  // Same 34 as the goals chart: at 26 the band heading overlapped the first row beneath it.
+  const ROW = 26, GAP = 34;
   const top = PAD.t + 22;
   const mineBottom = top + mine.length * ROW;
   const roundTop = mineBottom + (fromRound.length ? GAP : 0);
@@ -443,6 +460,10 @@ function Milestones({ spec }) {
   const band = (rows, y0) => rows.map((r, i) => {
     const y = y0 + i * ROW;
     const cx = x(r.due);
+    // Flipped past 60% of the plot, as in the goals chart — a date late in the span ran off the edge.
+    const flip = cx > PAD.l + PW * 0.6;
+    const tx = flip ? cx - 13 : cx + 14;
+    const anchor = flip ? "end" : "start";
     // THE DOT IS THE BALANCE ON THE DAY. THE RING IS WHETHER THE COMPANY GETS THERE. A green dot in a
     // red ring says "solvent that day, insolvent before it" — the truth in two marks, which is what a
     // single colour could not hold.
@@ -457,8 +478,11 @@ function Milestones({ spec }) {
         {!r.stranded && r.short && (
           <circle cx={cx} cy={y} r="8" fill="none" stroke="var(--caution)" strokeWidth="1.5" />
         )}
-        <text x={cx + 14} y={y - 2} className="ch-g">{String(r.label).slice(0, 34)}</text>
-        <text x={cx + 14} y={y + 9} className="ch-d"
+        <title>{r.label}</title>
+        <text x={tx} y={y - 2} textAnchor={anchor} className="ch-g">
+          {String(r.label).slice(0, 34)}
+        </text>
+        <text x={tx} y={y + 9} textAnchor={anchor} className="ch-d"
               fill={r.stranded ? TONE.danger : colour}>
           {r.dueLabel}
           {` · ${money(r.bal)}`}
@@ -494,7 +518,7 @@ function Milestones({ spec }) {
         <text x={PAD.l} y={PAD.t + 8} className="ch-p" fill="var(--muted)">Dates you set</text>
       )}
       {fromRound.length > 0 && (
-        <text x={PAD.l} y={roundTop - 8} className="ch-p" fill="var(--raise)">
+        <text x={PAD.l} y={roundTop - 16} className="ch-p" fill="var(--raise)">
           From rounds · not editable here
         </text>
       )}
@@ -532,6 +556,9 @@ const SHAPES = { lines: Lines, stack: Stack, bars: Bars, hbars: HBars, diverging
 export function Chart({ spec }) {
   const Shape = useMemo(() => SHAPES[spec?.kind], [spec?.kind]);
 
+  // Declared key first, falling back to the series for the shapes that have them.
+  const legend = spec?.legend || (spec?.series || []).map(sr => ({ id: sr.id, label: sr.label, tone: sr.tone }));
+
   if (!spec || spec.empty || !Shape) {
     return (
       <div className="ch-empty">
@@ -546,13 +573,21 @@ export function Chart({ spec }) {
   return (
     <div className="ch">
       <Shape spec={spec} />
-      <div className="ch-legend">
-        {(spec.series || []).map(sr => (
-          <span key={sr.id}>
-            <i style={{ background: tone(sr.tone) }} />{sr.label}
-          </span>
-        ))}
-      </div>
+      {/* A SPEC MAY DECLARE ITS OWN KEY. The legend was built from `spec.series`, and the row-based
+          shapes — goals, milestones, pace, hbars, diverging — carry `rows` instead. Six charts were
+          emitting an EMPTY legend div, which meant the ones whose entire meaning is colour had nothing
+          explaining any of it. */}
+      {legend.length > 0 && (
+        <div className="ch-legend">
+          {legend.map((k, i) => (
+            <span key={k.id || k.label || i}>
+              <i className={k.ring ? "ring" : ""}
+                 style={k.ring ? { borderColor: tone(k.tone) } : { background: tone(k.tone) }} />
+              {k.label}
+            </span>
+          ))}
+        </div>
+      )}
       {spec.note && <div className="ch-note">{spec.note}</div>}
     </div>
   );

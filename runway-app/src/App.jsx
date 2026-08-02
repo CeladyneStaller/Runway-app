@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ProfileMenu } from "./views/chrome/ProfileMenu";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
          demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
@@ -46,7 +47,7 @@ import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 import mark from './assets/waterline-mark.svg';
 
-function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKeepDemo = () => {},
+function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
                     companyName = null, tabPrefs, onSetup = null,
                     membership = null, companyHidden = [] }) {
   const startY = doc.startY;
@@ -379,6 +380,14 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
           {SHOWN_NAV.map(([k, label, icon]) => (
             <button key={k} className={"nav" + (view === k ? " on" : "")} onClick={() => setView(k)}>{icon}{label}</button>
           ))}
+          {/* COMPANY SETTINGS LIVES IN THE RAIL, not the profile menu, because it is scoped to whichever
+              company is active and the switcher is already here. Putting a company-scoped page inside a
+              person-scoped menu is the confusion the split exists to remove. */}
+          {!demo && (
+            <button className="nav navset" onClick={() => onOpenSettings?.("company", "general")}>
+              <span aria-hidden="true">⚙</span>Company settings
+            </button>
+          )}
           <div className="railfoot">
             <input className="docname" value={doc.name} onChange={e => setDoc(d => ({ ...d, name: e.target.value }))}
               aria-label="Model name" placeholder={companyName || "Untitled model"} />
@@ -426,6 +435,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, demo = false, onLeaveDemo, onKe
               <p className="sub">{isDefaultName(doc.name) ? (companyName || "Untitled model") : doc.name} · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
             </div>
             <div className="statuspill">
+              {!demo && <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />}
               <span>Runway</span>
               <b className="num" style={specInRunway ? { color: "var(--caution)" } : null}>{zero ? zero.months.toFixed(1) + " mo" : `${HORIZON}+ mo`}</b>
               <em className="num">{zero ? dateShort(zero.date) : "positive"}</em>
@@ -861,7 +871,9 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   // are how two people share a machine.
   const [tabPrefs, setTabPrefs] = useState(() => loadTabPrefs(globalThis.localStorage));
   const [seedName, setSeedName] = useState(false);    // this document started this session empty
-  const [showAccount, setShowAccount] = useState(false);
+  // null, or { scope: 'profile'|'company', page }. A route rather than a boolean, so the two
+  // entry points can open different places and a link can name one.
+  const [showAccount, setShowAccount] = useState(null);
   const [err, setErr] = useState(null);
 
   /** The account's name for the company being looked at. A model belongs to a company, so the company's
@@ -1099,9 +1111,15 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   if (showAccount) return (
     <Account
       doc={doc}
-      onClose={() => setShowAccount(false)}
+      // WHICH SETTINGS, not just "settings". The two entry points open different scopes and the page
+      // is part of the route so a link can land on one — "open your seat settings" in an email has to
+      // go somewhere, which a modal could not offer.
+      scope={showAccount.scope || "profile"}
+      page={showAccount.page || null}
+      onGo={(scope, page) => setShowAccount({ scope, page })}
+      onClose={() => setShowAccount(null)}
       // Adding a company opens the WIZARD, not a name box. Nothing is created until it finishes.
-      onNewCompany={() => { setShowAccount(false); setSetup("company"); }}
+      onNewCompany={() => { setShowAccount(null); setSetup("company"); }}
       tabPrefs={tabPrefs}
       onTabPrefs={applyTabPrefs}
       onSwitched={(r) => {
@@ -1126,12 +1144,13 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     <RunwayApp doc={doc} setDoc={setDoc} demo={demo} onLeaveDemo={onLeaveDemo} onKeepDemo={onKeepDemo}
                companyName={companyName}
                membership={membership} companyHidden={companyHidden}
+               onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
                // The prompt exists exactly where the wizard does, so it is keyed on the SAME signal the
                // wizard trigger and the auth gate use: a registered session provider. `enableHostedSync`
                // only registers one when the config is complete, so the provider IS hosted mode. In demo
                // mode the model is never empty, and in local mode the screen above is still right.
                onSetup={!demo && getSessionProvider() ? () => setSetup("model") : null}
-               onOpenAccount={demo ? null : () => setShowAccount(true)} />
+               onOpenAccount={demo ? null : () => setShowAccount({ scope: 'profile' })} />
     {demo && wasReset && (
       <div className="cf-backdrop" role="dialog" aria-modal="true" aria-label="Demo reset">
         <div className="cf-card">

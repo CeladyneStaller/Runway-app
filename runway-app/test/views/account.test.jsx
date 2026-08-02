@@ -128,9 +128,38 @@ const start = async (session = { access_token: "jwt", user: { id: TEST_USER_ID, 
 };
 
 const btn = (c, re) => [...c.querySelectorAll("button")].find(b => re.test(b.textContent));
-const openAccount = async (container) => {
+/** Open settings at a named page.
+ *
+ *  SETTINGS SPLIT IN TWO and every panel moved onto its own page, so a test has to say WHICH page it is
+ *  about. The old helper opened one flat screen and asserted against everything at once, which is
+ *  exactly the arrangement the split removed — a page holding password, billing, layout, companies and
+ *  data with no way to tell which of them were about you and which about the company.
+ */
+const openAccount = async (container, page = "profile") => {
   fireEvent.click([...container.querySelectorAll("button")].find(b => /corey@acme\.com/.test(b.textContent)));
-  await waitFor(() => expect(container.textContent).toMatch(/Companies/));
+  await waitFor(() => expect(container.textContent).toMatch(/Your account|This company|Back/));
+  await goTo(container, page);
+};
+
+const LABEL = {
+  profile: /^Profile$/, appearance: /^Appearance$/, advisor: /^Advisor plan$/, data: /^Your data$/,
+  general: /^General/, plan: /^Plan & seats/, people: /^People$/, tabs: /^Tabs/,
+  connections: /^Connections/,
+};
+
+const goTo = async (container, page) => {
+  const re = LABEL[page];
+  if (!re) return;
+  const item = [...container.querySelectorAll(".setnav-i")].find(b => re.test(b.textContent.trim()));
+  if (item) fireEvent.click(item);
+  await waitFor(() => expect(container.querySelector(".setbody")).toBeTruthy());
+};
+
+/** Company settings, from the rail. */
+const openCompany = async (container, page = "general") => {
+  fireEvent.click([...container.querySelectorAll("button")].find(b => /Company settings/.test(b.textContent)));
+  await waitFor(() => expect(container.textContent).toMatch(/General|owner/i));
+  await goTo(container, page);
 };
 
 describe("reaching the account page", () => {
@@ -191,7 +220,7 @@ describe("companies", () => {
       { id: "co-2", name: "Northwind Labs", role: "owner", has_document: false },
     ];
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     await waitFor(() => expect(container.textContent).toMatch(/Northwind Labs/));
     expect(container.textContent).toMatch(/current/);
     expect(container.textContent).toMatch(/empty/);        // no document yet
@@ -201,7 +230,7 @@ describe("companies", () => {
     // Asking for a name, creating the company, and THEN opening a wizard whose first question is the
     // name meant typing it twice — and the company row existed before the wizard ran.
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(btn(container, /^Add company$/));
     await waitFor(() => expect(container.textContent).toMatch(/New company/));
     expect(container.querySelector("#su-name")).toBeTruthy();
@@ -211,7 +240,7 @@ describe("companies", () => {
   it("creates nothing until the wizard finishes", async () => {
     // THE POINT of the reorder: backing out leaves no orphan company behind.
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(btn(container, /^Add company$/));
     await waitFor(() => expect(container.querySelector("#su-name")).toBeTruthy());
     fireEvent.click(btn(container, /^Cancel$/));
@@ -221,7 +250,7 @@ describe("companies", () => {
 
   it("will not move off the first step without a name to create it under", async () => {
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(btn(container, /^Add company$/));
     await waitFor(() => expect(container.querySelector("#su-name")).toBeTruthy());
     expect(btn(container, /^Next$/).disabled).toBe(true);
@@ -233,7 +262,7 @@ describe("companies", () => {
 
   it("creates it with the name the wizard collected, then switches", async () => {
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(btn(container, /^Add company$/));
     await waitFor(() => expect(container.querySelector("#su-name")).toBeTruthy());
     fireEvent.change(container.querySelector("#su-name"), { target: { value: "Northwind Labs" } });
@@ -247,7 +276,7 @@ describe("companies", () => {
 
   it("renames one", async () => {
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(btn(container, /Rename/));
     const input = [...container.querySelectorAll("input")].find(i => i.value === "Celadyne Energy");
     fireEvent.change(input, { target: { value: "Celadyne Holdings" } });
@@ -315,7 +344,7 @@ describe("deleting a company", () => {
   it("requires the name to be typed before the button works", async () => {
     twoCompanies();
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     await waitFor(() => expect(container.textContent).toMatch(/Northwind Labs/));
     fireEvent.click([...container.querySelectorAll("button")].filter(b => /^Delete$/.test(b.textContent))[1]);
     await waitFor(() => expect(container.textContent).toMatch(/Delete Northwind Labs/));
@@ -331,7 +360,7 @@ describe("deleting a company", () => {
   it("deletes a company you are not currently in, without moving you", async () => {
     twoCompanies();
     const { container, auth } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     await waitFor(() => expect(container.textContent).toMatch(/Northwind Labs/));
     fireEvent.click([...container.querySelectorAll("button")].filter(b => /^Delete$/.test(b.textContent))[1]);
     await waitFor(() => expect(container.querySelector("#del-name")).toBeTruthy());
@@ -345,7 +374,7 @@ describe("deleting a company", () => {
   it("warns that unsaved work is discarded when deleting the company you are in", async () => {
     twoCompanies();
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click([...container.querySelectorAll("button")].filter(b => /^Delete$/.test(b.textContent))[0]);
     await waitFor(() => expect(container.textContent).toMatch(/Delete Celadyne Energy/));
     expect(container.textContent).toMatch(/discarded rather than written first/i);
@@ -354,7 +383,7 @@ describe("deleting a company", () => {
 
   it("says a fresh company will be made when it is the last one", async () => {
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(btn(container, /^Delete$/));
     await waitFor(() => expect(container.textContent).toMatch(/last company/i));
     expect(container.textContent).toMatch(/new empty one will be created/i);
@@ -362,7 +391,7 @@ describe("deleting a company", () => {
 
   it("is honest that your sign-in survives", async () => {
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(btn(container, /^Delete$/));
     await waitFor(() => expect(container.textContent).toMatch(/Stays:/));
     expect(container.textContent).toMatch(/your sign-in/i);
@@ -415,7 +444,7 @@ describe("abandoning a company at the storage layer", () => {
 
 describe("deleting the account", () => {
   const openDelete = async (container) => {
-    await openAccount(container);
+    await openAccount(container, "data");
     await waitFor(() => expect(container.textContent).toMatch(/Delete your account/));
     fireEvent.click([...container.querySelectorAll("button")].find(b => /^Delete$/.test(b.textContent)
       && b.closest(".acct-row")?.textContent?.includes("sign-in")));
@@ -486,7 +515,7 @@ describe("deleting the account", () => {
 describe("aggregate statistics opt-out", () => {
   it("is offered per company, on by default", async () => {
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     const box = container.querySelector('[aria-label^="Include"][type="checkbox"]');
     expect(box).toBeTruthy();
     expect(box.checked).toBe(true);            // included unless somebody opts out
@@ -495,7 +524,7 @@ describe("aggregate statistics opt-out", () => {
 
   it("calls the owner-only RPC when unticked", async () => {
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     fireEvent.click(container.querySelector('[aria-label^="Include"][type="checkbox"]'));
     await waitFor(() => expect(rpcLog.some(r => r[0] === "optout")).toBe(true));
   });
@@ -506,7 +535,7 @@ describe("recently deleted companies", () => {
     deletedRows = [{ id: "co-9", name: "Old Co", deleted_at: "2026-07-01T00:00:00Z",
                      purges_at: "2026-07-31T00:00:00Z", restores_in_window: 1 }];
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     await waitFor(() => expect(container.textContent).toMatch(/Recently deleted/));
     expect(container.textContent).toMatch(/Old Co/);
     // The DATE, not "30 days": a window the reader has to do arithmetic on is one they get wrong.
@@ -517,7 +546,7 @@ describe("recently deleted companies", () => {
     deletedRows = [{ id: "co-9", name: "Churn Co", deleted_at: "2026-07-20T00:00:00Z",
                      purges_at: "2026-08-19T00:00:00Z", restores_in_window: 3 }];
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     await waitFor(() => expect(container.textContent).toMatch(/restored 3 times recently/i));
   });
 
@@ -525,7 +554,7 @@ describe("recently deleted companies", () => {
     deletedRows = [{ id: "co-9", name: "Fine Co", deleted_at: "2026-07-20T00:00:00Z",
                      purges_at: "2026-08-19T00:00:00Z", restores_in_window: 1 }];
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     await waitFor(() => expect(container.textContent).toMatch(/Fine Co/));
     expect(container.textContent).not.toMatch(/times recently/i);
   });
@@ -533,7 +562,7 @@ describe("recently deleted companies", () => {
   it("shows nothing at all when the bin is empty", async () => {
     deletedRows = [];
     const { container } = await start();
-    await openAccount(container);
+    await openAccount(container, "data");
     expect(container.textContent).not.toMatch(/Recently deleted/);
   });
 });
