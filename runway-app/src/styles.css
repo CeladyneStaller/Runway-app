@@ -383,8 +383,18 @@
 
 @media (max-width:900px){
   .shell{grid-template-columns:1fr}
-  .rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px}
-  .brand{padding:2px 8px 2px 4px;width:100%}
+  /* ONE SCROLLING ROW, NOT THREE WRAPPED ONES. Ten items measure roughly 950px of buttons across a
+     328px screen, so `flex-wrap:wrap` spent about a fifth of a phone screen on navigation before any
+     content appeared. Scrolling is the familiar phone pattern and costs nothing above the fold.
+     `scroll-snap` keeps a half-cut button from being the resting state. */
+  .rail{position:static;height:auto;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:6px;
+        overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;
+        -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .rail::-webkit-scrollbar{display:none}
+  .rail > *{flex:none;scroll-snap-align:start}
+  /* The brand was `width:100%`, which forced a wrap on its own and defeated the row. */
+  .brand{width:auto}
+  .brand{padding:2px 8px 2px 4px}
   /* The footer holds the name field and the export buttons, which are gone — but COMPANY SETTINGS is
      in the rail now and must survive. Hiding the whole footer took the settings button with it, which
      is why it could not be reached on a phone at all. */
@@ -399,9 +409,49 @@
   /* Anchored to the right edge rather than to the avatar, which is now flush with it. */
   .pdrop{right:0;left:auto;max-width:calc(100vw - 32px)}
   .stats{grid-template-columns:repeat(2,1fr)}
+
+  /* TABLES SCROLL RATHER THAN COMPRESS.
+     `.tbl` is width:100% with no overflow rule anywhere, so a ten-column table on a 360px screen gave
+     each cell 32px — `$1,204,000` needs about 70px at this type size. The choice was never between
+     "narrow" and "wide": it was between unreadable and scrollable.
+     Done on the PANEL rather than by wrapping 21 tables in JSX, which is the same fix with none of the
+     risk of editing markup in eight files. */
+  .panel{overflow-x:auto}
+  /* 640, chosen against the WIDEST CELL rather than a round number: a ten-column table gives 64px per
+     column and `$1,204,000` needs about 70px at 13px type. So the widest tables are still tight — the
+     scroll makes them usable, not comfortable. The comfortable version hides low-value columns below
+     640px per table, which is per-table judgement rather than a stylesheet rule. */
+  .tbl{min-width:640px}
+  /* The panel header should not scroll away from the table it labels. */
+  .panel-h{position:sticky;left:0}
   .tiers,.methods,.prow{grid-template-columns:1fr}
   .main{padding:20px 16px 50px}
   .ms-track{display:none}
+
+  /* ---- TOUCH TARGETS ----
+     Everything measured under the 44px guideline: `.linkbtn` at ~25px is the serious one, because it
+     has almost no padding and its hit area is the text box — "Remove", "Cancel" and "Load their
+     version" sit next to each other in table rows at 12px tall.
+     Confined to this block ON PURPOSE: at 44px everywhere the desktop tables would gain about 20px a
+     row, which is a real cost paid by people who are not using a thumb. */
+  .linkbtn{min-height:44px;padding:12px 8px;display:inline-flex;align-items:center}
+  /* Inside a table row the same rule would double every row's height. The target grows sideways and
+     through a transparent inset instead, which a thumb finds and the layout does not notice. */
+  /* 44 STATED, not inferred from line-height plus padding — the arithmetic landed at 43.5 and a target
+     that misses its own guideline by rounding is a target nobody checked. The negative margin keeps the
+     ROW height unchanged, so the desktop table does not gain 20px a row for a thumb that is not there. */
+  .tbl .linkbtn,.acct-row .linkbtn{min-height:44px;padding:0 10px;margin:-11px -2px}
+  .iconbtn{width:44px;height:44px}
+  /* THE CIRCLE STAYS 38, THE TARGET IS 44. A 44px filled circle in the header reads as a button that
+     wants to be pressed rather than an identity mark; the hit area grows through a transparent inset
+     instead, which a thumb finds and the eye does not. */
+  .avatar{width:38px;height:38px;font-size:13px;position:relative}
+  .avatar::after{content:"";position:absolute;inset:-3px;border-radius:44px}
+  .pitem,.setnav-i{min-height:44px}
+  .addbtn{min-height:44px}
+  .nav{min-height:44px}
+  /* A file input's label is the control; without this the tap area is the text only. */
+  label.addbtn{min-height:44px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .rw :focus-visible{outline:2px solid var(--signal);outline-offset:2px;border-radius:4px}
@@ -1028,8 +1078,19 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 /* Tab charts. One per overview, chosen per device. */
 .ch-panel .panel-h p{max-width:64ch}
 .ch svg{display:block;width:100%;height:auto}
-.ch-t{font-family:var(--fm);font-size:8.5px;fill:var(--muted-2)}
-.ch-l{font-family:var(--fb);font-size:9.5px;fill:var(--muted)}
+/* CHART TEXT DOES NOT SCALE WITH THE VIEWBOX.
+   The viewBox is 720 wide and scales to its container, so on a 390px phone every label was drawn at
+   HALF its intended size — 8.5px axis text rendering at 4.2px, which is not small but absent. Setting
+   the size on the <svg> in real units and sizing the labels in `em` decouples them from the scale
+   factor: identical on desktop, legible on a phone.
+   The upper bound matters as much as the lower: without it a wide desktop chart would grow its labels
+   past the surrounding prose. */
+/* FLOOR 10.5, NOT 9. The floor is a BASE that the `em` sizes multiply down from — at 9px the axis
+   labels landed at 7.4px, which is still below the point where text stops being text. The smallest
+   class here is 0.82em, so the base has to clear 8px after that multiplication, not before it. */
+.ch-svg{font-size:clamp(10.5px, 2.5vw, 11px)}
+.ch-t{font-family:var(--fm);font-size:0.82em;fill:var(--muted-2)}
+.ch-l{font-family:var(--fb);font-size:0.9em;fill:var(--muted)}
 .ch-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;
   font-family:var(--fb);font-size:11.5px;color:var(--muted)}
 .ch-legend span{display:inline-flex;align-items:center;gap:5px}
@@ -1053,10 +1114,10 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .alert.bad{background:#FBEAE7;border:1px solid #EFC5BD}
 .alert.info{background:#EDF4F2;border:1px solid #CFE0DA}
 .alert .linkbtn{white-space:nowrap}
-.ch-f{font-family:var(--fb);font-size:9px;font-weight:600}
-.ch-g{font-family:var(--fb);font-size:10.5px;fill:var(--ink)}
-.ch-d{font-family:var(--fm);font-size:9px}
-.ch-p{font-family:var(--fb);font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.ch-f{font-family:var(--fb);font-size:0.86em;font-weight:600}
+.ch-g{font-family:var(--fb);font-size:1em;fill:var(--ink)}
+.ch-d{font-family:var(--fm);font-size:0.86em}
+.ch-p{font-family:var(--fb);font-size:0.95em;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .ch-legend i.ring{background:none;border:1.6px solid currentColor;border-radius:9px}
 
 /* ---- profile menu ---- */

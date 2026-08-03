@@ -1376,6 +1376,59 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Mobile: the rail and touch targets
+
+**THE RAIL SCROLLS IN ONE ROW.** At <=900px it turned horizontal with `flex-wrap:wrap`, and ten items
+measure roughly 950px of buttons across a 328px screen — three wrapped rows, about a fifth of a phone
+screen spent on navigation before any content appeared. Now `flex-wrap:nowrap` with `overflow-x:auto`
+and `scroll-snap-type: x proximity`, so a half-cut button is not the resting state.
+
+**`.brand{width:100%}` was defeating the row on its own**, before any nav item was measured. Easy to
+miss because the symptom — a wrapped rail — looks entirely like a wrapping problem.
+
+**EVERY TAPPABLE CONTROL MEASURED UNDER 44px**: `.linkbtn` ~25, `.iconbtn` 28, `.avatar` 30, `.pitem`
+and `.setnav-i` ~31, `.addbtn` ~36, `.nav` ~37. `.linkbtn` is the serious one — almost no padding, so
+its hit area is the text box, and "Remove", "Cancel" and "Load their version" sit next to each other in
+table rows at 12px tall.
+
+**All raised to 44, INSIDE THE MEDIA QUERY ONLY.** At 44px everywhere the desktop tables would gain
+about 20px a row, paid by people who are not using a thumb.
+
+**Two techniques worth keeping.** In a table row the target grows through a NEGATIVE MARGIN rather than
+padding, so the row height does not change. And the avatar's circle stays 38px while its target is 44,
+through a transparent `::after` inset — a 44px filled circle in the header reads as a button demanding
+to be pressed rather than an identity mark.
+
+**One number was 43.5 by arithmetic** — line-height plus padding — and is now stated explicitly. A
+target that misses its own guideline by rounding is a target nobody checked.
+
+## Mobile: chart text and table overflow
+
+**EVERY CHART LABEL WAS 4-5px ON A PHONE.** The viewBox is 720 wide and scales to its container, so a
+font size declared in pixels is multiplied by the scale factor — on a 390px screen that is 0.50, turning
+8.5px axis text into 4.2px. Below about 8px text is not small, it is absent.
+
+`.ch-svg` now sets `clamp(10.5px, 2.5vw, 11px)` and every label class sizes in `em`, which decouples
+them from the scale entirely. **The floor is 10.5 rather than 9**, and the first attempt got that wrong:
+the floor is a BASE the em sizes multiply DOWN from, so it has to clear 8px AFTER multiplication, not
+before. At 9px the smallest class still landed at 7.4px. Four tests pin the arithmetic, including one
+that fails if any label goes back to a pixel size.
+
+**TABLES SCROLL RATHER THAN COMPRESS.** `.tbl` was `width:100%` with no overflow rule anywhere, so ten
+columns across a 328px screen gave each cell 32px — `$1,204,000` needs about 70px. Done on `.panel`
+with `overflow-x:auto` and `min-width:640px` on the table, rather than wrapping 21 tables across eight
+files: the same fix without editing markup in eight places, which is where regex-over-JSX had already
+gone wrong twice today. `.panel-h` is sticky so the header does not scroll away from what it labels.
+
+**640 is chosen against the widest cell, not rounded.** Ten columns still get 64px, so the widest tables
+are usable rather than comfortable. The comfortable version hides low-value columns below 640px per
+table, which is per-table judgement rather than a stylesheet rule.
+
+**A TEST OF MINE PASSED ITS WAY TO A FALSE FAILURE.** The `emOf` matcher was escaped for the template
+literal as well as the regex, so it matched nothing, every size read as 0, and the failure looked like a
+product bug rather than a broken test. Third escaping mistake today; the fix was to stop writing regexes
+through a shell heredoc.
+
 ## Import/export moved, model name deleted, avatar placed
 
 **Company settings -> Data, owner-only.** Import replaces the model every member of the company sees;

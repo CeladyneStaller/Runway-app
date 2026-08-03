@@ -113,7 +113,7 @@ function Lines({ spec }) {
   const path = (vals) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ");
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.band && (
         // The band is drawn first and lightly: it is context for the line, not a third series.
@@ -165,7 +165,7 @@ function Stack({ spec }) {
   });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {bands.map(({ sr, lo, hi }) => (
         <path key={sr.id} fill={tone(sr.tone)} opacity="0.5"
@@ -194,7 +194,7 @@ function Bars({ spec }) {
   const barW = Math.max(2, (groupW * 0.7) / spec.series.length);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.series.map((sr, si) => sr.values.map((v, i) => {
         const x = PAD.l + i * groupW + groupW * 0.15 + si * barW;
@@ -219,7 +219,7 @@ function HBars({ spec }) {
   const labelW = 132;
 
   return (
-    <svg viewBox={`0 0 ${W} ${Math.max(60, rows.length * rowH + 24)}`} role="img"
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${Math.max(60, rows.length * rowH + 24)}`} role="img"
          aria-label={spec.aria || "chart"}>
       {rows.map((r, i) => {
         let x = labelW;
@@ -254,7 +254,7 @@ function Diverging({ spec }) {
   const half = (W - labelW - PAD.r) / 2;
 
   return (
-    <svg viewBox={`0 0 ${W} ${Math.max(60, rows.length * rowH + 20)}`} role="img"
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${Math.max(60, rows.length * rowH + 20)}`} role="img"
          aria-label={spec.aria || "chart"}>
       <line x1={mid} y1={0} x2={mid} y2={rows.length * rowH} stroke="var(--line)" />
       {rows.map((r, i) => {
@@ -278,7 +278,7 @@ function Diverging({ spec }) {
 function Pace({ spec }) {
   const rows = spec.rows || [];
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
       <line x1={PAD.l} y1={PAD.t + PH} x2={W - PAD.r} y2={PAD.t + PH} stroke="var(--line)" />
       <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH} stroke="var(--line)" />
       <line x1={PAD.l} y1={PAD.t + PH} x2={W - PAD.r} y2={PAD.t}
@@ -376,7 +376,7 @@ function Goals({ spec }) {
   });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H2}`} role="img"
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${H2}`} role="img"
          aria-label={`${pre.length} pre-raise and ${post.length} post-raise goals on a calendar` +
            (spec.cashOutLabel ? `, cash running out on ${spec.cashOutLabel}` : "")}>
       {/* The two runways, each shaded only under its own phase. Shading the whole width would claim
@@ -498,7 +498,7 @@ function Milestones({ spec }) {
   });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H2}`} role="img"
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${H2}`} role="img"
          aria-label={`${mine.length + fromRound.length} milestones on a calendar` +
            (spec.cashOutEndless ? "" : `, cash running out on ${spec.cashOutLabel}`)}>
       {cliff != null && (
