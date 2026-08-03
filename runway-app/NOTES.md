@@ -1376,6 +1376,39 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Landing page — where somebody starts (migration 044)
+
+`engine/landing.js` is a pure rule with four inputs, kept out of the component because the settings UI
+needs the same answer to show somebody what their choice resolves to.
+
+- **One company** -> that company. The portfolio is BLOCKED, not hidden: a list of one is a worse
+  version of that company.
+- **Several** -> a company they OWN, then the OLDEST. Owning is the strongest signal a company is theirs
+  rather than one they were invited to; oldest is stabler than most-recent, which would move the landing
+  every time somebody adds them to something.
+- **Advisor** -> the portfolio, and they may still choose a company instead.
+
+**A STORED 'portfolio' IS REFUSED FOR A NON-ADVISOR**, not silently honoured — a preference saved while
+somebody was an advisor must not survive them ceasing to be one. It is still STORED, though, so a lapsed
+and resumed advisor plan does not lose the choice. What is allowed is decided on read.
+
+**On `profiles`, beside `last_company_id`**, because a landing choice follows the PERSON. In localStorage
+it would mean signing in on a laptop and a phone to two different screens.
+
+**The setting says what "decide for me" RESOLVES TO**, using the same function the app lands with —
+otherwise somebody changes the setting just to find out what it was.
+
+**TWO HOOK BUGS, and the second cost 31 test failures.**
+1. `account?.advisorPlan?.().then(...)` — `?.()` guards the CALL, not the chain after it, so a stub
+   without the method threw during render.
+2. **The landing effect sat BELOW five conditional returns.** On any render taking an early exit —
+   loading, bad load state, setup wizard — React saw fewer hooks than the render before. The message,
+   "rendered more hooks than during the previous render", names neither the hook nor the component, and
+   removing the two suspects one at a time was the only way to find it.
+
+**The logo was missing because I dropped it two turns ago**, replacing the invented `brandmark` element
+with text and leaving the image out — the rail kept its words and lost its mark.
+
 ## The profile menu was missing from the advisor's own home
 
 The avatar was in the company app's header and nowhere else, so an advisor — whose HOME the portfolio

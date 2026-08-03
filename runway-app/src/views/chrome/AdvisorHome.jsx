@@ -11,6 +11,7 @@
 // Loading is PROGRESSIVE and per-company. Twenty models is twenty round trips, and a screen that waits
 // for the slowest one is a screen that looks broken for the nineteen that already arrived.
 import React, { useEffect, useMemo, useState } from "react";
+import mark from "../../assets/waterline-mark.svg";
 import { money } from "../../engine/money";
 import { runwayMonths } from "./docsummary";
 import { buildModelParts, buildModelFromDoc } from "../../engine/buildmodel";
@@ -187,9 +188,10 @@ export function AdvisorHome({ account, onEnterCompany, onOpenSettings }) {
     <div className="rw">
     <div className="shell">
       <aside className="rail">
-        {/* The real brand block: an image and two lines. `brandmark` was invented and rendered as
-            nothing, which is how the rail lost its top-left corner. */}
+        {/* THE MARK, which I dropped when fixing the invented `brandmark` class — I replaced the
+            element with text and left the image out, so the rail kept its words and lost its logo. */}
         <div className="brand">
+          <img src={mark} alt="Waterline" width={100} />
           <div><b>Waterline</b><span>runway control</span></div>
         </div>
 

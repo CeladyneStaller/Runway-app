@@ -10,6 +10,7 @@ import { QuickBooks } from "./chrome/QuickBooks";
 import { SettingsShell, LockedNotice } from "./chrome/SettingsShell";
 import { CompanyGeneral } from "./chrome/CompanyGeneral";
 import { CompanyData } from "./chrome/CompanyData";
+import { LandingSetting } from "./chrome/LandingSetting";
 import { Portfolio } from "./chrome/Portfolio";
 import { AdvisorBilling } from "./chrome/AdvisorBilling";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
@@ -506,6 +507,19 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState(null);
   const [deletingCo, setDeletingCo] = useState(null);
+  // WHETHER THE PORTFOLIO EXISTS FOR THIS PERSON, which the landing setting needs to know before it can
+  // offer it. Fetched rather than assumed from `companies` — advising is a flag on the profile, not a
+  // count of memberships.
+  const [advisorPlan, setAdvisorPlan] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    // `?.()` GUARDS THE CALL, NOT THE CHAIN AFTER IT. Without the second `?.`, an account object
+    // without `advisorPlan` returns undefined and `.then` throws DURING RENDER — which React reports as
+    // "rendered more hooks than during the previous render", a message pointing nowhere near the cause.
+    // 31 tests failed on this and none of them named it.
+    account?.advisorPlan?.()?.then(p => { if (alive) setAdvisorPlan(p); })?.catch(() => {});
+    return () => { alive = false; };
+  }, [account]);
 
   const reload = async () => {
     if (!account) return;
@@ -648,7 +662,14 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
       <PasswordSection account={account} session={session} email={email}
                        hasPassword={!!profile?.password_set_at} onChanged={reload} />
     )}
-    {at === "appearance" && <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />}
+    {at === "appearance" && (
+      <>
+        <LandingSetting account={account} companies={companies}
+                        isAdvisor={advisorPlan?.allowed > 0 || advisorPlan?.companies > 0}
+                        value={profile?.landing || ""} onSaved={reload} />
+        <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />
+      </>
+    )}
     {at === "advisor" && (
       <>
         <AdvisorBilling account={account} onError={setErr} />

@@ -133,6 +133,11 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       return (await rpc("advisor_focus", { p_company_id: companyId })) || [];
     },
 
+    /** Where this person lands. `null` clears it back to the default rule. */
+    async setLanding(value) {
+      await rpc("set_landing", { p_landing: value ?? null });
+    },
+
     async advisorPlan() {
       const rows = await rpc("advisor_usage", {});
       return unwrapOne(rows) || { companies: 0, allowed: 0 };

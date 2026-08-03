@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
 import { AdvisorHome } from "./views/chrome/AdvisorHome";
+import { landingFor, portfolioAllowed, PORTFOLIO } from "./engine/landing";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
          demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
@@ -905,6 +906,10 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   const [showAccount, setShowAccount] = useState(null);
   // Advisors land here. Set once the profile says so, and cleared when they enter a client.
   const [advisorHome, setAdvisorHome] = useState(false);
+  // Whether the portfolio exists for this person at all — an advisor screen, blocked for everybody
+  // else rather than merely hidden.
+  const [mayPortfolio, setMayPortfolio] = useState(false);
+  const [landingCompany, setLandingCompany] = useState(null);
   const [enterView, setEnterView] = useState(null);
   const [err, setErr] = useState(null);
 
@@ -934,11 +939,22 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     let alive = true;
     (async () => {
       try {
-        const plan = await getAccountApi()?.advisorPlan?.();
-        // `companies` is how many they advise. Somebody with an advisor plan and no clients still gets
-        // the portfolio — it is the screen that explains what happens next.
-        if (alive && plan && (plan.allowed > 0 || plan.companies > 0)) setAdvisorHome(true);
-      } catch { /* not an advisor, or offline: the ordinary app is the right fallback */ }
+        const api = getAccountApi();
+        const [plan, list, prof] = await Promise.all([
+          api?.advisorPlan?.().catch(() => null),
+          api?.listCompanies?.().catch(() => []),
+          api?.profile?.().catch(() => null),
+        ]);
+        // ONE RULE, IN THE ENGINE. The screen to land on has four inputs and several ways to be subtly
+        // wrong, and the settings UI needs the same answer to show somebody what their choice resolves
+        // to — so it is a pure function rather than a condition here.
+        const isAdvisor = !!plan && (plan.allowed > 0 || plan.companies > 0);
+        const where = landingFor({ companies: list || [], isAdvisor, preferred: prof?.landing || null });
+        if (!alive) return;
+        setMayPortfolio(portfolioAllowed({ isAdvisor }));
+        if (where.view === PORTFOLIO) setAdvisorHome(true);
+        else if (where.companyId) setLandingCompany(where.companyId);
+      } catch { /* offline, or no account: the ordinary app is the right fallback */ }
       if (alive) setAdvisorChecked(true);
     })();
     return () => { alive = false; };
@@ -1079,6 +1095,29 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
 
   // ANSWERED BEFORE THE MODEL LOADS. Somebody arriving on an invitation link is not here to look at
   // their own numbers, and dropping them into a dashboard with a banner buries the decision.
+  // ABOVE EVERY CONDITIONAL RETURN. This sat below five of them, so on any render that took an
+  // early exit — loading, a bad load state, the setup wizard — React saw fewer hooks than the
+  // render before and threw "rendered more hooks than during the previous render". That message
+  // names neither the hook nor the component, and 31 tests failed without pointing at it.
+  // LAND ON THE PREFERRED COMPANY. Only when it is not already the active one — `last_company_id`
+  // usually agrees, and switching to a company you are already in would flush and reload for nothing.
+  useEffect(() => {
+    if (!landingCompany) return;
+    const at = getAuthAdapter()?.activeCompany?.();
+    if (at === landingCompany) { setLandingCompany(null); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const r = await switchCompany(getAuthAdapter(), landingCompany);
+        if (!alive) return;
+        if (r?.doc) setDoc(r.doc);
+        loadCompanyName();
+      } catch { /* the company they last used is a fine fallback */ }
+      if (alive) setLandingCompany(null);
+    })();
+    return () => { alive = false; };
+  }, [landingCompany, setDoc, loadCompanyName]);
+
   if (inviteToken && !demo) return (
     <div className="rw">
       <AcceptInvite
@@ -1186,7 +1225,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   // AN ADVISOR'S HOME IS THE PORTFOLIO. Everybody else signs in to one model; an advisor signs in to a
   // list of them. Entering a client hands over to the ordinary app — same tabs, same permission rules,
   // no second implementation of anything — and `advisorHome` is how they get back.
-  if (advisorHome) return (
+  if (advisorHome && mayPortfolio) return (
     <AdvisorHome
       account={getAccountApi()}
       onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
