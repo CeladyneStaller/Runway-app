@@ -288,12 +288,14 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
   // against hiding precisely so there is always a destination.
   useEffect(() => {
     const next = landingView(view, tabPrefs, { role: membership?.role,
-                                               isAdvisor: membership?.is_advisor, companyHidden });
+                                               isAdvisor: membership?.is_advisor, companyHidden,
+                                               advisorFocus: membership?.focus_tabs ?? null });
     if (next !== view) setView(next);
     // The membership and the company's tab list belong here too: a role arriving after first render
     // can hide the view somebody is looking at, and without the dependency they would sit on a tab
     // that is no longer in the nav.
-  }, [view, tabPrefs, setView, membership?.role, membership?.is_advisor, companyHidden]);
+  }, [view, tabPrefs, setView, membership?.role, membership?.is_advisor, companyHidden,
+      membership?.focus_tabs]);
 
 
   // Your entire backup story: a JSON file you own, on a disk you own. It's also the migration test —
@@ -370,6 +372,16 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
     <TabPrefsProvider value={tabPrefs}>
     <StartCtx.Provider value={startCtx}>
     <div className="rw">
+      {/* SAID ONCE, AT THE TOP, and never repeated at each gap. Without this the design is
+          indistinguishable from a bug: the first thing a focused advisor does is email the owner to
+          ask why half the app is missing, which is the opposite of what the owner wanted. */}
+      {Array.isArray(membership?.focus_tabs) && (
+        <div className="alert info focusbar">
+          <span>
+            {companyName || "This company"} has focused your view on the tabs you work on.
+          </span>
+        </div>
+      )}
       <UnpaidBar onOpenAccount={onOpenAccount} />
       {onSetup && isEmpty && <SetupBar onSetup={onSetup} onImport={doImport} />}
       <div className="shell">

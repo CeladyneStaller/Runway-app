@@ -327,3 +327,50 @@ describe("an unknown role does not hide anything", () => {
     expect(canSeeTab("scn", { role: "editor" })).toBe(false);
   });
 });
+
+describe("advisor focus — the fourth layer of tab visibility", () => {
+  // company (030) · personal (tabprefs) · role · and now the owner focusing ONE advisor.
+  const see = (view, ctx) => tabIsVisible(view, { isAdvisor: true, role: "viewer", ...ctx });
+
+  it("shows everything when no focus is set", () => {
+    // `null` is not an empty list. Absent means "everything the company shows"; empty would mean "no
+    // tabs", and an advisor with no tabs is a removed advisor.
+    expect(see("pay", { advisorFocus: null })).toBe(true);
+    expect(see("pay", {})).toBe(true);
+  });
+
+  it("hides a tab outside the focus", () => {
+    expect(see("pay", { advisorFocus: ["flow", "proj"] })).toBe(false);
+    expect(see("flow", { advisorFocus: ["flow", "proj"] })).toBe(true);
+  });
+
+  it("CANNOT ADD BACK what the company turned off", () => {
+    // The company's own hidden tabs are a floor. Focus takes away further, never restores — otherwise
+    // an owner could grant an advisor a tab their own staff cannot see.
+    expect(see("sales", { companyHidden: ["sales"], advisorFocus: ["sales", "flow"] })).toBe(false);
+  });
+
+  it("never hides the dashboard", () => {
+    // It is the fallback whenever the current view disappears, so an advisor focused away from it would
+    // land on nothing. The server enforces this too; this is the client's copy.
+    expect(see("dash", { advisorFocus: ["flow"], locked: true })).toBe(true);
+  });
+
+  it("does not override the role gate", () => {
+    // Focus is the owner's preference about an advisor's attention. What a role may see at all is a
+    // different question and answered first.
+    expect(tabIsVisible("scn", { role: "viewer", isAdvisor: false, advisorFocus: ["scn"] }))
+      .toBe(canSeeTab("scn", { role: "viewer", isAdvisor: false }));
+  });
+
+  it("leaves a member alone", () => {
+    // Focus applies to advisors only — the server refuses to set it on anybody else. A member holds a
+    // seat and can edit; focusing them would be a permission system pretending to be a preference.
+    expect(tabIsVisible("pay", { role: "editor", isAdvisor: false, advisorFocus: null })).toBe(true);
+  });
+
+  it("still lets a person hide more for themselves", () => {
+    // Four layers, all subtractive, in a fixed order.
+    expect(see("proj", { advisorFocus: ["flow", "proj"], personalHidden: ["proj"] })).toBe(false);
+  });
+});

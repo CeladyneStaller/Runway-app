@@ -4,6 +4,7 @@
 // the server will accept: roles above your own are not in the dropdown, and a full company says so
 // before you type an address rather than after.
 import React, { useCallback, useEffect, useState } from "react";
+import { AdvisorFocus } from "./AdvisorFocus";
 import { I } from "./icons";
 import { ROLES, grantableBy, canInvite, roleChangeRefusal, removalRefusal,
          seatSummary, seatsLeft, REFUSALS } from "../../engine/roles";
@@ -19,7 +20,7 @@ const explain = (e) => {
   return raw || "That did not work.";
 };
 
-export function Members({ account, companyId, canManage }) {
+export function Members({ account, companyId, companyHidden = [], canManage }) {
   const [members, setMembers] = useState([]);
   const [invites, setInvites] = useState([]);
   const [usage, setUsage] = useState(null);
@@ -125,6 +126,13 @@ export function Members({ account, companyId, canManage }) {
                   </button>
                 )}
               </div>
+
+              {/* Under the row, not beside it: focus is a paragraph of choices rather than a control,
+                  and squeezing it into the action column would make it look like a role dropdown. */}
+              {m.is_advisor && manage && (
+                <AdvisorFocus account={account} companyId={companyId} member={m}
+                              companyHidden={companyHidden} onSaved={load} />
+              )}
             </div>
           );
         })}

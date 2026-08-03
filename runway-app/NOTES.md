@@ -1376,6 +1376,38 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Advisor focus — migration 043, Layer 1 only
+
+The owner chooses which tabs an advisor works on. Per ADVISOR, not per role: two advisors on one company
+are usually there for different reasons, and the tax person does not need the cap table.
+
+**A FOURTH LAYER of tab visibility, and the ORDER is the rule.** `tabIsVisible` checks
+`companyHidden` BEFORE focus, so the company's own hidden tabs are a FLOOR — focus takes away further,
+never adds back. Otherwise an owner could grant an advisor a tab their own staff cannot see.
+
+**`null` is not an empty list.** Absent means "everything the company shows"; empty would mean "no
+tabs", and an advisor with no tabs is a removed advisor. The server refuses to store one, and the client
+says "remove them instead" rather than surfacing an error.
+
+**⚠️ THIS IS FOCUS, NOT CONFIDENTIALITY, AND THE LABELLING CARRIES THE WHOLE WEIGHT.** `load_document`
+delivers the model as one blob, so an advisor's browser receives every salary whatever is set here — it
+hides the TAB, not the data. Every string says "what they work on"; none says access, permission or
+private. A checkbox labelled "Payroll" that does not withhold payroll is worse than no checkbox: it is a
+promise the software does not keep. And a user who believes salaries are hidden will never ask for the
+feature that would hide them. **The panel says so in its own body text, not just in a comment.**
+
+**THE BANNER IS NOT OPTIONAL.** Without it this is indistinguishable from a bug, and the first thing a
+focused advisor does is email the owner asking why half the app is missing — the opposite of what the
+owner wanted. Said once at the top, never repeated at each gap: placeholder tiles turn a focused view
+into a list of what you are not trusted with.
+
+**A tab the company has turned off shows as ticked-and-disabled with the reason**, rather than a tick
+that does nothing. A control lying about its own effect is the same failure as the labelling one, at
+smaller scale.
+
+**Layer 2 — real withholding — is documented and NOT built.** It needs `employees` out of the blob and a
+role-aware `load_document`. Plan: `LAYER-2-advisor-confidentiality.md` in outputs.
+
 ## Advisor UI — scenarios on the company tab (stage 3, complete)
 
 `AdvisorScenarios` is mounted on the advisor's company tab. **Mounted, not rebuilt** — it was already

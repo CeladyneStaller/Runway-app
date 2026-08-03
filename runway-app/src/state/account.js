@@ -117,6 +117,22 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       return (await r.json()).url;
     },
 
+    /** What THIS caller may see here. One call rather than two, so the intersection cannot drift. */
+    async myVisibleTabs(companyId) {
+      const rows = await rpc("my_visible_tabs", { p_company_id: companyId });
+      return unwrapOne(rows) || { hidden: [], focus: null, focused_by_owner: false };
+    },
+
+    /** Owner only. `null` clears a focus; an empty list is refused by the server, because an advisor
+     *  with no tabs is a removed advisor. */
+    async setAdvisorFocus(companyId, userId, tabs) {
+      await rpc("set_advisor_focus", { p_company_id: companyId, p_user_id: userId, p_tabs: tabs });
+    },
+
+    async advisorFocus(companyId) {
+      return (await rpc("advisor_focus", { p_company_id: companyId })) || [];
+    },
+
     async advisorPlan() {
       const rows = await rpc("advisor_usage", {});
       return unwrapOne(rows) || { companies: 0, allowed: 0 };

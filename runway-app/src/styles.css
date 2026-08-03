@@ -1206,3 +1206,19 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .tt .ttf{position:absolute;top:10px;right:11px;font-size:10.5px;color:var(--muted-2)}
 .tt.attn{border-color:#EFC5BD;background:#FEF8F7}
 .tt.warn{border-color:#E8D3A8;background:#FDFAF3}
+.alert.info{background:#EEEDFE;border:1px solid #CFCCF0}
+.focusbar{margin:0 0 10px}
+
+/* ---- advisor focus ---- */
+.focusbox{margin:2px 0 10px;padding:11px 13px;background:var(--paper);border-radius:10px}
+.segbtn{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.segbtn button{font-family:var(--fb);font-size:11.5px;padding:6px 11px;border:none;
+  background:var(--card);color:var(--muted);cursor:pointer;border-right:1px solid var(--line)}
+.segbtn button:last-child{border-right:none}
+.segbtn button.on{background:var(--ink);color:#fff;font-weight:500}
+.focusgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:2px 18px;margin-top:8px}
+.focusgrid .tog{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;padding:4px 0}
+.focusgrid .tog input{margin-top:3px;accent-color:var(--signal)}
+.focusgrid .tog.off{opacity:.55}
+.focusgrid .tog em{display:block;font-style:normal;font-size:10.5px;color:var(--muted-2)}
+.focusnote{font-size:11.5px;color:var(--muted-2);margin:9px 0 0;line-height:1.55}

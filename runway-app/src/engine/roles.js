@@ -167,9 +167,21 @@ export function canSeeTab(view, { role, isAdvisor = false } = {}) {
  *  overrides the other.
  */
 export function tabIsVisible(view, { companyHidden = [], personalHidden = [], role, isAdvisor = false,
-                                     locked = false } = {}) {
+                                     advisorFocus = null, locked = false } = {}) {
   if (locked) return true;                       // the Dashboard is the fallback and cannot vanish
   if (!canSeeTab(view, { role, isAdvisor })) return false;
   if (companyHidden.includes(view)) return false;
+
+  // ADVISOR FOCUS — the owner deciding which tabs this advisor works on. A FOURTH layer, and the order
+  // here is the rule: `companyHidden` is checked FIRST and is a floor. Focus can take away further,
+  // never add back, so an advisor focused onto a tab the company has turned off still does not see it.
+  //
+  // `null` means no focus set, which is different from an empty list. An empty list would mean "no
+  // tabs", and an advisor with no tabs is a removed advisor — the server refuses to store one.
+  //
+  // ⚠️ PRESENTATION ONLY. The document is delivered whole; this hides the tab and not the data. Every
+  // label above this says "what they work on", never "what they can access".
+  if (Array.isArray(advisorFocus) && !advisorFocus.includes(view)) return false;
+
   return !personalHidden.includes(view);
 }
