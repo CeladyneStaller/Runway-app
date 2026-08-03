@@ -1376,6 +1376,141 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Advisor UI — scenarios on the company tab (stage 3, complete)
+
+`AdvisorScenarios` is mounted on the advisor's company tab. **Mounted, not rebuilt** — it was already
+parameterised, and a second smaller version would be a second definition of what a scenario does.
+
+**It is the one writing act on a screen where an advisor is otherwise a viewer**, which is the whole
+answer to "so what can they actually do here".
+
+**THE TILE AND THE PANEL SHARE ONE FETCH.** The Scenarios tile would otherwise have called
+`myScenarios` itself to say "3 yours · 1 offered" — two fetches for one list, and two chances to
+disagree about a number both are showing on the same screen. The panel reports its list up through
+`onCount`, and until it arrives the tile is ABSENT rather than reading zero: undefined means nobody
+fetched, `[]` means the advisor has none.
+
+**The callback is held in a REF, not a dependency.** Adding it to `load`'s deps re-fetches whenever the
+parent re-renders with a fresh function — a refetch loop that presents as a slow network rather than as
+a bug. Lint caught the missing dependency; the ref is the honest fix rather than silencing it.
+
+## Advisor UI — scenarios on the company tab (stage 3, complete)
+
+`AdvisorScenarios` is mounted on the advisor's company tab. It already existed and was already
+parameterised, so this was a mount rather than a build — the alternative, a smaller advisor-shaped copy,
+is how a product ends up with two definitions of what a scenario does.
+
+**THE TILE READS WHAT THE PANEL LOADED.** `onCount` was already on the component for exactly this. A
+second fetch would let the scenarios tile and the list six inches below it disagree, which is the worst
+kind of disagreement because both look authoritative. A test asserts `myScenarios` is called ONCE.
+
+**`undefined` and `[]` stay distinct all the way through.** Nobody has fetched them yet versus the
+advisor has none — the tile shows nothing rather than "0 scenarios", which would be a lie with a very
+short shelf life.
+
+**A SPREAD THAT WOULD HAVE DEFEATED AN EARLIER GUARD.** The mount read
+`advisorTiles({ ...doc }, ...)`, and `{ ...null }` is `{}` — truthy, empty, and exactly the shape the
+tile layer refuses on purpose so a model that would not load cannot report a burn of zero. The
+component's own null check catches it first TODAY, which is what makes this the dangerous kind of bug:
+harmless, invisible, and one refactor away from mattering.
+
+## Advisor UI — the landing route and the rail (stage 2)
+
+`AdvisorHome.jsx` is now the default screen for anybody with an advisor plan. The rail is their client
+list; each entry opens that client's tab in place; `onEnterCompany(id, view)` hands over to the ordinary
+app at a NAMED TAB, and `startView` makes it open there. `onBackToPortfolio` is the way back, in the
+rail beside Company settings.
+
+**Landing is decided ONCE per session**, on the first successful `advisorPlan()` read. An advisor who
+has navigated into a client must stay there on the next render — this chooses where a session starts,
+not where every render goes.
+
+**Somebody with an advisor plan and no clients still gets the portfolio.** It is the screen that
+explains what happens next; dropping them into an empty company model would not.
+
+**Loading is progressive and per-client.** Twenty models is twenty round trips and a screen that waits
+for the slowest looks broken for the nineteen that arrived. A client whose model fails is MARKED, not
+dropped — omitting it would tell an advisor they have fewer clients than they do, and a blank cell would
+read as a client with nothing wrong.
+
+**An unknown runway sorts LAST, not first.** Still-loading clients at the top of a list sorted by
+urgency would be a queue of false alarms that reorders itself as it settles.
+
+**Above eight clients the rail lists only what needs attention.** A rail with twenty entries is a
+scrollbar, which is not navigation.
+
+**THREE WRONG IMPORT PATHS, all found by the build rather than by review:** `readCompanyDocument` is a
+method on the account API, not a module export (and it must go through `load_document` +
+`assembleFromStorage`, because the blob no longer carries projects — reading the table directly was a
+silent wrong-runway bug once already); `runwayMonths` lives in `views/chrome/docsummary`, not
+`engine/stats` or `engine/docsummary`. Guessing a path from a function's name cost four build cycles.
+
+**A `str_replace` assertion aborted a script mid-write and left `App.jsx` half-edited** — the back
+button inserted, its prop never declared. The build caught it immediately, but it is the fourth
+string-matching failure in this session; the working fix was to edit the line by index instead.
+
+## Advisor UI — the tile layer (stage 1 of 3)
+
+**Built:** `src/engine/advisor.js` (`advisorTiles`, `TILES`) and `src/views/chrome/AdvisorCompany.jsx`.
+**Not yet built:** the advisor landing route and the rail listing clients — the two pieces that make
+this the DEFAULT view for an advisor rather than a component nothing mounts.
+
+**The tiles are the navigation.** One per tab; clicking Payroll opens that client's Payroll tab, not
+their dashboard. An advisor between meetings already knows which part of the business they are worried
+about.
+
+**NOTHING IS NEW ARITHMETIC.** Every figure comes from where its tab gets it — `payrollNow` and
+`derivedBurn` from `buildModelParts`, `spentToDate` for grants, `saasSeries` for MRR, `instConf` and
+`closeMonth` for the round, `msWithBal` for the next date. **If a tile ever disagrees with its tab, the
+tile is wrong by definition.**
+
+**A PLAUSIBLE ZERO IS WORSE THAN AN ERROR.** The first payroll tile summed `l.amounts[0]` across
+`employeeLines`, and those lines carry a flat `amount` with no per-month array — so every payroll tile
+read "0k/mo · 0% of burn". Nothing threw; the tile simply lied. `payrollNow` was already computed two
+fields away.
+
+**ABSENT AND ZERO ARE DIFFERENT STATEMENTS**, in three places here: a company with no SaaS has no MRR
+tile rather than an MRR of nothing; `myScenarios` undefined means nobody fetched them, while `[]` means
+the advisor has none; and **a document that would not load returns no tiles at all** rather than a
+company-shaped set of zeros — without that guard, `rowsOf` built a projection from `{}` and reported a
+burn of zero beside the portfolio's "could not read this model".
+
+**Tab visibility is read, not reinvented** — `hidden` and `canSee` are passed in, so `company_tabs` and
+the role gate stay the single source.
+
+**A TEST I COULD NOT VERIFY WAS REPLACED RATHER THAN FORCED.** I could not reliably hand-build a
+document that produced no tiles — emptying employees, projects, rounds, saas, history and lines still
+left a cash-flow tile from a field I had not found. The empty-state test now drives the branch through
+`hiddenTabs`, which is verifiable. A test whose premise I cannot confirm is worse than no test.
+
+## Mobile: timelines become rows, tables signal their scroll
+
+**THE TIMELINES DROP THE AXIS BELOW 640px.** At 328px the axis costs everything and buys nothing: 34
+characters of label have nowhere to go, and a dot's position along a 276px line resolves to a fortnight
+either way. `TimelineRows` renders the same data as a list — dot, name, date, verdict.
+
+**The substitution is lossless because every row already stated its own date.** That was a decision made
+when the goals chart was built, for a different reason, and it is what makes the axis droppable now.
+The narrow version actually shows MORE: the wide chart truncates labels at 36 characters because they
+must fit beside a dot, and a row has the whole width.
+
+**The verdict is worded identically in both.** Two phrasings of one verdict is how a reader on a phone
+and a reader at a desk end up describing different things to each other.
+
+**A media query cannot reach inside an SVG**, so the switch is a `matchMedia` subscription rather than a
+CSS rule — and subscribed rather than read once, because rotating a phone changes it and a mount-time
+check would keep drawing an axis into 328px until some other render came along.
+
+**Tables now SIGNAL their scroll.** The panel scrolls, but on a phone there is no visible scrollbar and
+a cut-off column edge reads as the end of the data — a scroll nobody knows about is a table with missing
+columns. Two pinned gradients with `background-attachment: local, scroll` show a shadow only at an edge
+you have not reached.
+
+**PER-TABLE COLUMN PRIORITY IS DELIBERATELY NOT DONE.** Hiding low-value columns needs class attributes
+on `<th>`/`<td>` pairs across 21 tables in eight files — the exact markup editing that went wrong three
+times in this session. The scroll affordance helps all 21 for one CSS rule; the column work helps two
+and risks the rest. It should be done deliberately, per table, not appended to a long session.
+
 ## Mobile: the rail and touch targets
 
 **THE RAIL SCROLLS IN ONE ROW.** At <=900px it turned horizontal with `flex-wrap:wrap`, and ten items

@@ -10,6 +10,7 @@
 // blank box looks like a bug and a sentence looks like an answer.
 import React, { useMemo } from "react";
 import { money } from "../../engine/money";
+import { TimelineRows } from "./TimelineRows";
 
 const W = 720, H = 252;
 const PAD = { l: 52, r: 16, t: 14, b: 38 };
@@ -553,7 +554,27 @@ function Milestones({ spec }) {
 const SHAPES = { lines: Lines, stack: Stack, bars: Bars, hbars: HBars, diverging: Diverging,
                  pace: Pace, goals: Goals, milestones: Milestones };
 
+/** Is the viewport too narrow to draw an axis on?
+ *
+ *  A MEDIA QUERY CANNOT REACH INSIDE AN SVG, so the substitution has to happen in JS. Subscribed rather
+ *  than read once: somebody rotating a phone changes this, and a chart that only checks on mount would
+ *  keep drawing an axis into 328px until the next render happened to come along.
+ */
+function useNarrow(px = 640) {
+  const [narrow, setNarrow] = React.useState(
+    () => typeof matchMedia === "function" && matchMedia(`(max-width:${px}px)`).matches);
+  React.useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const q = matchMedia(`(max-width:${px}px)`);
+    const on = (e) => setNarrow(e.matches);
+    q.addEventListener?.("change", on);
+    return () => q.removeEventListener?.("change", on);
+  }, [px]);
+  return narrow;
+}
+
 export function Chart({ spec }) {
+  const narrow = useNarrow();
   const Shape = useMemo(() => SHAPES[spec?.kind], [spec?.kind]);
 
   // Declared key first, falling back to the series for the shapes that have them.
@@ -570,14 +591,19 @@ export function Chart({ spec }) {
     );
   }
 
+  // THE TIMELINES BECOME ROWS. Their axis is the thing that does not survive 328px — 34 characters of
+  // label have nowhere to go, and a dot's position along a 276px line resolves to a fortnight either
+  // way. Every row already states its own date, so nothing is lost with the axis.
+  const asRows = narrow && (spec.kind === "goals" || spec.kind === "milestones");
+
   return (
     <div className="ch">
-      <Shape spec={spec} />
+      {asRows ? <TimelineRows spec={spec} /> : <Shape spec={spec} />}
       {/* A SPEC MAY DECLARE ITS OWN KEY. The legend was built from `spec.series`, and the row-based
           shapes — goals, milestones, pace, hbars, diverging — carry `rows` instead. Six charts were
           emitting an EMPTY legend div, which meant the ones whose entire meaning is colour had nothing
           explaining any of it. */}
-      {legend.length > 0 && (
+      {legend.length > 0 && !asRows && (
         <div className="ch-legend">
           {legend.map((k, i) => (
             <span key={k.id || k.label || i}>

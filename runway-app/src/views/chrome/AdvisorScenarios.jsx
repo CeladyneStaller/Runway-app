@@ -10,7 +10,7 @@
 // until offered. `onApplyToPlan` is deliberately absent, which now removes the button rather than
 // leaving it inert — an advisor cannot write the model, and a control that quietly does nothing is
 // worse than one that is not there.
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Scenarios } from "../Scenarios";
 import { buildModelFromDoc } from "../../engine";
 
@@ -20,14 +20,24 @@ import { buildModelFromDoc } from "../../engine";
 const toScenario = (row) => ({ ...(row.body || {}), _sid: row.id, _shared: row.shared_at,
                                _decision: row.decision });
 
-export function AdvisorScenarios({ account, companyId, doc }) {
+export function AdvisorScenarios({ account, companyId, doc, onCount }) {
+  // HELD IN A REF SO IT IS NOT A DEPENDENCY. Adding a callback to `load`'s deps re-fetches every time
+  // the parent re-renders and happens to pass a fresh function — a refetch loop that looks like a slow
+  // network rather than a bug. The ref keeps the latest one without making the fetch depend on it.
+  const notify = useRef(onCount);
+  notify.current = onCount;
   const [rows, setRows] = useState(null);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     if (!account?.myScenarios || !companyId) { setRows([]); return; }
-    account.myScenarios(companyId).then(rs => setRows(rs.map(toScenario))).catch(() => setRows([]));
+    // REPORTS ITS COUNT UP. The Scenarios tile beside this panel would otherwise have to fetch the
+    // same list to say "3 yours · 1 offered" — two fetches and two chances to disagree about a number
+    // both are showing on one screen.
+    account.myScenarios(companyId)
+      .then(rs => { const list = rs.map(toScenario); setRows(list); notify.current?.(list); })
+      .catch(() => { setRows([]); notify.current?.([]); });
   }, [account, companyId]);
   useEffect(load, [load]);
 

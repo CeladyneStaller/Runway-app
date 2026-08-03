@@ -1,6 +1,7 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
+import { AdvisorHome } from "./views/chrome/AdvisorHome";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
          demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
@@ -49,7 +50,8 @@ import mark from './assets/waterline-mark.svg';
 
 function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
                     companyName = null, tabPrefs, onSetup = null,
-                    membership = null, companyHidden = [] }) {
+                    membership = null, companyHidden = [],
+                    startView = null, onBackToPortfolio = null }) {
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -383,6 +385,13 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
           {/* COMPANY SETTINGS LIVES IN THE RAIL, not the profile menu, because it is scoped to whichever
               company is active and the switcher is already here. Putting a company-scoped page inside a
               person-scoped menu is the confusion the split exists to remove. */}
+            {/* A WAY BACK. An advisor who entered from a tile needs the portfolio one click away,
+                or the client they opened becomes the whole app again. */}
+            {onBackToPortfolio && (
+              <button className="nav navset" onClick={onBackToPortfolio}>
+                <span aria-hidden="true">←</span>Back to your portfolio
+              </button>
+            )}
           {!demo && (
             <button className="nav navset" onClick={() => onOpenSettings?.("company", "general")}>
               <span aria-hidden="true">⚙</span>Company settings
@@ -882,6 +891,9 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   // null, or { scope: 'profile'|'company', page }. A route rather than a boolean, so the two
   // entry points can open different places and a link can name one.
   const [showAccount, setShowAccount] = useState(null);
+  // Advisors land here. Set once the profile says so, and cleared when they enter a client.
+  const [advisorHome, setAdvisorHome] = useState(false);
+  const [enterView, setEnterView] = useState(null);
   const [err, setErr] = useState(null);
 
   /** The account's name for the company being looked at. A model belongs to a company, so the company's
@@ -900,6 +912,25 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   }, []);
 
   useEffect(() => { if (!demo) loadCompanyName(); }, [demo, loadCompanyName]);
+
+  // LAND ON THE PORTFOLIO, ONCE. An advisor who has navigated into a client should stay there on the
+  // next render — this decides where a SESSION starts, not where every render goes, so it fires on the
+  // first successful profile read and never again.
+  const [advisorChecked, setAdvisorChecked] = useState(false);
+  useEffect(() => {
+    if (demo || advisorChecked) return;
+    let alive = true;
+    (async () => {
+      try {
+        const plan = await getAccountApi()?.advisorPlan?.();
+        // `companies` is how many they advise. Somebody with an advisor plan and no clients still gets
+        // the portfolio — it is the screen that explains what happens next.
+        if (alive && plan && (plan.allowed > 0 || plan.companies > 0)) setAdvisorHome(true);
+      } catch { /* not an advisor, or offline: the ordinary app is the right fallback */ }
+      if (alive) setAdvisorChecked(true);
+    })();
+    return () => { alive = false; };
+  }, [demo, advisorChecked]);
 
   const applyTabPrefs = useCallback((next) => {
     setTabPrefs(next);
@@ -1140,6 +1171,25 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
     r.readAsText(file);
   });
 
+  // AN ADVISOR'S HOME IS THE PORTFOLIO. Everybody else signs in to one model; an advisor signs in to a
+  // list of them. Entering a client hands over to the ordinary app — same tabs, same permission rules,
+  // no second implementation of anything — and `advisorHome` is how they get back.
+  if (advisorHome) return (
+    <AdvisorHome
+      account={getAccountApi()}
+      onEnterCompany={async (id, view) => {
+        try {
+          const r = await switchCompany(getAuthAdapter(), id);
+          if (r?.doc) setDoc(r.doc);
+          try { await getAccountApi().setLastCompany(id); } catch { /* device choice only */ }
+          loadCompanyName();
+          setEnterView(view || "dash");
+          setAdvisorHome(false);
+        } catch (e) { setErr?.(e?.message || String(e)); }
+      }}
+    />
+  );
+
   if (showAccount) return (
     <Account
       doc={doc}
@@ -1179,6 +1229,8 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
                companyName={companyName}
                membership={membership} companyHidden={companyHidden}
                onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
+               startView={enterView}
+               onBackToPortfolio={advisorChecked && enterView ? () => setAdvisorHome(true) : null}
                // The prompt exists exactly where the wizard does, so it is keyed on the SAME signal the
                // wizard trigger and the auth gate use: a registered session provider. `enableHostedSync`
                // only registers one when the config is complete, so the provider IS hosted mode. In demo

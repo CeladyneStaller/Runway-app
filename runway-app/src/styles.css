@@ -422,6 +422,22 @@
      scroll makes them usable, not comfortable. The comfortable version hides low-value columns below
      640px per table, which is per-table judgement rather than a stylesheet rule. */
   .tbl{min-width:640px}
+  /* A SCROLL NOBODY KNOWS ABOUT IS A TABLE WITH MISSING COLUMNS. The panel scrolls, but on a phone
+     there is no scrollbar to see and the cut-off column edge reads as the end of the data. A fade at
+     the right edge is the standard signal that there is more, and it costs one gradient.
+     `background-attachment:local` on the first pair and `scroll` on the second is the classic trick:
+     the shadows are pinned to the CONTENT, so they appear only at an edge you have not reached. */
+  .panel{
+    background-image:
+      linear-gradient(to right, var(--card), var(--card)),
+      linear-gradient(to left,  var(--card), var(--card)),
+      linear-gradient(to right, rgba(12,26,34,.10), rgba(12,26,34,0)),
+      linear-gradient(to left,  rgba(12,26,34,.10), rgba(12,26,34,0));
+    background-position:left center, right center, left center, right center;
+    background-repeat:no-repeat;
+    background-size:22px 100%, 22px 100%, 12px 100%, 12px 100%;
+    background-attachment:local, local, scroll, scroll;
+  }
   /* The panel header should not scroll away from the table it labels. */
   .panel-h{position:sticky;left:0}
   .tiers,.methods,.prow{grid-template-columns:1fr}
@@ -1142,7 +1158,10 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .nav.navset{margin-top:6px}
 .setwrap{max-width:940px;margin:0 auto;padding:22px 24px 60px}
 .set{display:grid;grid-template-columns:176px 1fr;gap:22px;margin-top:14px}
-@media(max-width:760px){.set{grid-template-columns:1fr}}
+/* 900, NOT 760 — the app changes shape at one width. Between the two the settings nav was a 176px
+   column inside a main area that had already lost the rail: not broken, just one more breakpoint to
+   reason about later. */
+@media(max-width:900px){.set{grid-template-columns:1fr}}
 .setnav{display:flex;flex-direction:column;gap:1px;align-self:start}
 .setnav-i{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
   border:none;background:none;border-radius:7px;padding:7px 10px;cursor:pointer;text-align:left;
@@ -1158,3 +1177,32 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .chip.pro{background:#E4EDF6;color:#274F7D}
 .panel.danger{border-color:#EFC5BD;background:#FEF8F7}
 .addbtn.ghost.danger{color:var(--danger);border-color:#EFC5BD}
+
+/* Timelines as rows, below 640px. The axis is gone; every row states its own date. */
+.chrows{font-family:var(--fb)}
+.chr-cliff{margin:0 0 10px;padding:7px 10px;border-radius:8px;background:#FBEAE7;
+  border:1px solid #EFC5BD;font-size:12px;font-weight:600;color:var(--danger)}
+.chr-h{font-family:var(--fb);font-size:10.5px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--muted);margin:12px 0 4px}
+.chr-h:first-child{margin-top:0}
+.chr-list{list-style:none;margin:0;padding:0}
+.chr{display:flex;gap:9px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line-2)}
+.chr:last-child{border-bottom:none}
+.chr-dot{width:9px;height:9px;border-radius:9px;margin-top:5px;flex:none}
+.chr-body{min-width:0}
+.chr-name{display:block;font-size:13.5px;line-height:1.35}
+.chr-meta{display:block;font-family:var(--fm);font-size:11px;line-height:1.5;margin-top:2px}
+
+/* ---- advisor tab tiles ---- */
+.tabtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+.tt{position:relative;display:block;text-align:left;background:var(--card);
+  border:1px solid var(--line);border-radius:10px;padding:11px 13px;cursor:pointer;
+  font-family:var(--fb);color:inherit}
+.tt:hover{border-color:var(--signal-2)}
+.tt .ttl{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted-2);font-weight:600}
+.tt .ttv{display:block;font-family:var(--fd);font-size:19px;font-weight:600;line-height:1.3;margin-top:3px}
+.tt .tts{display:block;font-size:11px;color:var(--muted);line-height:1.45}
+.tt .ttf{position:absolute;top:10px;right:11px;font-size:10.5px;color:var(--muted-2)}
+.tt.attn{border-color:#EFC5BD;background:#FEF8F7}
+.tt.warn{border-color:#E8D3A8;background:#FDFAF3}
