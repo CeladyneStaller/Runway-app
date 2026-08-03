@@ -101,21 +101,21 @@ function Portfolio({ rows, onOpen }) {
       <div className="stats">
         <div className="stat">
           <div className="lab">Clients</div><div className="big">{rows.length}</div>
-          <div className="fine">{pending ? `${pending} still loading` : "all loaded"}</div>
+          <div className="meta">{pending ? `${pending} still loading` : "all loaded"}</div>
         </div>
         <div className="stat">
           <div className="lab">Under 6 months</div>
           <div className="big" style={short.length ? { color: "var(--danger)" } : null}>{short.length}</div>
-          <div className="fine">{short.length ? short.map(r => r.name).slice(0, 2).join(", ") : "none"}</div>
+          <div className="meta">{short.length ? short.map(r => r.name).slice(0, 2).join(", ") : "none"}</div>
         </div>
         <div className="stat">
           <div className="lab">Need attention</div><div className="big">{attention}</div>
-          <div className="fine">across your clients</div>
+          <div className="meta">across your clients</div>
         </div>
         <div className="stat hero">
           <div className="lab">Shortest runway</div>
           <div className="big">{shortest == null ? "—" : `${shortest.toFixed(1)} mo`}</div>
-          <div className="fine">of those loaded</div>
+          <div className="meta">of those loaded</div>
         </div>
       </div>
 
@@ -180,32 +180,38 @@ export function AdvisorHome({ account, onEnterCompany }) {
   const trimmed = rows.length > RAIL_MAX;
 
   return (
+    // `.rw` SCOPES THE ENTIRE STYLESHEET. Every other screen wraps in it — `RunwayApp`, `Account`, the
+    // sign-in — and without it this rendered as unstyled HTML: correct structure, no character at all.
+    // Nothing failed, which is why it looked like a broken page rather than a missing class.
+    <div className="rw">
     <div className="shell">
       <aside className="rail">
-        <div className="brand"><span className="brandmark" />Waterline</div>
+        {/* The real brand block: an image and two lines. `brandmark` was invented and rendered as
+            nothing, which is how the rail lost its top-left corner. */}
+        <div className="brand">
+          <div><b>Waterline</b><span>runway control</span></div>
+        </div>
 
-        <div className="railgrp">Advising{rows.length ? ` · ${rows.length}` : ""}</div>
-        <nav className="nav">
-          <button className={"navitem" + (at === "portfolio" ? " on" : "")}
+        <div className="railmeta railgrp">Advising{rows.length ? ` · ${rows.length}` : ""}</div>
+        {/* NO WRAPPER. `.nav` is the BUTTON class here — App puts them straight in the rail — and a
+            container sharing the class matched every selector first, including the tests' clicks. */}
+        <button className={"nav" + (at === "portfolio" ? " on" : "")}
                   onClick={() => setAt("portfolio")}>
-            Portfolio<span className="navr">{rows.length || ""}</span>
-          </button>
-        </nav>
+          Portfolio<span className="navr">{rows.length || ""}</span>
+        </button>
 
         {railRows.length > 0 && (
           <>
-            <div className="railgrp">{trimmed ? "Needs attention" : "Clients"}</div>
-            <nav className="nav">
-              {railRows.map(r => (
-                <button key={r.id} className={"navitem" + (at === r.id ? " on" : "")}
+            <div className="railmeta railgrp">{trimmed ? "Needs attention" : "Clients"}</div>
+            {railRows.map(r => (
+                <button key={r.id} className={"nav" + (at === r.id ? " on" : "")}
                         onClick={() => setAt(r.id)}>
                   <span className="navname">{r.name}</span>
                   <span className={"navr " + toneOf(r.months)}>
                     {r.state === "loading" ? "…" : r.months == null ? "" : r.months.toFixed(1)}
                   </span>
                 </button>
-              ))}
-            </nav>
+            ))}
           </>
         )}
 
@@ -264,6 +270,7 @@ export function AdvisorHome({ account, onEnterCompany }) {
                 onOpen={(view) => onEnterCompany(here.id, view)} />
         )}
       </main>
+    </div>
     </div>
   );
 }

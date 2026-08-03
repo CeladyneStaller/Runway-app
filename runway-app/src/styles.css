@@ -1222,3 +1222,10 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .focusgrid .tog.off{opacity:.55}
 .focusgrid .tog em{display:block;font-style:normal;font-size:10.5px;color:var(--muted-2)}
 .focusnote{font-size:11.5px;color:var(--muted-2);margin:9px 0 0;line-height:1.55}
+
+/* ---- advisor rail groups ---- */
+.rw .railgrp{padding:9px 16px 3px;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase}
+.rw .nav .navr{margin-left:auto;font-family:var(--fm);font-size:10.5px;opacity:.8}
+.rw .nav .navr.bad{color:#FF9E8E;opacity:1}
+.rw .nav .navr.warn{color:#E8C08A;opacity:1}
+.rw .nav .navname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

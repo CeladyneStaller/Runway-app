@@ -55,8 +55,8 @@ describe("where an advisor lands", () => {
   it("opens a client's tab in place, not the whole app", async () => {
     const onEnter = vi.fn();
     const v = render(<AdvisorHome account={api()} onEnterCompany={onEnter} />);
-    await waitFor(() => expect(v.container.querySelectorAll(".navitem").length).toBeGreaterThan(1));
-    fireEvent.click([...v.container.querySelectorAll(".navitem")].find(b => /Celadyne/.test(b.textContent)));
+    await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
+    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Celadyne/.test(b.textContent)));
     await waitFor(() => expect(v.container.textContent).toMatch(/Across their tabs/));
     expect(onEnter).not.toHaveBeenCalled();     // looking is not entering
   });
@@ -65,8 +65,8 @@ describe("where an advisor lands", () => {
     // The whole reason the tiles are doors.
     const onEnter = vi.fn();
     const v = render(<AdvisorHome account={api()} onEnterCompany={onEnter} />);
-    await waitFor(() => expect(v.container.querySelectorAll(".navitem").length).toBeGreaterThan(1));
-    fireEvent.click([...v.container.querySelectorAll(".navitem")].find(b => /Celadyne/.test(b.textContent)));
+    await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
+    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Celadyne/.test(b.textContent)));
     await waitFor(() => expect(v.container.querySelector(".tt")).toBeTruthy());
     fireEvent.click([...v.container.querySelectorAll(".tt")].find(t => /Payroll/.test(t.textContent)));
     expect(onEnter).toHaveBeenCalledWith("a", "pay");
@@ -75,8 +75,8 @@ describe("where an advisor lands", () => {
   it("offers a button naming the company, not a switcher", async () => {
     const onEnter = vi.fn();
     const v = render(<AdvisorHome account={api()} onEnterCompany={onEnter} />);
-    await waitFor(() => expect(v.container.querySelectorAll(".navitem").length).toBeGreaterThan(1));
-    fireEvent.click([...v.container.querySelectorAll(".navitem")].find(b => /Celadyne/.test(b.textContent)));
+    await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
+    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Celadyne/.test(b.textContent)));
     await waitFor(() => expect(v.container.textContent).toMatch(/Open Celadyne Energy/));
     fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Open Celadyne/.test(b.textContent)));
     expect(onEnter).toHaveBeenCalledWith("a", "dash");
@@ -92,5 +92,34 @@ describe("where an advisor lands", () => {
     const account = api({ listAdvisedCompanies: vi.fn().mockRejectedValue(new Error("offline")) });
     const v = render(<AdvisorHome account={account} onEnterCompany={() => {}} />);
     await waitFor(() => expect(v.container.textContent).toMatch(/offline|Could not list/i));
+  });
+});
+
+describe("it is actually styled", () => {
+  // THE BUG THESE CATCH. Every test above passed while the page rendered as unstyled white HTML: the
+  // structure was right, the data was right, and not one class matched the stylesheet. Assertions about
+  // text content cannot see that, which is why a page can be "fully tested" and visibly broken.
+  const { readFileSync } = require("node:fs");
+  const css = readFileSync("src/styles.css", "utf8");
+
+  it("wraps in .rw, which scopes the whole stylesheet", async () => {
+    const v = render(<AdvisorHome account={api()} onEnterCompany={() => {}} />);
+    await waitFor(() => expect(v.container.querySelector(".shell")).toBeTruthy());
+    // `.rw` must be an ANCESTOR of the shell, not merely present somewhere.
+    expect(v.container.querySelector(".rw .shell")).toBeTruthy();
+  });
+
+  it("uses classes the stylesheet defines", async () => {
+    // `navitem`, `brandmark`, `railgrp`, `navr` and `fine` were all invented — they rendered as
+    // nothing and no test noticed.
+    const v = render(<AdvisorHome account={api()} onEnterCompany={() => {}} />);
+    await waitFor(() => expect(v.container.querySelector(".shell")).toBeTruthy());
+
+    const used = new Set();
+    v.container.querySelectorAll("[class]").forEach(el =>
+      String(el.getAttribute("class")).split(/\s+/).filter(Boolean).forEach(c => used.add(c)));
+
+    const missing = [...used].filter(c => !new RegExp("\\." + c + "[\\s{,:.]").test(css));
+    expect(missing, `not in styles.css: ${missing.join(", ")}`).toEqual([]);
   });
 });

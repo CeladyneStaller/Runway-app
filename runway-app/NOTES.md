@@ -1376,6 +1376,28 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## The advisor portfolio rendered as unstyled HTML
+
+**`.rw` SCOPES THE ENTIRE STYLESHEET.** Every screen wraps in it — `RunwayApp`, `Account`, the sign-in —
+and `AdvisorHome` returned a bare `.shell`. Correct structure, correct data, no character at all.
+
+**Five class names were invented**: `navitem`, `brandmark`, `railgrp`, `navr`, `fine`. The real ones are
+`nav` (on the BUTTON, not a container), a `.brand` block with two lines, and `.meta` for a stat's
+supporting text. They rendered as nothing and nothing failed.
+
+**`<nav className="nav">` wrapping `<button className="nav">` was its own bug**: `.nav` is the button
+class in this app, so a container sharing it matched every selector first — including the tests' clicks,
+which is why three of them broke while looking like they were about routing.
+
+**ALL EIGHT EXISTING TESTS PASSED WHILE THE PAGE WAS VISIBLY BROKEN.** They asserted text content and
+behaviour, and both were fine. Two new tests close it: one requires `.rw` to be an ANCESTOR of `.shell`,
+the other collects every class the component renders and fails on any the stylesheet does not define.
+Verified by removing the wrapper and watching the first one fail.
+
+**This is the second time today that a component tested green and rendered wrong** — the milestones
+chart was the first. Both were caught by looking at the running app, not by the suite. Worth treating
+"the tests pass" as weaker evidence for view code than for the engine.
+
 ## Advisor focus — migration 043, Layer 1 only
 
 The owner chooses which tabs an advisor works on. Per ADVISOR, not per role: two advisors on one company
