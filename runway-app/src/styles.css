@@ -1230,3 +1230,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .rw .nav .navr.warn{color:#E8C08A;opacity:1}
 .rw .nav .navname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rw .topright{display:flex;align-items:center;gap:10px}
+.trialbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  background:#EDF4F2;border:1px solid #CFE0DA;border-radius:9px;padding:9px 13px;margin:0 0 12px;
+  font-family:var(--fb);font-size:12.5px;color:var(--ink-2)}
+.trialbar.soon{background:#FBF3E4;border-color:#E8D3A8}

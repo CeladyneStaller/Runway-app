@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { planSummary } from "./state/plans";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
 import { AdvisorHome } from "./views/chrome/AdvisorHome";
 import { landingFor, portfolioAllowed, PORTFOLIO } from "./engine/landing";
@@ -383,6 +384,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
           </span>
         </div>
       )}
+      <TrialBar companyId={getAuthAdapter()?.activeCompany?.()} onOpenSettings={onOpenSettings} />
       <UnpaidBar onOpenAccount={onOpenAccount} />
       {onSetup && isEmpty && <SetupBar onSetup={onSetup} onImport={doImport} />}
       <div className="shell">
@@ -751,6 +753,44 @@ function DemoPill({ onLeave, onKeep }) {
  *  retry, reload, and conclude the product is broken. It is not broken; it is asking to be paid, and
  *  that is a completely different sentence. This bar is the difference between a paywall and an
  *  outage, and its absence is why an unpaid company looked like a broken app for most of a day. */
+/** How much of the trial is left.
+ *
+ *  THE TRIAL WAS ONLY VISIBLE INSIDE COMPANY SETTINGS -> PLAN, a page an owner has to go looking for.
+ *  A new company is on a fourteen-day trial and said so nowhere in the app they actually use — so the
+ *  first sign of it was the day it stopped working, which is the worst possible moment to learn a thing
+ *  had a clock on it.
+ *
+ *  NOT AN ALERT. It states a fact and offers a plan; a trial with time left is not a problem, and
+ *  dressing it as one every day for two weeks teaches people to ignore the bar that eventually matters.
+ */
+function TrialBar({ companyId, onOpenSettings }) {
+  const [s, setS] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (!companyId) return () => { alive = false; };
+    getAccountApi()?.companyPlan?.(companyId)
+      ?.then(row => { if (alive) setS(planSummary(row)); })
+      ?.catch(() => {});
+    return () => { alive = false; };
+  }, [companyId]);
+
+  if (s?.state !== "trialing") return null;
+  const d = s.daysLeft;
+  return (
+    <div className={"trialbar" + (d <= 3 ? " soon" : "")} role="status">
+      <span>
+        <b>{d} day{d === 1 ? "" : "s"} left</b> of your trial.
+        {" "}No card needed until you choose a plan, and your model stays exportable whatever you decide.
+      </span>
+      {onOpenSettings && (
+        <button className="linkbtn" onClick={() => onOpenSettings("company", "plan")}>
+          See plans
+        </button>
+      )}
+    </div>
+  );
+}
+
 function UnpaidBar({ onOpenAccount }) {
   const [s, setS] = useState(status());
   useEffect(() => subscribe(setS), []);
@@ -948,7 +988,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
         // ONE RULE, IN THE ENGINE. The screen to land on has four inputs and several ways to be subtly
         // wrong, and the settings UI needs the same answer to show somebody what their choice resolves
         // to — so it is a pure function rather than a condition here.
-        const isAdvisor = !!plan && (plan.allowed > 0 || plan.companies > 0);
+        // `allowed` IS THE TEST. `advisor_usage.companies` counts EVERY MEMBERSHIP, not companies
+        // advised — so `companies > 0` was true for anybody with a single company of their own, and a
+        // brand-new user landed on a client portfolio containing themselves. `allowed` is the advisor
+        // flag or a paid advisor plan, which is the thing being asked about.
+        const isAdvisor = (plan?.allowed ?? 0) > 0;
         const where = landingFor({ companies: list || [], isAdvisor, preferred: prof?.landing || null });
         if (!alive) return;
         setMayPortfolio(portfolioAllowed({ isAdvisor }));

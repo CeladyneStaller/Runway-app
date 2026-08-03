@@ -94,3 +94,37 @@ describe("where somebody lands", () => {
     expect(r.view).toBe(PORTFOLIO);
   });
 });
+
+describe("who counts as an advisor", () => {
+  // THE BUG THIS CAUGHT. `advisor_usage` returns `{ companies, allowed }`, and `companies` counts
+  // EVERY MEMBERSHIP — not companies advised. Testing `companies > 0` made an advisor of anybody with a
+  // single company of their own, so a brand-new user landed on a client portfolio containing themselves.
+  //
+  // `allowed` is the advisor flag or a paid advisor plan, which is the thing being asked about.
+  const isAdvisor = (plan) => (plan?.allowed ?? 0) > 0;
+
+  it("a plain user with one company is NOT an advisor", () => {
+    expect(isAdvisor({ companies: 1, allowed: 0 })).toBe(false);
+  });
+
+  it("a plain user with several companies is still not an advisor", () => {
+    expect(isAdvisor({ companies: 4, allowed: 0 })).toBe(false);
+  });
+
+  it("an advisor with no clients yet IS one", () => {
+    // The flag, not the count. Somebody who just bought an advisor plan has no clients and is an
+    // advisor — and the portfolio is the screen that explains what happens next.
+    expect(isAdvisor({ companies: 0, allowed: 3 })).toBe(true);
+  });
+
+  it("and lands on the portfolio", () => {
+    expect(landingFor({ companies: [], isAdvisor: true }).view).toBe(PORTFOLIO);
+    expect(landingFor({ companies: [co("a")], isAdvisor: false }).view).toBe("company");
+  });
+
+  it("survives a missing or malformed plan", () => {
+    expect(isAdvisor(null)).toBe(false);
+    expect(isAdvisor({})).toBe(false);
+    expect(isAdvisor(undefined)).toBe(false);
+  });
+});

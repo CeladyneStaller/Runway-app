@@ -1376,6 +1376,28 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## A new plain user landed on the portfolio; a new company never mentioned its trial
+
+**`advisor_usage.companies` COUNTS EVERY MEMBERSHIP, not companies advised.** 031 built it that way for
+`AdvisorBilling`, where the correct sentence is "if this plan ends you take a seat in each of the N
+companies you are in" — which IS memberships. I read the field name and assumed it meant clients, so
+`plan.companies > 0` made an advisor of anybody with a single company of their own.
+
+**`allowed` is the test**: the advisor flag, or a paid advisor plan. Fixed in two places — I had made
+the same mistake in the landing setting, which would have offered the portfolio option to every user.
+
+⚠️ **`advisor_usage.companies` is misnamed for its content** and this will mislead somebody again. Its
+one existing consumer is correct, so renaming needs a migration and a careful read of `AdvisorBilling`.
+
+**THE TRIAL WAS ONLY VISIBLE INSIDE COMPANY SETTINGS -> PLAN.** All of it worked — `companies.trial_ends_at`
+is NOT NULL with a default (022), `company_plan` returns it, `planSummary` derives `trialing` and
+`daysLeft` correctly — and none of it appeared on any screen somebody uses. A new company is on a
+fourteen-day clock and the first sign of it would have been the day it stopped working.
+
+`TrialBar` now sits above `UnpaidBar`, turning amber at three days. **Deliberately not an alert**: a
+trial with time left is not a problem, and dressing it as one every day for two weeks teaches people to
+ignore the bar that eventually matters.
+
 ## Landing page — where somebody starts (migration 044)
 
 `engine/landing.js` is a pure rule with four inputs, kept out of the component because the settings UI

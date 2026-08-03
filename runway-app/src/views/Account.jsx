@@ -665,7 +665,7 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
     {at === "appearance" && (
       <>
         <LandingSetting account={account} companies={companies}
-                        isAdvisor={advisorPlan?.allowed > 0 || advisorPlan?.companies > 0}
+                        isAdvisor={(advisorPlan?.allowed ?? 0) > 0}
                         value={profile?.landing || ""} onSaved={reload} />
         <LayoutSection prefs={tabPrefs} onChange={onTabPrefs} />
       </>
