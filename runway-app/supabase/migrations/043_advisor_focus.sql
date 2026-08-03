@@ -43,7 +43,11 @@ begin
     raise exception 'forbidden' using errcode = '42501';
   end if;
 
-  select m.focus_tabs, coalesce(m.is_advisor, false)
+  -- `is_advisor` IS A FUNCTION READING `profiles`, NOT A COLUMN ON `memberships`. 022 put the flag on
+  -- the profile because being an advisor follows the PERSON across every company they advise — it is
+  -- not a property of one membership. `list_members` (032) returns it as a computed column, which is
+  -- what made it look like a stored one.
+  select m.focus_tabs, is_advisor(m.user_id)
     into was, is_adv
     from memberships m
    where m.company_id = p_company_id and m.user_id = p_user_id;
@@ -99,14 +103,24 @@ $$;
 /** For the owner's People screen: who is focused, and onto what. */
 create or replace function advisor_focus(p_company_id uuid)
 returns table (user_id uuid, email text, focus_tabs text[])
-language sql security definer set search_path = public as $$
-  select m.user_id, u.email::text, m.focus_tabs
-  from memberships m
-  join auth.users u on u.id = m.user_id
-  where m.company_id = p_company_id
-    and coalesce(m.is_advisor, false)
-    and coalesce(my_role(p_company_id), 'viewer') = 'owner';
-$$;
+language plpgsql security definer set search_path = public as $$
+begin
+  -- RAISED, NOT FILTERED. Folding the permission check into the WHERE clause returns zero rows to a
+  -- non-owner, which is indistinguishable from "this company has no advisors" — the caller cannot tell
+  -- refusal from absence, and neither can whoever debugs it. 032 does the same thing for `list_members`
+  -- and this follows it rather than inventing a second convention.
+  if coalesce(my_role(p_company_id), 'viewer') <> 'owner' then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+
+  return query
+    select m.user_id, lower(u.email), m.focus_tabs
+      from memberships m
+      join auth.users u on u.id = m.user_id
+     where m.company_id = p_company_id
+       and is_advisor(m.user_id)
+     order by u.email;
+end $$;
 
 revoke all on function set_advisor_focus(uuid, uuid, text[]) from public;
 revoke all on function my_visible_tabs(uuid)                 from public;

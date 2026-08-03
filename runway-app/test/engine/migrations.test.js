@@ -158,6 +158,74 @@ describe("the conflict check stays conditional on the blob", () => {
   });
 });
 
+/** Comments off before matching. A `--` line mentioning `m.is_advisor` is prose, not a read, and a
+ *  scanner that counts prose is a scanner people switch off. */
+const nc = (t) => t.replace(/--[^\n]*/g, "");
+
+describe("a column read must exist on the table it is read from", () => {
+  // THE BUG THIS WOULD HAVE CAUGHT. 043 read `m.is_advisor` off `memberships`; `is_advisor` is a
+  // column on PROFILES (022) and a FUNCTION, and was never on memberships. `list_members` (032) returns
+  // it as a computed column, which is exactly what made it look stored.
+  //
+  // Deliberately narrow: it tracks the columns each table actually declares, and only complains about
+  // an alias it can resolve to one of them. A scanner that guessed would cry wolf and be turned off.
+
+  const declared = () => {
+    const cols = {};
+    for (const f of FILES) {
+      const src = nc(read(f));
+      // create table foo ( ... )
+      for (const m of src.matchAll(/create table (?:if not exists )?(\w+)\s*\(([\s\S]*?)\n\)/g)) {
+        const t = m[1];
+        cols[t] = cols[t] || new Set();
+        for (const line of m[2].split("\n")) {
+          const c = /^\s*(\w+)\s+\w/.exec(line);
+          if (c && !/^(primary|foreign|unique|check|constraint)$/i.test(c[1])) cols[t].add(c[1]);
+        }
+      }
+      // alter table foo add column [if not exists] bar
+      for (const m of src.matchAll(/alter table (\w+)\s+add column (?:if not exists )?(\w+)/g)) {
+        cols[m[1]] = cols[m[1]] || new Set();
+        cols[m[1]].add(m[2]);
+      }
+    }
+    return cols;
+  };
+
+  it("every aliased column read resolves to a real one", () => {
+    const cols = declared();
+    const bad = [];
+
+    for (const name of FILES) {
+      const src = nc(read(name));
+      // Find `from <table> <alias>` / `join <table> <alias>` and check `<alias>.<col>` against it.
+      for (const m of src.matchAll(/\b(?:from|join)\s+(\w+)\s+(?!on\b|where\b|set\b)(\w+)\b/gi)) {
+        const [, table, alias] = m;
+        const known = cols[table];
+        if (!known || known.size === 0) continue;         // not a table this repo declares
+
+        // SCOPED TO THE STATEMENT, not the file. One letter means different tables in different
+        // functions — `s` is `staff` in 014 and `subscriptions` two functions later — and searching the
+        // whole file reported three confident falsehoods on the first run. A scanner that cries wolf
+        // gets switched off, which costs more than never having written it.
+        // BOTH DIRECTIONS. The window ran from `from` forwards, and in SQL the SELECT LIST COMES
+        // FIRST — so `select m.is_advisor ... from memberships m` put the bad read outside the window
+        // entirely. Reintroducing the real 043 bug and watching the scanner pass is how that surfaced;
+        // a scanner nobody tests against the bug it was written for is decoration.
+        const start = src.lastIndexOf(";", m.index) + 1;
+        const end = src.indexOf(";", m.index);
+        const stmt = src.slice(start, end < 0 ? src.length : end);
+
+        for (const u of stmt.matchAll(new RegExp("\\b" + alias + "\\.(\\w+)", "g"))) {
+          const col = u[1];
+          if (!known.has(col)) bad.push(`${name}: ${alias}.${col} — ${table} has no such column`);
+        }
+      }
+    }
+    expect([...new Set(bad)]).toEqual([]);
+  });
+});
+
 describe("the scanner itself", () => {
   it("catches the shape that broke 022 and 031", () => {
     // Both failures reduced to this: a function reading a column the same file adds after it.

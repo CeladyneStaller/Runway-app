@@ -1405,6 +1405,25 @@ into a list of what you are not trusted with.
 that does nothing. A control lying about its own effect is the same failure as the labelling one, at
 smaller scale.
 
+**043 FAILED ON FIRST APPLY: `column m.is_advisor does not exist`.** `is_advisor` is a column on
+PROFILES (022) and a FUNCTION reading it — it was never on `memberships`. `list_members` (032) returns
+it as a COMPUTED column, which is exactly what made it look stored. Both uses now call
+`is_advisor(m.user_id)`, as 032 does.
+
+**Two more things fixed while checking the rest rather than shipping the one-line fix:** `advisor_focus`
+folded its permission check into the WHERE clause, so a non-owner got zero rows — indistinguishable
+from "this company has no advisors", for the caller and for whoever debugs it. It now raises
+`forbidden` like `list_members`. And it uses `lower(u.email)`, matching 032.
+
+**A NEW SCANNER: every aliased column read must resolve to a real column.** Two failures in writing it,
+both instructive:
+- **It cried wolf on the first run** — alias `s` is `staff` in 014 and `subscriptions` two functions
+  later, and searching the whole file produced three confident falsehoods. Now scoped to the statement.
+- **Then it passed on the reintroduced bug.** The window ran from `from` FORWARDS, and in SQL the
+  select list comes first, so `select m.is_advisor ... from memberships m` fell outside it entirely.
+  Found by putting the real bug back and watching the scanner not care. **A scanner never tested
+  against the bug it was written for is decoration.**
+
 **Layer 2 — real withholding — is documented and NOT built.** It needs `employees` out of the blob and a
 role-aware `load_document`. Plan: `LAYER-2-advisor-confidentiality.md` in outputs.
 
