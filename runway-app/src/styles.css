@@ -1229,3 +1229,4 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .rw .nav .navr.bad{color:#FF9E8E;opacity:1}
 .rw .nav .navr.warn{color:#E8C08A;opacity:1}
 .rw .nav .navname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rw .topright{display:flex;align-items:center;gap:10px}

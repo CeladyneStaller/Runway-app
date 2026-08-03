@@ -1376,6 +1376,19 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## The profile menu was missing from the advisor's own home
+
+The avatar was in the company app's header and nowhere else, so an advisor — whose HOME the portfolio
+is — could only reach their own settings by first opening somebody else's company. The one thing that
+follows a person across every company was reachable only from inside one.
+
+**The avatar is on every screen or it is on none.** Now in a `.topright` beside the Open button, on both
+the portfolio and each company tab.
+
+Worth noting the class-existence test added minutes earlier would have caught a typo in `.topright`
+immediately — the first time this session that a guard written for one bug paid for itself on the next
+change rather than the next regression.
+
 ## The advisor portfolio rendered as unstyled HTML
 
 **`.rw` SCOPES THE ENTIRE STYLESHEET.** Every screen wraps in it — `RunwayApp`, `Account`, the sign-in —

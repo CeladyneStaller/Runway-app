@@ -123,3 +123,35 @@ describe("it is actually styled", () => {
     expect(missing, `not in styles.css: ${missing.join(", ")}`).toEqual([]);
   });
 });
+
+describe("the advisor's own account", () => {
+  it("offers the profile menu on the portfolio, not only inside a client", async () => {
+    // THE AVATAR IS ON EVERY SCREEN OR IT IS ON NONE. It was in the company app's header and missing
+    // here — so an advisor, whose HOME this is, could only reach their own settings by first opening
+    // somebody else's company. The one thing that follows a person across companies was reachable only
+    // from inside one.
+    const v = render(<AdvisorHome account={api()} onEnterCompany={() => {}} onOpenSettings={() => {}} />);
+    await waitFor(() => expect(v.container.querySelector(".avatar")).toBeTruthy());
+  });
+
+  it("keeps it on a company tab too, beside the open button", async () => {
+    const v = render(<AdvisorHome account={api()} onEnterCompany={() => {}} onOpenSettings={() => {}} />);
+    await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
+    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")]
+      .find(b => /Celadyne/.test(b.textContent)));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Open Celadyne/));
+    expect(v.container.querySelector(".avatar")).toBeTruthy();
+  });
+
+  it("routes to profile settings rather than into a company", async () => {
+    const onSettings = vi.fn();
+    const onEnter = vi.fn();
+    const v = render(<AdvisorHome account={api()} onEnterCompany={onEnter} onOpenSettings={onSettings} />);
+    await waitFor(() => expect(v.container.querySelector(".avatar")).toBeTruthy());
+    fireEvent.click(v.container.querySelector(".avatar"));
+    await waitFor(() => expect(v.container.querySelector(".pdrop")).toBeTruthy());
+    fireEvent.click([...v.container.querySelectorAll(".pitem")].find(b => /Advisor plan/.test(b.textContent)));
+    expect(onSettings).toHaveBeenCalledWith("profile", "advisor");
+    expect(onEnter).not.toHaveBeenCalled();
+  });
+});

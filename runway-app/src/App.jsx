@@ -1189,6 +1189,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   if (advisorHome) return (
     <AdvisorHome
       account={getAccountApi()}
+      onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
       onEnterCompany={async (id, view) => {
         try {
           const r = await switchCompany(getAuthAdapter(), id);

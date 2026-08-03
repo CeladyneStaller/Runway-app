@@ -17,6 +17,7 @@ import { buildModelParts, buildModelFromDoc } from "../../engine/buildmodel";
 import { buildProjection } from "../../engine/projection";
 import { alertsFor } from "../../engine/alerts";
 import { AdvisorCompany } from "./AdvisorCompany";
+import { ProfileMenu } from "./ProfileMenu";
 
 /** Above this many clients the rail stops listing them all and shows only what needs attention.
  *  A rail with twenty entries is a scrollbar, which is not navigation. */
@@ -162,7 +163,7 @@ function Portfolio({ rows, onOpen }) {
   );
 }
 
-export function AdvisorHome({ account, onEnterCompany }) {
+export function AdvisorHome({ account, onEnterCompany, onOpenSettings }) {
   const { rows, loading, err } = useClients(account);
   const [at, setAt] = useState("portfolio");        // "portfolio" | a company id
 
@@ -230,13 +231,20 @@ export function AdvisorHome({ account, onEnterCompany }) {
             <span className="eyebrow">{here ? "Advising · read only" : "Advisor"}</span>
             <h1 className="h1">{here ? here.name : "Your portfolio"}</h1>
           </div>
-          {here && (
-            // A BUTTON NAMING THE COMPANY, not a switcher. Switching is what you do to change context;
-            // this is what you do to one company you are already looking at.
-            <button className="addbtn" onClick={() => onEnterCompany(here.id, "dash")}>
-              Open {here.name} →
-            </button>
-          )}
+          {/* THE AVATAR IS ON EVERY SCREEN OR IT IS ON NONE. It was in the company app's header and
+              missing here — so an advisor, whose home this is, had no route to their own settings
+              without first opening a client. The one thing that follows a person across companies was
+              reachable only from inside one. */}
+          <div className="topright">
+            {here && (
+              // A BUTTON NAMING THE COMPANY, not a switcher. Switching is what you do to change
+              // context; this is what you do to one company you are already looking at.
+              <button className="addbtn" onClick={() => onEnterCompany(here.id, "dash")}>
+                Open {here.name} →
+              </button>
+            )}
+            <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />
+          </div>
         </div>
 
         {err && <div className="signin-error" role="alert">{err}</div>}
