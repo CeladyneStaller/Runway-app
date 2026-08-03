@@ -2,6 +2,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { planSummary } from "./state/plans";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
+import { Commitments } from "./views/Commitments";
+import { atLeast } from "./engine/roles";
 import { AdvisorHome } from "./views/chrome/AdvisorHome";
 import { landingFor, portfolioAllowed, PORTFOLIO } from "./engine/landing";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
@@ -273,6 +275,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
   const NAV = [
     ["dash", "Dashboard", I.dash], ["flow", "Cash flow", I.flow], ["pay", "Payroll", I.pay], ["proj", "Projects", I.proj],
     ["sales", "Sales", I.sales], ["inv", "Investment", I.invest], ["hist", "Spend history", I.hist], ["ms", "Milestones", I.flag],
+    ["cmt", "Commitments", I.invest],
     ["scn", "Scenarios", I.invest],
   ];
   // Hidden tabs are dropped from the NAV only. A hash that points at a hidden view still renders it:
@@ -643,6 +646,8 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
             onApplyToPlan={(next) => setDoc(next)} />}
           {/* Milestones has no sub-tabs and no tile row of its own, so the insights block goes here
               rather than inside the view. Same order regardless: alerts, chart, then the table. */}
+          {view === "cmt" && <Commitments doc={doc} setDoc={setDoc} rows={rows}
+                                          canWrite={atLeast(membership?.role, "editor")} />}
           {view === "ms" && <TabInsights tab="ms" subtab="all" />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
           </ViewBoundary>

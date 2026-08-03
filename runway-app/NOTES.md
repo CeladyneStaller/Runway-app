@@ -1376,6 +1376,43 @@ The rule is PURE and in `state/setup.js` rather than inline in the view specific
 `positive` is currently unreachable through the wizard, which collects no recurring revenue — a rule
 that cannot be exercised through the UI still deserves to be exercised somewhere.
 
+## Commitments — schema v5, engine, tab
+
+A signed obligation was real from the day it was signed and invisible until the month it was paid: a
+$200k PO payable in month 20 left runway at 5.6 and every screen looking identical to not having signed
+it. Verified against the engine before building anything.
+
+**RUNWAY DOES NOT CHANGE.** `zeroInfo` untouched, golden unmoved. What is added is a SECOND reading —
+`coveredMonths`, how long the cash lasts if every obligation is honoured — because "when do I run out"
+and "can I sign this" are different questions.
+
+**THE INVARIANT: every commitment owns exactly one outflow.** A promoted commitment REFERENCES an
+existing cost line and creates nothing; a manual one creates its own; removal deletes the line only if
+it created it. **A test asserts promoting leaves the projection BYTE-IDENTICAL** — without it, a lease
+recorded as both a recurring cost and a commitment doubles the burn silently.
+
+**COVERED RUNWAY IS `zeroInfo` ON ADJUSTED ROWS.** My first version scanned whole months while
+`zeroInfo` interpolates, and reported a covered runway of **6.0 against a runway of 5.6 — LONGER**,
+which is nonsense. A units mismatch reading as a finding, and the sort of number somebody repeats in a
+board meeting. Both now come from the same function over the same rows with the obligation subtracted,
+so they are comparable by construction and a test asserts covered <= runway.
+
+**Cover is CUMULATIVE**, not per-commitment: two obligations individually affordable and jointly
+impossible is the same failure fixed on the milestones chart.
+
+**Month end, not month start.** Commitments carry a month index and `balanceAtDate` takes a day. A
+payment due in a month is due by its END; reading the balance on the 1st would call an obligation
+covered on money that leaves later the same month.
+
+**Recurring lines are NOT promotable.** A lease's whole remaining term being "uncovered" is true and
+useless — six figures of unavoidable rent permanently at the top of a list meant for discrete decisions.
+
+**Built:** schema v5, `engine/commitments.js`, the tab with manual add, promotion, mark-paid and the
+empty state that explains the concept. **Not built:** the chart series, the dashboard figure, the
+advisor tile, grant cost-share, and QuickBooks `AgedPayableDetail` — the last is the highest-value
+source and a real addition, since `qbo-sync` pulls `ProfitAndLossDetail`, which is spend that already
+happened.
+
 ## A new plain user landed on the portfolio; a new company never mentioned its trial
 
 **`advisor_usage.companies` COUNTS EVERY MEMBERSHIP, not companies advised.** 031 built it that way for

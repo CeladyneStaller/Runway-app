@@ -4,7 +4,7 @@
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 const settings = () => ({
   fringePct: 0.30,
@@ -85,6 +85,15 @@ export const demoDoc = () => ({
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.
 const MIGRATIONS = {
+  // v4 -> v5: COMMITMENTS. A signed obligation is real from the day it is signed and, until now,
+  // invisible until the month it is paid — a $200k PO payable in month 20 left runway at 5.6 months and
+  // every screen looking identical to not having signed it.
+  //
+  // PURELY ADDITIVE. Every existing model becomes a model with no commitments, which is the truth about
+  // it — there is nothing in an old document from which a commitment could be inferred, and guessing
+  // one would be inventing an obligation somebody never entered.
+  5: (d) => ({ ...d, schemaVersion: 5, commitments: d.commitments || [] }),
+
   // v3 -> v4: a round's goals gain a PHASE. A round has goals pointing in both directions and the
   // model was treating them as one list — "5 kW stack at 92%" is evidence needed to CLOSE the round,
   // "scale to 50 kW" is what the round BUYS, and they are measured against two different runways.
