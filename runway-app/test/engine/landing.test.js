@@ -82,7 +82,7 @@ describe("where somebody lands", () => {
   });
 
   it("offers the portfolio in settings ONLY to an advisor", () => {
-    const companies = [co("a", { name: "Celadyne" })];
+    const companies = [co("a", { name: "Harbor Point" })];
     expect(landingChoices({ companies, isAdvisor: false }).map(c => c.value)).toEqual(["a"]);
     expect(landingChoices({ companies, isAdvisor: true }).map(c => c.value)).toEqual([PORTFOLIO, "a"]);
   });

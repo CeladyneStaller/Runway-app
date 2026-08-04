@@ -5,7 +5,7 @@ NAV = [("/product/", "Product"), ("/advisors/", "Advisors"), ("/pricing/", "Pric
        ("/docs/", "Docs"), ("/writing/", "Writing")]
 
 SITE = "https://waterline-runway.com"
-EMAIL = "hello@waterline-runway.com"
+EMAIL = "info@waterline-runway.com"
 
 # The site and the app subdomain go live together. Until the DNS record answers, every "Open the app"
 # button here 404s — which is correct, because the site is not public until then either.

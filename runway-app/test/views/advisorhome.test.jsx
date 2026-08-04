@@ -9,7 +9,7 @@ globalThis.matchMedia ||= () => ({ matches: false, addEventListener() {}, remove
 
 const api = (over = {}) => ({
   listAdvisedCompanies: vi.fn().mockResolvedValue([
-    { id: "a", name: "Celadyne Energy", has_document: true },
+    { id: "a", name: "Harbor Point Labs", has_document: true },
     { id: "b", name: "Halden Bio", has_document: true },
   ]),
   readCompanyDocument: vi.fn().mockResolvedValue(demoDoc()),
@@ -19,7 +19,7 @@ const api = (over = {}) => ({
 describe("where an advisor lands", () => {
   it("lists every client in the rail, with a runway beside each", async () => {
     const v = render(<AdvisorHome account={api()} onEnterCompany={() => {}} />);
-    await waitFor(() => expect(v.container.textContent).toMatch(/Celadyne Energy/));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Harbor Point Labs/));
     expect(v.container.textContent).toMatch(/Halden Bio/);
     await waitFor(() => expect(v.container.querySelector(".navr")).toBeTruthy());
   });
@@ -56,7 +56,7 @@ describe("where an advisor lands", () => {
     const onEnter = vi.fn();
     const v = render(<AdvisorHome account={api()} onEnterCompany={onEnter} />);
     await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
-    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Celadyne/.test(b.textContent)));
+    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Harbor Point/.test(b.textContent)));
     await waitFor(() => expect(v.container.textContent).toMatch(/Across their tabs/));
     expect(onEnter).not.toHaveBeenCalled();     // looking is not entering
   });
@@ -66,7 +66,7 @@ describe("where an advisor lands", () => {
     const onEnter = vi.fn();
     const v = render(<AdvisorHome account={api()} onEnterCompany={onEnter} />);
     await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
-    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Celadyne/.test(b.textContent)));
+    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Harbor Point/.test(b.textContent)));
     await waitFor(() => expect(v.container.querySelector(".tt")).toBeTruthy());
     fireEvent.click([...v.container.querySelectorAll(".tt")].find(t => /Payroll/.test(t.textContent)));
     expect(onEnter).toHaveBeenCalledWith("a", "pay");
@@ -76,9 +76,9 @@ describe("where an advisor lands", () => {
     const onEnter = vi.fn();
     const v = render(<AdvisorHome account={api()} onEnterCompany={onEnter} />);
     await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
-    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Celadyne/.test(b.textContent)));
-    await waitFor(() => expect(v.container.textContent).toMatch(/Open Celadyne Energy/));
-    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Open Celadyne/.test(b.textContent)));
+    fireEvent.click([...v.container.querySelectorAll(".rail button.nav")].find(b => /Harbor Point/.test(b.textContent)));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Open Harbor Point Labs/));
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Open Harbor Point/.test(b.textContent)));
     expect(onEnter).toHaveBeenCalledWith("a", "dash");
   });
 
@@ -138,8 +138,8 @@ describe("the advisor's own account", () => {
     const v = render(<AdvisorHome account={api()} onEnterCompany={() => {}} onOpenSettings={() => {}} />);
     await waitFor(() => expect(v.container.querySelectorAll(".rail button.nav").length).toBeGreaterThan(1));
     fireEvent.click([...v.container.querySelectorAll(".rail button.nav")]
-      .find(b => /Celadyne/.test(b.textContent)));
-    await waitFor(() => expect(v.container.textContent).toMatch(/Open Celadyne/));
+      .find(b => /Harbor Point/.test(b.textContent)));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Open Harbor Point/));
     expect(v.container.querySelector(".avatar")).toBeTruthy();
   });
 

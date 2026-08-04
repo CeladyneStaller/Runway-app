@@ -133,10 +133,10 @@ describe("the portfolio", () => {
   });
 
   it("lists clients and says how much of the plan is used", async () => {
-    const a = pfApi([client("c1", "Celadyne"), client("c2", "Halden")],
+    const a = pfApi([client("c1", "Harbor Point"), client("c2", "Halden")],
                     { c1: docWith(400000), c2: docWith(900000) });
     const v = render(<Portfolio account={a} onOpen={() => {}} />);
-    await waitFor(() => expect(v.container.textContent).toMatch(/Celadyne/));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Harbor Point/));
     expect(v.container.textContent).toMatch(/2 of 3 companies/);
   });
 
@@ -168,11 +168,11 @@ describe("the portfolio", () => {
 
   it("opens a client when its name is clicked", async () => {
     const onOpen = vi.fn();
-    const a = pfApi([client("c1", "Celadyne"), client("c2", "Halden")],
+    const a = pfApi([client("c1", "Harbor Point"), client("c2", "Halden")],
                     { c1: docWith(400000), c2: docWith(900000) });
     const v = render(<Portfolio account={a} onOpen={onOpen} />);
-    await waitFor(() => expect(v.container.textContent).toMatch(/Celadyne/));
-    fireEvent.click(v.getByText("Celadyne"));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Harbor Point/));
+    fireEvent.click(v.getByText("Harbor Point"));
     expect(onOpen).toHaveBeenCalledWith("c1");
   });
 });

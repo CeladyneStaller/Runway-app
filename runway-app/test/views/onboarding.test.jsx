@@ -29,7 +29,7 @@ let App, S, sync, uploaded, companies;
 beforeEach(async () => {
   vi.resetModules();
   idb.clear();
-  companies = [{ id: "co-1", name: "Celadyne Energy", role: "owner", has_document: false }];
+  companies = [{ id: "co-1", name: "Harbor Point Labs", role: "owner", has_document: false }];
   try { globalThis.localStorage.clear(); globalThis.sessionStorage.clear(); } catch { /* unavailable */ }
   window.location.hash = "";
   S = await import("../../src/state/storage.js");

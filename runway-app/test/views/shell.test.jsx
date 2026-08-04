@@ -51,7 +51,7 @@ describe("the rail foot", () => {
   it("carries the document's identity, not the demo's", () => {
     // It used to read `Northwind Labs / Projection start · Jul 2026` — hardcoded. Someone else's
     // company name, in the chrome, on every screen, forever.
-    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Celadyne", startY: 2029, startM: 3 }} setDoc={() => {}} />);
+    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Harbor Point", startY: 2029, startM: 3 }} setDoc={() => {}} />);
     // The name FIELD is gone — every company has a name and the model name was a second string for
     // the same object. What the footer still carries is the projection start, which is the one thing
     // there that helps you read the charts above it.
@@ -70,14 +70,14 @@ describe("the rail foot", () => {
     // last one was found.
     const { container } = render(
       <RunwayApp doc={{ ...demoDoc(), name: "a stale model name" }} setDoc={() => {}}
-                 companyName="Celadyne" />
+                 companyName="Harbor Point" />
     );
-    expect(container.querySelector(".sub").textContent).toMatch(/^Celadyne ·/);
+    expect(container.querySelector(".sub").textContent).toMatch(/^Harbor Point ·/);
     expect(container.textContent).not.toMatch(/Northwind Labs/);
   });
 
   it("no chrome anywhere names a company the document doesn't", () => {
-    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Celadyne" }} setDoc={() => {}} />);
+    const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "Harbor Point" }} setDoc={() => {}} />);
     expect(container.textContent).not.toContain("Northwind Labs");
   });
 

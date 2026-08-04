@@ -81,7 +81,7 @@ beforeEach(async () => {
   idb.clear();
   rpcLog = []; deleteAccountResult = null; deletedRows = [];
   server = {};                        // company id -> document
-  companies = [{ id: "co-1", name: "Celadyne Energy", role: "owner", has_document: true }];
+  companies = [{ id: "co-1", name: "Harbor Point Labs", role: "owner", has_document: true }];
   profileRow = { password_set_at: null, last_company_id: "co-1" };
   S = await import("../../src/state/storage.js");
   sync = await import("../../src/state/sync.js");
@@ -221,7 +221,7 @@ describe("password section", () => {
 describe("companies", () => {
   it("lists them and marks the current one", async () => {
     companies = [
-      { id: "co-1", name: "Celadyne Energy", role: "owner", has_document: true },
+      { id: "co-1", name: "Harbor Point Labs", role: "owner", has_document: true },
       { id: "co-2", name: "Northwind Labs", role: "owner", has_document: false },
     ];
     const { container } = await start();
@@ -283,10 +283,10 @@ describe("companies", () => {
     const { container } = await start();
     await openAccount(container, "data");
     fireEvent.click(btn(container, /Rename/));
-    const input = [...container.querySelectorAll("input")].find(i => i.value === "Celadyne Energy");
-    fireEvent.change(input, { target: { value: "Celadyne Holdings" } });
+    const input = [...container.querySelectorAll("input")].find(i => i.value === "Harbor Point Labs");
+    fireEvent.change(input, { target: { value: "Harbor Point Holdings" } });
     fireEvent.click(btn(container, /^Save$/));
-    await waitFor(() => expect(rpcLog.some(r => r[0] === "rename" && r[1] === "Celadyne Holdings")).toBe(true));
+    await waitFor(() => expect(rpcLog.some(r => r[0] === "rename" && r[1] === "Harbor Point Holdings")).toBe(true));
   });
 });
 
@@ -341,7 +341,7 @@ describe("switching companies", () => {
 describe("deleting a company", () => {
   const twoCompanies = () => {
     companies = [
-      { id: "co-1", name: "Celadyne Energy", role: "owner", has_document: true },
+      { id: "co-1", name: "Harbor Point Labs", role: "owner", has_document: true },
       { id: "co-2", name: "Northwind Labs", role: "owner", has_document: false },
     ];
   };
@@ -381,7 +381,7 @@ describe("deleting a company", () => {
     const { container } = await start();
     await openAccount(container, "data");
     fireEvent.click([...container.querySelectorAll("button")].filter(b => /^Delete$/.test(b.textContent))[0]);
-    await waitFor(() => expect(container.textContent).toMatch(/Delete Celadyne Energy/));
+    await waitFor(() => expect(container.textContent).toMatch(/Delete Harbor Point Labs/));
     expect(container.textContent).toMatch(/discarded rather than written first/i);
     expect(container.textContent).toMatch(/Export it first/i);
   });
@@ -465,7 +465,7 @@ describe("deleting the account", () => {
 
   it("promises NOT to destroy a company shared with someone else", async () => {
     companies = [
-      { id: "co-1", name: "Celadyne", role: "owner", has_document: true },
+      { id: "co-1", name: "Harbor Point", role: "owner", has_document: true },
       { id: "co-2", name: "Shared Co", role: "editor", has_document: true },
     ];
     const { container } = await start();

@@ -29,9 +29,9 @@ describe("what may leave this module", () => {
   });
 
   it("carries no customer or company name either", () => {
-    const doc = co({ name: "Celadyne Energy", pos: [{ id: "p1", customer: "Northwind", amount: 145000 }] });
+    const doc = co({ name: "Harbor Point Labs", pos: [{ id: "p1", customer: "Northwind", amount: 145000 }] });
     const blob = JSON.stringify(computeStats(many(MIN_COHORT).concat(doc)));
-    expect(blob).not.toMatch(/Celadyne|Northwind/);
+    expect(blob).not.toMatch(/Harbor Point|Northwind/);
   });
 
   it("reports a headcount but never a person", () => {

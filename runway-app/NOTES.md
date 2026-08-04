@@ -619,7 +619,7 @@ but import used to ignore them (returned only `{periods, categories, costSharePc
 now also recovers `funder` and `reimburseTiming` (reversing `TIMING_LABEL`) WHEN THOSE ROWS ARE PRESENT
 — a template-only import still returns the original shape with those keys absent, so nothing is invented.
 `modals.jsx` prefers recovered terms over the UI billing selector. Tested by injecting the rows into the
-importable `celadyne.xlsx` fixture and re-importing.
+importable `harborpoint.xlsx` fixture and re-importing.
 
 *(closed — spend history is editable under **Spend history → Burn**. Months are ordered oldest → newest
 and **position is the date**: labels derive from the projection start rather than being typed, so they

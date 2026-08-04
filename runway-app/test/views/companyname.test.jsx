@@ -30,7 +30,7 @@ beforeEach(async () => {
   vi.resetModules();
   idb.clear();
   serverDoc = null; uploaded = [];
-  companies = [{ id: "co-1", name: "Celadyne Energy", role: "owner", has_document: false }];
+  companies = [{ id: "co-1", name: "Harbor Point Labs", role: "owner", has_document: false }];
   try { globalThis.localStorage.clear(); globalThis.sessionStorage.clear(); } catch { /* unavailable */ }
   window.location.hash = "";
   S = await import("../../src/state/storage.js");
@@ -73,7 +73,7 @@ describe("a new company's first model", () => {
     goHosted();
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Set up your company/i));
-    expect(container.querySelector("#su-name").value).toBe("Celadyne Energy");
+    expect(container.querySelector("#su-name").value).toBe("Harbor Point Labs");
 
     fireEvent.change(container.querySelector("#su-cash"), { target: { value: "250,000" } });
     fireEvent.click(btn(container, /^Next$/));
@@ -82,7 +82,7 @@ describe("a new company's first model", () => {
     fireEvent.click(btn(container, /^Done$/));
 
     // The rail's name field is gone; the subtitle reads the COMPANY name, which is now the only name.
-    await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
   });
 
   it("needs no seeding at all, because nothing copies the company name into the document", async () => {
@@ -93,7 +93,7 @@ describe("a new company's first model", () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Set up your company/i));
     fireEvent.click(btn(container, /^Cancel$/));
-    await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
   });
 
   it("writes NOTHING to the account until that action happens", async () => {
@@ -113,7 +113,7 @@ describe("what it must not overwrite", () => {
     serverDoc = { ...docs.demoDoc(), name: "Acme Holdings" };
     goHosted();
     const { container } = render(<App />);
-    await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
     await new Promise(r => setTimeout(r, 400));
     expect(uploaded).toEqual([]);   // no unrequested rewrite of real data
   });
@@ -124,7 +124,7 @@ describe("what it must not overwrite", () => {
     serverDoc = { ...docs.demoDoc(), name: "Untitled" };
     goHosted();
     const { container } = render(<App />);
-    await waitFor(() => expect(sub(container)).toMatch(/^Celadyne Energy ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
     await new Promise(r => setTimeout(r, 400));
     expect(uploaded).toEqual([]);
     expect(serverDoc.name).toBe("Untitled");   // the stored document, untouched
@@ -142,8 +142,8 @@ describe("the model name is gone", () => {
     const withCash = { ...docs.emptyDoc(), cash: 100000 };
 
     const a = render(<RunwayApp doc={{ ...withCash, name: "A stale model name" }} setDoc={() => {}}
-                                companyName="Celadyne" />);
-    expect(sub(a.container)).toMatch(/^Celadyne ·/);
+                                companyName="Harbor Point" />);
+    expect(sub(a.container)).toMatch(/^Harbor Point ·/);
     a.unmount();
 
     const b = render(<RunwayApp doc={{ ...withCash, name: "" }} setDoc={() => {}} />);
@@ -153,7 +153,7 @@ describe("the model name is gone", () => {
   it("offers no name field in the rail", async () => {
     const { RunwayApp } = await import("../../src/App.jsx");
     const { container } = render(
-      <RunwayApp doc={{ ...docs.emptyDoc(), cash: 100000 }} setDoc={() => {}} companyName="Celadyne" />
+      <RunwayApp doc={{ ...docs.emptyDoc(), cash: 100000 }} setDoc={() => {}} companyName="Harbor Point" />
     );
     expect(container.querySelector(".docname")).toBeNull();
   });
@@ -163,7 +163,7 @@ describe("the model name is gone", () => {
     // the navigation, was the most destructive control in the product in the least guarded place.
     const { RunwayApp } = await import("../../src/App.jsx");
     const { container } = render(
-      <RunwayApp doc={{ ...docs.emptyDoc(), cash: 100000 }} setDoc={() => {}} companyName="Celadyne" />
+      <RunwayApp doc={{ ...docs.emptyDoc(), cash: 100000 }} setDoc={() => {}} companyName="Harbor Point" />
     );
     const rail = container.querySelector(".rail");
     expect(rail.textContent).not.toMatch(/Export|Import/);

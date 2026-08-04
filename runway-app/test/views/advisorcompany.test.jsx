@@ -14,7 +14,7 @@ const parts = () => {
   const p = buildModelParts(doc);
   return { ...p, rows: buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {}) };
 };
-const co = { id: "co-1", name: "Celadyne Energy" };
+const co = { id: "co-1", name: "Harbor Point Labs" };
 
 describe("an advisor's view of one client", () => {
   it("draws the client's own runway chart", () => {

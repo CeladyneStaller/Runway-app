@@ -157,7 +157,7 @@ company is the failure that makes the whole feature worthless. A test should ass
 ```js
 it("sends an advisor no salary, ever", async () => {
   const asAdvisor = await signInAs("dana@sharpecfo.com");
-  const doc = await asAdvisor.rpc("load_document", { p_company_id: CELADYNE });
+  const doc = await asAdvisor.rpc("load_document", { p_company_id: HARBOR_POINT });
   const json = JSON.stringify(doc);
   expect(json).not.toMatch(/Alex Rivera/);
   expect(json).not.toMatch(/18200/);              // a known individual salary

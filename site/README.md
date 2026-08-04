@@ -35,7 +35,7 @@ site that contradicts checkout costs more than one that is out of date.
    then replace that paragraph. Do not describe a policy that does not exist.
 2. **Legal review** of `/privacy/` and `/terms/`. Both carry a visible notice saying they are drafts;
    remove it when reviewed.
-3. **A real inbox** at hello@waterline-runway.com. The address appears on nine pages.
+3. **A real inbox** at info@waterline-runway.com. The address appears on nine pages.
 4. **The five unwritten articles.** They are listed as "Coming" rather than linked, so nothing is
    broken — but a list that stays unwritten for six months should be trimmed to the one that exists.
 

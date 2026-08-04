@@ -9,10 +9,10 @@ import { computeGrant } from "../../src/engine";
 import { importWorkbook, exportBudget } from "../../src/engine/sf424a";   // not in the barrel — see engine/index.js
 
 // jsdom rewrites import.meta.url to an http: URL, so resolve from cwd instead.
-const wbPath = resolve(process.cwd(), "test/fixtures/celadyne.xlsx");
+const wbPath = resolve(process.cwd(), "test/fixtures/harborpoint.xlsx");
 const read = () => XLSX.read(readFileSync(wbPath), { type: "buffer" });
 
-describe("the Celadyne workbook — a real DOE EERE SF-424A budget justification", () => {
+describe("the Harbor Point workbook — a real DOE EERE SF-424A budget justification", () => {
   it("opens, and has the tabs the importer expects", () => {
     const wb = read();
     expect(wb.SheetNames.length).toBeGreaterThan(1);

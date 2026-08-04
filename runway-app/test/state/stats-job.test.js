@@ -61,18 +61,18 @@ describe("running the job", () => {
 
   it("writes nothing identifying, at any cohort size", async () => {
     const docs = Array.from({ length: MIN_COHORT }, (_, i) =>
-      co({ name: `Celadyne ${i}`, pos: [{ id: "p", customer: "Northwind", amount: 1000 }] }));
+      co({ name: `Harbor Point ${i}`, pos: [{ id: "p", customer: "Northwind", amount: 1000 }] }));
     const c = fakeClient(docs);
     await runStatsJob({ client: c });
     const blob = JSON.stringify(c.written);
-    expect(blob).not.toMatch(/Celadyne|Northwind|Alex Rivera|Engineer/);
+    expect(blob).not.toMatch(/Harbor Point|Northwind|Alex Rivera|Engineer/);
   });
 
   it("logs counts, never names or bodies", async () => {
     // A job that logs what it reads has re-created the leak it was written to avoid.
     const lines = [];
-    await runStatsJob({ client: fakeClient([co({ name: "Celadyne Energy" })]), log: (m) => lines.push(m) });
-    expect(lines.join("\n")).not.toMatch(/Celadyne/);
+    await runStatsJob({ client: fakeClient([co({ name: "Harbor Point Labs" })]), log: (m) => lines.push(m) });
+    expect(lines.join("\n")).not.toMatch(/Harbor Point/);
     expect(lines.join("\n")).toMatch(/scanned 1/);
   });
 });
@@ -123,10 +123,10 @@ describe("what the client asks the database for", () => {
     await client.insertStats({
       companies: 3, sampleSize: 3, minCohort: 10, suppressed: true, computedAt: "2026-07-26T00:00:00Z",
       // things that must not be forwarded even when present on the object handed in
-      companyName: "Celadyne Energy", topEarner: "Alex Rivera", rawDocs: [{ cash: 1 }],
+      companyName: "Harbor Point Labs", topEarner: "Alex Rivera", rawDocs: [{ cash: 1 }],
     });
     const body = JSON.parse(calls[0].init.body);
     for (const k of Object.keys(body)) expect(ALLOWED.has(k), `unexpected column ${k}`).toBe(true);
-    expect(JSON.stringify(body)).not.toMatch(/Celadyne|Alex Rivera/);
+    expect(JSON.stringify(body)).not.toMatch(/Harbor Point|Alex Rivera/);
   });
 });

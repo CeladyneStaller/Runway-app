@@ -4,7 +4,7 @@ import React from "react";
 import { Account } from "../../src/views/Account";
 import * as sync from "../../src/state/sync";
 const api = {
-  listCompanies: vi.fn().mockResolvedValue([{ id: "co-1", name: "Celadyne", role: "owner" }]),
+  listCompanies: vi.fn().mockResolvedValue([{ id: "co-1", name: "Harbor Point", role: "owner" }]),
   profile: vi.fn().mockResolvedValue({ last_company_id: "co-1" }),
   listMembers: vi.fn().mockResolvedValue([]),
   companyPlan: vi.fn().mockResolvedValue({ plan: "solo", status: "active" }),

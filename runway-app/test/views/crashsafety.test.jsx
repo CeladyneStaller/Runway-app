@@ -113,7 +113,7 @@ describe("a caught crash is reported, not just logged", () => {
     try {
       openView(demoDoc(), "Milestones");
       const blob = JSON.stringify(sent);
-      expect(blob).not.toMatch(/Alex Rivera|Celadyne|560000/);
+      expect(blob).not.toMatch(/Alex Rivera|Harbor Point|560000/);
     } finally { _resetErrorReporting(); }
   });
 });
