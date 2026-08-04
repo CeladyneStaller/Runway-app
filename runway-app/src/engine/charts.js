@@ -18,6 +18,7 @@ import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, monthRevenue, isCost, lineAmount, lineCode, resolveLine, OVERHEAD } from "./coding.js";
 import { instConf } from "./capital.js";
+import { commitmentPressure } from "./commitments.js";
 import { spentToDate } from "./summary.js";
 import { saasSeries } from "./saas.js";
 import { HORIZON, monthLabel } from "./time.js";
@@ -123,6 +124,22 @@ const flowRunway = (doc) => {
     format: "money",
     // THE HOLE, so a recovery stops reading as good news. The line already dips; naming the gap is
     // what stops somebody seeing the far side and thinking the money is there.
+    // COMMITMENTS AS A SECOND LINE. Dashed, because it is not a forecast of cash — it is cash less what
+    // has already been promised, and the point is where it crosses zero BEFORE the solid line does.
+    committed: (() => {
+      try {
+        const pr = commitmentPressure(doc, buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {}));
+        if (!pr) return null;
+        const byMonth = new Map();
+        for (const c of pr.rows) byMonth.set(c.payMonth, (byMonth.get(c.payMonth) || 0) + c.amount);
+        let owed = 0;
+        // The chart's own rows, not `parts` — this builder does not take them, and reaching for a name
+        // that is not in scope is how the first attempt failed to compile rather than failing quietly.
+        const own = buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {});
+        const values = own.map((r, m) => { owed += byMonth.get(m) || 0; return r.end - owed; });
+        return values.length ? { values, coveredMonths: pr.coveredMonths, unpaid: pr.unpaid } : null;
+      } catch { return null; }
+    })(),
     underwater: solv ? {
       fromT: solv.zeroT, toT: solv.recoversT,
       deepest: solv.deepest, days: solv.daysUnderwater,

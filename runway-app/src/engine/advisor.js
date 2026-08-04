@@ -19,6 +19,7 @@ import { spentToDate } from "./summary.js";
 import { saasSeries } from "./saas.js";
 import { monthTotal, isCost, lineAmount } from "./coding.js";
 import { instConf } from "./capital.js";
+import { commitmentPressure } from "./commitments.js";
 
 const clean = (n) => (Number.isFinite(n) ? n : 0);
 const sum = (xs) => xs.reduce((a, b) => a + clean(b), 0);
@@ -155,6 +156,19 @@ const scnTile = (doc, parts) => {
   };
 };
 
+const cmtTile = (doc, parts) => {
+  let p = null;
+  try { p = commitmentPressure(doc, rowsOf(doc, parts)); } catch { p = null; }
+  if (!p) return null;
+  return {
+    value: p.unpaid, format: "money",
+    sub: p.uncovered > 0
+      ? `signed · ${Math.round(p.uncovered / 1000)}k uncovered`
+      : p.coveredMonths != null ? `signed · covered ${p.coveredMonths.toFixed(1)} mo` : "signed",
+    tone: p.uncovered > 0 ? "danger" : "signal",
+  };
+};
+
 /** Which tab each tile belongs to, in the order the rail shows them. */
 export const TILES = Object.freeze([
   { view: "flow", label: "Cash flow", build: flowTile },
@@ -164,6 +178,7 @@ export const TILES = Object.freeze([
   { view: "inv", label: "Investment", build: invTile },
   { view: "hist", label: "Spend history", build: histTile },
   { view: "ms", label: "Milestones", build: msTile },
+  { view: "cmt", label: "Commitments", build: cmtTile },
   { view: "scn", label: "Scenarios", build: scnTile },
 ]);
 

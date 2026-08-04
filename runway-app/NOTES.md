@@ -1407,11 +1407,28 @@ covered on money that leaves later the same month.
 **Recurring lines are NOT promotable.** A lease's whole remaining term being "uncovered" is true and
 useless — six figures of unavoidable rent permanently at the top of a list meant for discrete decisions.
 
-**Built:** schema v5, `engine/commitments.js`, the tab with manual add, promotion, mark-paid and the
-empty state that explains the concept. **Not built:** the chart series, the dashboard figure, the
-advisor tile, grant cost-share, and QuickBooks `AgedPayableDetail` — the last is the highest-value
-source and a real addition, since `qbo-sync` pulls `ProfitAndLossDetail`, which is spend that already
-happened.
+**COST SHARE IS DERIVED, NOT STORED**, so it cannot drift from the award it comes from — edit the
+budget and the obligation moves. `computeGrant().grand.costShare` is the figure, which is what the
+Projects tab already totals, so the two cannot disagree. It creates no cost line: the spend is already
+in the project, the same invariant as a promoted line reached differently.
+
+**TWO WRONG FIELD GUESSES, both found by running it against the demo model.** `budget × costSharePct`
+is not a thing — `costSharePct` lives on `project.grant`, not the project, and the total comes from
+`computeGrant`. Then `g.endM` does not exist either: a grant's dates live in `periods[]`, so the first
+working version dated EVERY cost-share obligation to month 0 and reported it due immediately. Wrong in
+the alarming direction is still wrong, and that one was wrong by the entire length of the award.
+
+**THREE TESTS BROKE BECAUSE THE DEMO MODEL NOW HAS A COMMITMENT.** "Returns null when nothing is
+committed", "explains the concept when empty" and an uncovered total asserted as a bare number were all
+about the fixture rather than the behaviour. Each now builds a model with no awards, or measures a
+DELTA. Worth noticing: a derived feature changes what every fixture means.
+
+**Built:** schema v5, `engine/commitments.js`, the tab, the dashed committed series on `flow.runway`,
+the dashboard tile (shown only when covered runway differs by half a month or more — a tile that always
+appears teaches people to stop reading it), the advisor tile, and grant cost share.
+
+**Not built:** QuickBooks `AgedPayableDetail` — the highest-value source and a real addition, since
+`qbo-sync` pulls `ProfitAndLossDetail`, which is spend that already happened.
 
 ## A new plain user landed on the portfolio; a new company never mentioned its trial
 

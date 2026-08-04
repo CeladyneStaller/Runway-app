@@ -4,6 +4,7 @@ import { planSummary } from "./state/plans";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
 import { Commitments } from "./views/Commitments";
 import { atLeast } from "./engine/roles";
+import { commitmentPressure } from "./engine/commitments";
 import { AdvisorHome } from "./views/chrome/AdvisorHome";
 import { landingFor, portfolioAllowed, PORTFOLIO } from "./engine/landing";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
@@ -246,6 +247,9 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
              target: msTarget(ms), pass: msPass(bal, ms), gap: msGap(bal, ms),
              stranded, bridge: stranded ? solv.bridgeTo(t) : 0 };
   }).sort((a, b) => a.t - b.t);
+
+  const pressure = useMemo(() => { try { return commitmentPressure(doc, rows); } catch { return null; } },
+                           [doc, rows]);
 
   const netBurn = rows.slice(0, 3).reduce((a, r) => a + r.net, 0) / 3;
   const grossBurn = rows.slice(0, 3).reduce((a, r) => a + r.cost, 0) / 3;
@@ -500,6 +504,19 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
                   <div className="meta">{zero ? `zero on ${dateShort(zero.date)}` : "cash-flow positive"}</div>
                   {showConf && <div className="meta conf">confident to {dateShort(zeroConf.date)}{sameAsConf ? " — speculative lands too late to move it" : ""}</div>}
                 </div>
+                {/* SHOWN ONLY WHEN IT DIFFERS MATERIALLY. A covered runway equal to the runway is not a
+                    second number, it is the same number twice — and a tile that always appears teaches
+                    people to stop reading it. Half a month is the threshold: below that the difference
+                    is rounding, above it is a decision. */}
+                {pressure && pressure.coveredMonths != null && zero &&
+                 (zero.months - pressure.coveredMonths) >= 0.5 && (
+                  <div className="stat">
+                    <div className="accent" style={{ background: "var(--commit)" }} />
+                    <div className="lab">Covered runway</div>
+                    <div className="big">{pressure.coveredMonths.toFixed(1)} mo</div>
+                    <div className="meta">if every commitment is honoured</div>
+                  </div>
+                )}
                 <div className="stat">
                   <div className="accent" style={{ background: "var(--caution)" }} />
                   <div className="lab">Operating burn / mo</div>

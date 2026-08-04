@@ -144,6 +144,16 @@ function Lines({ spec }) {
           </g>
         );
       })()}
+      {/* CASH LESS WHAT IS PROMISED. Dashed and in its own colour: it is not another scenario of the
+          same line, it is the same money with obligations taken off — and where it crosses zero first
+          is the moment the signatures outrun the bank. */}
+      {spec.committed?.values && (() => {
+        const v = spec.committed.values;
+        // `s.y` is the scaler this shape already built — the same one the cash line uses, so the two
+        // are drawn against one axis rather than two that happen to look alike.
+        const d = v.map((val, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(val)}`).join(" ");
+        return <path d={d} fill="none" stroke="var(--commit)" strokeWidth="1.8" strokeDasharray="5 4" />;
+      })()}
       {spec.series.map(sr => (
         <path key={sr.id} d={path(sr.values)} fill="none" stroke={tone(sr.tone)} strokeWidth="2"
               strokeDasharray={sr.dashed ? "4 3" : undefined} />

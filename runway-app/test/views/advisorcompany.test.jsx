@@ -64,7 +64,7 @@ describe("an advisor's view of one client", () => {
     //
     // Driven through `hiddenTabs` rather than a hand-emptied document — I could not reliably construct
     // one that produced no tiles, and a test whose premise I cannot verify is worse than no test.
-    const all = ["flow", "pay", "proj", "sales", "inv", "hist", "ms", "scn"];
+    const all = ["flow", "pay", "proj", "sales", "inv", "hist", "ms", "cmt", "scn"];
     const v = render(<AdvisorCompany company={co} doc={doc} parts={parts()} hiddenTabs={all} />);
     expect(v.container.textContent).toMatch(/nothing in it yet/);
     expect(v.container.textContent).not.toMatch(/Could not read/);

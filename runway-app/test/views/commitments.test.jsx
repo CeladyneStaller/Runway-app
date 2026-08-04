@@ -18,7 +18,10 @@ describe("the Commitments tab", () => {
   it("EXPLAINS THE CONCEPT when empty", () => {
     // Unlike every other tab, this one is not populated by using the product normally. Somebody
     // arriving has to be told what belongs in it before they can put anything in it.
-    const v = draw(base);
+    //
+    // Needs a model with NO AWARDS: the demo carries a derived cost-share obligation now, so it is
+    // never truly empty — which is the cost-share feature working, not this test failing.
+    const v = draw({ ...base, projects: [], commitments: [] });
     expect(v.container.textContent).toMatch(/Nothing signed yet/);
     expect(v.container.textContent).toMatch(/agreed to pay and have not paid/);
   });

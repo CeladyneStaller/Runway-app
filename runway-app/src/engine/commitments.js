@@ -15,13 +15,14 @@
 // cost and a commitment doubles the burn, and the overstatement is silent.
 
 import { balanceAtDate, zeroInfo } from "./projection.js";
+import { computeGrant } from "./grant.js";
 
 const clean = (n) => (Number.isFinite(n) ? n : 0);
 const DAY = 86400000;
 
 /** Unpaid, in payment order. Ordering matters: cover is cumulative, so the sequence IS the arithmetic. */
 export function unpaidCommitments(doc) {
-  return (doc?.commitments || [])
+  return allCommitments(doc)
     .filter(c => c && c.status !== "paid" && clean(c.amount) > 0)
     .slice()
     .sort((a, b) => clean(a.payMonth) - clean(b.payMonth));
@@ -121,6 +122,62 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
     overdue: out.filter(r => r.overdue).length,
     rows: out,
   };
+}
+
+/** Cost-share obligations, derived from the awards themselves.
+ *
+ *  A COST-SHARE AWARD COMMITS YOU TO SPENDING YOUR OWN MONEY to unlock theirs — an obligation the model
+ *  already knows the size of, and which appears nowhere today. `costSharePct` of the budget is money you
+ *  have agreed to put in, and failing to put it in does not just cost you the match, it can claw back
+ *  what was already drawn.
+ *
+ *  DERIVED, NOT STORED, so it cannot drift from the award it comes from. Editing the budget moves the
+ *  obligation; nobody has to remember to update a second record. The cost is ALREADY in the plan as
+ *  project spend, so these create no outflow — same invariant as a promoted line, reached differently.
+ */
+export function costShareCommitments(doc) {
+  const out = [];
+  for (const proj of doc?.projects || []) {
+    if (!proj || proj.stage === "prospective" || !proj.grant) continue;
+    // `computeGrant().grand.costShare` IS THE FIGURE, computed from the budget periods — not
+    // `budget × pct`, which I reached for first and which is not a field that exists. The Projects tab
+    // already totals cost share this way, so the two cannot disagree.
+    let share = 0;
+    try { share = clean(computeGrant(proj.grant).grand?.costShare); } catch { share = 0; }
+    if (share <= 0) continue;
+
+    const g = proj.grant;
+    // The obligation lands with the work. Without per-period detail the honest simplification is the
+    // award's own end — earlier would overstate the pressure, and a wrong number in the alarming
+    // direction is still a wrong number.
+    // THE END OF THE LAST PERIOD. A grant's dates live in `periods[]`, not on the grant — `g.endM` does
+    // not exist, so my first version defaulted every award's obligation to month 0 and reported it as
+    // due immediately. Pressure in the alarming direction is still wrong, and this one was wrong by the
+    // entire length of the award.
+    const per = Array.isArray(g.periods) ? g.periods : [];
+    const payMonth = per.length ? Math.max(...per.map(x => clean(x.end))) : 0;
+    const startMonth = per.length ? Math.min(...per.map(x => clean(x.start))) : 0;
+
+    out.push({
+      id: `cs_${proj.id}`,
+      label: `${proj.name || "Award"} — cost share`,
+      signedMonth: startMonth,
+      payMonth,
+      amount: Math.round(share),
+      projectId: proj.id,
+      source: "grant",
+      lineId: null,          // no line of its own: the spend is already in the project
+      status: "committed",
+      paidRef: null,
+      derived: true,         // cannot be edited or removed here; change the award instead
+    });
+  }
+  return out;
+}
+
+/** Everything committed, stored and derived, as one list. */
+export function allCommitments(doc) {
+  return [...(doc?.commitments || []), ...costShareCommitments(doc)];
 }
 
 /** Planned cost lines that could be promoted.
