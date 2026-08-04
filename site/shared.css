@@ -150,3 +150,9 @@ td b{color:var(--ink);font-weight:500}
   text-transform:uppercase;padding:2px 9px;border-radius:2px;background:var(--linen);color:var(--muted)}
 .tag--warn{background:#F0E2D8;color:var(--brick)}
 .hero{border-bottom:none}
+
+/* The headline breaks after the first sentence. Below ~640px the second line no longer fits either, so
+   it is allowed to wrap AS A PHRASE rather than mid-italic — three lines is fine, "Cash above the /
+   line." is not. */
+.nb{display:inline-block}
+@media(max-width:640px){ h1 .nb{display:inline} }
