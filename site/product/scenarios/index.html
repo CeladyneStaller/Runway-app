@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scenarios — Waterline</title>
-<meta name="description" content="Committed, expected and speculative revenue toggled independently, with the runway range that falls out of them.">
-<link rel="canonical" href="https://waterline-runway.com/product/scenarios/">
+<meta name="description" content="Try a change against the whole model before you make it. Delay hires, slip a raise, extend a period — and see what each one does to your runway.">
+<link rel="canonical" href="https://waterline-runway.com/product/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Waterline">
 <meta property="og:title" content="Scenarios — Waterline">
-<meta property="og:description" content="Committed, expected and speculative revenue toggled independently, with the runway range that falls out of them.">
-<meta property="og:url" content="https://waterline-runway.com/product/scenarios/">
-<meta property="og:image" content="https://waterline-runway.com/og.svg">
+<meta property="og:description" content="Try a change against the whole model before you make it. Delay hires, slip a raise, extend a period — and see what each one does to your runway.">
+<meta property="og:url" content="https://waterline-runway.com/product/">
+<meta property="og:image" content="https://waterline-runway.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="icon" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
@@ -34,32 +34,93 @@
 
 <div class="wrap phead">
   <span class="eyebrow">Product · Scenarios</span>
-  <h1>A range, not a number.</h1>
-  <p class="lead">One runway figure hides the question worth asking. Waterline splits revenue three ways
-  and shows you what each layer is holding up.</p>
+  <h1>Try the fix before you <em>make</em> it.</h1>
+  <p class="lead">Knowing which month breaks is half of it. The other half is finding out, in ninety
+  seconds, which of the three things you could do about it actually helps.</p>
 </div>
+
 <section style="padding-top:10px">
-  <div class="wrap grid2" style="gap:64px">
+  <div class="wrap grid2" style="gap:64px;align-items:center">
     <div>
-      <table>
-        <tr><th>Layer</th><th>Means</th></tr>
-        <tr><td><b>Committed</b></td><td>Signed, awarded, in the bank or contractually certain.</td></tr>
-        <tr><td><b>Expected</b></td><td>Likely — a renewal you have every reason to believe in.</td></tr>
-        <tr><td><b>Speculative</b></td><td>Applied for, pitched, hoped for.</td></tr>
-      </table>
-      <p class="lead" style="max-width:52ch">Toggle them independently. If your runway triples when
-      speculative is on, that is not a longer runway — it is a dependency, and now you can see it.</p>
-      <div class="acts"><a class="btn btn--fill" href="https://app.waterline-runway.com/?demo=1">Try it on the demo</a></div>
+      <h2>Five changes, and what each one moved</h2>
+      <p class="lead" style="max-width:52ch">Each figure is that change applied to the whole model — the
+      burn, the drawdowns, every milestone that depended on it, and the range. Not the one number you
+      thought to check.</p>
+      <p class="lead" style="max-width:52ch">The live plan does not move until you apply one.</p>
     </div>
-    <div class="card">
-      <span class="item__k">Also on this tab</span>
-      <h3>Saved scenarios</h3>
-      <p>Model a change without touching the plan — delay two hires, slip a round, bridge $200k — and
-      compare it against the live model. Advisors keep their own layer and can offer one to the owner,
-      who accepts or declines it.</p>
-      <h3 style="margin-top:22px">Anchored to actuals</h3>
-      <p>Months you have closed use what really happened. The projection starts where your books stop,
-      so a scenario is never arguing with your ledger.</p>
+    <div class="plot">
+      <p class="plot__h">Against a live plan of 5.6 months</p>
+      <table><tr><td style="border-color:var(--pine-3);color:#CFDCD4">Delay two hires to Q3</td>
+        <td style="border-color:var(--pine-3);text-align:right;font-family:var(--fm);color:#8FD3BE">+1.4 mo</td></tr><tr><td style="border-color:var(--pine-3);color:#CFDCD4">Extend period 2 by six months</td>
+        <td style="border-color:var(--pine-3);text-align:right;font-family:var(--fm);color:#8FD3BE">+0.9 mo</td></tr><tr><td style="border-color:var(--pine-3);color:#CFDCD4">Bridge $200k in December</td>
+        <td style="border-color:var(--pine-3);text-align:right;font-family:var(--fm);color:#8FD3BE">+2.1 mo</td></tr><tr><td style="border-color:var(--pine-3);color:#CFDCD4">Series A slips to June</td>
+        <td style="border-color:var(--pine-3);text-align:right;font-family:var(--fm);color:#B8624A">−1.9 mo</td></tr><tr><td style="border-color:var(--pine-3);color:#CFDCD4">Lose the largest customer</td>
+        <td style="border-color:var(--pine-3);text-align:right;font-family:var(--fm);color:#B8624A">−3.4 mo</td></tr></table>
+      <p class="plot__note">Keep one, discard it, or hand it to somebody.</p>
+    </div>
+  </div>
+</section>
+
+<section class="rule">
+  <div class="wrap">
+    <div style="max-width:46ch;margin-bottom:40px">
+      <span class="eyebrow">What a scenario is</span>
+      <h2>A patch, not a copy.</h2>
+      <p class="lead">The reason everybody has <span style="font-family:var(--fm);font-size:.9em">plan-v3-FINAL-actually.xlsx</span>
+      is not disorganisation. A spreadsheet has no way to hold two versions of the truth at once, so you
+      make a second file — and from that moment you have two models and no way to tell which is right.</p>
+    </div>
+    <div class="grid3">
+      <div class="card"><span class="item__k">Stored as a change</span><h3>Not a duplicate</h3>
+        <p>A scenario records what differs from the plan, so when the plan moves underneath it — a new
+        actual, a hire that started — the scenario moves with it. A copied file does not.</p></div>
+      <div class="card"><span class="item__k">Private until applied</span><h3>Model quietly</h3>
+        <p>Nothing changes and nobody sees it. Your co-founder is not watching you model redundancies
+        in real time.</p></div>
+      <div class="card"><span class="item__k">Anchored to actuals</span><h3>Never argues with the ledger</h3>
+        <p>Months you have closed use what really happened. A scenario changes the future, not your
+        bank statement.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="pine">
+  <div class="wrap grid2" style="gap:70px;align-items:center">
+    <div>
+      <span class="eyebrow eyebrow--pale">Three layers</span>
+      <h2>A range, because there is one.</h2>
+      <p class="lead">Committed money is signed. Expected money is likely. Speculative money is hoped
+      for. Toggle them independently — and if your runway triples when speculative comes on, that is not
+      a longer runway. It is a dependency with a size.</p>
+    </div>
+    <div class="plot">
+      <p class="plot__h">Floor, expected, ceiling</p>
+      <svg viewBox="0 0 440 200" role="img" aria-label="Three cash curves: a floor crossing zero at 4.1 months, an expected case at 5.6, and a ceiling that clears the horizon.">
+        <path d="M28 26 L110 54 L192 86 L274 122 L356 164 L420 196 L420 96 L356 78 L274 58 L192 42 L110 32 L28 26 Z" fill="#D9CDB4" opacity=".1"/>
+        <line x1="28" y1="156" x2="424" y2="156" stroke="#B8624A" stroke-dasharray="4 4"/>
+        <polyline points="28,26 110,60 174,110 216,156" fill="none" stroke="#B8624A" stroke-width="1.6"/>
+        <polyline points="28,26 110,54 192,88 274,124 300,156" fill="none" stroke="#D9CDB4" stroke-width="2.1"/>
+        <polyline points="28,26 110,44 192,62 274,82 356,102 420,120" fill="none" stroke="#BE9440" stroke-width="1.6" stroke-dasharray="5 4"/>
+        <circle cx="216" cy="156" r="3.4" fill="#B8624A"/><circle cx="300" cy="156" r="3.6" fill="#D9CDB4"/>
+        <g fill="#7B9489" font-family="'IBM Plex Mono',monospace" font-size="9">
+          <text x="6" y="170">0</text><text x="182" y="186">4.1 mo</text><text x="272" y="186">5.6 mo</text>
+          <text x="368" y="186">clears</text></g>
+      </svg>
+      <p class="plot__note">The gap between the first two is the number to manage.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap narrow">
+    <span class="eyebrow">If somebody advises you</span>
+    <h2>Advice you can run.</h2>
+    <p class="lead" style="max-width:60ch">A fractional CFO or board member builds a scenario inside your
+    model and offers it. You see exactly what it changes, and you accept or decline. The recommendation
+    arrives as a thing that computes rather than a paragraph in an email.</p>
+    <div class="acts">
+      <a class="btn btn--fill" href="https://app.waterline-runway.com/?demo=1">Try it on the demo</a>
+      <a class="btn btn--line" href="/advisors/">If you are the advisor &rarr;</a>
     </div>
   </div>
 </section>

@@ -1,0 +1,6 @@
+{
+  "redirects": [
+    { "source": "/product/grants", "destination": "/product/funded-work/", "permanent": true },
+    { "source": "/product/grants/", "destination": "/product/funded-work/", "permanent": true }
+  ]
+}
