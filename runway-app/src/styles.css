@@ -1246,3 +1246,6 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .subpill.on{background:var(--ink);color:#fff;font-weight:500}
 .src{display:inline-block;font-family:var(--fm);font-size:9.5px;padding:1px 6px;border-radius:4px;
   background:var(--paper);color:var(--muted-2);border:1px solid var(--line-2)}
+.ncebox{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.ncebox .sel{font-size:12px;padding:3px 6px}

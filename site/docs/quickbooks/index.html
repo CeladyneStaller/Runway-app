@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connecting QuickBooks — Waterline</title>
+<meta name="description" content="What Waterline reads from QuickBooks, what it never writes, and what unpaid bills do and do not include.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="/">
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="/mark.svg#duck"/></svg>
+      <span>Waterline</span>
+    </a>
+    <nav class="nav__links"><a href="/product/">Product</a><a href="/advisors/">Advisors</a><a href="/pricing/">Pricing</a><a href="/docs/" aria-current="page">Docs</a><a href="/writing/">Writing</a></nav>
+    <a class="btn btn--fill" href="https://runway-app-two.vercel.app">Open the app</a>
+  </div>
+</header>
+
+<div class="wrap phead narrow">
+  <span class="eyebrow">Docs · Connections</span>
+  <h1>Connecting QuickBooks.</h1>
+</div>
+<section style="padding-top:0"><div class="wrap narrow">
+  <p class="lead" style="max-width:60ch">Connect from <b>Company settings → Connections</b>. The
+  connection is per company and owner-only, and it is <b>read-only</b> — nothing is ever written back to
+  your books.</p>
+  <h2 style="margin:36px 0 0">What is read</h2>
+  <table style="margin-top:14px">
+    <tr><td style="width:34%"><b>Profit and loss detail</b></td>
+      <td>Becomes your spend history. Pulled from Spend history → Sync, then reviewed in the import
+      screen before anything is committed to your model.</td></tr>
+    <tr><td><b>Unpaid bills</b></td>
+      <td>Become commitment drafts on the Commitments tab. You confirm each one; nothing is added
+      automatically.</td></tr>
+  </table>
+  <h2 style="margin:40px 0 0">What unpaid bills do not include</h2>
+  <p class="lead" style="max-width:60ch">QuickBooks raises a bill when an <b>invoice arrives</b>. A
+  commitment begins when you <b>sign</b>. So the import finds obligations that have already been
+  invoiced and misses everything signed and not yet billed — which is often the long-dated purchase
+  order you most wanted to track.</p>
+  <p class="lead" style="max-width:60ch">Treat the import as a floor on what you owe, and add signed
+  commitments by hand or by promoting a planned cost. The app repeats this on every import for the same
+  reason.</p>
+  <h2 style="margin:40px 0 0">Reconnecting</h2>
+  <p class="lead" style="max-width:60ch">Intuit requires reauthorisation periodically. Waterline keeps
+  the connection alive on a schedule and tells you on the Connections page when it needs your
+  attention.</p>
+</div></section><footer class="foot">
+  <div class="wrap">
+    <div class="foot__cols">
+      <div>
+        <a class="foot__logo" href="/">Waterline</a>
+        <p class="foot__blurb">Cash runway modelling for grant-funded organizations.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/product/grants/">Grants</a></li>
+          <li><a href="/product/commitments/">Commitments</a></li>
+          <li><a href="/product/scenarios/">Scenarios</a></li>
+          <li><a href="/advisors/">For advisors</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="/writing/">Writing</a></li>
+          <li><a href="/pricing/">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Trust</h4>
+        <ul>
+          <li><a href="/security/">Security</a></li>
+          <li><a href="/privacy/">Privacy</a></li>
+          <li><a href="/terms/">Terms</a></li>
+          <li><a href="mailto:hello@waterline.app">hello@waterline.app</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot__base">© 2026 Waterline · Cash runway modelling for grant-funded organizations</p>
+  </div>
+</footer>
+</body>
+</html>

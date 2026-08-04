@@ -8,12 +8,15 @@ import { money } from "../engine/money";
 import { dateShort } from "../engine/time";
 import { commitmentPressure, promotable, promote, addManual, removeCommitment, markPaid }
   from "../engine/commitments";
+import { payablesToCommitments } from "../engine/payables";
 
 const SUBS = [["all", "All"], ["uncovered", "Uncovered"], ["paid", "Paid"]];
 
-export function Commitments({ doc, setDoc, rows, canWrite = true }) {
+export function Commitments({ doc, setDoc, rows, canWrite = true, account, companyId }) {
   const [sub, setSub] = useState("all");
   const [adding, setAdding] = useState(false);
+  const [imported, setImported] = useState(null);
+  const [pulling, setPulling] = useState(false);
   const [draft, setDraft] = useState({ label: "", signedMonth: 0, payMonth: 1, amount: 0 });
 
   const p = useMemo(() => commitmentPressure(doc, rows), [doc, rows]);
@@ -104,7 +107,24 @@ export function Commitments({ doc, setDoc, rows, canWrite = true }) {
               <h3>{sub === "uncovered" ? "Uncovered" : "Unpaid"}</h3>
               <p>Sorted by payment date. Cover counts everything payable before it, not just this one.</p>
             </div>
-            {canWrite && <button className="addbtn ghost" onClick={() => setAdding(true)}>Add</button>}
+            <span className="members-form" style={{ margin: 0 }}>
+              {canWrite && account && companyId && (
+                <button className="linkbtn" disabled={pulling} onClick={async () => {
+                  setPulling(true);
+                  try {
+                    const r = await account.qboSync(companyId, { what: "payables" });
+                    setImported(payablesToCommitments(r?.grid, {
+                      startY: doc.startY, startM: doc.startM, existing: doc.commitments || [],
+                    }));
+                  } catch (e) {
+                    setImported({ drafts: [], reason: e?.message || "Could not read unpaid bills.",
+                                  note: "" });
+                  }
+                  setPulling(false);
+                }}>{pulling ? "Reading…" : "Pull unpaid bills"}</button>
+              )}
+              {canWrite && <button className="addbtn ghost" onClick={() => setAdding(true)}>Add</button>}
+            </span>
           </div>
           <div className="subs">
             {SUBS.map(([k, l]) => (
@@ -184,6 +204,61 @@ export function Commitments({ doc, setDoc, rows, canWrite = true }) {
               This does not change your runway. Covered runway becomes{" "}
               <b>{preview.coveredEndless ? "beyond the horizon" : `${preview.coveredMonths.toFixed(1)} months`}</b>
               {preview.uncovered > 0 && <> and commits you to <b>{money(preview.uncovered)}</b> you do not have</>}.
+            </p>
+          )}
+        </section>
+      )}
+
+      {imported && (
+        <section className="panel">
+          <div className="panel-h">
+            <div>
+              <h3>From QuickBooks</h3>
+              {/* SAID EVERY TIME, not only when the list is short. A bill is raised when an INVOICE
+                  arrives; a commitment begins when you sign — so this misses everything signed and not
+                  yet billed, which is precisely the long-dated purchase order the tab exists for. An
+                  empty list read as "nothing outstanding" would be worse than not importing at all. */}
+              <p>{imported.note}</p>
+            </div>
+            <button className="linkbtn" onClick={() => setImported(null)}>Dismiss</button>
+          </div>
+
+          {imported.reason && <p className="acct-row-s acct-warn">{imported.reason}</p>}
+
+          {imported.drafts.length === 0
+            ? <p className="acct-row-s">No unpaid bills came back.</p>
+            : (
+              <table className="tbl">
+                <thead><tr><th>Bill</th><th>Due</th>
+                  <th style={{ textAlign: "right" }}>Amount</th><th /></tr></thead>
+                <tbody>
+                  {imported.drafts.map((d, i) => (
+                    <tr key={d.extRef || i}>
+                      <td>{d.label}</td>
+                      <td className="meta">month {d.payMonth}</td>
+                      <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(d.amount)}</td>
+                      <td>
+                        {/* NOTHING IS WRITTEN UNTIL SOMEBODY CONFIRMS. An import that silently added
+                            obligations would change a company's runway on the strength of a report
+                            nobody had read. */}
+                        <button className="linkbtn" onClick={() => {
+                          setDoc(dd => addManual(dd, d));
+                          setImported(im => ({ ...im, drafts: im.drafts.filter(x => x !== d) }));
+                        }}>Add</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+          {(imported.noDate > 0 || imported.duplicates > 0 || imported.skipped > 0) && (
+            <p className="acct-row-s">
+              {/* COUNTED, NOT SILENT. A row that did not import for a reason somebody can act on is
+                  worth a sentence; a row that vanished is a support ticket. */}
+              {imported.noDate > 0 && <>{imported.noDate} had no due date. </>}
+              {imported.duplicates > 0 && <>{imported.duplicates} already recorded. </>}
+              {imported.skipped > 0 && <>{imported.skipped} were credits or zero.</>}
             </p>
           )}
         </section>

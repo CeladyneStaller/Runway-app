@@ -321,10 +321,10 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
     },
 
     /** Returns a Grid for the existing import screen — headers and rows, nothing interpreted. */
-    async qboSync(companyId, { since, until } = {}) {
+    async qboSync(companyId, { since, until, what } = {}) {
       const r = await doFetch(`${base}/functions/v1/qbo-sync`, {
         method: "POST", headers: await headers(),
-        body: JSON.stringify({ company_id: companyId, since, until }),
+        body: JSON.stringify({ company_id: companyId, since, until, what }),
       });
       const body = await r.json().catch(() => ({}));
       if (r.ok) return body;

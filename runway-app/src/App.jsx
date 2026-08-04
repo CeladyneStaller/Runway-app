@@ -664,7 +664,8 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
           {/* Milestones has no sub-tabs and no tile row of its own, so the insights block goes here
               rather than inside the view. Same order regardless: alerts, chart, then the table. */}
           {view === "cmt" && <Commitments doc={doc} setDoc={setDoc} rows={rows}
-                                          canWrite={atLeast(membership?.role, "editor")} />}
+                                          canWrite={atLeast(membership?.role, "editor")}
+                                          account={getAccountApi()} companyId={getAuthAdapter()?.activeCompany?.()} />}
           {view === "ms" && <TabInsights tab="ms" subtab="all" />}
           {view === "ms" && <Milestones ms={msWithBal} setMilestones={setMilestones} />}
           </ViewBoundary>

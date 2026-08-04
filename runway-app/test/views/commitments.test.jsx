@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import { Commitments } from "../../src/views/Commitments";
 import { buildProjection } from "../../src/engine/projection";
@@ -77,5 +77,55 @@ describe("the Commitments tab", () => {
       String(el.getAttribute("class")).split(/\s+/).filter(Boolean).forEach(c => used.add(c)));
     const missing = [...used].filter(c => !new RegExp("\\." + c + "[\\s{,:.]").test(css));
     expect(missing, `not in styles.css: ${missing.join(", ")}`).toEqual([]);
+  });
+});
+
+describe("pulling unpaid bills", () => {
+  const base = demoDoc();
+  const account = (grid) => ({ qboSync: vi.fn().mockResolvedValue({ grid }) });
+  const payGrid = {
+    headers: ["Tx Date", "Doc Num", "Vendor", "Due Date", "Open Balance"],
+    rows: [["2026-07-12", "B-1001", "Bruker", "2026-09-30", "42,000"]],
+  };
+
+  it("offers the pull only with an account behind it", () => {
+    const d = addManual(base, { label: "x", signedMonth: 0, payMonth: 2, amount: 1000 });
+    const without = draw(d);
+    expect(without.container.textContent).not.toMatch(/Pull unpaid bills/);
+    cleanup();
+    const withIt = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)}
+                                       account={account(payGrid)} companyId="co-1" />);
+    expect(withIt.container.textContent).toMatch(/Pull unpaid bills/);
+  });
+
+  it("lists what came back WITHOUT writing any of it", async () => {
+    // An import that silently added obligations would change a company's runway on the strength of a
+    // report nobody had read.
+    const d = addManual(base, { label: "x", signedMonth: 0, payMonth: 2, amount: 1000 });
+    const setDoc = vi.fn();
+    const v = render(<Commitments doc={d} setDoc={setDoc} rows={rowsOf(d)}
+                                  account={account(payGrid)} companyId="co-1" />);
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Pull unpaid/.test(b.textContent)));
+    await waitFor(() => expect(v.container.textContent).toMatch(/Bruker/));
+    expect(setDoc).not.toHaveBeenCalled();
+  });
+
+  it("SAYS it is invoiced obligations only", async () => {
+    // A bill is raised when an invoice arrives; a commitment begins when you sign. An empty list read
+    // as "nothing outstanding" would be worse than not importing at all.
+    const d = addManual(base, { label: "x", signedMonth: 0, payMonth: 2, amount: 1000 });
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)}
+                                  account={account(payGrid)} companyId="co-1" />);
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Pull unpaid/.test(b.textContent)));
+    await waitFor(() => expect(v.container.textContent).toMatch(/not yet invoiced/i));
+  });
+
+  it("says so when the pull fails, rather than showing an empty list", async () => {
+    const d = addManual(base, { label: "x", signedMonth: 0, payMonth: 2, amount: 1000 });
+    const bad = { qboSync: vi.fn().mockRejectedValue(new Error("payables 403")) };
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)}
+                                  account={bad} companyId="co-1" />);
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Pull unpaid/.test(b.textContent)));
+    await waitFor(() => expect(v.container.textContent).toMatch(/payables 403/));
   });
 });

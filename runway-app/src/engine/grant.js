@@ -1,6 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import { tripCost } from "./history.js";
-import { HORIZON, clampM, floorM, nMon } from "./time.js";
+import { HORIZON, clampM, floorM, nMon, periodEnd } from "./time.js";
 
 // Billing lives on ONE axis: reimburseTiming = arrears | monthly | advance | milestone.
 // "milestone" is reimbursement in arrears against delivered milestones rather than against a budget period.
@@ -60,7 +60,10 @@ export function computeGrant(g, H = HORIZON) {
       ? t.total // milestone / fixed-price: you incur the full budget and are paid on the award schedule
       : (g.assumeFunded ? t.costShare : (g.costShareType === "inkind" ? t.federal : t.total));
     const cashOut = Math.max(0, gross - t.allocated); // allocated labour is already counted in payroll
-    push("cost", cashOut / n, p.start, p.end, `BP${i + 1} costs`);
+    // `periodEnd`, not `p.end` — `nMon` already stretches the DIVISOR for an extension, and using the
+    // unextended end here would spread a smaller monthly figure over the original window, quietly
+    // losing the tail of the budget.
+    push("cost", cashOut / n, p.start, periodEnd(p), `BP${i + 1} costs`);
   });
 
   // REVENUE — set by how the grant is reimbursed
@@ -78,9 +81,11 @@ export function computeGrant(g, H = HORIZON) {
     const timing = g.reimburseTiming || "arrears";
     P.forEach((p, i) => {
       const t = per[i], n = nMon(p);
-      if (timing === "monthly") for (let m = p.start; m <= p.end; m++) push("revenue", t.federal / n, m + lag, null, `BP${i + 1} reimbursement`);
+      if (timing === "monthly") for (let m = p.start; m <= periodEnd(p); m++) push("revenue", t.federal / n, m + lag, null, `BP${i + 1} reimbursement`);
       else if (timing === "advance") push("revenue", t.federal, p.start + lag, null, `BP${i + 1} advance`);
-      else push("revenue", t.federal, p.end + lag, null, `BP${i + 1} reimbursement`);
+      // Reimbursement in arrears follows the period END, so an extension delays the money too — which
+      // is the half of an NCE people forget: more time to spend, and later cash.
+      else push("revenue", t.federal, periodEnd(p) + lag, null, `BP${i + 1} reimbursement`);
     });
   }
   return { per, grand, lines };

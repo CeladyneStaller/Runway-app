@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waterline — cash runway for grant-funded organizations</title>
+<meta name="description" content="Waterline models cash runway for grant-funded organizations: payroll, grants, purchase orders and cost share, resolved to the month the cash actually moves.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="/">
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="/mark.svg#duck"/></svg>
+      <span>Waterline</span>
+    </a>
+    <nav class="nav__links"><a href="/product/">Product</a><a href="/advisors/">Advisors</a><a href="/pricing/">Pricing</a><a href="/docs/">Docs</a><a href="/writing/">Writing</a></nav>
+    <a class="btn btn--fill" href="https://runway-app-two.vercel.app">Open the app</a>
+  </div>
+</header>
+
+<section class="hero" style="padding:92px 0 0">
+  <div class="wrap grid2" style="align-items:end">
+    <div>
+      <span class="eyebrow">Cash runway · Grant-funded organizations</span>
+      <h1>Funded is not the same as <em>liquid</em>.</h1>
+      <p class="lead">Waterline models the months between the work you have committed to and the money
+      that has not landed — payroll, purchase orders, drawdowns and cost share, resolved to the month
+      the cash actually moves.</p>
+      <div class="acts">
+        <a class="btn btn--fill" href="https://runway-app-two.vercel.app">Open the app</a>
+        <a class="btn btn--line" href="https://runway-app-two.vercel.app/?demo=1">Walk through the demo</a>
+      </div>
+      <p class="fine">No card to start · 14-day trial · The demo loads a real award structure</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 1024 1024" style="width:100%;height:auto;display:block"
+           role="img" aria-label="A painted decoy duck riding at its waterline.">
+        <use href="/mark.svg#duck"/>
+      </svg>
+    </div>
+  </div>
+  <div style="height:1px;background:var(--danger)" aria-hidden="true"></div>
+</section>
+
+<section class="rule">
+  <div class="wrap">
+    <div style="max-width:46ch;margin-bottom:56px">
+      <span class="eyebrow">What sits below the line</span>
+      <h2>Four things decide how deep you are riding.</h2>
+      <p class="lead">Each one lands on the month the money moves, not the month the paperwork was
+      signed.</p>
+    </div>
+    <div class="grid2" style="gap:0 72px">
+      <article class="item">
+        <span class="item__k">Grants</span>
+        <h3>An award is not a deposit</h3>
+        <p>Period of performance, drawdown schedule, and the lag between the invoice you send and the
+        money that lands. Cost share accrues against what you bill, per budget period.</p>
+        <a href="/product/grants/">How grants are modelled →</a>
+      </article>
+      <article class="item">
+        <span class="item__k">Commitments</span>
+        <h3>Signed is not spent</h3>
+        <p>An open purchase order is money promised and not yet gone. Waterline shows what your cash
+        does, and separately what it does if you honour everything you have signed.</p>
+        <a href="/product/commitments/">How commitments work →</a>
+      </article>
+      <article class="item">
+        <span class="item__k">Payroll</span>
+        <h3>People, by month</h3>
+        <p>Headcount, start dates, raises and fully loaded cost per person. Move one hire date and the
+        whole curve shifts with it.</p>
+      </article>
+      <article class="item">
+        <span class="item__k">Capital stack</span>
+        <h3>What is left to raise</h3>
+        <p>Convertibles, SAFEs and venture debt, with the goals that close a round separated from the
+        ones the round pays for.</p>
+        <a href="/product/scenarios/">Scenarios and ranges →</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="pine">
+  <div class="wrap grid2" style="grid-template-columns:.88fr 1.12fr;gap:76px;align-items:center">
+    <div>
+      <span class="eyebrow eyebrow--pale">Scenarios</span>
+      <h2>Change one number. Watch the line move.</h2>
+      <p class="lead">Toggle committed, expected and speculative revenue independently. Waterline
+      redraws the curve, widens or narrows the range, and names the month the balance crosses the
+      waterline.</p>
+      <div class="acts">
+        <a class="btn btn--pale" href="/product/scenarios/">How scenarios work</a>
+      </div>
+    </div>
+    <div class="plot">
+      <p class="plot__h">Cash balance · runway to zero funds</p>
+      <svg viewBox="0 0 620 240" role="img" aria-label="Projected cash balance falling to the waterline in month eight, with a dashed speculative curve that clears month twelve.">
+        <g stroke="#2E5245" stroke-width="1"><line x1="62" y1="30" x2="600" y2="30"/><line x1="62" y1="110" x2="600" y2="110"/></g>
+        <line x1="62" y1="190" x2="600" y2="190" stroke="#B8624A" stroke-width="1.2" stroke-dasharray="4 4"/>
+        <polyline points="62,30 107,44 152,58 197,72 242,86 287,99 332,112 377,124 422,136 466,148 511,159 556,170 600,180" fill="none" stroke="#BE9440" stroke-width="1.6" stroke-dasharray="5 4"/>
+        <polyline points="62,30 107,50 152,70 197,90 242,110 287,130 332,150 377,170 422,190" fill="none" stroke="#D9CDB4" stroke-width="1.9"/>
+        <circle cx="422" cy="190" r="3.4" fill="#D9CDB4"/>
+        <g fill="#7B9489" font-family="'IBM Plex Mono',monospace" font-size="10.5">
+          <text x="6" y="34">$2.4M</text><text x="6" y="114">$1.2M</text><text x="22" y="204">$0</text>
+          <text x="58" y="222">M0</text><text x="406" y="222">M8</text><text x="580" y="222">M12</text>
+        </g>
+      </svg>
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:18px;border-top:1px solid var(--pine-3);padding-top:15px;
+                  font-family:var(--fm);font-size:.66rem;color:#8FA79C">
+        <span>— projected balance</span><span>-- with speculative</span><span>-- waterline</span>
+      </div>
+      <p class="plot__note">Runway range <b>4.1–7.9 mo</b>. <em>Your runway depends heavily on uncertain
+      revenue.</em></p>
+    </div>
+  </div>
+</section>
+
+<section class="linen" style="padding:66px 0">
+  <div class="wrap" style="display:flex;align-items:center;gap:56px;flex-wrap:wrap">
+    <h2 style="font-size:clamp(1.35rem,2.2vw,1.72rem);max-width:19ch">Start from your actuals, not a
+    blank sheet.</h2>
+    <p style="margin:0;max-width:36ch;font-size:.95rem;color:var(--ink-2)">Connect QuickBooks Online,
+    upload a CSV, or build the model by hand. Your books stay the source of truth.</p>
+    <a class="btn btn--line" style="margin-left:auto" href="/docs/quickbooks/">How importing works</a>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="display:flex;align-items:flex-end;gap:56px;flex-wrap:wrap">
+    <div>
+      <span class="eyebrow">Pricing</span>
+      <h2 style="max-width:20ch">Priced per company, not per spreadsheet.</h2>
+      <p class="lead">From <b>$40 per company per month</b>. Advisors pay separately, once, and carry it
+      into every client — from <b>$99</b>.</p>
+      <div class="acts">
+        <a class="btn btn--fill" href="/pricing/">See the plans</a>
+        <a class="btn btn--line" href="/advisors/">If you advise several</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pine" style="text-align:center">
+  <div class="wrap">
+    <h2 style="max-width:15ch;margin:0 auto">Find your waterline.</h2>
+    <p class="lead" style="max-width:44ch;margin:22px auto 0">Load the demo company to read a finished
+    model in about a minute, or start your own and import last month's books.</p>
+    <div class="acts" style="justify-content:center">
+      <a class="btn btn--pale" href="https://runway-app-two.vercel.app">Open the app</a>
+      <a class="btn btn--paleline" href="https://runway-app-two.vercel.app/?demo=1">Walk through the demo</a>
+    </div>
+  </div>
+</section>
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__cols">
+      <div>
+        <a class="foot__logo" href="/">Waterline</a>
+        <p class="foot__blurb">Cash runway modelling for grant-funded organizations.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/product/grants/">Grants</a></li>
+          <li><a href="/product/commitments/">Commitments</a></li>
+          <li><a href="/product/scenarios/">Scenarios</a></li>
+          <li><a href="/advisors/">For advisors</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="/writing/">Writing</a></li>
+          <li><a href="/pricing/">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Trust</h4>
+        <ul>
+          <li><a href="/security/">Security</a></li>
+          <li><a href="/privacy/">Privacy</a></li>
+          <li><a href="/terms/">Terms</a></li>
+          <li><a href="mailto:hello@waterline.app">hello@waterline.app</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot__base">© 2026 Waterline · Cash runway modelling for grant-funded organizations</p>
+  </div>
+</footer>
+</body>
+</html>

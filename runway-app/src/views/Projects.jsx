@@ -786,6 +786,20 @@ export function GrantBudget({ p, g, R, setGrant, employees = [] }) {
               <select className="sel" value={pp.start} onChange={e => setPeriod(i, { start: +e.target.value })}>{MOPTS(START_Y, START_M)}</select>
               <span style={{ color: "var(--muted-2)" }}>→</span>
               <select className="sel" value={pp.end} onChange={e => setPeriod(i, { end: +e.target.value })}>{MOPTS(START_Y, START_M)}</select>
+              {/* NO-COST EXTENSION. Adds time and no money: the same budget spreads over a longer
+                  window, reimbursement in arrears arrives later, and the cost-share deadline for this
+                  period moves with it. Kept beside the period's own dates because that is what it
+                  extends — an award-level control would hide which period was actually extended. */}
+              <label className="ncebox" title="No-cost extension: more time, no more money">
+                NCE
+                <select className="sel" value={pp.nceMonths || 0}
+                        aria-label={`No-cost extension, period ${i + 1}`}
+                        onChange={e => setPeriod(i, { nceMonths: +e.target.value })}>
+                  {[0, 3, 6, 9, 12, 18, 24].map(m => (
+                    <option key={m} value={m}>{m === 0 ? "none" : `+${m} mo`}</option>
+                  ))}
+                </select>
+              </label>
               {!isMsBilled(g) && !g.assumeFunded && <span className="paysat" title={why}>{when}</span>}
               {n > 1 && <button className="iconbtn" onClick={() => delPeriod(i)} aria-label="Remove period">{I.trash}</button>}
             </div>

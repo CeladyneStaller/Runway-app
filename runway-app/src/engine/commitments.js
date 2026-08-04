@@ -15,7 +15,9 @@
 // cost and a commitment doubles the burn, and the overstatement is silent.
 
 import { balanceAtDate, zeroInfo } from "./projection.js";
-import { computeGrant } from "./grant.js";
+import { computeGrant, isMsBilled } from "./grant.js";
+import { lastActualMonth } from "./summary.js";
+import { periodEnd } from "./time.js";
 
 const clean = (n) => (Number.isFinite(n) ? n : 0);
 const DAY = 86400000;
@@ -137,43 +139,204 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
  */
 export function costShareCommitments(doc) {
   const out = [];
+
+  /** Make a project's obligations sum EXACTLY to the award's own cost-share figure.
+   *
+   *  Rounding each row independently left the total a dollar under — true of every timing, because the
+   *  drift comes from rounding parts rather than from any one schedule. Small, and exactly the kind of
+   *  discrepancy that becomes "your match is $1 short" in somebody's reconciliation with a funder.
+   *
+   *  The LAST row absorbs it, because the last row is where a real reconciliation happens. */
+  const settle = (rows, target) => {
+    if (!rows.length) return;
+    const sum = rows.reduce((a, r) => a + r.amount, 0);
+    rows[rows.length - 1].amount += Math.round(target) - sum;
+  };
+
   for (const proj of doc?.projects || []) {
     if (!proj || proj.stage === "prospective" || !proj.grant) continue;
-    // `computeGrant().grand.costShare` IS THE FIGURE, computed from the budget periods — not
-    // `budget × pct`, which I reached for first and which is not a field that exists. The Projects tab
-    // already totals cost share this way, so the two cannot disagree.
-    let share = 0;
-    try { share = clean(computeGrant(proj.grant).grand?.costShare); } catch { share = 0; }
-    if (share <= 0) continue;
 
     const g = proj.grant;
-    // The obligation lands with the work. Without per-period detail the honest simplification is the
-    // award's own end — earlier would overstate the pressure, and a wrong number in the alarming
-    // direction is still a wrong number.
-    // THE END OF THE LAST PERIOD. A grant's dates live in `periods[]`, not on the grant — `g.endM` does
-    // not exist, so my first version defaulted every award's obligation to month 0 and reported it as
-    // due immediately. Pressure in the alarming direction is still wrong, and this one was wrong by the
-    // entire length of the award.
-    const per = Array.isArray(g.periods) ? g.periods : [];
-    const payMonth = per.length ? Math.max(...per.map(x => clean(x.end))) : 0;
-    const startMonth = per.length ? Math.min(...per.map(x => clean(x.start))) : 0;
+    let R = null;
+    try { R = computeGrant(g); } catch { R = null; }
+    if (!R?.per?.length) continue;
 
-    out.push({
-      id: `cs_${proj.id}`,
-      label: `${proj.name || "Award"} — cost share`,
-      signedMonth: startMonth,
-      payMonth,
-      amount: Math.round(share),
-      projectId: proj.id,
-      source: "grant",
-      lineId: null,          // no line of its own: the spend is already in the project
-      status: "committed",
-      paidRef: null,
-      derived: true,         // cannot be edited or removed here; change the award instead
+    const timing = g.reimburseTiming || "arrears";
+    const name = proj.name || "Award";
+    const before = out.length;         // where this project's rows begin, for the settle pass
+
+    // BILLED, NOT PLANNED, WHERE WE KNOW IT.
+    //
+    // Cost share is a percentage of what has ACTUALLY been billed to the award. Dividing a period's
+    // share evenly across its months assumes billing runs to plan, and a grant that under-bills for two
+    // months then catches up owes a different amount at each point than the even split says.
+    //
+    // PAST FROM ACTUALS, FUTURE FROM PLAN — the same hybrid the projection itself uses via
+    // `anchorToActuals`. Months up to the last recorded actual use what was really billed; beyond it
+    // there is nothing to use but the plan, and pretending otherwise would be inventing a figure.
+    //
+    // This is what the QuickBooks and CSV ledgers feed. Neither is connected here: both write
+    // `project.actuals`, and reading that is the whole integration.
+    const actuals = proj.actuals || {};
+    const lastReal = lastActualMonth(actuals);
+    const billedAt = (m) => {
+      const v = Number(actuals[m]);
+      return Number.isFinite(v) ? v : null;
+    };
+
+    // COST SHARE IS DUE AT THE REPRESENTATIVE PERIOD — the period a bill represents. It is verified
+    // against what you BILLED, so it falls due on the rhythm you bill on, not on a calendar of its own.
+    // A monthly-billed award with an annual cost-share obligation would be twelve small proofs of match,
+    // not one large one; treating them all as period-end understated how soon the money was needed.
+    //
+    // NOTE the lag is deliberately NOT applied. `reimburseLagMonths` is how long the FUNDER takes to
+    // pay you; your match is due when you bill, not when they settle. Applying it would push every
+    // obligation later by the funder's own slowness, which is backwards.
+
+    if (isMsBilled(g)) {
+      // Billed against delivered milestones, so the match is proven per milestone, in proportion to
+      // what that milestone draws.
+      const ms = (g.milestones || []).filter(m => clean(m.payment) > 0);
+      const totalPay = ms.reduce((a, m) => a + clean(m.payment), 0);
+      const share = clean(R.grand?.costShare);
+      if (share <= 0) continue;
+      // A MILESTONE-BILLED AWARD WITH NO MILESTONES YET still owes its match — we simply do not know
+      // the rhythm. Falling through to period ends keeps the obligation visible; dropping it would make
+      // a real liability vanish because a schedule had not been filled in, which is the same silent
+      // disappearance this whole feature exists to prevent.
+      if (totalPay <= 0) {
+        (g.periods || []).forEach((p, i) => {
+          const sh = clean(R.per[i]?.costShare);
+          if (sh <= 0) return;
+          out.push(mk(proj, g, {
+            key: `p${i}`,
+            label: `${name} — cost share, period ${i + 1}`,
+            signedMonth: clean(p.start), payMonth: periodEnd(p), amount: Math.round(sh),
+            accrualFrom: clean(p.start),
+          }));
+        });
+        settle(out.slice(before), clean(R.grand?.costShare));
+        continue;
+      }
+
+      ms.forEach((m, k) => {
+        const amt = share * (clean(m.payment) / totalPay);
+        if (amt <= 0) return;
+        out.push(mk(proj, g, {
+          key: `ms${k}`,
+          label: `${name} — cost share, ${m.label || `milestone ${k + 1}`}`,
+          signedMonth: clean((g.periods || [])[0]?.start),
+          payMonth: clean(m.month),
+          amount: Math.round(amt),
+          accrualFrom: clean((g.periods || [])[0]?.start),
+        }));
+      });
+      settle(out.slice(before), clean(R.grand?.costShare));
+      continue;
+    }
+
+    (g.periods || []).forEach((p, i) => {
+      const share = clean(R.per[i]?.costShare);
+      if (share <= 0) return;
+      const start = clean(p.start);
+      const end = periodEnd(p);
+      const n = Math.max(1, end - start + 1);
+
+      if (timing === "monthly") {
+        // Billed as incurred, so matched as incurred: one obligation per month of the period.
+        //
+        // THE LAST MONTH ABSORBS THE REMAINDER. Rounding each of twelve rows independently left the
+        // total a dollar short of the award's own cost-share figure — small, and exactly the kind of
+        // discrepancy that turns into "your match is $1 under" in somebody's reconciliation.
+        // WEIGHTED BY WHAT WAS BILLED, where a month has a real figure. A period that billed nothing
+        // in month one owes nothing for month one — the obligation follows the draw, which is the whole
+        // point of doing this against a ledger rather than a calendar.
+        //
+        // Months with no actual yet fall back to the MEAN OF THE MONTHS THAT DO have one, or to an even
+        // split when none do. That is the least invented assumption available: it says "we expect the
+        // rest to look like what we have seen", rather than weighting a future month by a guess.
+        const billed = [];
+        for (let m = start; m <= end; m++) {
+          billed.push(lastReal != null && m <= lastReal ? billedAt(m) : null);
+        }
+        const known = billed.filter(b => b != null);
+        const mean = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 1;
+        const weights = billed.map(b => (b != null ? Math.max(0, b) : mean));
+        const totalW = weights.reduce((a, w) => a + w, 0) || 1;
+
+        let placed = 0;
+        for (let m = start, k = 0; m <= end; m++, k++) {
+          // The last month absorbs the remainder: rounding each row independently left the total short
+          // of the award's own figure, which becomes "your match is $1 under" in a reconciliation.
+          const amount = m === end
+            ? Math.round(share) - placed
+            : Math.round(share * (weights[k] / totalW));
+          placed += amount;
+          out.push(mk(proj, g, {
+            key: `p${i}m${m}`,
+            label: `${name} — cost share, ${monthLabel(i, m, start)}`,
+            signedMonth: start, payMonth: m, amount, accrualFrom: m,
+          }));
+        }
+        return;
+      }
+
+      // `arrears` and `advance` both reconcile at the period's end — arrears because that is when you
+      // bill, advance because that is when the funder checks what the advance was spent on. Being paid
+      // up front does not move when the match is PROVEN.
+      out.push(mk(proj, g, {
+        key: `p${i}`,
+        label: `${name} — cost share, period ${i + 1}`,
+        signedMonth: start, payMonth: end, amount: Math.round(share), accrualFrom: start,
+      }));
     });
+    settle(out.slice(before), clean(R.grand?.costShare));
   }
   return out;
 }
+
+const monthLabel = (periodIdx, m, start) => `BP${periodIdx + 1} month ${m - start + 1}`;
+
+function mk(proj, g, { key, label, signedMonth, payMonth, amount, accrualFrom }) {
+  return {
+    id: `cs_${proj.id}_${key}`,
+    label, signedMonth, payMonth, amount,
+    projectId: proj.id,
+    source: "grant",
+    lineId: null,          // no line of its own: the spend is already in the project
+    status: "committed",
+    paidRef: null,
+    derived: true,         // change the award, not this
+    timing: g.reimburseTiming || "arrears",
+    // ACCRUES WITH BILLING rather than appearing whole on the due date.
+    accrual: { start: accrualFrom, end: payMonth },
+  };
+}
+
+/** How much cost share has ALREADY accrued by a given month.
+ *
+ *  The obligation grows with what has been billed: a period half elapsed with spend running to plan has
+ *  half its cost share already owed, whatever the due date says. This is what the tab shows beside the
+ *  total so an obligation reads as a rising line rather than a future cliff.
+ */
+export function accruedCostShare(doc, month) {
+  const m = clean(month);
+  let owed = 0;
+  for (const c of costShareCommitments(doc)) {
+    // SUMS THE ROWS RATHER THAN INTERPOLATING. The rows are already weighted by what was billed, so
+    // interpolating across a period would undo that and hand back a straight line — the exact even
+    // split this change exists to replace.
+    if (c.payMonth <= m) { owed += c.amount; continue; }
+    // The row currently in flight accrues within itself, because a period half elapsed with spend
+    // running to plan has half its match already owed whatever the due date says.
+    const { start, end } = c.accrual || {};
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    if (m <= start) continue;
+    owed += c.amount * Math.max(0, Math.min(1, (m - start) / (end - start)));
+  }
+  return owed;
+}
+
 
 /** Everything committed, stored and derived, as one list. */
 export function allCommitments(doc) {

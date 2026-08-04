@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grants — Waterline</title>
+<meta name="description" content="Period of performance, drawdown schedule, reimbursement lag, no-cost extensions, and cost share that accrues against what you bill.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="/">
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="/mark.svg#duck"/></svg>
+      <span>Waterline</span>
+    </a>
+    <nav class="nav__links"><a href="/product/" aria-current="page">Product</a><a href="/advisors/">Advisors</a><a href="/pricing/">Pricing</a><a href="/docs/">Docs</a><a href="/writing/">Writing</a></nav>
+    <a class="btn btn--fill" href="https://runway-app-two.vercel.app">Open the app</a>
+  </div>
+</header>
+
+<div class="wrap phead">
+  <span class="eyebrow">Product · Grants</span>
+  <h1>An award is not a deposit.</h1>
+  <p class="lead">The money is committed. The cash is not. Waterline models the distance between
+  those two things — period of performance, drawdown schedule, reimbursement lag, and the match you owe
+  against every dollar you bill.</p>
+</div>
+
+<section style="padding-top:20px">
+  <div class="wrap grid2" style="gap:64px">
+    <div>
+      <h2>Cost share is not a lump sum</h2>
+      <p class="lead" style="max-width:52ch">It accrues as a percentage of what you have <em>billed</em>,
+      and it has to be satisfied inside each budget period. A funder does not let you under-match in
+      year one and make it up in year three.</p>
+      <p class="lead" style="max-width:52ch">So Waterline schedules it on the rhythm you bill on, and
+      weights it by what you actually billed rather than by the calendar. A month you billed nothing is
+      a month you owe nothing.</p>
+      <table style="margin-top:26px">
+        <tr><th>How you bill</th><th>When the match is due</th></tr>
+        <tr><td><b>Monthly, as incurred</b></td><td>each month, weighted by what you billed</td></tr>
+        <tr><td><b>In arrears</b></td><td>at the close of each budget period</td></tr>
+        <tr><td><b>Advance</b></td><td>at the close — being paid early does not move the proof</td></tr>
+        <tr><td><b>Against milestones</b></td><td>per milestone, in proportion to the draw</td></tr>
+      </table>
+    </div>
+    <div class="plot">
+      <p class="plot__h">Cost share owed · two budget periods</p>
+      <svg viewBox="0 0 420 200" role="img" aria-label="A rising line showing cost share accruing month by month, with dashed markers at the two budget period closes.">
+        <g stroke="#2E5245" stroke-width="1"><line x1="34" y1="20" x2="410" y2="20"/><line x1="34" y1="150" x2="410" y2="150"/></g>
+        <polyline points="34,150 65,138 96,128 127,110 158,104 189,86 220,74 251,66 282,52 313,44 344,30 375,22 406,20"
+                  fill="none" stroke="#D9CDB4" stroke-width="1.9"/>
+        <line x1="189" y1="14" x2="189" y2="150" stroke="#BE9440" stroke-dasharray="4 4"/>
+        <line x1="406" y1="14" x2="406" y2="150" stroke="#BE9440" stroke-dasharray="4 4"/>
+        <g fill="#7B9489" font-family="'IBM Plex Mono',monospace" font-size="9">
+          <text x="0" y="24">match</text><text x="14" y="154">0</text>
+          <text x="146" y="172">BP1 close</text><text x="356" y="172">BP2 close</text>
+        </g>
+      </svg>
+      <p class="plot__note">The obligation rises with billing. The dashed rules are the two moments a
+      funder checks it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="rule">
+  <div class="wrap">
+    <div class="grid3">
+      <div class="card">
+        <span class="item__k">No-cost extension</span>
+        <h3>More time, no more money</h3>
+        <p>One field on a budget period. The same budget spreads over a longer window, reimbursement in
+        arrears arrives later, and the cost-share deadline moves with the period end. Every figure
+        downstream follows.</p>
+      </div>
+      <div class="card">
+        <span class="item__k">Reimbursement lag</span>
+        <h3>Invoiced is not banked</h3>
+        <p>The weeks between sending an invoice and the money landing are where a fully funded
+        organization runs out of cash. Set the lag once per award and it applies to every draw.</p>
+      </div>
+      <div class="card">
+        <span class="item__k">Indirect</span>
+        <h3>The part you cannot spend</h3>
+        <p>Negotiated rates, direct and indirect split per category, and an SF-424A that imports and
+        exports rather than being retyped.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="linen">
+  <div class="wrap narrow">
+    <h2>What this looks like in practice</h2>
+    <p class="lead" style="max-width:58ch">A $2.4m award at 20% cost share, billed monthly, is not one
+    $480,000 obligation at the end. It is a rising line you owe against as you draw — and if your runway
+    ends before the second period closes, the match you have not yet made is money you have promised and
+    do not have.</p>
+    <p class="lead" style="max-width:58ch">That is the number Waterline shows you, and it is the reason
+    the software exists.</p>
+    <div class="acts">
+      <a class="btn btn--fill" href="https://runway-app-two.vercel.app/?demo=1">See it on the demo award</a>
+      <a class="btn btn--line" href="/product/commitments/">Commitments →</a>
+    </div>
+  </div>
+</section>
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__cols">
+      <div>
+        <a class="foot__logo" href="/">Waterline</a>
+        <p class="foot__blurb">Cash runway modelling for grant-funded organizations.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/product/grants/">Grants</a></li>
+          <li><a href="/product/commitments/">Commitments</a></li>
+          <li><a href="/product/scenarios/">Scenarios</a></li>
+          <li><a href="/advisors/">For advisors</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="/writing/">Writing</a></li>
+          <li><a href="/pricing/">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Trust</h4>
+        <ul>
+          <li><a href="/security/">Security</a></li>
+          <li><a href="/privacy/">Privacy</a></li>
+          <li><a href="/terms/">Terms</a></li>
+          <li><a href="mailto:hello@waterline.app">hello@waterline.app</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot__base">© 2026 Waterline · Cash runway modelling for grant-funded organizations</p>
+  </div>
+</footer>
+</body>
+</html>

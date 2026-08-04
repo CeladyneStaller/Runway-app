@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security — Waterline</title>
+<meta name="description" content="Where your data lives, who can reach it, and what Waterline does not do with it.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="/">
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="/mark.svg#duck"/></svg>
+      <span>Waterline</span>
+    </a>
+    <nav class="nav__links"><a href="/product/">Product</a><a href="/advisors/">Advisors</a><a href="/pricing/">Pricing</a><a href="/docs/">Docs</a><a href="/writing/">Writing</a></nav>
+    <a class="btn btn--fill" href="https://runway-app-two.vercel.app">Open the app</a>
+  </div>
+</header>
+
+<div class="wrap phead">
+  <span class="eyebrow">Trust</span>
+  <h1>Where your data lives, and who can reach it.</h1>
+  <p class="lead">Written for a treasurer rather than an engineer. If something here is not specific
+  enough for your board, write to <a href="mailto:hello@waterline.app" style="color:var(--sage)">hello@waterline.app</a>
+  and I will answer it properly.</p>
+</div>
+
+<section style="padding-top:10px">
+  <div class="wrap">
+    <div class="grid3">
+      <div class="card"><span class="item__k">Storage</span><h3>Postgres, row-level</h3>
+        <p>Every row is scoped to a company and enforced by the database, not by the application. A
+        request for another company's data returns nothing.</p></div>
+      <div class="card"><span class="item__k">Access</span><h3>You decide, per person</h3>
+        <p>Owner, admin, editor, viewer. Advisors hold no seat and cannot edit anything. Removing
+        somebody ends their access immediately.</p></div>
+      <div class="card"><span class="item__k">Export</span><h3>Your model, any time</h3>
+        <p>One JSON file, re-importable, from Company settings. No request, no waiting period, no
+        lock-in that depends on our goodwill.</p></div>
+      <div class="card"><span class="item__k">QuickBooks</span><h3>Read only</h3>
+        <p>Tokens are held in a server-side vault and never reach the browser. Nothing is ever written
+        back to your books.</p></div>
+      <div class="card"><span class="item__k">Payments</span><h3>Handled by Stripe</h3>
+        <p>Card details never touch Waterline. Checkout and the billing portal are Stripe's.</p></div>
+      <div class="card"><span class="item__k">Subprocessors</span><h3>A short list, named</h3>
+        <p>Supabase (database and auth), Vercel (hosting), Stripe (payments), Intuit (QuickBooks, only
+        if you connect it).</p></div>
+    </div>
+
+    <div style="background:#F6E7E2;border:1px solid #E2C4BA;border-radius:2px;padding:20px 22px;margin-top:34px">
+      <p style="margin:0;font-size:.94rem;color:var(--ink-2)">
+      <b style="color:var(--brick)">Backups and retention are being finalised and are deliberately not
+      described here yet.</b> A security page that describes a policy which is not yet configured is
+      worse than one that admits the gap. This paragraph will be replaced with the real retention window
+      when it is in place — if you need it before then, ask.</p>
+    </div>
+  </div>
+</section>
+
+<section class="linen">
+  <div class="wrap narrow">
+    <h2>What we do not do</h2>
+    <table style="margin-top:20px">
+      <tr><td style="width:34%"><b>Sell or share your data</b></td>
+        <td>Never, to anyone, for any purpose.</td></tr>
+      <tr><td><b>Train models on your figures</b></td>
+        <td>Your model is yours. It is not training data.</td></tr>
+      <tr><td><b>Write to your accounting system</b></td>
+        <td>The QuickBooks connection is read-only by design, not by policy.</td></tr>
+      <tr><td><b>Read your model in support</b></td>
+        <td>Not without you asking. If a support question needs it, you will be asked first.</td></tr>
+    </table>
+  </div>
+</section>
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__cols">
+      <div>
+        <a class="foot__logo" href="/">Waterline</a>
+        <p class="foot__blurb">Cash runway modelling for grant-funded organizations.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/product/grants/">Grants</a></li>
+          <li><a href="/product/commitments/">Commitments</a></li>
+          <li><a href="/product/scenarios/">Scenarios</a></li>
+          <li><a href="/advisors/">For advisors</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="/writing/">Writing</a></li>
+          <li><a href="/pricing/">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Trust</h4>
+        <ul>
+          <li><a href="/security/">Security</a></li>
+          <li><a href="/privacy/">Privacy</a></li>
+          <li><a href="/terms/">Terms</a></li>
+          <li><a href="mailto:hello@waterline.app">hello@waterline.app</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot__base">© 2026 Waterline · Cash runway modelling for grant-funded organizations</p>
+  </div>
+</footer>
+</body>
+</html>

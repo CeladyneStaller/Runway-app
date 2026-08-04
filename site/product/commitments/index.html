@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commitments — Waterline</title>
+<meta name="description" content="A signed purchase order does not change your runway. It should change your decision. Waterline tracks committed-but-unpaid obligations and a covered runway alongside your cash.">
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__logo" href="/">
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="/mark.svg#duck"/></svg>
+      <span>Waterline</span>
+    </a>
+    <nav class="nav__links"><a href="/product/" aria-current="page">Product</a><a href="/advisors/">Advisors</a><a href="/pricing/">Pricing</a><a href="/docs/">Docs</a><a href="/writing/">Writing</a></nav>
+    <a class="btn btn--fill" href="https://runway-app-two.vercel.app">Open the app</a>
+  </div>
+</header>
+
+<div class="wrap phead">
+  <span class="eyebrow">Product · Commitments</span>
+  <h1>Signed is not spent.</h1>
+  <p class="lead">A purchase order payable in nine months does not change your runway — the money has
+  not moved. It should still change your decision. Waterline shows both, and does not confuse them.</p>
+</div>
+
+<section style="padding-top:20px">
+  <div class="wrap grid2" style="gap:64px">
+    <div>
+      <h2>Two numbers, not one</h2>
+      <p class="lead" style="max-width:52ch"><b>Runway</b> is when your cash runs out. It keeps meaning
+      exactly that, because every alert, chart and comparison in the product depends on it.</p>
+      <p class="lead" style="max-width:52ch"><b>Covered runway</b> is how long the cash lasts if you also
+      honour everything you have signed. The gap between the two is the period in which the model says
+      you are fine and your signatures say otherwise.</p>
+      <table style="margin-top:26px">
+        <tr><th></th><th>Answers</th></tr>
+        <tr><td><b>Runway</b></td><td>When do I run out?</td></tr>
+        <tr><td><b>Covered runway</b></td><td>Can I sign this?</td></tr>
+      </table>
+    </div>
+    <div class="plot">
+      <p class="plot__h">Cash, and cash less what is promised</p>
+      <svg viewBox="0 0 420 200" role="img" aria-label="A solid cash line crossing zero in month eight, and a dashed committed line falling faster and crossing in month five.">
+        <line x1="34" y1="150" x2="410" y2="150" stroke="#B8624A" stroke-width="1.2" stroke-dasharray="4 4"/>
+        <polyline points="34,24 90,52 146,80 202,108 258,136 300,150 358,178" fill="none" stroke="#D9CDB4" stroke-width="1.9"/>
+        <polyline points="34,24 90,68 146,112 190,150 246,190" fill="none" stroke="#8FA79C" stroke-width="1.7" stroke-dasharray="5 4"/>
+        <circle cx="300" cy="150" r="3.4" fill="#D9CDB4"/>
+        <circle cx="190" cy="150" r="3.4" fill="#8FA79C"/>
+        <g fill="#7B9489" font-family="'IBM Plex Mono',monospace" font-size="9">
+          <text x="14" y="164">0</text><text x="160" y="186">M5</text><text x="286" y="186">M8</text>
+        </g>
+      </svg>
+      <p class="plot__note">Solid: cash. Dashed: cash less everything signed. <em>Ten weeks separate the
+      two crossings.</em></p>
+    </div>
+  </div>
+</section>
+
+<section class="rule">
+  <div class="wrap">
+    <h2 style="max-width:30ch;margin-bottom:34px">The tab fills itself, because a list you type by hand
+    is a list nobody types.</h2>
+    <div class="grid3">
+      <div class="card">
+        <span class="item__k">Promote a planned cost</span>
+        <h3>One click, no double-count</h3>
+        <p>Your project plan already says $110k of tooling in October. When you sign for it, mark it
+        signed. Nothing moves — the spend was always there. It simply starts counting as an obligation.</p>
+      </div>
+      <div class="card">
+        <span class="item__k">From QuickBooks</span>
+        <h3>Unpaid bills, pulled</h3>
+        <p>Your outstanding bills become drafts you confirm. <b>Invoiced obligations only</b> — anything
+        signed and not yet billed will not appear, and the product says so every time.</p>
+      </div>
+      <div class="card">
+        <span class="item__k">Cost share</span>
+        <h3>Derived from the award</h3>
+        <p>The match you owe on every grant appears without being entered, and moves when the budget
+        moves. There is no second record to keep in step.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="linen">
+  <div class="wrap narrow">
+    <h2>Before you sign</h2>
+    <p class="lead" style="max-width:58ch">The sentence the software could not say before, and now says
+    while you are still typing the amount:</p>
+    <p style="font-family:var(--display);font-size:1.3rem;line-height:1.5;color:var(--ink);
+              border-left:3px solid var(--brick);padding-left:20px;margin:24px 0 0;max-width:52ch">
+      Signing this does not change your runway, and commits you to $188,000 you do not have.</p>
+    <p class="lead" style="max-width:58ch">Both halves are true. The first is why a cash model stays
+    quiet. The second is why this exists.</p>
+    <div class="acts">
+      <a class="btn btn--fill" href="https://runway-app-two.vercel.app/?demo=1">See it on the demo</a>
+      <a class="btn btn--line" href="/product/grants/">Grants →</a>
+    </div>
+  </div>
+</section>
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__cols">
+      <div>
+        <a class="foot__logo" href="/">Waterline</a>
+        <p class="foot__blurb">Cash runway modelling for grant-funded organizations.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/product/grants/">Grants</a></li>
+          <li><a href="/product/commitments/">Commitments</a></li>
+          <li><a href="/product/scenarios/">Scenarios</a></li>
+          <li><a href="/advisors/">For advisors</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="/writing/">Writing</a></li>
+          <li><a href="/pricing/">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Trust</h4>
+        <ul>
+          <li><a href="/security/">Security</a></li>
+          <li><a href="/privacy/">Privacy</a></li>
+          <li><a href="/terms/">Terms</a></li>
+          <li><a href="mailto:hello@waterline.app">hello@waterline.app</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot__base">© 2026 Waterline · Cash runway modelling for grant-funded organizations</p>
+  </div>
+</footer>
+</body>
+</html>

@@ -171,3 +171,41 @@ export function mergeGrids(grids) {
   }
   return { headers, rows };
 }
+
+// ---------------------------------------------------------------- payables --
+
+/** Unpaid bills, from `AgedPayableDetail`.
+ *
+ *  A DIFFERENT REPORT FROM A DIFFERENT QUESTION. `ProfitAndLossDetail` is money that has already left;
+ *  this is money that has not left and is owed — which is what a commitment is, and why the existing
+ *  sync could never have produced one however it was wired.
+ *
+ *  ⚠️ A QUICKBOOKS BILL IS NOT EXACTLY A COMMITMENT. A bill is raised when an INVOICE arrives; a
+ *  commitment begins when you SIGN. So this finds the obligations that have already been invoiced and
+ *  misses everything signed and not yet billed — which is precisely the long-dated PO this feature was
+ *  built for. It is a floor on what you owe, never the whole of it, and the UI has to say so or people
+ *  will read an empty list as "nothing outstanding".
+ */
+export function payablesSource(report) {
+  const cols = report?.Columns?.Column ?? [];
+  const reported = cols.map((c, i) => c?.ColTitle || `Column ${i + 1}`);
+  const headers = unique([...reported, "Vendor", "Section Path"]);
+
+  const found = walk(report?.Rows, [], []);
+  const width = reported.length;
+
+  const rows = found.map(({ cells, account, path }) => {
+    const fixed = Array.from({ length: width }, (_, i) => cells[i] ?? "");
+    return [...fixed, account, path.join(" › ")];
+  });
+
+  return { headers, rows };
+}
+
+/** The columns `AgedPayableDetail` is asked for.
+ *
+ *  `due_date` is the one that matters and is NOT in the default set — without it every bill would
+ *  import with no payment date, and a commitment with no payment date is a number with nowhere to sit
+ *  on a runway.
+ */
+export const PAYABLE_COLUMNS = "tx_date,txn_type,doc_num,vend_name,due_date,memo,subt_open_bal";

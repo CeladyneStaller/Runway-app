@@ -1407,6 +1407,120 @@ covered on money that leaves later the same month.
 **Recurring lines are NOT promotable.** A lease's whole remaining term being "uncovered" is true and
 useless — six figures of unavoidable rent permanently at the top of a list meant for discrete decisions.
 
+## QuickBooks unpaid bills -> commitments
+
+`AgedPayableDetail`, a DIFFERENT REPORT answering a different question: `ProfitAndLossDetail` is money
+that has already left, this is money that has not left and is owed. The existing sync could never have
+produced a commitment however it was wired.
+
+**No windowing.** Payables returns what is outstanding NOW, so there is no date range to split and no
+truncation to chase — one call, one grid, unlike the P&L path.
+
+**⚠️ A BILL IS NOT A SIGNATURE.** QuickBooks raises a bill when an INVOICE arrives; a commitment begins
+when you SIGN. So this finds obligations already invoiced and misses everything signed and not yet
+billed — precisely the long-dated purchase order the whole feature was built for. It is a FLOOR on what
+you owe, never the whole of it. **The UI says so on every import, not only when the list is short**,
+because an empty list read as "nothing outstanding" would be worse than not importing at all.
+
+**Drafts, not commitments.** Nothing is written until somebody confirms. An import that silently added
+obligations would change a company's runway on the strength of a report nobody had read.
+
+**Columns matched by NAME, not position** — position is what breaks when somebody adds a column. And
+`due_date` is requested explicitly because it is NOT in the default column set; without it every bill
+imports with no payment date, which is a number with nowhere to sit on a runway.
+
+**Three ways a row can fail to import, all COUNTED:** no due date, already recorded, or a credit note.
+A credit is a NEGATIVE open balance — importing it as an obligation would overstate the total by twice
+its value. A row that vanishes silently is a support ticket.
+
+**A TIMEZONE BUG CAUGHT BY THE SUITE'S OWN TZ.** `new Date("2026-08-01")` is UTC midnight by spec, and
+`getMonth()` in any negative offset reads it as 31 July — so a bill due on the FIRST of a month landed
+in the month BEFORE it, everywhere west of Greenwich. The assertions that passed were the ones with
+mid-month dates. Date-only strings are now parsed as local, with boundary tests pinning it.
+
+**The CSV path needs nothing further:** `payablesToCommitments` takes a grid, and the CSV importer
+already produces one.
+
+## Cost share follows ACTUAL billings
+
+Cost share is a percentage of what has actually been BILLED. Dividing a period's share evenly across
+its months assumes billing runs to plan — and a grant that under-bills for two months then catches up
+owes a different amount at each point than the even split claims.
+
+**PAST FROM ACTUALS, FUTURE FROM PLAN**, the same hybrid the projection already uses via
+`anchorToActuals`. Months up to the last recorded actual are weighted by what was really billed; beyond
+it there is nothing to use but the plan, and pretending otherwise would be inventing a figure.
+
+**A MONTH THAT BILLED NOTHING OWES NOTHING.** With actuals `{0: 0, 1: 0, 2: 60000}` the first two rows
+are $0 and the third carries the draw. With flat billing the result is identical to the even split,
+because flat billing IS an even split — a good check that the weighting is doing nothing gratuitous.
+
+**Unbilled months fall back to the MEAN of the months that do have a figure**, not to a guess. It says
+"we expect the rest to look like what we have seen", which is the least invented assumption available.
+
+**`accruedCostShare` now SUMS THE WEIGHTED ROWS rather than interpolating.** Interpolating across a
+period would undo the weighting and hand back a straight line — exactly the even split this change
+replaces.
+
+**THIS IS THE WHOLE QUICKBOOKS AND CSV INTEGRATION.** Both write `project.actuals`, and reading that is
+all the wiring there is. Nothing further is needed on this side when the QBO connection lands.
+
+**I fumbled the weighting first** — a convoluted expression with a dead `billedShare` variable and a
+`void` to silence it. That is a signal, not a matter: the rewrite is a weights array, a total, and a
+proportional split, which is what it should have been.
+
+## Cost share is due at the REPRESENTATIVE PERIOD
+
+Cost share is verified against what you BILLED, so it falls due on the rhythm you bill on — not on a
+calendar of its own. `reimburseTiming` now drives the schedule:
+
+- **monthly** — twelve small proofs of match, one per month of the period. Treating these as period-end
+  understated how soon the money was needed.
+- **arrears** and **advance** — both reconcile at the period end. Being paid up front does not move when
+  the match is PROVEN; the funder still checks what the advance was spent on at the close.
+- **milestone** — spread across milestones in proportion to what each draws.
+
+**THE LAG IS DELIBERATELY NOT APPLIED.** `reimburseLagMonths` is how long the FUNDER takes to pay YOU.
+Your match is due when you bill, not when they settle — applying it would push every obligation later by
+the funder's own slowness, which is backwards. A test pins this.
+
+**A MILESTONE-BILLED AWARD WITH NO MILESTONES YET falls back to period ends** rather than producing
+nothing. The obligation is real; only the rhythm is unknown. Dropping it would make a liability vanish
+because a schedule had not been filled in — the same silent disappearance this feature exists to
+prevent, and my first version did exactly that.
+
+**EVERY TIMING SUMS EXACTLY to the award's own cost-share figure.** Rounding each row independently left
+the total $1 under across all four rhythms — the drift comes from rounding parts, not from any one
+schedule. A `settle` pass puts the remainder in the LAST row, because that is where a real
+reconciliation happens. "$1 short" in a funder reconciliation is not a rounding curiosity.
+
+## Cost share is PER PERIOD, and grants gained a no-cost extension
+
+**COST SHARE IS NOT A LUMP SUM AT AWARD END.** It accrues as a percentage of what has been BILLED, and
+must be satisfied WITHIN EACH BUDGET PERIOD — a funder does not let you under-match in year one and make
+it up in year three. Modelling it as one payment at the end was wrong twice: it understated the
+near-term obligation, and it put the whole of it after a runway it should have been pressing against.
+
+On the demo model that is the difference between one $62k obligation at month 11 and **two — $30,570 at
+month 5 and $31,567 at month 11**. The first falls INSIDE the 5.6-month runway, so covered runway moves
+5.6 -> 5.4. The lump-sum version hid that entirely.
+
+`accruedCostShare(doc, month)` gives how much is already owed, so the obligation reads as a rising line
+rather than a cliff somebody thinks they can plan around.
+
+**NO-COST EXTENSION: MORE TIME, NO MORE MONEY.** Put in `nMon()` in `time.js` — the ONE place a
+period's length is decided — so everything downstream follows without being told: spend spreading,
+reimbursement timing, the burn split, the pace charts. A second definition of "how long is this period"
+is how an extension gets honoured in one place and not another.
+
+**Three sites used `p.end` directly and would have ignored it**: the cost push, monthly reimbursement,
+and arrears reimbursement. `periodEnd(p)` now. The arrears one matters most and is the half people
+forget — an extension delays the MONEY too, not just the deadline.
+
+Verified: +6 months leaves the budget total identical at $310,688, moves the cost-share deadline 11 ->
+17, and lengthens runway slightly as the same spend spreads thinner. A test asserts the total does not
+move, because if it does it is not a no-cost extension.
+
 **COST SHARE IS DERIVED, NOT STORED**, so it cannot drift from the award it comes from — edit the
 budget and the obligation moves. `computeGrant().grand.costShare` is the figure, which is what the
 Projects tab already totals, so the two cannot disagree. It creates no cost line: the spend is already

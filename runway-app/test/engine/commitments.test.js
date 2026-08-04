@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { commitmentPressure, promote, addManual, promotable, removeCommitment, markPaid,
-         costShareCommitments }
+         costShareCommitments, accruedCostShare }
   from "../../src/engine/commitments.js";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { demoDoc } from "../../src/state/document.js";
+import { computeGrant } from "../../src/engine/grant.js";
 
 const rowsOf = (d) => buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
 const runway = (d) => zeroInfo(rowsOf(d), d.startY, d.startM)?.months ?? null;
@@ -172,5 +173,204 @@ describe("cost share, derived from the award", () => {
     // Not yet won is not yet owed.
     const prosp = { ...base, projects: (base.projects || []).map(p => ({ ...p, stage: "prospective" })) };
     expect(costShareCommitments(prosp)).toEqual([]);
+  });
+});
+
+describe("cost share accrues per period", () => {
+  const base = demoDoc();
+
+  it("is ONE OBLIGATION PER BUDGET PERIOD, not one per award", () => {
+    // A funder does not let you under-match in year one and make it up in year three. Modelling it as a
+    // lump at award end was wrong twice: it understated the near-term obligation and put the whole of
+    // it after a runway it should have been pressing against all along.
+    // `period` was dropped when rows gained a billing rhythm — a monthly-billed award has twelve rows
+    // inside ONE period, so a unique-period assertion was really asserting the arrears schedule.
+    // Distinct DUE DATES is the property that actually matters.
+    const cs = costShareCommitments(base);
+    expect(cs.length).toBeGreaterThan(1);
+    expect(new Set(cs.map(c => c.payMonth)).size).toBe(cs.length);
+  });
+
+  it("each falls at the END OF ITS OWN PERIOD", () => {
+    const cs = costShareCommitments(base);
+    for (const c of cs) expect(c.payMonth).toBeGreaterThanOrEqual(c.signedMonth);
+    for (let i = 1; i < cs.length; i++) expect(cs[i].payMonth).toBeGreaterThan(cs[i - 1].payMonth);
+  });
+
+  it("PRESSES ON THE RUNWAY, because an early period falls inside it", () => {
+    // The whole point of the correction: the first period's obligation lands before the cash runs out,
+    // which the lump-sum version hid completely.
+    const rows = rowsOf(base);
+    const p = commitmentPressure(base, rows);
+    const runway = zeroInfo(rows, base.startY, base.startM)?.months;
+    expect(p.rows.some(r => r.payMonth < runway)).toBe(true);
+  });
+
+  it("accrues with the period rather than appearing whole on the due date", () => {
+    // The obligation is already partly real; a reader should not see a cliff they think they can plan
+    // around.
+    const a = accruedCostShare(base, 0);
+    const b = accruedCostShare(base, 3);
+    const c = accruedCostShare(base, 11);
+    expect(a).toBe(0);
+    expect(b).toBeGreaterThan(a);
+    expect(c).toBeGreaterThan(b);
+  });
+});
+
+describe("no-cost extension", () => {
+  const base = demoDoc();
+  const withNce = (months) => ({
+    ...base,
+    projects: (base.projects || []).map(p => (p.grant
+      ? { ...p, grant: { ...p.grant, periods: p.grant.periods.map((x, i) =>
+          (i === p.grant.periods.length - 1 ? { ...x, nceMonths: months } : x)) } }
+      : p)),
+  });
+
+  it("ADDS TIME AND NO MONEY", () => {
+    // The defining property. If the total moves, it is not a no-cost extension.
+    const a = computeGrant((base.projects || []).find(p => p.grant).grant).grand.total;
+    const b = computeGrant((withNce(6).projects || []).find(p => p.grant).grant).grand.total;
+    expect(Math.round(b)).toBe(Math.round(a));
+  });
+
+  it("moves the cost-share deadline with the period end", () => {
+    const before = costShareCommitments(base);
+    const after = costShareCommitments(withNce(6));
+    expect(after[after.length - 1].payMonth).toBe(before[before.length - 1].payMonth + 6);
+  });
+
+  it("spreads the same spend thinner, so the runway does not shorten", () => {
+    const r = (d) => zeroInfo(rowsOf(d), d.startY, d.startM)?.months ?? 0;
+    expect(r(withNce(6))).toBeGreaterThanOrEqual(r(base));
+  });
+
+  it("changes nothing when there is no extension", () => {
+    expect(JSON.stringify(costShareCommitments(withNce(0))))
+      .toBe(JSON.stringify(costShareCommitments(base)));
+  });
+});
+
+describe("cost share follows the BILLING RHYTHM", () => {
+  const base = demoDoc();
+  const retime = (t) => ({
+    ...base,
+    projects: (base.projects || []).map(p => (p.grant
+      ? { ...p, grant: { ...p.grant, reimburseTiming: t } } : p)),
+  });
+  const exact = Math.round(
+    computeGrant((base.projects || []).find(p => p.grant).grant).grand.costShare);
+
+  it("MONTHLY billing means monthly match", () => {
+    // Cost share is verified against what you BILLED, so it falls due on the rhythm you bill on. A
+    // monthly-billed award is twelve small proofs of match, not one large one — and treating them all
+    // as period-end understated how soon the money was needed.
+    const cs = costShareCommitments(retime("monthly"));
+    expect(cs.length).toBeGreaterThan(6);
+    expect(cs[0].payMonth).toBeLessThan(cs[1].payMonth);
+  });
+
+  it("ARREARS and ADVANCE both reconcile at the period end", () => {
+    // Being paid up front does not move when the match is PROVEN — the funder still checks what the
+    // advance was spent on at the period's close.
+    const a = costShareCommitments(retime("arrears")).map(c => c.payMonth);
+    const b = costShareCommitments(retime("advance")).map(c => c.payMonth);
+    expect(b).toEqual(a);
+  });
+
+  it("MILESTONE billing spreads the match across milestones", () => {
+    const withMs = {
+      ...base,
+      projects: (base.projects || []).map(p => (p.grant
+        ? { ...p, grant: { ...p.grant, reimburseTiming: "milestone",
+            milestones: [{ label: "M1", month: 4, payment: 100000 },
+                         { label: "M2", month: 9, payment: 100000 }] } }
+        : p)),
+    };
+    const cs = costShareCommitments(withMs);
+    expect(cs.map(c => c.payMonth)).toEqual([4, 9]);
+  });
+
+  it("DOES NOT DROP the obligation when a milestone-billed award has no milestones yet", () => {
+    // A real liability must not vanish because a schedule has not been filled in — the same silent
+    // disappearance this whole feature exists to prevent. Falls back to period ends.
+    const cs = costShareCommitments(retime("milestone"));
+    expect(cs.length).toBeGreaterThan(0);
+  });
+
+  it("does NOT apply the reimbursement lag", () => {
+    // `reimburseLagMonths` is how long the FUNDER takes to pay you. Your match is due when you bill,
+    // not when they settle — applying it would push every obligation later by the funder's slowness.
+    const lagged = {
+      ...base,
+      projects: (base.projects || []).map(p => (p.grant
+        ? { ...p, grant: { ...p.grant, reimburseLagMonths: 3 } } : p)),
+    };
+    expect(costShareCommitments(lagged).map(c => c.payMonth))
+      .toEqual(costShareCommitments(base).map(c => c.payMonth));
+  });
+
+  it("SUMS EXACTLY to the award's own figure, whatever the rhythm", () => {
+    // Rounding each row independently left the total a dollar under — the kind of discrepancy that
+    // becomes "your match is $1 short" in a reconciliation with a funder.
+    for (const t of ["arrears", "monthly", "advance", "milestone"]) {
+      const total = costShareCommitments(retime(t)).reduce((a, c) => a + c.amount, 0);
+      expect(total, t).toBe(exact);
+    }
+  });
+});
+
+describe("cost share against ACTUAL billings", () => {
+  const base = demoDoc();
+  const billed = (actuals) => ({
+    ...base,
+    projects: (base.projects || []).map(p => (p.grant
+      ? { ...p, actuals, grant: { ...p.grant, reimburseTiming: "monthly" } } : p)),
+  });
+  const first = (d) => costShareCommitments(d).filter(c => c.payMonth <= 5);
+
+  it("A MONTH THAT BILLED NOTHING OWES NOTHING", () => {
+    // The obligation follows the draw. Dividing evenly assumes billing runs to plan, and a grant that
+    // under-bills for two months then catches up owes a different amount at each point.
+    const rows = first(billed({ 0: 0, 1: 0, 2: 60000 }));
+    expect(rows[0].amount).toBe(0);
+    expect(rows[1].amount).toBe(0);
+    expect(rows[2].amount).toBeGreaterThan(0);
+  });
+
+  it("falls back to an even split when nothing has been billed yet", () => {
+    const rows = first(billed({}));
+    const amounts = new Set(rows.map(r => r.amount));
+    expect(amounts.size).toBe(1);
+  });
+
+  it("treats flat billing the same as an even split, because it IS one", () => {
+    const flat = first(billed({ 0: 10000, 1: 10000, 2: 10000 })).map(r => r.amount);
+    const none = first(billed({})).map(r => r.amount);
+    expect(flat).toEqual(none);
+  });
+
+  it("still sums exactly, whatever the billing pattern", () => {
+    for (const a of [{}, { 0: 10000, 1: 10000 }, { 0: 0, 1: 0, 2: 60000 }, { 0: 999 }]) {
+      const total = costShareCommitments(billed(a)).reduce((x, c) => x + c.amount, 0);
+      expect(total, JSON.stringify(a)).toBe(
+        Math.round(computeGrant((base.projects || []).find(p => p.grant).grant).grand.costShare));
+    }
+  });
+
+  it("accrual follows the weighted rows, not a straight line", () => {
+    // Interpolating across a period would undo the weighting and hand back the even split this change
+    // exists to replace.
+    const lumpy = billed({ 0: 0, 1: 0, 2: 60000 });
+    expect(accruedCostShare(lumpy, 1)).toBe(0);
+    expect(accruedCostShare(lumpy, 2)).toBeGreaterThan(0);
+  });
+
+  it("ignores actuals beyond the last recorded month", () => {
+    // Past from actuals, future from plan — the same hybrid the projection uses. There is nothing to
+    // use beyond the ledger but the plan, and pretending otherwise would be inventing a figure.
+    const d = billed({ 0: 10000 });
+    expect(costShareCommitments(d).length).toBeGreaterThan(1);
   });
 });

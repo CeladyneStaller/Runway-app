@@ -542,3 +542,27 @@ now protect is a product that takes money, connects to QuickBooks, and has nobod
 *State at revision: ~1,000 tests passing offline plus 15 isolation probes verified against the real
 database, 2 timing-sensitive. 0 lint errors.
 19 migrations. 9 Edge Functions (plus `_shared`). Golden number 5.6 months, unchanged through all of it.*
+
+## Backlog · subscription analytics
+
+**Added after the website work.** Nothing about how the business is doing is currently visible anywhere:
+Stripe knows, and nothing in the product does.
+
+What it needs to answer, roughly in order of how soon it will be asked:
+
+- **MRR, and its movement** — new, expansion, contraction, churn. One number is a vanity metric; the
+  four components are a diagnosis.
+- **Trial conversion** — how many trials start, how many convert, and how long they take. The 14-day
+  window is a guess until this exists.
+- **Churn, with a reason where there is one** — and whether it is companies or advisors, because they
+  are different products with different economics.
+- **Advisor-driven signups** — whether an advisor account brings companies with it. If it does, the
+  advisor plan is a channel and should be priced as one; if it does not, it is a feature.
+- **Seat utilisation** — companies at their limit are upgrade candidates; companies far under it are
+  paying for something they do not use, which is churn waiting to happen.
+
+**Two constraints worth setting now.** Stripe is the source of truth for money — this reads from it
+rather than keeping a second ledger that can disagree. And it is staff-only: an owner has no reason to
+see aggregate business metrics, and the analytics allowlist already exists precisely so that new events
+are a deliberate decision rather than a habit.
+

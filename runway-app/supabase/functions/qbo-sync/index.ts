@@ -8,7 +8,8 @@
 // Deploy: supabase functions deploy qbo-sync   (verify_jwt = false, caller verified below)
 import { corsHeaders } from "../_shared/cors.js";
 import { refreshTokens, apiBase } from "../_shared/qbo-intuit.js";
-import { quickbooksSource, mergeGrids, dateWindows } from "../_shared/qbo-report.js";
+import { quickbooksSource, payablesSource, PAYABLE_COLUMNS, mergeGrids, dateWindows }
+  from "../_shared/qbo-report.js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -38,7 +39,7 @@ Deno.serve(async (req) => {
   const auth = req.headers.get("Authorization") || "";
   if (!auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
 
-  const { company_id: companyId, since, until } = await req.json().catch(() => ({}));
+  const { company_id: companyId, since, until, what } = await req.json().catch(() => ({}));
   if (!companyId) return json({ error: "company_required" }, 400);
 
   // The CALLER's own token is used for the permission check, so the answer comes from `can_edit`
@@ -107,6 +108,16 @@ Deno.serve(async (req) => {
     await rpc("qbo_mark_error", { p_company_id: companyId,
                                   p_error: "rotated token could not be stored", p_terminal: true });
     return json({ error: "needs_reauth" }, 409);
+  }
+
+  // UNPAID BILLS ARE A DIFFERENT REPORT, and a much smaller one: `AgedPayableDetail` returns what is
+  // outstanding NOW, so there is no window to split and no truncation to chase. One call, one grid.
+  if (what === "payables") {
+    const q = new URLSearchParams({ columns: PAYABLE_COLUMNS });
+    const res = await fetch(`${apiBase(QBO_ENV)}/v3/company/${realmId}/reports/AgedPayableDetail?${q}`,
+                            { headers: { Authorization: `Bearer ${tokens.accessToken}`, Accept: "application/json" } });
+    if (!res.ok) throw new Error(`payables ${res.status}`);
+    return json({ grid: payablesSource(await res.json()), kind: "payables" });
   }
 
   const end = until || new Date().toISOString().slice(0, 10);
