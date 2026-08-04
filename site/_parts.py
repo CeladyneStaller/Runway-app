@@ -4,9 +4,15 @@
 NAV = [("/product/", "Product"), ("/advisors/", "Advisors"), ("/pricing/", "Pricing"),
        ("/docs/", "Docs"), ("/writing/", "Writing")]
 
-APP = "https://runway-app-two.vercel.app"
+SITE = "https://waterline-runway.com"
+EMAIL = "hello@waterline-runway.com"
+
+# The site and the app subdomain go live together. Until the DNS record answers, every "Open the app"
+# button here 404s — which is correct, because the site is not public until then either.
+APP = "https://app.waterline-runway.com"
 
 def head(title, desc, current=""):
+    SITE_ = SITE  # for the f-string below
     links = "".join(
         f'<a href="{h}"{" aria-current=\"page\"" if h == current else ""}>{t}</a>'
         for h, t in NAV)
@@ -17,7 +23,16 @@ def head(title, desc, current=""):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{desc}">
+<link rel="canonical" href="{SITE_}{current or '/'}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Waterline">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{desc}">
+<meta property="og:url" content="{SITE_}{current or '/'}">
+<meta property="og:image" content="{SITE_}/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
@@ -66,7 +81,7 @@ FOOT = f'''<footer class="foot">
           <li><a href="/security/">Security</a></li>
           <li><a href="/privacy/">Privacy</a></li>
           <li><a href="/terms/">Terms</a></li>
-          <li><a href="mailto:hello@waterline.app">hello@waterline.app</a></li>
+          <li><a href="mailto:{EMAIL}">{EMAIL}</a></li>
         </ul>
       </div>
     </div>
