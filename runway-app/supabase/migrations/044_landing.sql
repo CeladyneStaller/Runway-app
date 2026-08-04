@@ -10,7 +10,7 @@
 --
 -- ⚠️ NOT A PERMISSION. `engine/landing.js` refuses a stored 'portfolio' for anybody without the advisor
 -- flag, so losing the flag cannot leave somebody on a screen they may no longer have. This column
--- records a wish; what is allowed is decided when it is read.
+-- records a wish; what is allowed is decided when it is read. 
 
 alter table profiles
   add column if not exists landing text null;
