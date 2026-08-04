@@ -140,3 +140,13 @@ td b{color:var(--ink);font-weight:500}
   padding:11px 0;border-bottom:1px solid var(--pine-3);font-size:.87rem;color:#CFDCD4}
 .scnrow:last-child{border-bottom:none}
 .scnrow .d{font-family:var(--fm);font-size:.8rem;text-align:right}
+
+/* ---- pieces the home page introduced ---- */
+.quote{font-family:var(--display);font-size:1.28rem;line-height:1.5;border-left:3px solid var(--brick);
+  padding-left:22px;margin:26px 0;max-width:52ch}
+.item__k--pale{color:var(--caution)}
+.pine .item__k--pale{color:#BE9440}
+.tag{display:inline-block;font-family:var(--fm);font-size:.6rem;letter-spacing:.12em;
+  text-transform:uppercase;padding:2px 9px;border-radius:2px;background:var(--linen);color:var(--muted)}
+.tag--warn{background:#F0E2D8;color:var(--brick)}
+.hero{border-bottom:none}
