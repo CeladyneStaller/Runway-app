@@ -1437,7 +1437,24 @@ the debt excluded, "not now — after Jan 31" with it included, for money not ye
 now skips it entirely. **A liability that predates its own cause is the clearest kind of wrong**, and it
 made the toggle look broken rather than the arithmetic.
 
-**2 · THE SCAN WAS NOT FORWARD-LOOKING.** It started at month zero, so a model beginning in January 2025
+**2 · THE "FORWARD-LOOKING" FIX WAS WRONG AND IS REVERTED.** Two requirements conflict and only one can
+hold: never report a date in the past, OR let an obligation move the date. Anchoring the scan to today —
+or to the end of actuals, which I tried second — satisfies the first and DESTROYS the second: a company
+whose cash is already negative at that point fails on the first month tested whatever it owes, so the
+date pins there and a million-pound facility changes nothing.
+
+That is what Corey saw, and it is worse than the bug it replaced. **A figure that cannot respond to its
+own inputs is not a figure.** The scan runs from month zero again; a date in the past is the model
+saying the company was already past a clean exit before today, which is information.
+
+**AND THE LISTING MEASURED AT MONTH ZERO**, so a facility drawn in February reported $0 and was filtered
+out entirely — the "counted and shown nowhere" failure arriving through a third door. It is now measured
+at its own draw month.
+
+Restored behaviour, measured: no debt 4.78 · drawn month 0 → 0.00 · month 1 → 3.29 · month 3 → 3.59 ·
+excluded → 3.81. Earlier draw, earlier deadline; excluding it moves the date back out.
+
+**2b · WHAT WAS ACTUALLY WRONG ORIGINALLY:** It started at month zero, so a model beginning in January 2025
 that dipped in month two reported an exit date already in the past. A decision deadline that has gone by
 is not a deadline. The scan now starts at today, and the interpolation no longer reaches behind it.
 

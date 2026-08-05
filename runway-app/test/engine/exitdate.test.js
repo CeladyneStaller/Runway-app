@@ -33,18 +33,36 @@ describe("nothing is owed before it is drawn", () => {
   });
 });
 
-describe("the exit date is forward-looking", () => {
-  it("NEVER REPORTS A MONTH THAT HAS ALREADY PASSED", () => {
-    // The scan started at month zero, so a model beginning last year and dipping in month two reported
-    // a deadline that had already gone by. A decision deadline in the past is not a deadline.
-    const d = { ...bare(), startY: 2025, startM: 0 };
-    const p = commitmentPressure(d, rowsOf(d), { today: new Date(2026, 7, 5) });
-    if (p?.coveredAt) expect(p.coveredAt.getTime()).toBeGreaterThanOrEqual(new Date(2026, 6, 1).getTime());
+describe("the exit date responds to what is owed", () => {
+  const fac = (cm) => ({ ...bare(), rounds: [{ id: "vd", name: "Facility", kind: "debt",
+    status: "closed", amount: 800000, closeMonth: cm, termMonths: 36, rateAPR: 12 }] });
+  const exit = (d, o) => commitmentPressure(d, rowsOf(d), o)?.coveredMonths;
+
+  it("AN EARLIER DRAW MEANS AN EARLIER DEADLINE", () => {
+    // The property the "forward-looking" version destroyed: anchoring the scan to today, or to the end
+    // of actuals, made a company already negative at that point fail on the first month tested whatever
+    // it owed — so the date pinned there and a million-pound facility changed nothing. A figure that
+    // cannot respond to its own inputs is not a figure.
+    expect(exit(fac(0))).toBeLessThan(exit(fac(1)));
+    expect(exit(fac(1))).toBeLessThan(exit(fac(3)));
   });
 
-  it("starts at the model's own start when that is in the future", () => {
-    const d = bare();
-    const p = commitmentPressure(d, rowsOf(d), { today: new Date(d.startY, d.startM, 1) });
-    expect(p?.coveredMonths ?? 0).toBeGreaterThanOrEqual(0);
+  it("and every draw month brings it in from the no-debt case", () => {
+    const none = exit(bare());
+    for (const cm of [0, 1, 3]) expect(exit(fac(cm))).toBeLessThan(none);
+  });
+
+  it("excluding the debt moves it back out", () => {
+    expect(exit(fac(0), { withVentureDebt: false })).toBeGreaterThan(exit(fac(0)));
+  });
+
+  it("A FACILITY IS LISTED WHATEVER MONTH IT IS DRAWN", () => {
+    // Listing it at month zero meant one drawn in February reported $0 and was filtered out entirely —
+    // the "counted and shown nowhere" failure arriving through a different door.
+    for (const cm of [0, 1, 3, 12]) {
+      const p = commitmentPressure(fac(cm), rowsOf(fac(cm)));
+      expect(p.debt.length, `drawn month ${cm}`).toBe(1);
+      expect(p.debt[0].amount).toBeGreaterThan(0);
+    }
   });
 });

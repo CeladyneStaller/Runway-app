@@ -210,12 +210,23 @@ export function commitmentPressure(doc, rows,
     return owed;
   };
 
-  // ⚠️ FORWARD-LOOKING ONLY. The scan started at month zero, so a model beginning in January 2025 and
-  // dipping in month two reported a clean-exit date in the PAST — a decision deadline that has already
-  // gone by is not a deadline, it is a history lesson, and it made the figure look broken.
+  // ⚠️ THE SCAN STARTS AT MONTH ZERO, AND THE "FORWARD-LOOKING" VERSION IS REVERTED.
   //
-  // The question is "from today, how long can I still close cleanly", so the scan starts at today.
-  const nowM = Math.max(0, (today.getFullYear() - startY) * 12 + (today.getMonth() - startM));
+  // Two requirements conflict and only one can hold:
+  //
+  //   (a) never report a date in the past
+  //   (b) an obligation you owe must be able to move the date
+  //
+  // Anchoring the scan to today, or to the end of actuals, satisfies (a) and DESTROYS (b): a company
+  // whose cash is already negative at that point fails on the first month tested whatever it owes, so
+  // the date pins there and adding a million-pound facility changes nothing. That is the bug Corey
+  // reported after the first fix, and it is worse than the one it replaced — a figure that cannot
+  // respond to its own inputs is not a figure.
+  //
+  // So (b) wins. If the reported date is in the past, that is the model TELLING YOU the company was
+  // already past the point of a clean exit before today — which is information, not an error.
+  const nowM = 0;
+  void today;
 
   let coveredMonths = null, coveredAt = null;
   for (let m = nowM; m < rows.length; m++) {
@@ -277,7 +288,14 @@ export function commitmentPressure(doc, rows,
       label: x.name || (x.kind === "note" ? "Note" : "Facility"),
       what: x.kind === "note" ? "repaid at maturity" : "drawn",
       group: x.kind === "note" ? "note" : "venture",
-      amount: outstandingDebt({ rounds: [x] }, 0),
+      // MEASURED AT ITS OWN DRAW MONTH, not at month zero.
+      //
+      // Listing it at month zero meant a facility drawn in February reported $0 and was filtered out
+      // entirely — it appeared nowhere on the tab, which is exactly the "counted and shown nowhere"
+      // failure again, arriving through a different door. What you owe on a facility is what you owe
+      // once you have it.
+      amount: outstandingDebt({ rounds: [x] }, clean(x.closeMonth)),
+      drawsAt: clean(x.closeMonth),
     }))
     .filter(x => x.amount > 0);
   const debtTotal = debt.reduce((a, x) => a + x.amount, 0);
