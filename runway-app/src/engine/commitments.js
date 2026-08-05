@@ -137,7 +137,27 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
   });
 
   const unpaid = running;
-  const uncovered = out.filter(r => !r.covered).reduce((a, r) => a + clean(r.amount), 0);
+
+  // TWO DISTINCT FAILURES, because they have different remedies and folding them together hides that.
+  //
+  //   unpayable   — a payment falls due after the cash runs out. Fixed by money, or by moving the date.
+  //   unmatchable — cost share you could not meet from ELIGIBLE funds. Fixed by non-grant money
+  //                 specifically, and by nothing else: a bank balance made entirely of drawdowns
+  //                 against an award cannot match that award.
+  //
+  // Unpayable counts BOTH debt and planned, unlike the clean-exit date. The questions differ: this one
+  // asks "will I be able to pay this", which is true of a patent fee; the exit date asks "can I close
+  // cleanly", which is not.
+  const unpayable = out.filter(r => !r.covered).reduce((a, r) => a + clean(r.amount), 0);
+
+  // Measured at the moment the cash runs out — by then, this much match is unmet and would be asked
+  // for. Measuring at the end of the horizon would report a shortfall for a company that is already
+  // long gone.
+  const zeroAt = rows.findIndex(r => r.end < 0);
+  const unmatchable = shortfallAt(doc, rows, zeroAt >= 0 ? zeroAt : rows.length - 1);
+
+  // Kept as the sum for anything still reading it, and named so the two parts are the real interface.
+  const uncovered = unpayable + unmatchable;
 
   // ── COVERED RUNWAY: THE SOLVENT WIND-DOWN DATE ─────────────────────────────────────────────────
   //
@@ -208,6 +228,8 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
     costShare,
     costShareTotal,
     unpaid,
+    unpayable,
+    unmatchable,
     uncovered,
     coveredMonths,
     coveredAt,

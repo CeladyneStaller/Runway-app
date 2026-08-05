@@ -11,7 +11,9 @@ import { commitmentPressure, promotable, promote, addManual, removeCommitment, m
   from "../engine/commitments";
 import { payablesToCommitments } from "../engine/payables";
 
-const SUBS = [["all", "All"], ["uncovered", "Uncovered"], ["paid", "Paid"]];
+// "Unpayable" rather than "Uncovered": the filter shows payments the cash will not be there for, which
+// is one of the two failures now, not the whole of it.
+const SUBS = [["all", "All"], ["uncovered", "Unpayable"], ["paid", "Paid"]];
 
 export function Commitments({ doc, setDoc, rows, canWrite = true, account, companyId }) {
   const [sub, setSub] = useState("all");
@@ -62,12 +64,23 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         </div>
         <div className="stat">
           <div className="accent" style={{ background: "var(--danger)" }} />
-          <div className="lab">Uncovered</div>
-          <div className="big" style={p?.uncovered ? { color: "var(--danger)" } : null}>
-            {money(p?.uncovered || 0)}
+          <div className="lab">Cannot be paid</div>
+          <div className="big" style={p?.unpayable ? { color: "var(--danger)" } : null}>
+            {money(p?.unpayable || 0)}
           </div>
-          <div className="meta">signed, no cash behind it</div>
+          <div className="meta">falls due after the cash runs out</div>
         </div>
+        {p?.unmatchable > 0 && (
+          <div className="stat">
+            <div className="accent" style={{ background: "var(--danger)" }} />
+            {/* A SEPARATE FAILURE WITH A SEPARATE REMEDY. Money does not fix this — only NON-GRANT
+                money does. A bank balance made entirely of drawdowns against an award cannot match
+                that award, which is why this can be non-zero while the cash looks fine. */}
+            <div className="lab">Cannot be matched</div>
+            <div className="big" style={{ color: "var(--danger)" }}>{money(p.unmatchable)}</div>
+            <div className="meta">cost share your non-grant income cannot cover</div>
+          </div>
+        )}
         <div className="stat hero">
           <div className="lab">Next payable</div>
           <div className="big" style={{ fontSize: 15 }}>
@@ -79,10 +92,25 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         </div>
       </div>
 
-      {p?.uncovered > 0 && (
+      {p?.coveredMonths != null && (
+        <p className="acct-row-s meta cmt-assume">
+          {/* THE ASSUMPTION, WHERE THE NUMBER IS. One company-wide notice period rather than one per
+              person: a per-employee field would be empty in most models, and a closure figure computed
+              from mostly-empty fields is worse than one computed from a stated assumption — provided
+              the assumption is stated and can be argued with, which is what this is. */}
+          Clean exit assumes{" "}
+          <input className="inp inp-wk" type="number" min="0" max="52" disabled={!canWrite}
+                 value={doc?.settings?.noticeWeeks ?? 4}
+                 onChange={e => setDoc(d => ({ ...d,
+                   settings: { ...(d.settings || {}), noticeWeeks: Math.max(0, Number(e.target.value) || 0) } }))} />
+          {" "}weeks' notice for everyone, and that every debt below is settled.
+        </p>
+      )}
+
+      {p?.unpayable > 0 && (
         <div className="alert bad">
-          <span><b>{money(p.uncovered)} has no cash behind it.</b> Signed, and the money is not there
-            on the day it is due.</span>
+          <span><b>{money(p.unpayable)} cannot be paid.</b> Signed, and the money is not there on the
+            day it falls due.</span>
           <button className="linkbtn" onClick={() => setSub("uncovered")}>Show</button>
         </div>
       )}
@@ -111,7 +139,7 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         <section className="panel">
           <div className="panel-h">
             <div>
-              <h3>{sub === "uncovered" ? "Uncovered" : "Unpaid"}</h3>
+              <h3>{sub === "uncovered" ? "Cannot be paid" : "Unpaid"}</h3>
               <p>Sorted by payment date. Cover counts everything payable before it, not just this one.</p>
             </div>
             <span className="members-form" style={{ margin: 0 }}>

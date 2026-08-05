@@ -206,3 +206,37 @@ describe("the debt / planned badge", () => {
     expect(v.container.textContent).not.toMatch(/Covered runway/);
   });
 });
+
+describe("the notice assumption", () => {
+  const base = demoDoc();
+  const d = addManual(base, { label: "x", signedMonth: 0, payMonth: 3, amount: 1000 });
+
+  it("IS STATED WHERE THE NUMBER IS, not buried in settings", () => {
+    // A closure figure computed from an assumption is fine provided the assumption is visible and can
+    // be argued with. Hidden in a settings page, it is just a number somebody has to trust.
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)} />);
+    expect(v.container.textContent).toMatch(/Clean exit assumes/);
+    expect(v.container.textContent).toMatch(/weeks' notice for everyone/);
+  });
+
+  it("is editable and writes to settings", () => {
+    let held = d;
+    const v = render(<Commitments doc={d} setDoc={fn => { held = fn(d); }} rows={rowsOf(d)} />);
+    const inp = v.container.querySelector(".inp-wk");
+    expect(inp.value).toBe("4");
+    fireEvent.change(inp, { target: { value: "8" } });
+    expect(held.settings.noticeWeeks).toBe(8);
+  });
+
+  it("is read-only for a viewer", () => {
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)} canWrite={false} />);
+    expect(v.container.querySelector(".inp-wk").disabled).toBe(true);
+  });
+
+  it("names the two failures separately", () => {
+    const late = addManual(base, { label: "L", signedMonth: 0, payMonth: 9, amount: 150000 });
+    const v = render(<Commitments doc={late} setDoc={() => {}} rows={rowsOf(late)} />);
+    expect(v.container.textContent).toMatch(/Cannot be paid/);
+    expect(v.container.textContent).not.toMatch(/Uncovered/);
+  });
+});

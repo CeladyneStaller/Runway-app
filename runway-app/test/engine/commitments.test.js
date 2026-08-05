@@ -461,3 +461,51 @@ describe("covered runway is the solvent wind-down date", () => {
     expect(covered(longer)).toBeLessThan(covered(base));
   });
 });
+
+describe("uncovered is two distinct failures", () => {
+  const base = demoDoc();
+
+  it("UNPAYABLE is money, UNMATCHABLE is non-grant money specifically", () => {
+    // Folding them together hides that they have different remedies. A bank balance made entirely of
+    // drawdowns against an award cannot match that award, however large it is.
+    const d = addManual(base, { label: "A", signedMonth: 0, payMonth: 9, amount: 150000 });
+    const p = commitmentPressure(d, rowsOf(d));
+    expect(p.unpayable).toBe(150000);
+    expect(p.unmatchable).toBe(0);              // the demo has non-grant income covering the match
+  });
+
+  it("A COMPANY FUNDED ONLY BY ITS AWARD CANNOT MATCH IT", () => {
+    // The case the approximation exists for, and where it is exactly right rather than approximate:
+    // zero eligible funds means the whole accrued match is a shortfall, which is true.
+    const grantOnly = {
+      ...base,
+      lines: (base.lines || []).filter(l => l.kind !== "revenue"),
+      pos: [], saas: [], rounds: [],
+    };
+    const p = commitmentPressure(grantOnly, rowsOf(grantOnly));
+    expect(p.unmatchable).toBeGreaterThan(0);
+    expect(p.unpayable).toBe(0);                // nothing is late — they simply cannot match
+  });
+
+  it("UNPAYABLE COUNTS PLANNED COSTS, unlike the clean-exit date", () => {
+    // The questions differ. "Will I be able to pay this" is true of a patent fee; "can I close cleanly"
+    // is not. The same commitment can be unpayable and irrelevant to bankruptcy.
+    const d = addManual(base, { label: "B", signedMonth: 0, payMonth: 9, amount: 150000, kind: "planned" });
+    const p = commitmentPressure(d, rowsOf(d));
+    expect(p.unpayable).toBe(150000);
+    expect(p.coveredMonths).toBeCloseTo(commitmentPressure(base, rowsOf(base)).coveredMonths, 2);
+  });
+
+  it("the shortfall is measured when the cash runs out, not at the horizon", () => {
+    // Measuring at the end of the horizon would report a match shortfall for a company already long
+    // gone, which is a number about nothing.
+    const p = commitmentPressure(base, rowsOf(base));
+    expect(p.unmatchable).toBeLessThanOrEqual(p.costShareTotal);
+  });
+
+  it("uncovered remains the sum, for anything still reading it", () => {
+    const d = addManual(base, { label: "C", signedMonth: 0, payMonth: 9, amount: 50000 });
+    const p = commitmentPressure(d, rowsOf(d));
+    expect(p.uncovered).toBe(p.unpayable + p.unmatchable);
+  });
+});

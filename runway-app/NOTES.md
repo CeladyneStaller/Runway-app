@@ -1470,6 +1470,28 @@ they measured the same thing; they answer different questions.
 **Two tests asserted the old definition** and were corrected with it — including one that asserted
 `covered == runway`, which under the new definition asserts that closing is free.
 
+**STEPS 5-7 · uncovered split, and the notice assumption made visible.**
+
+`uncovered` is now `unpayable` + `unmatchable`, kept as a sum for anything still reading it but split
+because THE REMEDIES DIFFER: unpayable is fixed by money or by moving a date; unmatchable is fixed by
+NON-GRANT money specifically and by nothing else. A bank balance made entirely of drawdowns against an
+award cannot match that award, however large it is.
+
+Verified on a grant-only model — revenue lines, POs, subscriptions and rounds all removed — which
+reports **unmatchable $18,342 and unpayable $0**. Nothing is late; they simply cannot match. That is the
+case the approximation exists for, and it is exactly right there rather than approximate.
+
+**`unpayable` counts PLANNED costs; the clean-exit date does not.** The questions differ: "will I be
+able to pay this" is true of a patent fee, "can I close cleanly" is not.
+
+**The shortfall is measured at the month the cash runs out**, not at the horizon — measuring at the
+horizon would report a match shortfall for a company already long gone.
+
+**`noticeWeeks` LIVES BESIDE THE NUMBER IT DRIVES**, on the Commitments tab, not in a settings page.
+A closure figure computed from an assumption is fine provided the assumption is visible and can be
+argued with; hidden in settings it is just a number somebody has to trust. Reads: "Clean exit assumes
+[4] weeks' notice for everyone, and that every debt below is settled."
+
 ## Cost share was double-counted in covered runway — corrected
 
 **COST SHARE IS NOT AN EXTRA COST. IT IS A SPLIT OF ONE.** `computeGrant` computes `total = direct +
