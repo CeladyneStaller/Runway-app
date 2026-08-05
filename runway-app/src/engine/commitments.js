@@ -18,7 +18,7 @@ import { balanceAtDate, zeroInfo } from "./projection.js";
 import { computeGrant, isMsBilled } from "./grant.js";
 import { lastActualMonth } from "./summary.js";
 import { empCostAt } from "./payroll.js";
-import { debtLines } from "./capital.js";
+import { debtLines, accrued } from "./capital.js";
 import { periodEnd } from "./time.js";
 
 const clean = (n) => (Number.isFinite(n) ? n : 0);
@@ -103,7 +103,7 @@ export function shortfallAt(doc, rows, month) {
  *  Returns null when there is nothing committed — the common case, and the one where this must cost
  *  nothing and change nothing.
  */
-export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
+export function commitmentPressure(doc, rows, { today = new Date(), withDebt = true } = {}) {
   if (!doc || !Array.isArray(rows) || !rows.length) return null;
   const list = unpaidCommitments(doc);
   // Cost share alone is still worth a tab: nothing is owed on top of the plan, but the unreimbursed
@@ -193,8 +193,13 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
     }
     owed += shortfallAt(doc, rows, t);
     owed += windDownCost(doc);
-    // Drawn debt: a signed obligation that lived only in the capital stack and never in this figure.
-    owed += outstandingDebt(doc, t);
+    // DRAWN DEBT, ON BY DEFAULT AND EXCLUDABLE.
+    //
+    // It belongs in the figure — a lender is owed whether or not you close. But a facility can dwarf
+    // everything else, and then the exit date says only "you owe a bank", which hides whether the rest
+    // of the business could be made whole. Being able to take it out is how you see the timeline for
+    // settling everybody else, which is a different and also useful question.
+    if (withDebt) owed += outstandingDebt(doc, t);
     return owed;
   };
 
@@ -238,6 +243,7 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
   return {
     debt,
     debtTotal,
+    withDebt,
     costShare,
     costShareTotal,
     unpaid,
@@ -469,6 +475,36 @@ export function accruedCostShare(doc, month) {
 }
 
 
+/** Royalty notes, as indexed commitments.
+ *
+ *  A ROYALTY NOTE REPAYS A SHARE OF THE BUSINESS UNTIL A CAP IS SATISFIED. That is an indexed
+ *  obligation by the definition already in use: it scales with something the model computes and stops
+ *  when that stops.
+ *
+ *  IT DOES NOT AFFECT THE CLEAN-EXIT DATE, and that is correct rather than convenient. A royalty is
+ *  paid out of revenue you are earning; stop trading and there is no revenue and nothing further owed.
+ *  Unlike a maturity repayment, walking away discharges it.
+ */
+export function royaltyCommitments(doc) {
+  const out = [];
+  for (const x of doc?.rounds || []) {
+    if (!x || x.kind !== "note" || x.atMaturity !== "royalty" || x.status !== "closed") continue;
+    const pct = clean(x.royaltyPct);
+    if (pct <= 0) continue;
+    out.push({
+      id: `roy_${x.id}`, label: `${x.name || "Note"} — royalty`,
+      signedMonth: clean(x.closeMonth), payMonth: null, amount: 0,
+      index: { of: x.royaltyBase === "profit" ? "profit" : "revenue", ref: null, pct },
+      // THE CAP is what the holder is owed in total; past it the obligation ends. Carried so the tab
+      // can say how much of it is left rather than implying it runs forever.
+      cap: clean(x.amount) * clean(x.capMultiple || 5),
+      projectId: null, source: "note", flavor: "indexed", kind: "planned",
+      lineId: null, status: "committed", paidRef: null, derived: true,
+    });
+  }
+  return out;
+}
+
 /** Everything committed, stored and derived, as one list. */
 export function allCommitments(doc) {
   return [...(doc?.commitments || []), ...costShareCommitments(doc)];
@@ -649,7 +685,9 @@ export function setKind(doc, id, kind) {
  */
 export function indexedLines(doc, lineItems, horizon = 60) {
   const out = [];
-  for (const c of doc?.commitments || []) {
+  // DERIVED ROYALTIES TOO, not just stored commitments — they come from the capital stack and nobody
+  // enters them by hand.
+  for (const c of [...(doc?.commitments || []), ...royaltyCommitments(doc)]) {
     if (!c || c.flavor !== "indexed" || c.status === "paid") continue;
     const pct = clean(c.index?.pct);
     if (pct <= 0) continue;
@@ -712,7 +750,19 @@ export function outstandingDebt(doc, month) {
     // `status`, NOT `stage`. I filtered on a field that does not exist, so nothing was ever drawn and
     // the whole term was silently zero on real data — the test passed only because it set the same
     // wrong field. A test that agrees with the bug is not a test.
-    if (!x || x.kind !== "debt" || x.status !== "closed") continue;
+    // A NOTE THAT REPAYS AT MATURITY IS DEBT IN EVERYTHING BUT NAME. Principal plus accrued, due on a
+    // date, owed whether or not you close — and it was counted nowhere, because this only looked at
+    // `kind === "debt"`. A convertible that converts owes nothing; one that repays owes everything.
+    if (!x || x.status !== "closed") continue;
+    const isNote = x.kind === "note" && x.atMaturity !== "convert" && x.atMaturity !== "royalty"
+                   && !x.assumeExtended;
+    if (isNote) {
+      const mat = clean(x.closeMonth) + clean(x.maturityMonths || 24);
+      // Only if it has not already matured — past that, the cash has moved and the projection has it.
+      if (mat > m) owed += clean(x.amount) + clean(accrued(x, mat));
+      continue;
+    }
+    if (x.kind !== "debt") continue;
     let lines = [];
     try { lines = debtLines(x, "committed") || []; } catch { lines = []; }
     for (const l of lines) {

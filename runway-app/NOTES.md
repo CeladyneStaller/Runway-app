@@ -1429,6 +1429,34 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Convertible notes, and a toggle for drawn debt
+
+**A NOTE THAT REPAYS AT MATURITY IS DEBT IN EVERYTHING BUT NAME** — principal plus accrued, due on a
+date, owed whether or not you close — and it was counted nowhere, because `outstandingDebt` looked only
+at `kind === "debt"`. A convertible that CONVERTS owes nothing; one that REPAYS owes everything. Now
+counted, and only while the maturity is in the future: past it the cash has moved and the projection has
+it.
+
+**A ROYALTY NOTE IS AN INDEXED COMMITMENT**, derived from the capital stack the way cost share is
+derived from a grant. It scales with revenue and stops when that stops, which is the definition already
+in use.
+
+**It does NOT add to the closure figure, and that is correct rather than convenient.** A royalty is paid
+out of revenue you are earning; stop trading and there is no revenue and nothing further owed. Unlike a
+maturity repayment, walking away discharges it. It carries its cap so the tab need not imply it runs
+forever.
+
+**⚠️ IT STILL MOVES THE EXIT DATE, INDIRECTLY**, because it costs cash and the balance is lower. My
+first test asserted the date was unchanged and failed — the TEST was wrong, not the code. An indexed
+obligation that costs money must move every downstream number. The right assertion is that the GAP
+between "cash runs out" and "cannot close cleanly" is unchanged, which is what it now checks.
+
+**DRAWN DEBT IS TOGGLEABLE, ON BY DEFAULT.** A lender is owed whether or not you close, so it belongs in
+the figure. But a facility can dwarf everything else, and then the exit date says only "you owe a bank"
+— hiding whether the rest of the business could be made whole. Excluding it shows the timeline for
+settling everybody ELSE, which is a different and also useful question. The total stays reported either
+way.
+
 ## A round marked CLOSED deleted its own money
 
 **THE WORST SHAPE A BUG CAN TAKE: a destructive no-op triggered by recording good news.**

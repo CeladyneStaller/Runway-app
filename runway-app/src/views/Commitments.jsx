@@ -24,7 +24,10 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
     label: "", signedMonth: 0, payMonth: 1, amount: 0, flavor: "payment",
   });
 
-  const p = useMemo(() => commitmentPressure(doc, rows), [doc, rows]);
+  // DEFAULTS TO INCLUDING DEBT, because a lender is owed whether or not you close. Excluding it answers
+  // the other question worth asking: could everybody ELSE be made whole, and by when.
+  const [withDebt, setWithDebt] = useState(true);
+  const p = useMemo(() => commitmentPressure(doc, rows, { withDebt }), [doc, rows, withDebt]);
   const ready = useMemo(() => promotable(doc), [doc]);
   const paid = (doc?.commitments || []).filter(c => c.status === "paid");
 
@@ -394,6 +397,11 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
                 stopped trading — remaining scheduled payments, which is conservative.
               </p>
             </div>
+            <label className="dbt-toggle">
+              <input type="checkbox" checked={withDebt}
+                     onChange={e => setWithDebt(e.target.checked)} />
+              <span>Count in clean exit</span>
+            </label>
             <span className="chip">{money(p.debtTotal)}</span>
           </div>
           <table className="tbl">

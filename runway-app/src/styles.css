@@ -1374,3 +1374,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   .flavour-pick{grid-template-columns:1fr}
   .flavour{min-height:44px}
 }
+.dbt-toggle{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);
+  margin-right:10px;cursor:pointer}
+.dbt-toggle input{width:15px;height:15px;accent-color:var(--signal)}
+@media(max-width:900px){ .dbt-toggle{min-height:44px} .dbt-toggle input{width:20px;height:20px} }
