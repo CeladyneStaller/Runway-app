@@ -14,7 +14,7 @@
 // cash at all. A manual one creates its own line. Without this, a lease recorded as both a recurring
 // cost and a commitment doubles the burn, and the overstatement is silent.
 
-import { balanceAtDate, zeroInfo } from "./projection.js";
+import { balanceAtDate, zeroInfo, forecastFrom } from "./projection.js";
 import { computeGrant, isMsBilled } from "./grant.js";
 import { lastActualMonth } from "./summary.js";
 import { empCostAt } from "./payroll.js";
@@ -210,23 +210,16 @@ export function commitmentPressure(doc, rows,
     return owed;
   };
 
-  // ⚠️ THE SCAN RUNS FROM MONTH ZERO — and the reported date CAN therefore land inside months you have
-  // already closed. That is a known, unresolved defect, kept deliberately over the alternative.
+  // THE SAME WINDOW AS RUNWAY. History is not a decision: months you have closed already happened, and
+  // "could you have closed cleanly in February" is not a question anybody can act on.
   //
-  // TWO REQUIREMENTS CONFLICT and only one can hold:
-  //   (a) never report a date inside recorded history
-  //   (b) an obligation you owe must be able to move the date
-  //
-  // Anchoring the scan after the last actual satisfies (a) and breaks (b): a company already below its
-  // closure debt at the first forecast month SATURATES, and a saturated window cannot get shorter, so
-  // adding a facility changes no number at all. Both were tried; (b) is the more damaging to lose,
-  // because a figure that cannot respond to its own inputs is not a figure.
-  //
-  // THE REAL FIX IS NOT HERE. A model that starts in January with five months of actuals is walking
-  // history as though it were forecast; rebasing the model start to the last closed month resolves both
-  // requirements at once and is a change to the document, not to this arithmetic.
-  const nowM = 0;
-  void today;
+  // ⚠️ AND THE BALANCE ENTERING IT COMES FROM `rows`, WHICH ARE ALREADY ANCHORED. This is the half my
+  // three earlier attempts missed. I moved the starting index while still comparing against a balance
+  // that had been shifted to line up with history, so a company mid-history looked already-past and the
+  // window saturated at zero — no obligation could move it. Anchored rows carry the real figure where
+  // one was recorded and the shifted forecast where none was, which is correct in both cases and needs
+  // no special-casing for gaps.
+  const nowM = Math.max(0, Math.min(forecastFrom(doc, today), rows.length - 1));
 
   let coveredMonths = null, coveredAt = null, alreadyPast = false;
   for (let m = nowM; m < rows.length; m++) {

@@ -6,6 +6,7 @@ import { TermsGate } from "./views/chrome/TermsGate";
 import { Commitments } from "./views/Commitments";
 import { atLeast } from "./engine/roles";
 import { commitmentPressure } from "./engine/commitments";
+import { forecastFrom } from "./engine/projection";
 import { AdvisorHome } from "./views/chrome/AdvisorHome";
 import { landingFor, portfolioAllowed, PORTFOLIO } from "./engine/landing";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
@@ -181,7 +182,10 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
   const modelRowsConf = useMemo(() => buildProjection(model, confToggles), [model, confToggles]);
   const rowsConf = useMemo(() => anchorToActuals(modelRowsConf, cashActuals, anchorActuals), [modelRowsConf, cashActuals, anchorActuals]);
   const rowsBase = useMemo(() => buildProjection({ cashOnHand: cash, horizon: HORIZON, lineItems: [...lines, ...employeeLines, ...baselineLines] }, toggles), [lines, employeeLines, baselineLines, toggles, cash]);
-  const zero = useMemo(() => zeroInfo(rows, startY, startM), [rows, startY, startM]);
+  // THE WINDOW, COMPUTED ONCE. Every runway figure on screen must use the same one, or the range band
+  // and the headline would answer the question from different starting months.
+  const fcFrom = useMemo(() => forecastFrom(doc), [doc]);
+  const zero = useMemo(() => zeroInfo(rows, startY, startM, fcFrom), [rows, startY, startM, fcFrom]);
 
   // PROJECTION JOURNAL — record what the forecast said, weekly, so it can later be checked against what
   // actually happened. Nothing here computes statistics; this is the recorder, and the value only
@@ -214,8 +218,8 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
       ceiling: { ...b.ceiling, rows: anchor(b.ceiling.rows) },
     };
   }, [doc, cashActuals, anchorActuals]);
-  const zeroUp = useMemo(() => zeroInfo(rowsUp, startY, startM), [rowsUp, startY, startM]);
-  const zeroConf = useMemo(() => zeroInfo(rowsConf, startY, startM), [rowsConf, startY, startM]);
+  const zeroUp = useMemo(() => zeroInfo(rowsUp, startY, startM, fcFrom), [rowsUp, startY, startM, fcFrom]);
+  const zeroConf = useMemo(() => zeroInfo(rowsConf, startY, startM, fcFrom), [rowsConf, startY, startM, fcFrom]);
   const zeroBase = useMemo(() => zeroInfo(rowsBase, startY, startM), [rowsBase, startY, startM]);
   const zeroModel = useMemo(() => zeroInfo(modelRows, startY, startM), [modelRows, startY, startM]);
   const projWeeks = (zeroModel && zeroBase) ? Math.round((zeroBase.months - zeroModel.months) * 4.345) : 0;

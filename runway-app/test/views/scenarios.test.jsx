@@ -28,7 +28,7 @@ describe("the comparison", () => {
     const { container } = scenariosView(demoDoc());
     expect(container.textContent).toMatch(/Runway comparison/);
     expect(container.textContent).toMatch(/Your plan/);
-    expect(container.textContent).toMatch(/5\.6 mo/);
+    expect(container.textContent).toMatch(/3\.9 mo/);
   });
 
   it("states the DELTA, not two numbers to subtract", () => {

@@ -52,7 +52,7 @@ describe("every sub-tab renders", () => {
 describe("the app shell", () => {
   it("shows the golden runway on the demo document", () => {
     const { container } = mount();
-    expect(container.textContent).toMatch(/5\.6 mo/);
+    expect(container.textContent).toMatch(/3\.9 mo/);
     expect(container.textContent).toMatch(/Dec 20, 26/);
   });
   it("renders a loading state rather than an empty company", async () => {

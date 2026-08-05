@@ -1429,7 +1429,48 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
-## ⚠️ OPEN DEFECT: the clean-exit date can land inside recorded history
+## The forecast window — runway and clean exit stop scanning history
+
+**`forecastFrom(doc, today)` = today's month, clamped at 0.** A cash figure is the balance at the START
+of a month, so an entry for the CURRENT month is a real anchor AND the month is still in progress — it
+is the last month you can still act on. ROUNDS DOWN: a month becomes canon on the first of the next, so
+a purchase on the 28th is not counted as forecast and then again as actual.
+
+**Both scans use it.** `zeroInfo(rows, startY, startM, from = 0)` — defaulted, so the golden canary and
+every existing caller are untouched. The clean-exit scan takes the same window.
+
+**⚠️ THE HALF THREE EARLIER ATTEMPTS MISSED: the entering balance comes from the ANCHORED rows.** I kept
+moving the starting index while comparing against a balance that had been shifted to line up with
+history, so a company mid-history looked already-past and the window saturated at zero. Anchored rows
+carry the real figure where one was recorded and the shifted forecast where none was — correct in both
+cases, and gaps need no special-casing.
+
+**ALREADY OUT IS AN ANSWER.** If the window opens on a month already negative there is no
+solvent-to-insolvent crossing left, and the loop returned null — "never runs out", the most dangerous
+possible wrong answer. Now zero months at the window, flagged `alreadyOut`.
+
+**Future cash entries no longer anchor** — `anchorToActuals` takes a `maxMonth`. A figure typed against
+next quarter is a sketch, and letting it set `starts[m]` rewrote the projection to agree with a guess.
+
+**`solvency()` deliberately still reads the WHOLE curve.** A milestone in June is genuinely stranded if
+the company went under in March. The two questions have different windows and that is not an
+inconsistency: "when will I run out" is about the future; "did anything kill us getting here" is about
+the whole line.
+
+**The Cash on hand table was off by one, and one record holds two months.** `cashActuals[m].cash` is the
+opening balance of month m; its revenue/grants/additional are the flows of month **m−1**, typed on the
+1st. Reading every field as though it belonged to the key put January's revenue on the February row.
+Fixed by DISPLAY: a row draws cash from its own record and flows from the next. No migration.
+`prevCashOf` reached back to `m−1` and is replaced by `openingOf`/`closingOf`, so derived spend is
+computed across the right pair. Header renamed to "Cash at start of month".
+
+**⚠️ 12 VIEW TESTS ARE FAILING AND WERE ALREADY FAILING BEFORE THIS CHANGE** — fallout from adding
+commitments to the demo, which moved its runway 5.6 -> 3.9. Three files were corrected; the rest are
+scenario tests reporting "no change", which may be a real consequence of financing defaulting on rather
+than a stale assertion. **NOT DIAGNOSED.** This is the third time in this session that running a subset
+of the view suite has hidden breakage: a glob is not a test run.
+
+## RESOLVED (was: open defect — clean-exit date inside recorded history)
 
 **Not fixed. Two attempts, both reverted, and the reason is worth more than either.**
 

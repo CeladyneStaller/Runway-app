@@ -27,7 +27,7 @@ describe("first run", () => {
     fireEvent.click([...container.querySelectorAll("button")].find(b => /demo company/i.test(b.textContent)));
     expect(doc.employees.length).toBeGreaterThan(0);
     rerender(<RunwayApp doc={doc} setDoc={() => {}} />);
-    expect(container.textContent).toMatch(/5\.6 mo/);
+    expect(container.textContent).toMatch(/3\.9 mo/);
   });
   it("leaves the empty state as soon as there is cash", () => {
     const withCash = { ...emptyDoc(), cash: 100000 };

@@ -41,9 +41,16 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
 
   // cash-on-hand actuals vs model
   const [actualModal, setActualModal] = useState(null); // { editMonth } | null
-  const prevCashOf = (m) => { if (m <= 0) return cash; const prev = cashActuals[m - 1]; return prev ? prev.cash : (modelStarts[m - 1] ?? cash); };
+  // OPENING cash of month m. `cashActuals[m].cash` IS that figure — the previous version reached back
+  // to `m - 1`, which is the opening balance of the month before, so every derived spend was computed
+  // across the wrong pair of months.
+  const openingOf = (m) => { const a = cashActuals[m]; return a && Number.isFinite(a.cash) ? a.cash : cash; };
+  const closingOf = (m) => { const a = cashActuals[m + 1]; return a && Number.isFinite(a.cash) ? a.cash : openingOf(m); };
   const grantsReceived = (m, gmap) => grantPaymentsAt(projects, m).reduce((a, p) => a + (Number(gmap?.[p.id]) || 0), 0);
-  const spendOf = (m, r) => (r.revenue || 0) + grantsReceived(m, r.grants) + (r.additional || 0) + (prevCashOf(m) - r.cash);
+  // SPEND FOR MONTH m = what came in, less what the balance actually moved. Both ends now come from the
+  // right records: opening from m, closing from m+1, flows from m+1.
+  const spendOf = (m, f) => (f.revenue || 0) + grantsReceived(m, f.grants) + (f.additional || 0)
+                            + (openingOf(m) - closingOf(m));
   const actualRows = Object.keys(cashActuals).map(k => ({ m: +k, ...cashActuals[k] })).filter(r => Number.isFinite(r.cash)).sort((a, b) => a.m - b.m);
   const nextMonth = actualRows.length ? Math.min(HORIZON, actualRows[actualRows.length - 1].m + 1) : 0;
   const saveActual = (month, data) => setCashActuals(a => ({ ...a, [month]: data }));
@@ -377,17 +384,26 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
         </div>
         <div className="pgrid">
           <table className="tbl">
-            <thead><tr><th>Month</th><th style={{ textAlign: "right" }}>Actual cash</th><th style={{ textAlign: "right" }}>Revenue</th><th style={{ textAlign: "right" }}>Grants in</th><th style={{ textAlign: "right" }}>Spend</th><th style={{ textAlign: "right" }}>Δ vs model</th><th></th></tr></thead>
+            <thead><tr><th>Month</th><th style={{ textAlign: "right" }}>Cash at start of month</th><th style={{ textAlign: "right" }}>Revenue</th><th style={{ textAlign: "right" }}>Grants in</th><th style={{ textAlign: "right" }}>Spend</th><th style={{ textAlign: "right" }}>Δ vs model</th><th></th></tr></thead>
             <tbody>
               {actualRows.map((r) => {
-                const model = modelStarts[r.m] ?? 0, varc = r.cash - model, gr = grantsReceived(r.m, r.grants);
+                // ⚠️ A ROW DRAWS FROM TWO RECORDS, because one record holds two months.
+                //
+                //   cashActuals[m].cash                      -> the OPENING balance of month m
+                //   cashActuals[m].revenue/grants/additional -> the FLOWS OF MONTH m-1, typed on the 1st
+                //
+                // Reading every field as though it belonged to the key put January's revenue on the
+                // February row. The flows for month m live in the record for m+1.
+                const flows = cashActuals[r.m + 1] || {};
+                const model = modelStarts[r.m] ?? 0, varc = r.cash - model;
+                const gr = grantsReceived(r.m, flows.grants);
                 return (
                   <tr key={r.m} className="clickrow" onClick={() => setActualModal({ editMonth: r.m })} title="Click to edit">
                     <td className="num" style={{ fontSize: 12.5 }}>{monthLabel(START_Y, START_M, r.m)}</td>
                     <td className="amt num" style={{ fontWeight: 500 }}>{moneyFull(r.cash)}</td>
-                    <td className="amt num" style={{ color: "var(--muted)" }}>{moneyFull(r.revenue || 0)}</td>
+                    <td className="amt num" style={{ color: "var(--muted)" }}>{moneyFull(flows.revenue || 0)}</td>
                     <td className="amt num" style={{ color: gr > 0 ? "var(--signal-ink)" : "var(--muted-2)" }}>{gr > 0 ? moneyFull(gr) : "—"}</td>
-                    <td className="amt num" style={{ color: "var(--danger)" }}>{moneyFull(spendOf(r.m, r))}</td>
+                    <td className="amt num" style={{ color: "var(--danger)" }}>{moneyFull(spendOf(r.m, flows))}</td>
                     <td className="amt num" style={{ fontWeight: 500, color: varc >= 0 ? "var(--signal-ink)" : "var(--danger)" }}>{varc >= 0 ? "+" : "−"}{moneyFull(Math.abs(varc))}</td>
                     <td style={{ textAlign: "right" }}><button className="iconbtn" onClick={e => { e.stopPropagation(); delActual(r.m); }} aria-label="Remove">{I.trash}</button></td>
                   </tr>
@@ -421,7 +437,7 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
           initial={actualModal.editMonth != null ? cashActuals[actualModal.editMonth] : null}
           projects={projects}
           modelStarts={modelStarts}
-          prevCashOf={prevCashOf}
+          prevCashOf={openingOf}
           onClose={() => setActualModal(null)}
           onSave={(month, data) => { if (actualModal.editMonth != null && actualModal.editMonth !== month) delActual(actualModal.editMonth); saveActual(month, data); }}
         />

@@ -55,8 +55,19 @@ export function buildProjection(model, toggles) {
   return rows;
 }
 
-export function zeroInfo(rows, startY, startM) {
-  for (const r of rows) {
+export function zeroInfo(rows, startY, startM, from = 0) {
+  // `from` IS THE FIRST MONTH A FORWARD-LOOKING QUESTION CAN BE ASKED ABOUT. Defaulted to 0 so every
+  // existing caller is unaffected; the golden canary builds from seed data with no actuals, where the
+  // window is 0 anyway.
+  //
+  // ⚠️ ALREADY OUT IS AN ANSWER. If the window opens on a month that is ALREADY negative, there is no
+  // solvent-to-insolvent crossing left to find and the loop below would return null — "never runs out",
+  // which is the most dangerous possible wrong answer. Zero months, at the window.
+  const w = Math.max(0, Math.min(from, rows.length - 1));
+  if (rows[w] && rows[w].start < 0) {
+    return { t: w, date: new Date(startY, startM + w, 1), months: w, alreadyOut: true };
+  }
+  for (const r of rows.slice(w)) {
     if (r.end < 0 && r.start >= 0) {
       const f = r.start / (r.start - r.end);
       const dim = daysInMonth(startY, startM + r.m);
@@ -153,10 +164,14 @@ export function balanceAtDate(rows, startY, startM, y, m, day) {
 }
 
 // Replace the model with recorded actuals for elapsed months, then re-anchor the forecast to the latest actual.
-export function anchorToActuals(rows, cashActuals, enabled) {
+export function anchorToActuals(rows, cashActuals, enabled, maxMonth = null) {
   if (!enabled) return rows;
   const rec = Object.keys(cashActuals || {}).map(Number)
-    .filter(m => Number.isFinite(cashActuals[m]?.cash) && m >= 0 && m < rows.length)
+    // ⚠️ FUTURE MONTHS DO NOT ANCHOR. A figure typed against next quarter is a forecast somebody is
+    // sketching, not a fact — letting it set `starts[m]` would rewrite the projection to agree with a
+    // guess, and the offset it produced would shift every month after it.
+    .filter(m => Number.isFinite(cashActuals[m]?.cash) && m >= 0 && m < rows.length
+                 && m <= (maxMonth ?? Infinity))
     .sort((a, b) => a - b);
   if (!rec.length) return rows;
   const lastM = rec[rec.length - 1];
@@ -173,3 +188,22 @@ export function anchorToActuals(rows, cashActuals, enabled) {
 }
 
 export const lineSpan = (l) => l.end == null ? l.amount : l.amount * (l.end - l.start + 1);
+
+/** The first month a forward-looking question can be asked about.
+ *
+ *  TODAY'S MONTH, NOT THE LAST RECORDED ENTRY. A cash figure is the balance at the START of a month, so
+ *  an entry for the CURRENT month is a real anchor AND the month is still in progress — it is a month
+ *  you can still act on, and the last one you can. Anchoring to the last entry would close it early and
+ *  stop asking questions about the month somebody is living in.
+ *
+ *  ROUNDS DOWN: a month becomes canon on the first day of the NEXT month. A large purchase on the 28th
+ *  is already in the model as a forecast line, and closing the month before it lands would count the
+ *  forecast and then the actual.
+ *
+ *  A MODEL THAT STARTS IN THE FUTURE asks from its own month 0 — there is no history to skip.
+ */
+export function forecastFrom(doc, today = new Date()) {
+  if (!doc || !Number.isFinite(doc.startY) || !Number.isFinite(doc.startM)) return 0;
+  const m = (today.getFullYear() - doc.startY) * 12 + (today.getMonth() - doc.startM);
+  return Math.max(0, m);
+}
