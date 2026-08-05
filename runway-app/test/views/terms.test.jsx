@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import { SetPassword } from "../../src/views/SetPassword";
 import { TERMS_VERSION } from "../../src/state/plans";
+import { TermsGate } from "../../src/views/chrome/TermsGate";
 
 afterEach(cleanup);
 const draw = (over = {}) => render(
@@ -87,5 +88,64 @@ describe("what signup sends", () => {
     const { readFileSync } = await import("node:fs");
     const sql = readFileSync("supabase/migrations/046_terms_acceptance.sql", "utf8");
     expect(sql).toMatch(/p\.terms_version is null/);
+  });
+});
+
+describe("asking again when the terms change", () => {
+  const draw = (over = {}) => render(
+    <TermsGate version="2026-09-01" onAccept={async () => {}} onSignOut={() => {}} {...over} />);
+
+  it("shows NOTHING when nothing is required", () => {
+    // The common case. `my_profile()` returns null for `terms_required` when the recorded version
+    // matches, and the gate must stay entirely out of the way.
+    const v = render(<TermsGate version={null} onAccept={() => {}} onSignOut={() => {}} />);
+    expect(v.container.textContent).toBe("");
+  });
+
+  it("CANNOT BE DISMISSED BY CLICKING AWAY", () => {
+    // Every other modal closes on an overlay click. A gate that does would be optional in practice
+    // while looking mandatory, and the record it produces would be worth nothing.
+    const v = draw();
+    const overlay = v.container.querySelector(".modal-overlay");
+    expect(overlay.onclick).toBeFalsy();
+    fireEvent.click(overlay);
+    expect(v.container.textContent).toMatch(/terms have changed/i);
+  });
+
+  it("will not accept until the box is ticked", () => {
+    const onAccept = vi.fn();
+    const v = draw({ onAccept });
+    const go = [...v.container.querySelectorAll("button")].find(b => /agree and continue/i.test(b.textContent));
+    expect(go.disabled).toBe(true);
+    fireEvent.click(v.container.querySelector('input[type="checkbox"]'));
+    expect(go.disabled).toBe(false);
+  });
+
+  it("sends the version the server asked for, not one of its own", async () => {
+    const onAccept = vi.fn().mockResolvedValue();
+    const v = draw({ version: "2027-01-01", onAccept });
+    fireEvent.click(v.container.querySelector('input[type="checkbox"]'));
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /agree and continue/i.test(b.textContent)));
+    await waitFor(() => expect(onAccept).toHaveBeenCalledWith("2027-01-01"));
+  });
+
+  it("EXPLAINS A STALE TAB rather than looping on a failing button", () => {
+    // `accept_terms` rejects any version that is not current, so a browser left open across a change
+    // sends the old one. Reloading is the fix and is worth saying.
+    const onAccept = vi.fn().mockRejectedValue(new Error("terms_version_mismatch"));
+    const v = draw({ onAccept });
+    fireEvent.click(v.container.querySelector('input[type="checkbox"]'));
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /agree and continue/i.test(b.textContent)));
+    return waitFor(() => expect(v.container.textContent).toMatch(/Reload the page/i));
+  });
+
+  it("offers a way out that is not agreeing", () => {
+    // Somebody who does not want to agree should not feel trapped — that is a support request and a
+    // bad review rather than a decision.
+    const onSignOut = vi.fn();
+    const v = draw({ onSignOut });
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /sign out/i.test(b.textContent)));
+    expect(onSignOut).toHaveBeenCalled();
+    expect(v.container.textContent).toMatch(/can still be exported/i);
   });
 });

@@ -93,6 +93,11 @@ describe("creating an account", () => {
     expect(container.textContent).toMatch(new RegExp(`At least ${MIN_LENGTH} characters`));
   });
 
+  // AGREEING IS NOW PART OF BEING ABLE TO SUBMIT. These three tests broke when the terms checkbox was
+  // added and were not caught, because the run at the time was scoped to `s*.jsx` and `t*.jsx` and this
+  // file is `p`. A glob is not a test run.
+  const agree = (c) => fireEvent.click(c.querySelector('input[type="checkbox"]'));
+
   it("keeps the button disabled until every rule passes", async () => {
     const { container } = await start();
     fireEvent.change(container.querySelector("#signin-email"), { target: { value: "corey@acme.com" } });
@@ -104,6 +109,8 @@ describe("creating an account", () => {
     fireEvent.change(container.querySelector("#pw-new"), { target: { value: "winter-ledger-88" } });
     expect(submit().disabled).toBe(true);                       // confirm still empty
     fireEvent.change(container.querySelector("#pw-confirm"), { target: { value: "winter-ledger-88" } });
+    expect(submit().disabled).toBe(true);                       // terms not agreed
+    agree(container);
     expect(submit().disabled).toBe(false);
   });
 
@@ -114,6 +121,7 @@ describe("creating an account", () => {
     await waitFor(() => expect(container.querySelector("#pw-new")).toBeTruthy());
     fireEvent.change(container.querySelector("#pw-new"), { target: { value: "winter-ledger-88" } });
     fireEvent.change(container.querySelector("#pw-confirm"), { target: { value: "winter-ledger-88" } });
+    agree(container);
     fireEvent.click(btn(container, /Create account/));
     await waitFor(() => expect(client.calls.signUp).toHaveLength(1));
     expect(client.calls.signUp[0].email).toBe("corey@acme.com");
@@ -132,6 +140,7 @@ describe("creating an account", () => {
     await waitFor(() => expect(container.querySelector("#pw-new")).toBeTruthy());
     fireEvent.change(container.querySelector("#pw-new"), { target: { value: "winter-ledger-88" } });
     fireEvent.change(container.querySelector("#pw-confirm"), { target: { value: "winter-ledger-88" } });
+    agree(container);
     fireEvent.click(btn(container, /Create account/));
     await waitFor(() => expect(container.textContent).toMatch(/Confirm your email/));
     expect(container.textContent).toMatch(/turn off email confirmation/i);

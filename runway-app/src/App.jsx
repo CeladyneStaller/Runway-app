@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { planSummary } from "./state/plans";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
+import { TermsGate } from "./views/chrome/TermsGate";
 import { Commitments } from "./views/Commitments";
 import { atLeast } from "./engine/roles";
 import { commitmentPressure } from "./engine/commitments";
@@ -53,7 +54,7 @@ import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 import mark from './assets/waterline-mark.svg';
 
-function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
+function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
                     companyName = null, tabPrefs, onSetup = null,
                     membership = null, companyHidden = [],
                     startView = null, onBackToPortfolio = null }) {
@@ -391,6 +392,10 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
           </span>
         </div>
       )}
+      {/* THE GATE LIVES IN THE SHELL, not in DocumentHost. DocumentHost has six conditional returns —
+          invite, loading, load failure, setup, demo, main — and a gate rendered from one of them would
+          be absent from the other five. Everything that is actually usable comes through here. */}
+      <TermsGate version={termsRequired} onAccept={onAcceptTerms} onSignOut={onSignOutTerms} />
       <TrialBar companyId={getAuthAdapter()?.activeCompany?.()} onOpenSettings={onOpenSettings} />
       <UnpaidBar onOpenAccount={onOpenAccount} />
       {onSetup && isEmpty && <SetupBar onSetup={onSetup} onImport={doImport} />}
@@ -942,6 +947,7 @@ const isDefaultName = (n) => !n || !String(n).trim() || String(n).trim() === "Un
 function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   // An invitation is answered BEFORE the model loads. Somebody arriving on a link is not here to look
   // at their own numbers, and dropping them into a dashboard with a banner would bury the decision.
+  const [termsRequired, setTermsRequired] = useState(null);
   const [inviteToken, clearInvite] = useInviteToken();
   // WHO AM I HERE, and what does this company use. One call each, after the document is open, because
   // neither changes while somebody is working and both are needed before the nav can be honest.
@@ -1015,6 +1021,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
         // advised — so `companies > 0` was true for anybody with a single company of their own, and a
         // brand-new user landed on a client portfolio containing themselves. `allowed` is the advisor
         // flag or a paid advisor plan, which is the thing being asked about.
+        // WHAT THE SERVER SAYS IS REQUIRED, not a comparison made here. A client-side check would need
+        // the current version in two places and would disagree with the database the moment one of them
+        // shipped without the other.
+        setTermsRequired(prof?.terms_required || null);
+
         const isAdvisor = (plan?.allowed ?? 0) > 0;
         const where = landingFor({ companies: list || [], isAdvisor, preferred: prof?.landing || null });
         if (!alive) return;
@@ -1344,7 +1355,10 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   );
 
   return <>
-    <RunwayApp doc={doc} setDoc={setDoc} demo={demo} onLeaveDemo={onLeaveDemo} onKeepDemo={onKeepDemo}
+    <RunwayApp doc={doc} setDoc={setDoc} demo={demo}
+      termsRequired={termsRequired}
+      onAcceptTerms={async (v) => { await getAccountApi()?.acceptTerms?.(v); setTermsRequired(null); }}
+      onSignOutTerms={() => getAuthAdapter()?.signOut?.()} onLeaveDemo={onLeaveDemo} onKeepDemo={onKeepDemo}
                companyName={companyName}
                membership={membership} companyHidden={companyHidden}
                onOpenSettings={(scope, page) => setShowAccount({ scope, page })}

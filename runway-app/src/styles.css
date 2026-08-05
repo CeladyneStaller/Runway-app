@@ -1257,3 +1257,96 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .agree a{color:var(--signal-ink)}
 @media(max-width:900px){ .agree input{width:20px;height:20px} }
 .setup-trial{border-left:2px solid var(--signal-2);padding-left:10px;margin-top:10px}
+
+/* The re-acceptance gate. No pointer escape: the overlay has no click handler, so unlike every other
+   modal this one cannot be dismissed by clicking away. */
+.terms-gate .modal-f{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.terms-gate .meta{color:var(--muted-2);font-size:11.5px}
+
+/* ================================================================= mobile audit ==
+   Found by auditing every rule against a 360px viewport rather than by eye. Each block below is a
+   measured overflow or an element added since the last mobile pass that never got one. */
+@media(max-width:640px){
+
+  /* FIVE FIXED WIDTHS THAT OVERFLOW A PHONE. A 360px screen has about 300px of usable width after the
+     shell padding, so a 220px input beside anything else pushes the row sideways and takes the whole
+     page with it — horizontal scroll on a form is the defect people report as "the page is broken". */
+  .members-form .inp{min-width:0;width:100%}
+  .members-form{flex-direction:column;align-items:stretch}
+  .members-form .addbtn,.members-form .linkbtn{width:100%}
+  .cf-actions .addbtn{min-width:0;width:100%}
+  .empty-cash .inp{width:100%}
+  .jfield{min-width:0}
+  .ms-name{width:100%}
+
+  /* THE TRIAL BAR wraps to two lines on a phone; its button was being squeezed to a few characters. */
+  .trialbar{flex-direction:column;align-items:flex-start;gap:8px}
+  .trialbar .linkbtn{min-height:44px;padding-left:0}
+
+  /* SUB-PILLS scroll rather than wrapping into three ragged rows. */
+  .subs{flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  .subs::-webkit-scrollbar{display:none}
+  .subpill{white-space:nowrap;scroll-snap-align:start;min-height:36px}
+
+  /* STAT CARDS: four across is unreadable at this width; two is the most that stays legible. */
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stat .big{font-size:18px}
+
+  /* THE COMMITMENTS EMPTY STATE was sized for a desk. */
+  .cmt-empty{padding:20px 4px}
+  .cmt-empty p{font-size:13px}
+
+  /* THE AGREEMENT ROW must not let a long link run off the edge, and the box needs a real target. */
+  .agree{align-items:flex-start}
+  .agree span{min-width:0;overflow-wrap:anywhere}
+
+  /* THE TERMS GATE's footer put "Sign out" and "Agree and continue" on one line with
+     space-between — at this width the second button clipped. Stack, with the action on top so it is
+     under the thumb rather than behind it. */
+  .terms-gate .modal-f{flex-direction:column-reverse;align-items:stretch;gap:8px}
+  .terms-gate .modal-f .addbtn,.terms-gate .modal-f .linkbtn{width:100%;min-height:44px}
+
+  /* THE NCE CONTROL sat inline with two month selectors and pushed the period row wide. */
+  .ncebox{width:100%;justify-content:space-between}
+  .ncebox .sel{min-height:44px}
+}
+
+/* ---- iOS zooms the whole page when a focused input is under 16px ----
+   `.inp` and `.sel` are 12px, which is right on a desktop and is why tapping any field on an iPhone
+   jerks the page to 130% and leaves it there. 16px is the threshold, not a preference — Safari applies
+   it regardless of viewport settings, and the fix is the font size rather than `user-scalable=no`,
+   which breaks pinch-zoom for everyone who needs it.
+   Paired with a 44px target, since a field big enough to type in is a field big enough to hit. */
+@media(max-width:900px){
+  .inp,.sel,input[type="text"],input[type="number"],input[type="email"],input[type="password"],
+  textarea,select{font-size:16px}
+  .inp,.sel{min-height:44px;padding:8px 10px}
+  .chip{min-height:26px;display:inline-flex;align-items:center}
+}
+
+/* ---- a net under the whole page ----
+   Every measured overflow above is fixed, but ONE missed wide element scrolls the entire page sideways
+   and that is the defect people describe as "the site is broken on my phone" — the cost of missing one
+   is far higher than the cost of the guard.
+
+   `clip`, NOT `hidden`: `overflow:hidden` makes the element a scroll container, which silently kills
+   `position:sticky` on descendants — and `.panel-h` is sticky inside scrolling tables at this exact
+   breakpoint. `clip` truncates without creating that container. */
+@media(max-width:900px){
+  html,body{overflow-x:clip}
+  .rw{max-width:100vw}
+
+  /* SVG charts scale with their box; without this a wide viewBox forces its natural width. */
+  .ch-svg,.panel svg,.plot svg{max-width:100%;height:auto}
+
+  /* Long unbroken strings — email addresses, company names, QuickBooks refs — are a common source of
+     a single overflowing row. One rule covered the agreement text; these are the other places a user
+     supplies the string. */
+  .tbl td,.acct-row,.meta,.chip,.src,.fine{overflow-wrap:anywhere}
+}
+
+/* Two rules are MORE SPECIFIC than the 16px override above and would win — so the iOS zoom would have
+   survived the fix in exactly the two places a phone user meets a select. Specificity, not order. */
+@media(max-width:900px){
+  .members-link .inp,.ncebox .sel{font-size:16px}
+}

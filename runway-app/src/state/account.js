@@ -378,7 +378,13 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
     /** `{ password_set_at, last_company_id }` — creates the row on first read. */
     async profile() {
       const out = await rpc("my_profile");
-      return unwrapOne(out) || { password_set_at: null, last_company_id: null };
+      // The fallback names every field a caller reads. Returning a short object here meant
+      // `terms_required` was `undefined` rather than null on any path where the RPC came back empty —
+      // and `undefined` is falsy, so the gate would silently never appear.
+      return unwrapOne(out) || {
+        password_set_at: null, last_company_id: null,
+        terms_version: null, terms_accepted_at: null, terms_required: null,
+      };
     },
 
     /** Records that a password now exists. The password itself never comes near this call. */

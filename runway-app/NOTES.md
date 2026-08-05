@@ -1429,6 +1429,43 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Mobile audit — measured, not eyeballed
+
+Audited by parsing every rule in `styles.css` and testing it against a 360px viewport, because the
+previous pass was done by eye and these are precisely the defects an eye skips.
+
+**FIVE FIXED WIDTHS THAT OVERFLOWED A PHONE**, all real: `.members-form .inp` at min-width 220px (used
+by the new Commitments add form), `.cf-actions .addbtn` 180, `.empty-cash .inp` 180, `.ms-name` 190,
+`.jfield` 150. A 360px screen has ~300px usable, so any of these pushes the row sideways and takes the
+page with it.
+
+**THE iOS INPUT-ZOOM DEFECT.** `.inp` is 12.5px and `.sel` is 12px. Safari zooms the whole page to ~130%
+when a focused input is under 16px, regardless of viewport settings, and leaves it there — so tapping
+any field on an iPhone jerked the layout. Fixed with a font size rather than `user-scalable=no`, which
+breaks pinch-zoom for people who need it.
+
+**AND TWO RULES WERE MORE SPECIFIC THAN THE FIX.** `.members-link .inp` and `.ncebox .sel` both set 12px
+and would have won on specificity, so the zoom would have survived in exactly the two places a phone
+user meets a select. Specificity, not source order.
+
+**No page-level overflow guard existed**, so one missed wide element scrolled the entire page. Added —
+using `overflow-x:clip`, NOT `hidden`: `hidden` makes the element a scroll container and silently kills
+`position:sticky` on descendants, and `.panel-h` is sticky inside scrolling tables at this exact
+breakpoint.
+
+**Eight components added this session had NO mobile rule at all**: `.trialbar`, `.subpill`, `.cmt-empty`,
+`.agree`, `.terms-gate`, `.ncebox`, `.stat`, `.members-form`. The terms gate's footer was the worst —
+two buttons with `space-between` clipped the primary action at this width.
+
+**⚠️ THE AUDIT ITSELF HAD A BUG WORTH REMEMBERING.** The first pass flagged twenty "fixed widths"
+because `max-width: 520px` contains the substring `width: 520px`. Anchoring the property to a start
+boundary cut twenty false positives down to five real ones. A detector that cries wolf gets ignored,
+which is worse than not having one.
+
+**THREE SIGNUP TESTS HAD BEEN FAILING SINCE THE TERMS TURN** and were not caught, because the run at
+the time was scoped to `s*.jsx` and `t*.jsx` and the file is `password.test.jsx`. **A glob is not a test
+run.** Fixed by ticking the box in the tests that submit.
+
 ## Terms acceptance — migration 046
 
 **A CHECKBOX THAT WRITES NOTHING IS WORTH NOTHING.** If anybody ever asks whether a given user agreed to
@@ -1462,6 +1499,26 @@ imply the reset was itself a new agreement.
 **The wizard now states the trial at step 0** — creating a company is what starts the clock, and under
 the one-trial rule that is a decision rather than a free action. Saying it on a billing page they have
 to go and find is saying it too late.
+
+**THE RE-ACCEPTANCE GATE LIVES IN THE SHELL, not in `DocumentHost`.** DocumentHost has six conditional
+returns — invite, loading, load failure, setup, demo, main — and a gate rendered from one of them would
+be absent from the other five. `RunwayApp` is what everything usable comes through, so it takes
+`termsRequired` as a prop.
+
+Two placement mistakes on the way there, both the same shape as the Commitments-section bug: anchoring
+on a string that exists in a DIFFERENT COMPONENT (`TrialBar` renders in RunwayApp; `termsRequired` lives
+in DocumentHost), and then inserting after a `return () => { alive = false; }` inside an effect rather
+than the component's JSX return, which was a syntax error rather than a silent misplacement. **When
+moving JSX between components, find the component first and the marker within it.**
+
+**The gate cannot be dismissed by clicking away** — the overlay deliberately has no click handler,
+unlike every other modal. A gate that closes on an outside click is optional in practice while looking
+mandatory, and the record it produces is then worth nothing. The two ways out are reading the terms and
+signing out, and it says plainly that the model is unaffected and still exportable.
+
+**`profile()`'s fallback now names every field a caller reads.** It returned a two-key object, so
+`terms_required` was `undefined` rather than null on any path where the RPC came back empty — and
+`undefined` is falsy, so the gate would have silently never appeared.
 
 ## App icon — the duck's head
 

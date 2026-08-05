@@ -119,7 +119,16 @@ td b{color:var(--ink);font-weight:500}
   section{padding:60px 0}
   .phead{padding:52px 0 34px}
   .foot__cols{grid-template-columns:1fr 1fr;gap:30px}
-  .nav__links{display:none}
+  /* NOT `display:none`. Hiding the nav with nothing in its place left a phone visitor with a logo, one
+     button, and no route to Pricing or Docs except the footer. A scrolling row keeps every destination
+     one tap away and needs no JavaScript and no hamburger. */
+  .nav__in{gap:16px}
+  .nav__links{display:flex;gap:16px;margin:0;overflow-x:auto;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;flex:1 1 auto;min-width:0}
+  .nav__links::-webkit-scrollbar{display:none}
+  .nav__links a{white-space:nowrap;font-size:.82rem;padding:6px 0}
+  .nav .btn--fill{padding:11px 15px;font-size:.8rem;white-space:nowrap;flex:none}
+  .nav__logo span{display:none}          /* the mark carries it; the word costs a destination */
 }
 @media(max-width:560px){ .foot__cols{grid-template-columns:1fr} }
 @media(prefers-reduced-motion:reduce){ html{scroll-behavior:auto} *{transition:none!important} }
@@ -156,3 +165,47 @@ td b{color:var(--ink);font-weight:500}
    line." is not. */
 .nb{display:inline-block}
 @media(max-width:640px){ h1 .nb{display:inline} }
+
+/* ================================================================= mobile audit ==
+   Same treatment as the app: every rule tested against a 360px viewport rather than read. */
+@media(max-width:720px){
+  /* THE THREE-STEP BLOCK never collapsed. Its media query came across from the mockup at 820px but the
+     block itself is used at every width, and three columns of prose at 360px is about nine characters
+     a line. */
+  .stack{grid-template-columns:1fr}
+  .stack div{border-right:1px solid var(--hair);border-bottom:none}
+  .stack div:last-child{border-bottom:1px solid var(--hair)}
+}
+
+@media(max-width:560px){
+  /* THE PRACTICE-VIEW ROWS are an inline three-column grid with no responsive handling — the client
+     name, a bar and a figure. At this width the name truncates to a few characters, which makes the
+     one screen the advisors page is selling look broken. Two columns, bar underneath. */
+  .fleet-row,.rows > div{grid-template-columns:minmax(0,1fr) auto !important;
+    grid-template-areas:"name fig" "bar bar";gap:6px 12px}
+  .rows > div > span:first-child{grid-area:name}
+  .rows > div > .fig{grid-area:fig}
+  .rows > div > .tr{grid-area:bar}
+}
+
+@media(max-width:940px){
+  /* A NET UNDER THE PAGE. Every measured overflow is fixed; one missed element would still scroll the
+     whole site sideways. `clip` rather than `hidden` so `position:sticky` on the nav survives. */
+  html,body{overflow-x:clip}
+  /* Long unbroken strings — the email address in the footer and on four other pages, and file names in
+     the docs — are the usual single source of a wide row. */
+  td,.foot a,.lead,.item p,.card p{overflow-wrap:anywhere}
+  /* Tables were checked and none exceeds three columns, so they need no scroll treatment. What they
+     do need is for the first column to stop forcing a wide row. */
+  th,td{padding:9px 8px}
+  td:first-child{max-width:46vw}
+}
+
+@media(max-width:940px){
+  /* LINK TARGETS. `.btn` is already 44px; plain links in the nav and footer were ~26-28px, which is
+     under the threshold and they sit in tight vertical lists where a mis-tap opens the wrong page. */
+  .nav__links a{min-height:44px;display:inline-flex;align-items:center}
+  .foot li{padding:0}
+  .foot a{min-height:44px;display:inline-flex;align-items:center}
+  .item a{min-height:44px;display:inline-flex;align-items:center;margin-top:8px}
+}
