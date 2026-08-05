@@ -509,3 +509,54 @@ describe("uncovered is two distinct failures", () => {
     expect(p.uncovered).toBe(p.unpayable + p.unmatchable);
   });
 });
+
+describe("the three flavours", () => {
+  const base = demoDoc();
+  const rows = (d) => rowsOf(d);
+  const runway = (d) => zeroInfo(rows(d), d.startY, d.startM)?.months;
+
+  it("RECURRING creates a real recurring cost line and stops when the model does", () => {
+    // That is the whole reason the flavour exists: it needs no closure handling, because it is not
+    // there once you close.
+    const d = addManual(base, { label: "Lease", flavor: "recurring", signedMonth: 0, amount: 5000 });
+    expect(d.lines.length).toBe(base.lines.length + 1);
+    expect(d.lines[d.lines.length - 1].cadence).toBe("recurring");
+    expect(d.commitments[0].kind).toBe("planned");     // never a closure debt
+    expect(runway(d)).toBeLessThan(runway(base));
+  });
+
+  it("INDEXED creates NO line — the amount is not known until the index is", () => {
+    const d = addManual(base, { label: "Royalty", flavor: "indexed", signedMonth: 0,
+                                index: { of: "revenue", pct: 0.05 } });
+    expect(d.lines.length).toBe(base.lines.length);
+    expect(d.commitments[0].amount).toBe(0);
+    expect(runway(d)).toBeLessThan(runway(base));      // but it still costs money
+  });
+
+  it("indexes against revenue, project spend and profit", () => {
+    const at = (of, pct, ref) => runway(addManual(base,
+      { label: "x", flavor: "indexed", signedMonth: 0, index: { of, pct, ref } }));
+    expect(at("revenue", 0.05)).toBeLessThan(runway(base));
+    expect(at("profit", 0.20)).toBeLessThan(runway(base));
+    expect(at("project", 0.10, (base.projects || [])[0]?.id)).toBeLessThan(runway(base));
+  });
+
+  it("a zero rate is a clean no-op", () => {
+    const d = addManual(base, { label: "x", flavor: "indexed", signedMonth: 0,
+                                index: { of: "revenue", pct: 0 } });
+    expect(runway(d)).toBeCloseTo(runway(base), 2);
+  });
+
+  it("PROFIT IS MEASURED BEFORE THE OBLIGATION, which is the only definition that terminates", () => {
+    // A share of profit changes the profit it is a share of. Pre-obligation is both the standard
+    // commercial reading and the only one that does not recurse.
+    const one = addManual(base, { label: "a", flavor: "indexed", signedMonth: 0,
+                                  index: { of: "profit", pct: 0.1 } });
+    const two = addManual(one, { label: "b", flavor: "indexed", signedMonth: 0,
+                                 index: { of: "profit", pct: 0.1 } });
+    // two 10% obligations cost twice one, rather than compounding
+    const d1 = runway(base) - runway(one), d2 = runway(base) - runway(two);
+    expect(d2).toBeGreaterThan(d1);
+    expect(d2).toBeLessThanOrEqual(d1 * 2 + 0.05);
+  });
+});

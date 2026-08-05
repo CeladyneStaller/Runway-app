@@ -13,6 +13,7 @@ import { compileProject, resolveProjectRates, syncFulfilStage } from "./projects
 import { compilePO } from "./sales.js";
 import { compileInstrument } from "./capital.js";
 import { compileSaas, saasVariances } from "./saas.js";
+import { indexedLines } from "./commitments.js";
 import { tagRevenue } from "./projection.js";
 import { applyRevenueActuals } from "./revenue.js";
 import { codedRevenue } from "./coding.js";
@@ -77,7 +78,11 @@ export function buildModelParts(doc, horizon = HORIZON) {
   const poProject = Object.fromEntries(pos.filter(p => p.projectId).map(p => [p.id, p.projectId]));
 
   const rawLines = tagRevenue([...lines, ...employeeLines, ...projectLines, ...salesLines, ...roundLines, ...saasLines, ...baselineLines]);
-  const { lineItems, variances } = applyRevenueActuals(rawLines, revActuals, toggles, { poProject });
+  const { lineItems: baseItems, variances } = applyRevenueActuals(rawLines, revActuals, toggles, { poProject });
+  // INDEXED COMMITMENTS LAST, and measured against everything else. They scale with revenue, project
+  // spend or profit, so they cannot be built alongside the lines they measure — and they must not
+  // measure against themselves, which is why they are appended rather than folded in.
+  const lineItems = [...baseItems, ...indexedLines(doc, baseItems, horizon)];
   // Subscription variances join the project ones in a SINGLE list, so the "recorded revenue differs
   // from projection" panel stays one place to look rather than two. They carry `label` because they
   // have no project to resolve a name from.

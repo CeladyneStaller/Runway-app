@@ -7,7 +7,7 @@ import React, { useMemo, useState } from "react";
 import { dateShort } from "../engine/time";
 import { money } from "../engine/money";
 
-import { commitmentPressure, promotable, promote, addManual, removeCommitment, markPaid, setKind }
+import { INDEX_OF, commitmentPressure, promotable, promote, addManual, removeCommitment, markPaid, setKind }
   from "../engine/commitments";
 import { payablesToCommitments } from "../engine/payables";
 
@@ -20,7 +20,9 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
   const [adding, setAdding] = useState(false);
   const [imported, setImported] = useState(null);
   const [pulling, setPulling] = useState(false);
-  const [draft, setDraft] = useState({ label: "", signedMonth: 0, payMonth: 1, amount: 0 });
+  const [draft, setDraft] = useState({
+    label: "", signedMonth: 0, payMonth: 1, amount: 0, flavor: "payment",
+  });
 
   const p = useMemo(() => commitmentPressure(doc, rows), [doc, rows]);
   const ready = useMemo(() => promotable(doc), [doc]);
@@ -236,18 +238,72 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
             <div><h3>Add a commitment</h3>
               <p>Two dates and an amount. The consequence updates as you type.</p></div>
           </div>
+          {/* THE FLAVOUR FIRST, because it decides what the rest of the form asks for. The three differ
+              at exactly one moment — closure — and that difference is what the fields below express. */}
+          <div className="flavour-pick">
+            {[["payment", "Payment", "A debt due on a date, or when you close"],
+              ["recurring", "Recurring", "Overhead that stops when the business does"],
+              ["indexed", "Indexed", "Scales with revenue, project spend or profit"]].map(([k, label, why]) => (
+              <button key={k} className={"flavour" + (draft.flavor === k ? " on" : "")}
+                      onClick={() => setDraft(d => ({ ...d, flavor: k }))}>
+                <b>{label}</b><span>{why}</span>
+              </button>
+            ))}
+          </div>
+
           <div className="members-form">
             <input className="inp" placeholder="What" value={draft.label}
                    onChange={e => setDraft(d => ({ ...d, label: e.target.value }))} />
             <input className="inp" type="number" placeholder="Signed (month)" value={draft.signedMonth}
                    onChange={e => setDraft(d => ({ ...d, signedMonth: Number(e.target.value) || 0 }))} />
-            <input className="inp" type="number" placeholder="Payable (month)" value={draft.payMonth}
-                   onChange={e => setDraft(d => ({ ...d, payMonth: Number(e.target.value) || 0 }))} />
-            <input className="inp" type="number" placeholder="Amount" value={draft.amount || ""}
-                   onChange={e => setDraft(d => ({ ...d, amount: Number(e.target.value) || 0 }))} />
-            <button className="addbtn" disabled={!draft.label || !(draft.amount > 0)}
-                    onClick={() => { setDoc(d => addManual(d, draft)); setAdding(false);
-                                     setDraft({ label: "", signedMonth: 0, payMonth: 1, amount: 0 }); }}>
+
+            {draft.flavor === "indexed" ? (
+              <>
+                <select className="sel" value={draft.indexOf || "revenue"}
+                        onChange={e => setDraft(d => ({ ...d, indexOf: e.target.value }))}>
+                  {INDEX_OF.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+                {draft.indexOf === "project" && (
+                  <select className="sel" value={draft.indexRef || ""}
+                          onChange={e => setDraft(d => ({ ...d, indexRef: e.target.value }))}>
+                    <option value="">Every project</option>
+                    {(doc?.projects || []).map(pr => (
+                      <option key={pr.id} value={pr.id}>{pr.name || "Project"}</option>
+                    ))}
+                  </select>
+                )}
+                <input className="inp" type="number" step="0.1" placeholder="Rate %"
+                       value={draft.indexPct ?? ""}
+                       onChange={e => setDraft(d => ({ ...d, indexPct: Number(e.target.value) || 0 }))} />
+              </>
+            ) : draft.flavor === "recurring" ? (
+              <input className="inp" type="number" placeholder="Per month" value={draft.amount || ""}
+                     onChange={e => setDraft(d => ({ ...d, amount: Number(e.target.value) || 0 }))} />
+            ) : (
+              <>
+                {/* A PAYMENT CAN HAVE NO DUE DATE. A lease break or a dissolution cost is real,
+                    quantified, and has no month until you pick one — leaving it blank is the point,
+                    not an omission. */}
+                <input className="inp" type="number" placeholder="Payable (month)"
+                       value={draft.payMonth ?? ""}
+                       onChange={e => setDraft(d => ({ ...d,
+                         payMonth: e.target.value === "" ? null : (Number(e.target.value) || 0) }))} />
+                <input className="inp" type="number" placeholder="Amount" value={draft.amount || ""}
+                       onChange={e => setDraft(d => ({ ...d, amount: Number(e.target.value) || 0 }))} />
+              </>
+            )}
+            <button className="addbtn"
+                    disabled={!draft.label ||
+                      (draft.flavor === "indexed" ? !(draft.indexPct > 0) : !(draft.amount > 0))}
+                    onClick={() => {
+                      setDoc(d => addManual(d, draft.flavor === "indexed"
+                        ? { ...draft, amount: 0, payMonth: null,
+                            index: { of: draft.indexOf || "revenue", ref: draft.indexRef || null,
+                                     pct: (draft.indexPct || 0) / 100 } }
+                        : draft));
+                      setAdding(false);
+                      setDraft({ label: "", signedMonth: 0, payMonth: 1, amount: 0, flavor: "payment" });
+                    }}>
               Add
             </button>
             <button className="linkbtn" onClick={() => setAdding(false)}>Cancel</button>

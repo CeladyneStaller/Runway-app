@@ -1492,6 +1492,27 @@ A closure figure computed from an assumption is fine provided the assumption is 
 argued with; hidden in settings it is just a number somebody has to trust. Reads: "Clean exit assumes
 [4] weeks' notice for everyone, and that every debt below is settled."
 
+**THE THREE FLAVOURS ARE NOW REACHABLE.** A picker on the add form, and it comes FIRST because it
+decides what the rest of the form asks for.
+
+- **recurring** — creates a real recurring cost line and is `kind: "planned"` by construction, so it is
+  never a closure debt. That is the whole reason the flavour exists: it needs no closure handling
+  because it is not there once you close.
+- **indexed** — creates NO line. `indexedLines()` builds them from the model at projection time, because
+  the amount is not known until the thing it indexes is. Indexes against revenue, project spend (with an
+  optional single project) or profit.
+- **payment** — a due month, or BLANK for a closure-triggered cost, plus the debt/planned badge.
+
+Measured: recurring $5k/mo takes runway 5.56 -> 5.26 and adds a line; indexed 5% of revenue takes it to
+3.99 and adds none; a $50k closure fee leaves runway at 5.56 and drops the clean-exit date to 3.96.
+
+**⚠️ PROFIT IS MEASURED PRE-OBLIGATION.** A share of profit changes the profit it is a share of, which
+is circular. Pre-obligation is both the standard commercial reading and the only definition that
+terminates — a test asserts two 10% obligations cost about twice one rather than compounding.
+
+**`indexedLines` runs AFTER the other lines and is APPENDED, not folded in**, so an indexed commitment
+cannot measure against itself.
+
 ## Cost share was double-counted in covered runway — corrected
 
 **COST SHARE IS NOT AN EXTRA COST. IT IS A SPLIT OF ONE.** `computeGrant` computes `total = direct +

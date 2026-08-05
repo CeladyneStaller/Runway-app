@@ -1362,3 +1362,15 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 @media(max-width:900px){ .badge{min-height:32px;display:inline-flex;align-items:center;font-size:11px} }
 .cmt-assume{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 10px}
 .inp-wk{width:56px;text-align:center}
+
+/* ---- flavour picker ---- */
+.flavour-pick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 14px}
+.flavour{text-align:left;background:var(--paper);border:1px solid var(--line);border-radius:9px;
+  padding:10px 12px;cursor:pointer;font-family:var(--fb)}
+.flavour.on{background:var(--card);border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal)}
+.flavour b{display:block;font-size:13px;margin-bottom:3px;color:var(--ink)}
+.flavour span{display:block;font-size:11px;color:var(--muted);line-height:1.45}
+@media(max-width:900px){
+  .flavour-pick{grid-template-columns:1fr}
+  .flavour{min-height:44px}
+}

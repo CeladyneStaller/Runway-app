@@ -523,8 +523,41 @@ export function addManual(doc, draft = {}) {
     kind = "debt",
   } = draft;
 
+  const { index = null } = draft;
   const id = `cm_${Math.random().toString(36).slice(2, 9)}`;
   const lineId = `l_${id}`;
+
+  // ── INDEXED: no line here, because `indexedLines` builds them from the model at projection time.
+  // Its amount is not known until the thing it indexes is, so a fixed line would be a guess.
+  if (flavor === "indexed") {
+    return { ...doc, commitments: [...(doc?.commitments || []), {
+      id, label: label || "Indexed commitment", signedMonth: clean(signedMonth), payMonth: null,
+      amount: 0, index, projectId, source, extRef, vendor, memo,
+      flavor: "indexed", kind: "debt",     // the ACCRUED part survives closure
+      lineId: null, status: "committed", paidRef: null,
+    }] };
+  }
+
+  // ── RECURRING: a real recurring cost line, which is what it is. It STOPS when the model stops, so
+  // it needs no closure handling at all — that is the whole reason the flavour exists.
+  if (flavor === "recurring") {
+    const line = {
+      id: lineId, label: label || "Recurring commitment", cadence: "recurring", kind: "cost",
+      amount: clean(amount), start: clean(signedMonth), confidence: "committed",
+      projectId: projectId || undefined,
+    };
+    return {
+      ...doc,
+      lines: [...(doc?.lines || []), line],
+      commitments: [...(doc?.commitments || []), {
+        id, label: label || "Recurring commitment", signedMonth: clean(signedMonth), payMonth: null,
+        amount: clean(amount), projectId, source, extRef, vendor, memo,
+        flavor: "recurring", kind: "planned",   // stops on closure, so it is never a closure debt
+        lineId, status: "committed", paidRef: null,
+      }],
+    };
+  }
+
   // A PAYMENT WITH NO DUE DATE CREATES NO LINE. It is triggered by closing, so it never appears in a
   // projection of a company that is still trading — putting it in the plan would spend money on a date
   // nobody has chosen.
@@ -584,3 +617,62 @@ export function setKind(doc, id, kind) {
         ? { ...c, kind } : c)),
   };
 }
+
+// ── indexed commitments ──────────────────────────────────────────────────────────────────────────
+
+/** Turn indexed commitments into cost lines.
+ *
+ *  An indexed obligation scales with something the model already computes — a royalty on revenue, a
+ *  match on project spend, a share of profit. It cannot be a fixed amount because the amount is not
+ *  known until the thing it indexes is.
+ *
+ *  RUNS AFTER THE OTHER LINES ARE BUILT AND BEFORE THE BALANCE WALK, because it needs the lines to
+ *  measure against and must not measure against itself.
+ *
+ *  ⚠️ PROFIT IS PRE-ROYALTY. A share of profit changes the profit it is a share of, which is circular.
+ *  Measuring against profit BEFORE this obligation is both the standard commercial definition and the
+ *  only one that terminates — and it is stated in the interface, because a founder reading "5% of
+ *  profit" is entitled to know which profit.
+ */
+export function indexedLines(doc, lineItems, horizon = 60) {
+  const out = [];
+  for (const c of doc?.commitments || []) {
+    if (!c || c.flavor !== "indexed" || c.status === "paid") continue;
+    const pct = clean(c.index?.pct);
+    if (pct <= 0) continue;
+    const of = c.index?.of || "revenue";
+    const ref = c.index?.ref || null;
+
+    for (let m = 0; m < horizon; m++) {
+      let basis = 0;
+      for (const li of lineItems || []) {
+        if (!li || li.start > m || (li.end != null && li.end < m)) continue;
+        if (li.cadence === "onetime" && li.start !== m) continue;
+        const amt = clean(li.amount);
+        if (of === "revenue" && li.kind === "revenue") {
+          if (!ref || li.projectId === ref) basis += amt;
+        } else if (of === "project" && li.kind === "cost") {
+          if (ref && li.projectId === ref) basis += amt;
+        } else if (of === "profit") {
+          basis += li.kind === "revenue" ? amt : -amt;
+        }
+      }
+      const amount = Math.max(0, basis) * pct;
+      if (amount <= 0.005) continue;
+      out.push({
+        id: `ixl_${c.id}_${m}`, label: c.label || "Indexed commitment",
+        cadence: "onetime", kind: "cost", amount, start: m,
+        confidence: "committed", projectId: c.projectId || undefined,
+        indexedFrom: c.id,
+      });
+    }
+  }
+  return out;
+}
+
+/** Index targets offered in the interface, and what each measures. */
+export const INDEX_OF = [
+  ["revenue", "Revenue", "A royalty or revenue share. Paid on money in, whether or not you profit."],
+  ["project", "Project spend", "Cost share and matching obligations. Scales with what a project spends."],
+  ["profit", "Profit", "A share of what is left. Measured BEFORE this obligation, which is both standard and the only definition that terminates."],
+];
