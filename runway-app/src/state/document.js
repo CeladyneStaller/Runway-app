@@ -4,7 +4,7 @@
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 const settings = () => ({
   fringePct: 0.30,
@@ -85,6 +85,27 @@ export const demoDoc = () => ({
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.
 const MIGRATIONS = {
+  // v5 -> v6: commitments gain a FLAVOUR and, for payments, a KIND.
+  //
+  //   recurring — overhead that stops the moment the business does (a lease's rent)
+  //   indexed   — scales with something and stops when that stops (cost share, royalties)
+  //   payment   — a discrete debt, due on a date or ON CLOSURE
+  //
+  // The three differ at exactly one moment — closure — and that is the whole reason to distinguish
+  // them. Recurring stops. Indexed stops, leaving whatever it accrued. Payments survive.
+  //
+  // INFERRED, NOT GUESSED. Everything that exists today has a `payMonth` and is a payment; derived cost
+  // share is `source: "grant"` and is indexed. `kind` defaults to "debt" for the same reason the UI
+  // does: a closure figure that errs towards comfort is not worth having.
+  6: (d) => ({
+    ...d, schemaVersion: 6,
+    commitments: (d.commitments || []).map(c => ({
+      ...c,
+      flavor: c.flavor || (c.source === "grant" ? "indexed" : "payment"),
+      kind: c.kind || "debt",
+    })),
+  }),
+
   // v4 -> v5: COMMITMENTS. A signed obligation is real from the day it is signed and, until now,
   // invisible until the month it is paid — a $200k PO payable in month 20 left runway at 5.6 months and
   // every screen looking identical to not having signed it.

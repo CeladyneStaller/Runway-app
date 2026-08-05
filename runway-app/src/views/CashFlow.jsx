@@ -126,6 +126,9 @@ export function CashFlow({ doc, rows, routeTab, setRouteTab = () => {}, lines, s
   const commitmentRows = useMemo(() => {
     let pressure = null;
     try { pressure = rows?.length ? commitmentPressure(doc, rows) : null; } catch { pressure = null; }
+    // CASH COMMITMENTS ONLY. Cost share is already inside the project cost lines above it on this very
+    // tab — listing it here as well would show the same money twice on one screen, which is worse than
+    // showing it twice across two.
     const list = pressure?.rows || (() => {
       try { return unpaidCommitments(doc); } catch { return []; }
     })();
@@ -236,7 +239,7 @@ export function CashFlow({ doc, rows, routeTab, setRouteTab = () => {}, lines, s
             disagree. */}
         {commitmentRows.length > 0 && roTable(
           "Commitments",
-          "Signed and not yet paid. These already move the cash below; edit them on the Commitments tab.",
+          "Signed and not yet paid. These already move the cash below; edit them on the Commitments tab. Grant cost share is inside the project costs above and is listed separately there.",
           commitmentRows, "commitment")}
 
         {baselineOpex > 0.5 && (

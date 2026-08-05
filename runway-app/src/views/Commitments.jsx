@@ -4,9 +4,10 @@
 // has to explain the concept, and the "ready to promote" panel has to exist. A tab you fill by hand is
 // a tab nobody fills.
 import React, { useMemo, useState } from "react";
-import { money } from "../engine/money";
 import { dateShort } from "../engine/time";
-import { commitmentPressure, promotable, promote, addManual, removeCommitment, markPaid }
+import { money } from "../engine/money";
+
+import { commitmentPressure, promotable, promote, addManual, removeCommitment, markPaid, setKind }
   from "../engine/commitments";
 import { payablesToCommitments } from "../engine/payables";
 
@@ -41,17 +42,23 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
           <div className="accent" style={{ background: "var(--commit)" }} />
           <div className="lab">Committed, unpaid</div>
           <div className="big">{p ? money(p.unpaid) : money(0)}</div>
-          <div className="meta">{(p?.rows || []).length} obligation{(p?.rows || []).length === 1 ? "" : "s"}</div>
+          <div className="meta">
+            {(p?.rows || []).length} obligation{(p?.rows || []).length === 1 ? "" : "s"}
+            {p?.costShareTotal > 0 && <> · {money(p.costShareTotal)} cost share separately</>}
+          </div>
         </div>
         <div className="stat">
           <div className="accent" style={{ background: "var(--caution)" }} />
-          <div className="lab">Covered runway</div>
+          {/* NOT "covered runway" ANY MORE. It is the last point at which you could stop trading and
+              still pay everyone — a different question from when the bank hits zero, and the label has
+              to say so or people will read the two numbers as rivals. */}
+          <div className="lab">Clean exit until</div>
           <div className="big">
-            {/* Endless is an ANSWER, not a blank. The cash outlasting every obligation is the opposite
-                of a problem and must not render as "no data". */}
             {!p ? "—" : p.coveredEndless ? "beyond" : `${p.coveredMonths.toFixed(1)} mo`}
           </div>
-          <div className="meta">{p?.coveredAt ? `runs short ${dateShort(p.coveredAt)}` : "every obligation covered"}</div>
+          <div className="meta">
+            {p?.coveredAt ? `after ${dateShort(p.coveredAt)} you could not pay everyone` : "you can close and pay everyone"}
+          </div>
         </div>
         <div className="stat">
           <div className="accent" style={{ background: "var(--danger)" }} />
@@ -156,6 +163,27 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
                         </span>}
                   </td>
                   <td>
+                    {/* THE ONE PER-COMMITMENT JUDGEMENT THE PRODUCT ASKS FOR. Everything else is
+                        inferred; this cannot be, because the difference between an invoice you owe and
+                        a fee you would walk away from is a fact about intentions.
+                        NOT OFFERED ON A CLOSURE FEE: a lease break exists BECAUSE you closed, so
+                        calling it a cost you would avoid by closing is a contradiction. */}
+                    {r.payMonth == null ? (
+                      <span className="badge badge-debt" title="Triggered by closing, so always a debt">
+                        debt
+                      </span>
+                    ) : (
+                      <button
+                        className={"badge " + (r.kind === "planned" ? "badge-planned" : "badge-debt")}
+                        disabled={!canWrite}
+                        title={r.kind === "planned"
+                          ? "Not counted in your clean-exit date — click to mark it a debt"
+                          : "Counted in your clean-exit date — click if you would not pay it on closing"}
+                        onClick={() => canWrite && setDoc(d => setKind(d, r.id,
+                          r.kind === "planned" ? "debt" : "planned"))}>
+                        {r.kind === "planned" ? "planned" : "debt"}
+                      </button>
+                    )}
                     {canWrite && (
                       <>
                         <button className="linkbtn" onClick={() => setDoc(d => markPaid(d, r.id))}>
@@ -201,7 +229,7 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
             <p className="acct-row-s">
               {/* BOTH SENTENCES AT ONCE. The first is why the model stays quiet today; the second is why
                   this tab exists. */}
-              This does not change your runway. Covered runway becomes{" "}
+              This does not change your runway. Your clean-exit point becomes{" "}
               <b>{preview.coveredEndless ? "beyond the horizon" : `${preview.coveredMonths.toFixed(1)} months`}</b>
               {preview.uncovered > 0 && <> and commits you to <b>{money(preview.uncovered)}</b> you do not have</>}.
             </p>
@@ -261,6 +289,43 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
               {imported.skipped > 0 && <>{imported.skipped} were credits or zero.</>}
             </p>
           )}
+        </section>
+      )}
+
+      {(p?.costShare || []).length > 0 && (
+        <section className="panel">
+          <div className="panel-h">
+            <div>
+              <h3>Grant cost share</h3>
+              {/* A SEPARATE TABLE BECAUSE IT IS A SEPARATE THING. Cost share is not money owed on top
+                  of the plan — it is the part of spending you are already doing that never comes back.
+                  Listing it beside signed purchase orders implied a second call on the same cash and
+                  made covered runway read short. */}
+              <p>
+                Not owed on top of your plan. This is the part of your project spending that is never
+                reimbursed — already in your costs, shown here so you can see how much of it there is.
+              </p>
+            </div>
+            <span className="chip">{money(p.costShareTotal)}</span>
+          </div>
+          <table className="tbl">
+            <thead>
+              <tr><th>Award</th><th>Period ends</th><th style={{ textAlign: "right" }}>Your share</th></tr>
+            </thead>
+            <tbody>
+              {p.costShare.map(c => (
+                <tr key={c.id}>
+                  <td>{c.label}<div className="meta"><span className="src">derived</span></div></td>
+                  <td>{c.dueAt ? dateShort(c.dueAt) : `month ${c.payMonth}`}</td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(c.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="acct-row-s meta">
+            Change the award to change these — they are computed from its budget, so there is no second
+            record to keep in step.
+          </p>
         </section>
       )}
 

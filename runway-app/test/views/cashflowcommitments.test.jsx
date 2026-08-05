@@ -55,9 +55,11 @@ describe("commitments in the Costs sub-tab", () => {
     expect(labels.some(t => /mark paid|remove|mark signed|add a commitment/i.test(t))).toBe(false);
   });
 
-  it("shows the derived cost share the demo model carries", () => {
-    // Cost share is derived from the award, so it appears here without anybody entering it.
-    expect(costs(draw(base))).toMatch(/cost share/i);
+  it("does NOT list cost share here, because it is already in the project costs above", () => {
+    // Showing the same money twice on ONE screen is worse than showing it twice across two. The Costs
+    // tab already includes it inside the project cost lines; the Commitments tab lists it separately.
+    const v = costs(draw(base));
+    expect(v).not.toMatch(/cost share, period/i);
   });
 
   it("says when a commitment is not covered", () => {

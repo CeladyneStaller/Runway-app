@@ -517,9 +517,9 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                  (zero.months - pressure.coveredMonths) >= 0.5 && (
                   <div className="stat">
                     <div className="accent" style={{ background: "var(--commit)" }} />
-                    <div className="lab">Covered runway</div>
+                    <div className="lab">Clean exit until</div>
                     <div className="big">{pressure.coveredMonths.toFixed(1)} mo</div>
-                    <div className="meta">if every commitment is honoured</div>
+                    <div className="meta">last point you could close and pay everyone</div>
                   </div>
                 )}
                 <div className="stat">

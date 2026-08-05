@@ -1429,6 +1429,78 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Covered runway rebuilt as the SOLVENT WIND-DOWN DATE — steps 1-4
+
+**The old definition had no correct case.** "Cash minus what you have signed" double-counted, because
+every commitment is already in the projection. Proof: a promoted line — same line, same projection —
+moved covered runway 5.10 -> 4.41 purely because somebody marked it signed. No cash had moved.
+
+**The new one is a COMPARISON, not a subtraction**, so it cannot double-count by construction:
+
+    closureDebt(t) = unpaid payments marked DEBT + closure-triggered payments
+                   + shortfall(t) + payroll wind-down
+    covered        = last t where balance(t) >= closureDebt(t)
+
+Measured: promoting moves neither number; a $150k debt after cash-out drops covered 4.78 -> 3.33 while
+runway stays 5.56; the same amount marked PLANNED leaves covered untouched; a closure fee with no due
+date drops it to 3.33 and creates no cost line at all.
+
+**Recurring commitments appear nowhere in it** — they are in the projection and stop when you do.
+
+**`shortfall(t)` is one number doing two jobs**: the clawback in `closureDebt` and the unmatchable
+figure in `uncovered`. Two computations would eventually give two figures for one fact.
+
+**Eligible funds are approximated** from `rows[m].inNonGrant`, added to the projection because that loop
+is the only place that knows a line's origin. Right in the case that matters — a company funded solely
+by an award has zero eligible funds and the whole accrued match is a shortfall, which is TRUE.
+
+**A NUMBER THAT IS QUIETLY ZERO IS WORSE THAN ONE THAT IS OBVIOUSLY WRONG.** `windDownCost` first read
+`e.salary / 12` — a field that does not exist — and returned zero for every model, so payroll silently
+vanished from the closure figure. `empCostAt` is the function the model already uses.
+
+**Fractional, not whole months**, for the same reason as the first version: whole months once produced a
+covered runway of 6.0 against a runway of 5.6, longer, which is nonsense.
+
+**QBO PROVENANCE FIXED.** `addManual` hardcoded `source: "manual"` and dropped `extRef` — so the same
+bill would re-import on every sync. It has never fired because nobody has synced twice.
+
+**Renamed everywhere to "Clean exit until".** "Covered runway" invited comparison with runway as though
+they measured the same thing; they answer different questions.
+
+**Two tests asserted the old definition** and were corrected with it — including one that asserted
+`covered == runway`, which under the new definition asserts that closing is free.
+
+## Cost share was double-counted in covered runway — corrected
+
+**COST SHARE IS NOT AN EXTRA COST. IT IS A SPLIT OF ONE.** `computeGrant` computes `total = direct +
+indirect` and `costSharePct` divides that into a federal share and yours. The project's `cashOut` is
+`t.total` either way — **setting `costSharePct` to zero leaves the runway at 5.56, unchanged**, because
+you spend the same and are simply reimbursed less.
+
+So that money is ALREADY LEAVING in the projection as project spend. Counting it in `unpaid` made
+`commitmentPressure` subtract it a second time, reporting covered 5.41 against a runway of 5.56 — a
+0.15-month gap that did not exist. **The same cash, counted twice.**
+
+**WHY THE INVARIANT DID NOT CATCH IT.** "Every commitment owns exactly one outflow" was tested properly
+for the promoted and manual paths — the byte-identical projection test. Cost share was REASONED about:
+`lineId === null` proves it creates no line, and I concluded it therefore could not double-count. But
+the double count was never in the projection. It was in the covered-runway arithmetic, which subtracts
+from rows that already contain the spend. **An invariant tested on two of three paths is an invariant
+tested on two of three paths.**
+
+**Corrected:** `unpaidCommitments` is stored commitments only. `commitmentPressure` returns `costShare`
+and `costShareTotal` separately, reported and never counted. Covered runway now equals runway when cost
+share is the only obligation, and still moves for a real cash commitment (4.41 against 5.10 with a $40k
+deposit).
+
+**Its own table on the tab, "Grant cost share"**, saying plainly that it is not owed on top of the plan
+— it is the part of spending already happening that never comes back. **And excluded from the Cash flow
+Costs section entirely**, because the project cost lines directly above it already include it: showing
+the same money twice on ONE screen is worse than showing it twice across two.
+
+**Found by tracing the model to answer a question**, not by a failing test. Three tests asserted the
+wrong behaviour and had to be corrected with it.
+
 ## Password reset — three bugs, two of them the same line
 
 **1 · THE LINK BEHAVED LIKE A MAGIC LINK.** `setRecovering(true)` fired only on the `PASSWORD_RECOVERY`

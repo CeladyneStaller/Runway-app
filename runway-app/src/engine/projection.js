@@ -17,7 +17,7 @@ export function buildProjection(model, toggles) {
   const rows = [];
   let bal = model.cashOnHand;
   for (let m = 0; m <= model.horizon; m++) {
-    let rev = 0, cost = 0;
+    let rev = 0, cost = 0, nonGrant = 0;
     for (const li of model.lineItems) {
       const active = li.cadence === "recurring"
         ? (m >= li.start && (li.end == null || m <= li.end))
@@ -34,6 +34,12 @@ export function buildProjection(model, toggles) {
         // tagRevenue() guarantees a tier before anything reaches here — do not rely on this gate to notice.
         if (!toggles[li.confidence]) continue;
         rev += amt;
+        // NON-GRANT REVENUE, SPLIT OUT HERE because it is the only place that knows where a line came
+        // from. Cost share must be met from money that is not the award requiring it, and this is the
+        // approximation that stands in for cash provenance the engine does not have. `projectId` is
+        // set by `compileGrant` on every drawdown; everything else — sales, rounds, subscriptions — is
+        // eligible.
+        if (!li.projectId) nonGrant += amt;
       } else {
         // Costs usually have no tier and always count. Where one IS set — fulfillment work riding on
         // a quote — it gates the same way revenue does, so you never book the cost of a win you
@@ -43,7 +49,7 @@ export function buildProjection(model, toggles) {
       }
     }
     const start = bal, end = start + rev - cost;
-    rows.push({ m, start, rev, cost, net: rev - cost, end });
+    rows.push({ m, start, rev, cost, net: rev - cost, end, inNonGrant: nonGrant });
     bal = end;
   }
   return rows;

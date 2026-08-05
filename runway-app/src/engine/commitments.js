@@ -17,6 +17,7 @@
 import { balanceAtDate, zeroInfo } from "./projection.js";
 import { computeGrant, isMsBilled } from "./grant.js";
 import { lastActualMonth } from "./summary.js";
+import { empCostAt } from "./payroll.js";
 import { periodEnd } from "./time.js";
 
 const clean = (n) => (Number.isFinite(n) ? n : 0);
@@ -24,7 +25,16 @@ const DAY = 86400000;
 
 /** Unpaid, in payment order. Ordering matters: cover is cumulative, so the sequence IS the arithmetic. */
 export function unpaidCommitments(doc) {
-  return allCommitments(doc)
+  // STORED ONLY — cost share is deliberately NOT here.
+  //
+  // A grant's cost share is not an extra cost. `computeGrant` splits ONE budget into a federal share
+  // and your share, and the project's `cashOut` is the WHOLE budget either way: setting `costSharePct`
+  // to zero leaves the runway unchanged, because you spend the same and are simply reimbursed less.
+  //
+  // So that money is ALREADY LEAVING in the projection, month by month, as project spend. Including it
+  // here made `commitmentPressure` subtract it a second time when computing covered runway — the same
+  // cash counted twice, reading as a 0.15-month gap that did not exist.
+  return (doc?.commitments || [])
     .filter(c => c && c.status !== "paid" && clean(c.amount) > 0)
     .slice()
     .sort((a, b) => clean(a.payMonth) - clean(b.payMonth));
@@ -45,6 +55,48 @@ function cashAtMonthEnd(rows, startY, startM, month) {
   return { bal: b?.bal ?? null, date: d };
 }
 
+/** What a wind-down would cost in payroll.
+ *
+ *  ONE COMPANY-WIDE NOTICE PERIOD, not one per person. A per-employee field would be empty for most
+ *  people in most models, and a closure figure computed from mostly-empty fields is worse than one
+ *  computed from a stated assumption — so the assumption is stated beside the number instead.
+ */
+export function windDownCost(doc) {
+  const weeks = clean(doc?.settings?.noticeWeeks ?? 4);
+  if (weeks <= 0) return 0;
+  // `empCostAt` IS THE PAYROLL FUNCTION THE MODEL ALREADY USES — salary, basis, raises applied, fringe
+  // on top. My first version read `e.salary / 12`, a field that does not exist, and returned zero for
+  // every model: the wind-down cost silently vanished and covered runway read as though nobody worked
+  // here. A number that is quietly zero is worse than one that is obviously wrong.
+  const fr = clean(doc?.settings?.fringePct ?? 0.3);
+  const monthly = (doc?.employees || []).reduce((a, e) => a + clean(empCostAt(e, 0, fr)), 0);
+  return monthly * (weeks / 4.33);
+}
+
+/** Cost share accrued but not matchable — the clawback AND the unmatchable figure.
+ *
+ *  ONE NUMBER DOING TWO JOBS, deliberately. It is what a funder would ask for if you closed at `t`, so
+ *  it belongs in `closureDebt`; it is also what you cannot currently match, so it belongs in
+ *  `uncovered`. Two computations would eventually produce two figures for one fact.
+ *
+ *  ⚠️ ELIGIBLE FUNDS ARE APPROXIMATED from cumulative non-grant inflow. The engine has no cash
+ *  provenance — the projection produces one undifferentiated balance — and giving cash a source class
+ *  is a far larger change. This is right in the case that matters (a company funded solely by an award
+ *  has zero eligible funds, so the whole accrued match is a shortfall, which is TRUE) and wrong at the
+ *  margin where money is fungible in practice. The interface says which it is doing.
+ */
+export function shortfallAt(doc, rows, month) {
+  const accrued = accruedCostShare(doc, month);
+  if (accrued <= 0) return 0;
+  let eligible = 0;
+  for (let m = 0; m <= clean(month) && m < (rows?.length || 0); m++) {
+    eligible += clean(rows[m]?.inNonGrant);
+  }
+  // BOUNDED BY WHAT HAS ACCRUED, never by the award. A company closing in month 3 owes the match on
+  // three months of billing — using the award total would be alarmist by the whole remaining term.
+  return Math.max(0, accrued - Math.min(accrued, eligible));
+}
+
 /** Pressure from everything signed and unpaid.
  *
  *  Returns null when there is nothing committed — the common case, and the one where this must cost
@@ -53,7 +105,10 @@ function cashAtMonthEnd(rows, startY, startM, month) {
 export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
   if (!doc || !Array.isArray(rows) || !rows.length) return null;
   const list = unpaidCommitments(doc);
-  if (!list.length) return null;
+  // Cost share alone is still worth a tab: nothing is owed on top of the plan, but the unreimbursed
+  // portion is a real figure somebody should see.
+  const hasCostShare = costShareCommitments(doc).length > 0;
+  if (!list.length && !hasCostShare) return null;
 
   const startY = doc.startY, startM = doc.startM;
 
@@ -84,35 +139,74 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
   const unpaid = running;
   const uncovered = out.filter(r => !r.covered).reduce((a, r) => a + clean(r.amount), 0);
 
-  // COVERED RUNWAY IS `zeroInfo` ON ADJUSTED ROWS, not a hand-rolled month scan.
+  // ── COVERED RUNWAY: THE SOLVENT WIND-DOWN DATE ─────────────────────────────────────────────────
   //
-  // The first version counted WHOLE MONTHS while `zeroInfo` interpolates within one, and produced a
-  // covered runway of 6.0 against a runway of 5.6 — LONGER, which is nonsense. It was a units mismatch
-  // reading as a finding, and the sort of number somebody would have repeated in a board meeting.
+  // NOT "cash minus what you have signed". That was the previous definition and it double-counted: every
+  // commitment is ALREADY in the projection — that is what "every commitment owns exactly one outflow"
+  // guarantees — so subtracting it again charged the same money twice. The proof was a promoted line:
+  // same line, same projection, and covered runway moved from 5.10 to 4.41 purely because somebody
+  // marked it signed. No cash had moved.
   //
-  // Running the same function over the same rows, with the running obligation subtracted, makes the two
-  // numbers comparable by construction: it is still not a second projection, just the same one read
-  // against a lower floor.
-  const byMonth = new Map();
-  for (const c of list) byMonth.set(clean(c.payMonth), (byMonth.get(clean(c.payMonth)) || 0) + clean(c.amount));
+  // THE RIGHT QUESTION IS DIFFERENT: at each month, could you stop trading and still pay everyone?
+  // That is a COMPARISON, not a subtraction, so it cannot double-count by construction — nothing is
+  // ever taken off the balance.
+  //
+  //   closureDebt(t) = payments marked DEBT and not yet paid
+  //                  + payments with no due date          (triggered BY closing)
+  //                  + shortfall(t)                       (unmet cost share — the clawback)
+  //                  + payroll wind-down                  (noticeWeeks of the current payroll)
+  //
+  // Recurring commitments appear nowhere in it. They are in the projection and they STOP when you do,
+  // which is exactly why they need no special handling. A lease's rent is not a closure debt; its break
+  // fee is, and that is a payment with no due date.
+  const closureDebt = (t) => {
+    let owed = 0;
+    for (const c of list) {
+      if (c.flavor !== "payment") continue;
+      // A PLANNED cost is one you would simply not incur. A patent renewal you would abandon is not a
+      // reason to think you are heading for bankruptcy; an invoice for goods already received is.
+      if (c.kind !== "debt") continue;
+      // Already paid by month t in the projection, so it is not outstanding at closure.
+      if (c.payMonth != null && c.payMonth <= t) continue;
+      owed += clean(c.amount);
+    }
+    owed += shortfallAt(doc, rows, t);
+    owed += windDownCost(doc);
+    return owed;
+  };
 
-  let owed = 0;
-  const adjusted = rows.map((r, m) => {
-    const before = owed;
-    owed += byMonth.get(m) || 0;
-    // `start` carries the obligation as at the start of the month; `end` includes anything falling due
-    // within it, because a payment due in a month is due by its end.
-    return { ...r, start: r.start - before, end: r.end - owed };
-  });
-
-  let covered = null;
-  try { covered = zeroInfo(adjusted, startY, startM); } catch { covered = null; }
-  const coveredMonths = covered?.months ?? null;
-  const coveredAt = covered?.date ?? null;
+  let coveredMonths = null, coveredAt = null;
+  for (let m = 0; m < rows.length; m++) {
+    const { bal, date } = cashAtMonthEnd(rows, startY, startM, m);
+    if (bal == null) continue;
+    const debt = closureDebt(m);
+    if (bal < debt) {
+      // FRACTIONAL, so it is comparable with runway. Reporting whole months is what produced a covered
+      // runway of 6.0 against a runway of 5.6 in the first version — longer, which is nonsense, and a
+      // units mismatch reading as a finding. Interpolate across the month in which the cushion is lost.
+      const prev = m > 0 ? cashAtMonthEnd(rows, startY, startM, m - 1) : { bal: rows[0]?.start ?? 0 };
+      const prevSlack = (prev.bal ?? 0) - closureDebt(Math.max(0, m - 1));
+      const slack = bal - debt;
+      const frac = prevSlack > 0 && prevSlack !== slack ? prevSlack / (prevSlack - slack) : 0;
+      coveredMonths = Math.max(0, m + Math.min(1, Math.max(0, frac)));
+      coveredAt = date;
+      break;
+    }
+  }
 
   const next = out.find(r => !r.overdue) || out[0] || null;
 
+  // Reported, never counted. It belongs on the tab — "of what you are spending, this much is never
+  // reimbursed" is worth knowing — but it must not move covered runway, which asks whether the cash can
+  // cover what has been promised ON TOP of the plan.
+  const costShare = costShareCommitments(doc)
+    .map(c => ({ ...c, dueAt: cashAtMonthEnd(rows, startY, startM, c.payMonth).date }))
+    .sort((a, b) => a.payMonth - b.payMonth);
+  const costShareTotal = costShare.reduce((a, c) => a + clean(c.amount), 0);
+
   return {
+    costShare,
+    costShareTotal,
     unpaid,
     uncovered,
     coveredMonths,
@@ -303,6 +397,8 @@ function mk(proj, g, { key, label, signedMonth, payMonth, amount, accrualFrom })
     label, signedMonth, payMonth, amount,
     projectId: proj.id,
     source: "grant",
+    flavor: "indexed",     // scales with what is billed, and stops when the billing does
+    kind: "debt",          // the ACCRUED part survives closure as a clawback
     lineId: null,          // no line of its own: the spend is already in the project
     status: "committed",
     paidRef: null,
@@ -377,6 +473,8 @@ export function promote(doc, lineId, { signedMonth = 0 } = {}) {
     amount: clean(line.amount),
     projectId: line.projectId || null,
     source: "plan",
+    flavor: "payment",
+    kind: "debt",                // marking a planned cost SIGNED is what makes it a debt
     lineId,                      // OWNED, not duplicated
     status: "committed",
     paidRef: null,
@@ -385,19 +483,48 @@ export function promote(doc, lineId, { signedMonth = 0 } = {}) {
 }
 
 /** Add one that was never planned. It CREATES its cost line, so the invariant holds either way. */
-export function addManual(doc, { label, signedMonth, payMonth, amount, projectId = null }) {
+export function addManual(doc, draft = {}) {
+  const {
+    label, signedMonth, payMonth, amount, projectId = null,
+    // PROVENANCE IS CARRIED, NOT OVERWRITTEN.
+    //
+    // `payablesToCommitments` sets `source: "qbo"` and an `extRef`, and this function used to hardcode
+    // `source: "manual"` and drop the rest. Two consequences: the "unpaid bill" chip could never
+    // render, and — the real bug — `extRef` was lost, so the duplicate check on the NEXT sync would not
+    // recognise the bill and would import it again. It has never fired because nobody has synced twice.
+    source = "manual", extRef = null, vendor = null, memo = null,
+    // A payment unless told otherwise; recurring and indexed obligations are not entered this way.
+    flavor = "payment",
+    // DEBT BY DEFAULT. An optimistic default makes the closure figure reassuring by omission, and a
+    // number about bankruptcy danger that errs towards comfort is not worth having. Over-cautious is
+    // visible and one click from correct.
+    kind = "debt",
+  } = draft;
+
   const id = `cm_${Math.random().toString(36).slice(2, 9)}`;
   const lineId = `l_${id}`;
-  const line = {
+  // A PAYMENT WITH NO DUE DATE CREATES NO LINE. It is triggered by closing, so it never appears in a
+  // projection of a company that is still trading — putting it in the plan would spend money on a date
+  // nobody has chosen.
+  const dated = Number.isFinite(clean(payMonth)) && payMonth != null;
+  const line = dated ? {
     id: lineId, label: label || "Commitment", cadence: "onetime", kind: "cost",
     amount: clean(amount), start: clean(payMonth), confidence: "committed",
     projectId: projectId || undefined,
-  };
+  } : null;
+
   const c = {
-    id, label: label || "Commitment", signedMonth: clean(signedMonth), payMonth: clean(payMonth),
-    amount: clean(amount), projectId, source: "manual", lineId, status: "committed", paidRef: null,
+    id, label: label || "Commitment", signedMonth: clean(signedMonth),
+    payMonth: dated ? clean(payMonth) : null,
+    amount: clean(amount), projectId, source, extRef, vendor, memo,
+    flavor, kind: dated ? kind : "debt",     // a closure-triggered cost is a debt by construction
+    lineId: line ? lineId : null, status: "committed", paidRef: null,
   };
-  return { ...doc, lines: [...(doc?.lines || []), line], commitments: [...(doc?.commitments || []), c] };
+  return {
+    ...doc,
+    lines: line ? [...(doc?.lines || []), line] : (doc?.lines || []),
+    commitments: [...(doc?.commitments || []), c],
+  };
 }
 
 /** Remove one. Deletes its cost line ONLY if the commitment created it — a promoted line was in the
@@ -418,5 +545,20 @@ export function markPaid(doc, id, paidRef = null) {
     ...doc,
     commitments: (doc?.commitments || []).map(c =>
       (c?.id === id ? { ...c, status: "paid", paidRef } : c)),
+  };
+}
+
+/** Change a payment between debt and planned.
+ *
+ *  DEBT survives closure; PLANNED does not. A closure-triggered payment cannot be planned — it exists
+ *  BECAUSE you closed — so the change is refused rather than silently ignored, which would leave the
+ *  interface showing a state the engine does not hold.
+ */
+export function setKind(doc, id, kind) {
+  return {
+    ...doc,
+    commitments: (doc?.commitments || []).map(c => (
+      c?.id === id && c.payMonth != null && (kind === "debt" || kind === "planned")
+        ? { ...c, kind } : c)),
   };
 }

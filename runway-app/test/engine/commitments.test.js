@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { commitmentPressure, promote, addManual, promotable, removeCommitment, markPaid,
-         costShareCommitments, accruedCostShare }
+         costShareCommitments, accruedCostShare, windDownCost }
   from "../../src/engine/commitments.js";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
@@ -152,10 +152,36 @@ describe("cost share, derived from the award", () => {
     expect(cs.every(c => c.derived === true)).toBe(true);
   });
 
-  it("counts toward pressure alongside stored commitments", () => {
+  it("IS REPORTED SEPARATELY AND NEVER COUNTED AS CASH OWED", () => {
+    // THE CORRECTION. Cost share is not an extra cost — `computeGrant` splits ONE budget into a federal
+    // share and yours, and the project's cash out is the whole budget either way. Setting
+    // `costSharePct` to zero leaves the runway unchanged, which proves the money already leaves.
+    //
+    // Counting it in `unpaid` made covered runway subtract the same cash a second time.
     const p = commitmentPressure(base, rowsOf(base));
     expect(p).toBeTruthy();
-    expect(p.unpaid).toBeGreaterThan(0);
+    expect(p.costShareTotal).toBeGreaterThan(0);
+    expect(p.unpaid).toBe(0);                  // no stored commitments in the demo model
+    expect(p.rows).toEqual([]);                // and none in the cash table
+  });
+
+  it("shortens covered runway ONLY by the part that cannot be matched", () => {
+    // WRITTEN AGAINST THE OLD DEFINITION and wrong under the new one. Covered runway is now the solvent
+    // wind-down date, which is legitimately EARLIER than the runway because closing costs money —
+    // payroll notice, at minimum. Asserting `covered == runway` was asserting that closing is free.
+    //
+    // What matters is that cost share contributes only its SHORTFALL: the accrued match you could not
+    // meet from eligible funds. A company whose non-grant income covers the match owes nothing on the
+    // way out and its covered runway should not move.
+    const p = commitmentPressure(base, rowsOf(base));
+    const noAward = { ...base, projects: [] };
+    const pNo = commitmentPressure(noAward, rowsOf(noAward));
+    if (p.costShareTotal > 0 && pNo?.coveredMonths != null) {
+      // the award changes the projection too, so this is a sanity bound rather than an equality
+      expect(p.coveredMonths).toBeLessThanOrEqual(
+        zeroInfo(rowsOf(base), base.startY, base.startM).months + 0.001);
+    }
+    expect(p.unpaid).toBe(0);          // still not counted as cash owed
   });
 
   it("moves when the award moves, because it is derived rather than stored", () => {
@@ -197,13 +223,12 @@ describe("cost share accrues per period", () => {
     for (let i = 1; i < cs.length; i++) expect(cs[i].payMonth).toBeGreaterThan(cs[i - 1].payMonth);
   });
 
-  it("PRESSES ON THE RUNWAY, because an early period falls inside it", () => {
-    // The whole point of the correction: the first period's obligation lands before the cash runs out,
-    // which the lump-sum version hid completely.
-    const rows = rowsOf(base);
-    const p = commitmentPressure(base, rows);
-    const runway = zeroInfo(rows, base.startY, base.startM)?.months;
-    expect(p.rows.some(r => r.payMonth < runway)).toBe(true);
+  it("still falls due per period, even though it is not cash owed", () => {
+    // The per-period schedule still matters — it is when a funder checks the match — it simply belongs
+    // in its own table rather than in the cash arithmetic.
+    const cs = costShareCommitments(base);
+    const runway = zeroInfo(rowsOf(base), base.startY, base.startM)?.months;
+    expect(cs.some(c => c.payMonth < runway)).toBe(true);
   });
 
   it("accrues with the period rather than appearing whole on the due date", () => {
@@ -372,5 +397,67 @@ describe("cost share against ACTUAL billings", () => {
     // use beyond the ledger but the plan, and pretending otherwise would be inventing a figure.
     const d = billed({ 0: 10000 });
     expect(costShareCommitments(d).length).toBeGreaterThan(1);
+  });
+});
+
+describe("covered runway is the solvent wind-down date", () => {
+  const base = demoDoc();
+  const covered = (d) => commitmentPressure(d, rowsOf(d))?.coveredMonths;
+  const runway = (d) => zeroInfo(rowsOf(d), d.startY, d.startM)?.months;
+
+  it("PROMOTING A LINE MOVES NEITHER NUMBER", () => {
+    // THE TEST THE OLD DEFINITION FAILED. Same line, same projection — and covered runway moved 5.10 to
+    // 4.41 purely because somebody marked it signed. Nothing had changed about the company.
+    //
+    // It cannot happen now: the wind-down test COMPARES the balance against a debt, it never subtracts
+    // from it, so marking a line signed changes no term.
+    const withLine = { ...base, lines: [...(base.lines || []),
+      { id: "l_x", label: "Tool", cadence: "onetime", kind: "cost", amount: 40000, start: 2 }] };
+    expect(covered(promote(withLine, "l_x"))).toBeCloseTo(covered(withLine), 2);
+    expect(runway(promote(withLine, "l_x"))).toBeCloseTo(runway(withLine), 2);
+  });
+
+  it("A DEBT AFTER THE CASH RUNS OUT SHORTENS IT, and runway is untouched", () => {
+    // The case the whole feature exists for. You are insolvent before the bill arrives, so runway does
+    // not move — but you lost the ability to close cleanly long before that.
+    const d = addManual(base, { label: "A", signedMonth: 0, payMonth: 9, amount: 150000 });
+    expect(runway(d)).toBeCloseTo(runway(base), 2);
+    expect(covered(d)).toBeLessThan(covered(base));
+  });
+
+  it("A PLANNED COST DOES NOT, because you would not incur it", () => {
+    // The badge earning its place: a patent renewal you would abandon is not a reason to think you are
+    // heading for bankruptcy.
+    const d = addManual(base, { label: "B", signedMonth: 0, payMonth: 9, amount: 150000, kind: "planned" });
+    expect(covered(d)).toBeCloseTo(covered(base), 2);
+  });
+
+  it("a closure fee with NO due date counts, and never touches the runway", () => {
+    // Triggered BY closing, so it appears in no projection of a company still trading — but it is
+    // exactly what you would owe on the way out.
+    const d = addManual(base, { label: "Lease break", signedMonth: 0, payMonth: null, amount: 150000 });
+    expect(runway(d)).toBeCloseTo(runway(base), 2);
+    expect(covered(d)).toBeLessThan(covered(base));
+    expect((d.lines || []).length).toBe((base.lines || []).length);   // creates no cost line
+  });
+
+  it("is always at or before the runway", () => {
+    // Closing costs money, so the date you can still close cleanly cannot be later than the date the
+    // cash runs out.
+    for (const d of [base,
+        addManual(base, { label: "x", signedMonth: 0, payMonth: 2, amount: 40000 }),
+        addManual(base, { label: "y", signedMonth: 0, payMonth: null, amount: 20000 })]) {
+      expect(covered(d)).toBeLessThanOrEqual(runway(d) + 0.001);
+    }
+  });
+
+  it("counts payroll wind-down, using the payroll function the model already uses", () => {
+    // My first version read `e.salary / 12`, a field that does not exist, and returned zero for every
+    // model — the wind-down cost silently vanished. A number that is quietly zero is worse than one
+    // that is obviously wrong.
+    expect(windDownCost(base)).toBeGreaterThan(0);
+    expect(windDownCost({ ...base, settings: { ...base.settings, noticeWeeks: 0 } })).toBe(0);
+    const longer = { ...base, settings: { ...base.settings, noticeWeeks: 12 } };
+    expect(covered(longer)).toBeLessThan(covered(base));
   });
 });

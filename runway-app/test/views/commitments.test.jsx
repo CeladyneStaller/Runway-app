@@ -33,10 +33,11 @@ describe("the Commitments tab", () => {
     expect(v.container.textContent).toMatch(/short/);
   });
 
-  it("says covered runway as a number comparable to runway", () => {
+  it("names the clean-exit date, in months, comparable with runway", () => {
+    // Relabelled: it is the last point you could stop trading and pay everyone, not a second runway.
     const d = addManual(base, { label: "x", signedMonth: 0, payMonth: 1, amount: 188000 });
     const v = draw(d);
-    expect(v.container.textContent).toMatch(/Covered runway/);
+    expect(v.container.textContent).toMatch(/Clean exit until/);
     expect(v.container.textContent).toMatch(/\d\.\d mo/);
   });
 
@@ -127,5 +128,81 @@ describe("pulling unpaid bills", () => {
                                   account={bad} companyId="co-1" />);
     fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Pull unpaid/.test(b.textContent)));
     await waitFor(() => expect(v.container.textContent).toMatch(/payables 403/));
+  });
+});
+
+describe("the Grant cost share table", () => {
+  const base = demoDoc();
+
+  it("gets its own table, not a row among the signed obligations", () => {
+    const v = draw(base);
+    expect(v.container.textContent).toMatch(/Grant cost share/);
+  });
+
+  it("SAYS IT IS NOT OWED ON TOP OF THE PLAN", () => {
+    // Listing it beside signed purchase orders implied a second call on the same cash. It is the part
+    // of spending already happening that never comes back — a different fact entirely.
+    expect(draw(base).container.textContent).toMatch(/not owed on top of your plan/i);
+  });
+
+  it("points at the award as the place to change it", () => {
+    expect(draw(base).container.textContent).toMatch(/change the award/i);
+  });
+
+  it("offers no writing control, because there is nothing here to edit", () => {
+    const v = draw(base, { canWrite: true });
+    const rows = [...v.container.querySelectorAll("tr")]
+      .filter(r => /cost share, period/i.test(r.textContent));
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach(r => expect(r.querySelectorAll("button").length).toBe(0));
+  });
+});
+
+describe("the debt / planned badge", () => {
+  const base = demoDoc();
+  const withPay = (over = {}) => addManual(base,
+    { label: "Bill", signedMonth: 0, payMonth: 3, amount: 1000, ...over });
+
+  it("shows on a dated payment and toggles", () => {
+    const d = withPay();
+    let held = d;
+    const v = render(<Commitments doc={d} setDoc={fn => { held = fn(d); }} rows={rowsOf(d)} />);
+    const b = [...v.container.querySelectorAll("button")].find(x => /^debt$/i.test(x.textContent));
+    expect(b).toBeTruthy();
+    fireEvent.click(b);
+    expect(held.commitments.find(c => c.label === "Bill").kind).toBe("planned");
+  });
+
+  it("IS NOT OFFERED on a closure fee", () => {
+    // A lease break exists BECAUSE you closed. Calling it a cost you would avoid by closing is a
+    // contradiction, and a control that lets somebody express one will eventually be used to.
+    const d = withPay({ payMonth: null, label: "Lease break" });
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)} />);
+    const row = [...v.container.querySelectorAll("tr")].find(r => /Lease break/.test(r.textContent));
+    expect(row.textContent).toMatch(/debt/i);
+    expect([...row.querySelectorAll("button")].some(b => /^debt$|^planned$/i.test(b.textContent))).toBe(false);
+  });
+
+  it("says what the badge does to the number", () => {
+    // A control that silently changes a headline figure is how somebody ends up mistrusting the figure
+    // rather than the control.
+    const d = withPay({ kind: "planned" });
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)} />);
+    const b = [...v.container.querySelectorAll("button")].find(x => /^planned$/i.test(x.textContent));
+    expect(b.getAttribute("title")).toMatch(/clean-exit/i);
+  });
+
+  it("a viewer sees the badge and cannot change it", () => {
+    const d = withPay();
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)} canWrite={false} />);
+    const b = [...v.container.querySelectorAll("button")].find(x => /^debt$/i.test(x.textContent));
+    expect(b.disabled).toBe(true);
+  });
+
+  it("the headline says clean exit, not covered runway", () => {
+    // The two dates answer different questions and the interface must not imply they are rivals.
+    const v = render(<Commitments doc={withPay()} setDoc={() => {}} rows={rowsOf(withPay())} />);
+    expect(v.container.textContent).toMatch(/Clean exit until/);
+    expect(v.container.textContent).not.toMatch(/Covered runway/);
   });
 });
