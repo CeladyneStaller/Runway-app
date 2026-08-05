@@ -1429,6 +1429,34 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## The Commitments tab, restructured into four sections
+
+    Debt and notes        total
+      Venture debt        total + "count in clean exit"
+      Note debt           total + "count in clean exit"
+      Royalties           no toggle
+    Withstanding payments total, flat
+    Cost share            total, grouped by award, then by period
+    Shutdown costs        total, flat
+
+**ONE `Group` COMPONENT FOR EVERY GROUP**, so a group cannot look like a section by accident. The visual
+hierarchy IS the argument — a section is "what kind of obligation", a group is "which one" — and two
+implementations would eventually disagree about which is which.
+
+**`withDebt` became TWO toggles.** A lender with a security interest is not a noteholder, and a founder
+asking "could I settle everyone else" usually means one of them specifically.
+
+**NO TOGGLE ON ROYALTIES, because there is no decision to make.** Stop trading and nothing further is
+owed; offering a switch would imply otherwise. The group says so instead.
+
+**SHUTDOWN COSTS ARE THEIR OWN SECTION**, lifted out of the payments table. They exist only because you
+stopped, and sitting them among dated obligations made a null due date read as data somebody had failed
+to fill in. The payroll wind-down appears here as a row tagged "assumed", which is where the
+`noticeWeeks` assumption becomes visible rather than being a number inside a formula.
+
+**Cost share is grouped by award and then by period** because that is how a funder checks it — a flat
+list of rows from three grants is one nobody can reconcile against anything they were sent.
+
 ## Counted and shown nowhere — TWICE
 
 A convertible note did not appear on the Commitments tab despite moving the clean-exit date. Two

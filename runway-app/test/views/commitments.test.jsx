@@ -141,9 +141,12 @@ describe("pulling unpaid bills", () => {
 describe("the Grant cost share table", () => {
   const base = bare();
 
-  it("gets its own table, not a row among the signed obligations", () => {
-    const v = draw(base);
-    expect(v.container.textContent).toMatch(/Grant cost share/);
+  it("gets its own SECTION, grouped by award", () => {
+    // Cost share is checked per period by the funder, so a flat list of rows from three grants is one
+    // nobody can reconcile against anything they were sent.
+    const v = draw(demoDoc());
+    expect(v.container.textContent).toMatch(/Cost share/);
+    expect(v.container.querySelectorAll(".cgroup").length).toBeGreaterThan(0);
   });
 
   it("SAYS IT IS NOT OWED ON TOP OF THE PLAN", () => {
@@ -157,9 +160,9 @@ describe("the Grant cost share table", () => {
   });
 
   it("offers no writing control, because there is nothing here to edit", () => {
-    const v = draw(base, { canWrite: true });
-    const rows = [...v.container.querySelectorAll("tr")]
-      .filter(r => /cost share, period/i.test(r.textContent));
+    const v = draw(demoDoc(), { canWrite: true });
+    const rows = [...v.container.querySelectorAll(".crow")]
+      .filter(r => /period/i.test(r.textContent));
     expect(rows.length).toBeGreaterThan(0);
     rows.forEach(r => expect(r.querySelectorAll("button").length).toBe(0));
   });
@@ -245,5 +248,58 @@ describe("the notice assumption", () => {
     const v = render(<Commitments doc={late} setDoc={() => {}} rows={rowsOf(late)} />);
     expect(v.container.textContent).toMatch(/Cannot be paid/);
     expect(v.container.textContent).not.toMatch(/Uncovered/);
+  });
+});
+
+describe("the tab's four sections", () => {
+  const d = () => {
+    const b = demoDoc();
+    return { ...b, rounds: [
+      { id: "vd", name: "Growth facility", kind: "debt", status: "closed", amount: 800000,
+        closeMonth: 0, termMonths: 36, rateAPR: 12 },
+      { id: "nd", name: "2025 note", kind: "note", status: "closed", amount: 400000,
+        closeMonth: 0, maturityMonths: 18, atMaturity: "repay" },
+      { id: "rn", name: "Ferrous note", kind: "note", status: "closed", amount: 300000,
+        closeMonth: 0, atMaturity: "royalty", royaltyPct: 0.03, capMultiple: 4 },
+    ] };
+  };
+  const v = () => render(<Commitments doc={d()} setDoc={() => {}} rows={rowsOf(d())} />);
+
+  it("groups venture debt, note debt and royalties under one heading", () => {
+    const t = v().container.textContent;
+    expect(t).toMatch(/Debt and notes/);
+    expect(t).toMatch(/Venture debt/);
+    expect(t).toMatch(/Note debt/);
+    expect(t).toMatch(/Royalties/);
+  });
+
+  it("gives venture and note debt SEPARATE toggles", () => {
+    // A lender with a security interest is not a noteholder, and a founder asking "could I settle
+    // everyone else" usually means one of them specifically.
+    const boxes = [...v().container.querySelectorAll(".dbt-toggle input")];
+    expect(boxes.length).toBe(2);
+  });
+
+  it("offers NO toggle on royalties, because there is no decision to make", () => {
+    // Stop trading and nothing further is owed. A switch would imply otherwise.
+    const groups = [...v().container.querySelectorAll(".cgroup")];
+    const roy = groups.find(g => /Royalties/.test(g.textContent));
+    expect(roy.querySelectorAll(".dbt-toggle").length).toBe(0);
+    expect(roy.textContent).toMatch(/nothing further is owed/i);
+  });
+
+  it("SHUTDOWN COSTS ARE THEIR OWN SECTION, including the payroll assumption", () => {
+    // Not payments with a missing date. They exist only because you stopped — and grouping them with
+    // dated obligations made them read as data somebody had failed to fill in.
+    const t = v().container.textContent;
+    expect(t).toMatch(/Shutdown costs/);
+    expect(t).toMatch(/Payroll notice/);
+    expect(t).toMatch(/Only owed if you stop/);
+  });
+
+  it("every section shows its own total", () => {
+    const chips = [...v().container.querySelectorAll(".panel-h .chip")];
+    expect(chips.length).toBeGreaterThanOrEqual(2);
+    chips.forEach(c => expect(c.textContent).toMatch(/[\d,]/));
   });
 });

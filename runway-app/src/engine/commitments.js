@@ -103,7 +103,11 @@ export function shortfallAt(doc, rows, month) {
  *  Returns null when there is nothing committed — the common case, and the one where this must cost
  *  nothing and change nothing.
  */
-export function commitmentPressure(doc, rows, { today = new Date(), withDebt = true } = {}) {
+export function commitmentPressure(doc, rows,
+  // TWO TOGGLES, NOT ONE. A venture facility and a maturing note are different conversations — a lender
+  // with a security interest is not a noteholder — and a founder asking "could I settle everyone else"
+  // usually means one of them specifically.
+  { today = new Date(), withVentureDebt = true, withNoteDebt = true } = {}) {
   if (!doc || !Array.isArray(rows) || !rows.length) return null;
   const list = unpaidCommitments(doc);
   // Cost share alone is still worth a tab: nothing is owed on top of the plan, but the unreimbursed
@@ -199,7 +203,10 @@ export function commitmentPressure(doc, rows, { today = new Date(), withDebt = t
     // everything else, and then the exit date says only "you owe a bank", which hides whether the rest
     // of the business could be made whole. Being able to take it out is how you see the timeline for
     // settling everybody else, which is a different and also useful question.
-    if (withDebt) owed += outstandingDebt(doc, t);
+    if (withVentureDebt) owed += outstandingDebt({ ...doc,
+      rounds: (doc.rounds || []).filter(x => x?.kind === "debt") }, t);
+    if (withNoteDebt) owed += outstandingDebt({ ...doc,
+      rounds: (doc.rounds || []).filter(x => x?.kind === "note") }, t);
     return owed;
   };
 
@@ -232,6 +239,20 @@ export function commitmentPressure(doc, rows, { today = new Date(), withDebt = t
     .sort((a, b) => a.payMonth - b.payMonth);
   const costShareTotal = costShare.reduce((a, c) => a + clean(c.amount), 0);
 
+  // GROUPED BY AWARD, THEN BY PERIOD. Cost share is checked per period by the funder, so a flat list of
+  // rows from three grants is a list nobody can reconcile against anything they were sent.
+  const costShareByGrant = [];
+  for (const c of costShare) {
+    let g = costShareByGrant.find(x => x.projectId === c.projectId);
+    if (!g) {
+      const proj = (doc?.projects || []).find(p => p.id === c.projectId);
+      g = { projectId: c.projectId, label: proj?.name || "Award", total: 0, periods: [] };
+      costShareByGrant.push(g);
+    }
+    g.total += clean(c.amount);
+    g.periods.push(c);
+  }
+
   // Drawn facilities, so the tab can SHOW what the exit date is counting. An obligation that moves a
   // headline figure and appears nowhere is one somebody eventually stops believing.
   // NOTES THAT REPAY AT MATURITY BELONG HERE TOO. `outstandingDebt` counts them; this list filtered on
@@ -247,6 +268,7 @@ export function commitmentPressure(doc, rows, { today = new Date(), withDebt = t
       id: x.id,
       label: x.name || (x.kind === "note" ? "Note" : "Facility"),
       what: x.kind === "note" ? "repaid at maturity" : "drawn",
+      group: x.kind === "note" ? "note" : "venture",
       amount: outstandingDebt({ rounds: [x] }, 0),
     }))
     .filter(x => x.amount > 0);
@@ -257,10 +279,39 @@ export function commitmentPressure(doc, rows, { today = new Date(), withDebt = t
     id: c.id, label: c.label, pct: c.index?.pct || 0, of: c.index?.of || "revenue", cap: c.cap || 0,
   }));
 
+  const ventureDebt = debt.filter(x => x.group === "venture");
+  const noteDebt = debt.filter(x => x.group === "note");
+
+  // SHUTDOWN COSTS ARE THEIR OWN SECTION, not payments with a missing date. They exist only because you
+  // stopped — a lease break, a dissolution fee, the payroll you owe on the way out — and grouping them
+  // with dated obligations made them read as data somebody had failed to fill in.
+  const shutdown = out.filter(r => r.payMonth == null)
+    .map(r => ({ id: r.id, label: r.label, amount: r.amount }));
+  const notice = windDownCost(doc);
+  if (notice > 0) {
+    shutdown.push({ id: "wind_payroll", derived: true, amount: notice,
+      label: `Payroll notice — ${clean(doc?.settings?.noticeWeeks ?? 4)} weeks` });
+  }
+  const shutdownTotal = shutdown.reduce((a, x) => a + clean(x.amount), 0);
+
+  // Dated payments only. What is left after the shutdown rows are lifted out.
+  const dated = out.filter(r => r.payMonth != null);
+  const datedTotal = dated.reduce((a, r) => a + clean(r.amount), 0);
+
   return {
+    costShareByGrant,
     debt,
     debtTotal,
-    withDebt,
+    ventureDebt,
+    ventureDebtTotal: ventureDebt.reduce((a, x) => a + x.amount, 0),
+    noteDebt,
+    noteDebtTotal: noteDebt.reduce((a, x) => a + x.amount, 0),
+    withVentureDebt,
+    withNoteDebt,
+    shutdown,
+    shutdownTotal,
+    dated,
+    datedTotal,
     royalties,
     costShare,
     costShareTotal,

@@ -80,8 +80,10 @@ describe("the drawn-debt toggle", () => {
   const d = withNote({ atMaturity: "repay" });
 
   it("counts debt by default", () => {
-    const on = commitmentPressure(d, rowsOf(d), { withDebt: true });
-    const off = commitmentPressure(d, rowsOf(d), { withDebt: false });
+    // `withDebt` BECAME TWO TOGGLES — venture and note — because a lender with a security interest is
+    // not a noteholder, and a founder asking "could I settle everyone else" usually means one of them.
+    const on = commitmentPressure(d, rowsOf(d), { withNoteDebt: true });
+    const off = commitmentPressure(d, rowsOf(d), { withNoteDebt: false });
     expect(commitmentPressure(d, rowsOf(d)).coveredMonths).toBe(on.coveredMonths);
     expect(off.coveredMonths).toBeGreaterThanOrEqual(on.coveredMonths);
   });
@@ -89,8 +91,8 @@ describe("the drawn-debt toggle", () => {
   it("EXCLUDING IT ANSWERS A DIFFERENT QUESTION", () => {
     // A facility can dwarf everything else, and then the exit date says only "you owe a bank". Taking
     // it out shows the timeline for settling everybody ELSE, which is also worth knowing.
-    const off = commitmentPressure(d, rowsOf(d), { withDebt: false });
-    expect(off.withDebt).toBe(false);
+    const off = commitmentPressure(d, rowsOf(d), { withNoteDebt: false });
+    expect(off.withNoteDebt).toBe(false);
     expect(off.debtTotal).toBe(commitmentPressure(d, rowsOf(d)).debtTotal);   // still reported
   });
 });

@@ -26,8 +26,10 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
 
   // DEFAULTS TO INCLUDING DEBT, because a lender is owed whether or not you close. Excluding it answers
   // the other question worth asking: could everybody ELSE be made whole, and by when.
-  const [withDebt, setWithDebt] = useState(true);
-  const p = useMemo(() => commitmentPressure(doc, rows, { withDebt }), [doc, rows, withDebt]);
+  const [withVentureDebt, setWithVentureDebt] = useState(true);
+  const [withNoteDebt, setWithNoteDebt] = useState(true);
+  const p = useMemo(() => commitmentPressure(doc, rows, { withVentureDebt, withNoteDebt }),
+                    [doc, rows, withVentureDebt, withNoteDebt]);
   const ready = useMemo(() => promotable(doc), [doc]);
   const paid = (doc?.commitments || []).filter(c => c.status === "paid");
 
@@ -148,7 +150,7 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         <section className="panel">
           <div className="panel-h">
             <div>
-              <h3>{sub === "uncovered" ? "Cannot be paid" : "Unpaid"}</h3>
+              <h3>{sub === "uncovered" ? "Cannot be paid" : "Withstanding payments"}</h3>
               <p>Sorted by payment date. Cover counts everything payable before it, not just this one.</p>
             </div>
             <span className="members-form" style={{ margin: 0 }}>
@@ -383,104 +385,80 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         </section>
       )}
 
-      {(p?.debt || []).length > 0 && (
+      {/* ── DEBT AND NOTES ─────────────────────────────────────────────────────────────────────
+          One section with three groups, because they are one conversation — what a lender or a
+          noteholder is owed — and three different answers about whether closing discharges it. */}
+      {(p?.debtTotal > 0 || (p?.royalties || []).length > 0) && (
         <section className="panel">
           <div className="panel-h">
-            <div>
-              <h3>Debt and notes</h3>
-              {/* COUNTED IN THE EXIT DATE AND PREVIOUSLY SHOWN NOWHERE. An obligation that moves a
-                  headline figure and appears on no screen is one somebody eventually stops believing.
-                  The repayments are already in the runway; what this adds is the balance you would owe
-                  if you stopped. */}
-              <p>
-                Repayments are already in your runway. This is what you would still owe a lender if you
-                stopped trading — remaining scheduled payments, which is conservative.
-              </p>
-            </div>
-            <label className="dbt-toggle">
-              <input type="checkbox" checked={withDebt}
-                     onChange={e => setWithDebt(e.target.checked)} />
-              <span>Count in clean exit</span>
-            </label>
-            <span className="chip">{money(p.debtTotal)}</span>
+            <div><h3>Debt and notes</h3>
+              <p>Repayments are already in your runway. These are the balances behind them.</p></div>
+            <span className="chip">{money((p.debtTotal || 0))}</span>
           </div>
-          <table className="tbl">
-            <thead><tr><th>Facility or note</th><th style={{ textAlign: "right" }}>Outstanding</th></tr></thead>
-            <tbody>
-              {p.debt.map(x => (
-                <tr key={x.id}>
-                  <td>{x.label}<div className="meta"><span className="src">{x.what}</span></div></td>
-                  <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(x.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
 
-      {(p?.royalties || []).length > 0 && (
-        <section className="panel">
-          <div className="panel-h">
-            <div>
-              <h3>Royalties</h3>
-              {/* NOT IN THE CLEAN-EXIT DATE, and the panel says why rather than leaving somebody to
-                  wonder whether it was forgotten. A royalty is paid out of revenue you are earning;
-                  stop trading and there is no revenue and nothing further owed. */}
-              <p>
-                A share of revenue until a cap is met. Already in your costs. Not counted in your clean
-                exit — stop trading and there is nothing further owed.
-              </p>
-            </div>
-          </div>
-          <table className="tbl">
-            <thead><tr><th>Note</th><th>Rate</th><th style={{ textAlign: "right" }}>Until</th></tr></thead>
-            <tbody>
+          {p.ventureDebt?.length > 0 && (
+            <Group label="Venture debt" total={p.ventureDebtTotal}
+                   toggle={{ on: withVentureDebt, set: setWithVentureDebt }}>
+              {p.ventureDebt.map(x => <Row key={x.id} label={x.label} tag={x.what} amount={x.amount} />)}
+            </Group>
+          )}
+
+          {p.noteDebt?.length > 0 && (
+            <Group label="Note debt" total={p.noteDebtTotal}
+                   toggle={{ on: withNoteDebt, set: setWithNoteDebt }}>
+              {p.noteDebt.map(x => <Row key={x.id} label={x.label} tag={x.what} amount={x.amount} />)}
+            </Group>
+          )}
+
+          {(p.royalties || []).length > 0 && (
+            /* NO TOGGLE, because there is no decision to make. A royalty is paid out of revenue you are
+               earning; stop trading and there is nothing further owed. Offering a switch would imply
+               otherwise. */
+            <Group label="Royalties" total={null}
+                   note="Not counted in your clean exit — stop trading and nothing further is owed.">
               {p.royalties.map(x => (
-                <tr key={x.id}>
-                  <td>{x.label}<div className="meta"><span className="src">derived</span></div></td>
-                  <td className="meta">{Math.round(x.pct * 100)}% of {x.of}</td>
-                  <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(x.cap)}</td>
-                </tr>
+                <Row key={x.id} label={x.label} tag={`${Math.round(x.pct * 100)}% of ${x.of}`}
+                     amount={x.cap} amountLabel="until" />
               ))}
-            </tbody>
-          </table>
+            </Group>
+          )}
         </section>
       )}
 
-      {(p?.costShare || []).length > 0 && (
+      {/* ── COST SHARE ─────────────────────────────────────────────────────────────────────── */}
+      {(p?.costShareByGrant || []).length > 0 && (
         <section className="panel">
           <div className="panel-h">
-            <div>
-              <h3>Grant cost share</h3>
-              {/* A SEPARATE TABLE BECAUSE IT IS A SEPARATE THING. Cost share is not money owed on top
-                  of the plan — it is the part of spending you are already doing that never comes back.
-                  Listing it beside signed purchase orders implied a second call on the same cash and
-                  made covered runway read short. */}
-              <p>
-                Not owed on top of your plan. This is the part of your project spending that is never
-                reimbursed — already in your costs, shown here so you can see how much of it there is.
-              </p>
-            </div>
+            <div><h3>Cost share</h3>
+              <p>Not owed on top of your plan — the part of your project spending that is never
+                 reimbursed. Change the award to change these.</p></div>
             <span className="chip">{money(p.costShareTotal)}</span>
           </div>
-          <table className="tbl">
-            <thead>
-              <tr><th>Award</th><th>Period ends</th><th style={{ textAlign: "right" }}>Your share</th></tr>
-            </thead>
-            <tbody>
-              {p.costShare.map(c => (
-                <tr key={c.id}>
-                  <td>{c.label}<div className="meta"><span className="src">derived</span></div></td>
-                  <td>{c.dueAt ? dateShort(c.dueAt) : `month ${c.payMonth}`}</td>
-                  <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(c.amount)}</td>
-                </tr>
+          {p.costShareByGrant.map(g => (
+            <Group key={g.projectId} label={g.label} total={g.total}>
+              {g.periods.map(c => (
+                <Row key={c.id} label={c.label.replace(/^.*— /, "")}
+                     tag={c.dueAt ? dateShort(c.dueAt) : `month ${c.payMonth}`} amount={c.amount} />
               ))}
-            </tbody>
-          </table>
-          <p className="acct-row-s meta">
-            Change the award to change these — they are computed from its budget, so there is no second
-            record to keep in step.
-          </p>
+            </Group>
+          ))}
+        </section>
+      )}
+
+      {/* ── SHUTDOWN COSTS ─────────────────────────────────────────────────────────────────── */}
+      {p?.shutdownTotal > 0 && (
+        <section className="panel">
+          <div className="panel-h">
+            <div><h3>Shutdown costs</h3>
+              {/* THEIR OWN SECTION, not payments with a missing date. They exist only because you
+                  stopped, and grouping them with dated obligations made them read as data somebody had
+                  failed to fill in. */}
+              <p>Only owed if you stop. Nothing here is in your runway.</p></div>
+            <span className="chip">{money(p.shutdownTotal)}</span>
+          </div>
+          {p.shutdown.map(x => (
+            <Row key={x.id} label={x.label} tag={x.derived ? "assumed" : "on closing"} amount={x.amount} />
+          ))}
         </section>
       )}
 
@@ -542,5 +520,42 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         </section>
       )}
     </>
+  );
+}
+
+/** A named group inside a section: a heading, a total, an optional toggle, and its rows.
+ *
+ *  ONE COMPONENT FOR ALL OF THEM, so a group cannot look like a section by accident. The visual
+ *  hierarchy is the argument — section is "what kind of obligation", group is "which one" — and two
+ *  implementations would eventually disagree about which is which.
+ */
+function Group({ label, total, toggle, note, children }) {
+  return (
+    <div className="cgroup">
+      <div className="cgroup-h">
+        <b>{label}</b>
+        {toggle && (
+          <label className="dbt-toggle">
+            <input type="checkbox" checked={toggle.on} onChange={e => toggle.set(e.target.checked)} />
+            <span>Count in clean exit</span>
+          </label>
+        )}
+        {total != null && <span className="cgroup-t">{money(total)}</span>}
+      </div>
+      {note && <p className="cgroup-n">{note}</p>}
+      <div className="cgroup-b">{children}</div>
+    </div>
+  );
+}
+
+/** One line inside a group. */
+function Row({ label, tag, amount, amountLabel }) {
+  return (
+    <div className="crow">
+      <span className="crow-l">{label}{tag && <em className="src">{tag}</em>}</span>
+      <span className="crow-a">
+        {amountLabel && <i>{amountLabel} </i>}{money(amount)}
+      </span>
+    </div>
   );
 }
