@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { commitmentPressure, promote, addManual, promotable, removeCommitment, markPaid,
-         costShareCommitments, accruedCostShare, windDownCost }
+         costShareCommitments, accruedCostShare, windDownCost, outstandingDebt }
   from "../../src/engine/commitments.js";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
@@ -570,5 +570,46 @@ describe("the three flavours", () => {
     const d1 = runway(base) - runway(one), d2 = runway(base) - runway(two);
     expect(d2).toBeGreaterThan(d1);
     expect(d2).toBeLessThanOrEqual(d1 * 2 + 0.05);
+  });
+});
+
+describe("drawn debt is a closure obligation", () => {
+  const base = bare();
+  const drawn = () => ({ ...base,
+    rounds: (base.rounds || []).map(r => (r.kind === "debt" ? { ...r, stage: "closed" } : r)) });
+
+  it("AN UNDRAWN FACILITY OWES NOTHING", () => {
+    // A commitment letter is not a debt. Counting one would make the exit date depend on a decision
+    // nobody has taken.
+    expect(outstandingDebt(base, 0)).toBe(0);
+  });
+
+  it("a drawn one does, and it brings the exit date forward", () => {
+    // It moved the runway all along — the repayments are cost lines — and never this figure. A company
+    // could look able to close cleanly while owing a lender the balance of a facility.
+    const d = drawn();
+    expect(outstandingDebt(d, 0)).toBeGreaterThan(0);
+    expect(commitmentPressure(d, rowsOf(d)).coveredMonths)
+      .toBeLessThan(commitmentPressure(base, rowsOf(base)).coveredMonths);
+  });
+
+  it("falls as the facility is repaid", () => {
+    const d = drawn();
+    expect(outstandingDebt(d, 12)).toBeLessThan(outstandingDebt(d, 0));
+  });
+
+  it("IS THE REMAINING PAYMENTS, which is conservative and says so", () => {
+    // On acceleration a lender is owed principal plus accrued interest — LESS than future payments,
+    // which include interest not yet earned. Conservative is the right direction for a bankruptcy
+    // figure, and exact for a fixed-multiple facility where the multiple is the whole obligation.
+    const src = require("node:fs").readFileSync("src/engine/commitments.js", "utf8");
+    expect(src).toMatch(/CONSERVATIVE for amortising debt/);
+  });
+
+  it("leaves the runway alone", () => {
+    // The repayments were already in the projection. This adds a closure obligation, not a cost.
+    const d = drawn();
+    expect(zeroInfo(rowsOf(d), d.startY, d.startM)?.months)
+      .toBeCloseTo(zeroInfo(rowsOf(base), base.startY, base.startM)?.months, 2);
   });
 });

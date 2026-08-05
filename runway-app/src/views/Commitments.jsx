@@ -58,7 +58,11 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
               to say so or people will read the two numbers as rivals. */}
           <div className="lab">Clean exit until</div>
           <div className="big">
-            {!p ? "—" : p.coveredEndless ? "beyond" : `${p.coveredMonths.toFixed(1)} mo`}
+            {/* ZERO IS AN ANSWER AND "0.0 mo" IS NOT A SENTENCE. A company that already owes more than
+                it holds cannot close cleanly today, and saying so plainly beats a number that looks
+                like a rounding artefact. */}
+            {!p ? "—" : p.coveredEndless ? "beyond"
+              : p.coveredMonths < 0.05 ? "not now" : `${p.coveredMonths.toFixed(1)} mo`}
           </div>
           <div className="meta">
             {p?.coveredAt ? `after ${dateShort(p.coveredAt)} you could not pay everyone` : "you can close and pay everyone"}

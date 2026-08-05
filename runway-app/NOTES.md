@@ -1429,6 +1429,25 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Drawn debt is a closure obligation — it was in neither place it belonged
+
+**Venture debt moved the runway and never the clean-exit date.** The repayments are cost lines, so the
+projection always had them; the closure figure did not, so a company could look able to close cleanly
+while owing a lender the balance of a facility.
+
+**ONLY DRAWN DEBT COUNTS.** `stage === "closed"`. A commitment letter is not a debt, and counting one
+would make the exit date depend on a decision nobody has taken.
+
+**⚠️ IT IS THE REMAINING SCHEDULED PAYMENTS, not the principal.** On acceleration a lender is owed
+principal plus accrued interest, which is LESS than future payments — those include interest not yet
+earned. So this is CONSERVATIVE for amortising debt and EXACT for a fixed-multiple facility, where the
+multiple is the whole obligation however early you stop. Conservative is the right direction for a
+bankruptcy figure.
+
+Measured on the demo: undrawn, outstanding is $0 and the exit date is unchanged at 3.40. Drawn, the
+facility is $2.6m outstanding and the exit date goes to zero — correct, and it exposed that "0.0 mo"
+is not a sentence. It now reads **"not now"**.
+
 ## The dashboard showed a green tick for a milestone it could not reach
 
 **`pass` ASKS WHETHER THE BALANCE IS POSITIVE ON THE DAY.** It says nothing about whether the company

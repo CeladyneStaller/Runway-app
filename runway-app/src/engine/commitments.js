@@ -18,6 +18,7 @@ import { balanceAtDate, zeroInfo } from "./projection.js";
 import { computeGrant, isMsBilled } from "./grant.js";
 import { lastActualMonth } from "./summary.js";
 import { empCostAt } from "./payroll.js";
+import { debtLines } from "./capital.js";
 import { periodEnd } from "./time.js";
 
 const clean = (n) => (Number.isFinite(n) ? n : 0);
@@ -192,6 +193,8 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
     }
     owed += shortfallAt(doc, rows, t);
     owed += windDownCost(doc);
+    // Drawn debt: a signed obligation that lived only in the capital stack and never in this figure.
+    owed += outstandingDebt(doc, t);
     return owed;
   };
 
@@ -676,3 +679,38 @@ export const INDEX_OF = [
   ["project", "Project spend", "Cost share and matching obligations. Scales with what a project spends."],
   ["profit", "Profit", "A share of what is left. Measured BEFORE this obligation, which is both standard and the only definition that terminates."],
 ];
+
+/** What drawn debt would cost you on the way out.
+ *
+ *  DRAWN VENTURE DEBT IS A SIGNED OBLIGATION and it was not counted anywhere. It moved the runway,
+ *  because the repayments are cost lines, and never the clean-exit date — so a company could look able
+ *  to close cleanly while owing a lender the balance of a facility.
+ *
+ *  ⚠️ THIS IS THE REMAINING SCHEDULED REPAYMENTS, not the principal. On acceleration a lender is owed
+ *  principal plus accrued interest, which is LESS than the future payments — those include interest not
+ *  yet earned. So this is CONSERVATIVE for amortising debt and exact for a fixed-multiple facility
+ *  ("pay back 1.5x"), where the multiple is the whole obligation however early you stop.
+ *
+ *  Conservative is the right direction for a bankruptcy figure, and the interface says which it is.
+ */
+export function outstandingDebt(doc, month) {
+  const m = clean(month);
+  let owed = 0;
+  for (const x of doc?.rounds || []) {
+    // ONLY DRAWN DEBT. A facility you have been offered and not taken is not a debt — counting a
+    // commitment letter would make the exit date depend on a decision nobody has made.
+    if (!x || x.kind !== "debt" || x.stage !== "closed") continue;
+    let lines = [];
+    try { lines = debtLines(x, "committed") || []; } catch { lines = []; }
+    for (const l of lines) {
+      if (l.kind !== "cost") continue;
+      const start = clean(l.start), end = l.end == null ? start : clean(l.end);
+      if (l.cadence === "onetime") {
+        if (start > m) owed += clean(l.amount);
+      } else {
+        for (let k = Math.max(start, m + 1); k <= end; k++) owed += clean(l.amount);
+      }
+    }
+  }
+  return owed;
+}
