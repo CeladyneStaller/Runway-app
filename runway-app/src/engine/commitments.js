@@ -227,7 +227,17 @@ export function commitmentPressure(doc, rows, { today = new Date() } = {}) {
     .sort((a, b) => a.payMonth - b.payMonth);
   const costShareTotal = costShare.reduce((a, c) => a + clean(c.amount), 0);
 
+  // Drawn facilities, so the tab can SHOW what the exit date is counting. An obligation that moves a
+  // headline figure and appears nowhere is one somebody eventually stops believing.
+  const debt = (doc?.rounds || [])
+    .filter(x => x && x.kind === "debt" && x.status === "closed")
+    .map(x => ({ id: x.id, label: x.name || "Facility", amount: outstandingDebt({ rounds: [x] }, 0) }))
+    .filter(x => x.amount > 0);
+  const debtTotal = debt.reduce((a, x) => a + x.amount, 0);
+
   return {
+    debt,
+    debtTotal,
     costShare,
     costShareTotal,
     unpaid,
@@ -699,7 +709,10 @@ export function outstandingDebt(doc, month) {
   for (const x of doc?.rounds || []) {
     // ONLY DRAWN DEBT. A facility you have been offered and not taken is not a debt — counting a
     // commitment letter would make the exit date depend on a decision nobody has made.
-    if (!x || x.kind !== "debt" || x.stage !== "closed") continue;
+    // `status`, NOT `stage`. I filtered on a field that does not exist, so nothing was ever drawn and
+    // the whole term was silently zero on real data — the test passed only because it set the same
+    // wrong field. A test that agrees with the bug is not a test.
+    if (!x || x.kind !== "debt" || x.status !== "closed") continue;
     let lines = [];
     try { lines = debtLines(x, "committed") || []; } catch { lines = []; }
     for (const l of lines) {

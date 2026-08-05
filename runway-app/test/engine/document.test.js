@@ -19,7 +19,7 @@ describe("the document", () => {
   it("fills in settings a older document never had", () => {
     const d = migrate({ ...demoDoc(), settings: { fringePct: 0.25 } });
     expect(d.settings.fringePct).toBe(0.25);
-    expect(d.settings.toggles.financing).toBe(false);   // defaulted, not lost
+    expect(d.settings.toggles.financing).toBe(true);    // defaulted, not lost — and the default is now ON
   });
   it("refuses a document from a future build rather than mangling it", () => {
     expect(() => migrate({ ...emptyDoc(), schemaVersion: 99 })).toThrow(/upgrade the app/i);
@@ -35,7 +35,7 @@ describe("the document", () => {
     const d = demoDoc();
     expect(d.cash).toBe(560000);   // same cash as the seed — the divergence is commitments alone
     // The SEED still yields the golden number — that canary is untouched.
-    expect(seedZero({ committed: true, expected: true, speculative: false, financing: false }).zero.months)
+    expect(seedZero({ committed: true, expected: true, speculative: false, financing: true }).zero.months)
       .toBeCloseTo(5.6, 1);
     // The DEMO is shorter, because it carries five commitments the seed does not.
     const dz = zeroInfo(buildProjection(buildModelFromDoc(d), d.settings?.toggles || {}), d.startY, d.startM);

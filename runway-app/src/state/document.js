@@ -17,7 +17,10 @@ const settings = () => ({
   method: "trailing",
   applyBaseline: true,
   anchorActuals: true,
-  toggles: { committed: true, expected: true, speculative: false, financing: false },
+  // FINANCING ON BY DEFAULT. It was off, which meant a company with a closed round saw a runway that
+  // ignored money already in the bank — the toggle exists so a $6m raise cannot drown a $480k quote in
+  // one trace, not to hide financing that has happened.
+  toggles: { committed: true, expected: true, speculative: false, financing: true },
 });
 
 export const emptyDoc = () => {

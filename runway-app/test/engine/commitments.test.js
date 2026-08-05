@@ -576,7 +576,9 @@ describe("the three flavours", () => {
 describe("drawn debt is a closure obligation", () => {
   const base = bare();
   const drawn = () => ({ ...base,
-    rounds: (base.rounds || []).map(r => (r.kind === "debt" ? { ...r, stage: "closed" } : r)) });
+    // `status`, not `stage`. The original version of this test set the same wrong field the code read,
+    // so both agreed and neither was right — a test that agrees with the bug is not a test.
+    rounds: (base.rounds || []).map(r => (r.kind === "debt" ? { ...r, status: "closed" } : r)) });
 
   it("AN UNDRAWN FACILITY OWES NOTHING", () => {
     // A commitment letter is not a debt. Counting one would make the exit date depend on a decision
@@ -606,10 +608,13 @@ describe("drawn debt is a closure obligation", () => {
     expect(src).toMatch(/CONSERVATIVE for amortising debt/);
   });
 
-  it("leaves the runway alone", () => {
-    // The repayments were already in the projection. This adds a closure obligation, not a cost.
+  it("changes the runway too, now that financing is on by default", () => {
+    // WRITTEN WHEN FINANCING DEFAULTED TO OFF, so drawing a facility added no cash and the runway held
+    // still. With financing on, drawing one adds the draw AND the repayments — both real, and both
+    // already in the projection. What the closure figure adds is the BALANCE you would still owe.
     const d = drawn();
     expect(zeroInfo(rowsOf(d), d.startY, d.startM)?.months)
-      .toBeCloseTo(zeroInfo(rowsOf(base), base.startY, base.startM)?.months, 2);
+      .not.toBeCloseTo(zeroInfo(rowsOf(base), base.startY, base.startM)?.months, 2);
+    expect(outstandingDebt(d, 0)).toBeGreaterThan(0);
   });
 });

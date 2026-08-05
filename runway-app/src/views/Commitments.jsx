@@ -380,6 +380,36 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         </section>
       )}
 
+      {(p?.debt || []).length > 0 && (
+        <section className="panel">
+          <div className="panel-h">
+            <div>
+              <h3>Drawn debt</h3>
+              {/* COUNTED IN THE EXIT DATE AND PREVIOUSLY SHOWN NOWHERE. An obligation that moves a
+                  headline figure and appears on no screen is one somebody eventually stops believing.
+                  The repayments are already in the runway; what this adds is the balance you would owe
+                  if you stopped. */}
+              <p>
+                Repayments are already in your runway. This is what you would still owe a lender if you
+                stopped trading — remaining scheduled payments, which is conservative.
+              </p>
+            </div>
+            <span className="chip">{money(p.debtTotal)}</span>
+          </div>
+          <table className="tbl">
+            <thead><tr><th>Facility</th><th style={{ textAlign: "right" }}>Outstanding</th></tr></thead>
+            <tbody>
+              {p.debt.map(x => (
+                <tr key={x.id}>
+                  <td>{x.label}<div className="meta"><span className="src">drawn</span></div></td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(x.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       {(p?.costShare || []).length > 0 && (
         <section className="panel">
           <div className="panel-h">

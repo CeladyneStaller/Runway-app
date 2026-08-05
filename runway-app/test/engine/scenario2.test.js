@@ -40,7 +40,12 @@ describe("taking something out entirely", () => {
 
   it("and it actually changes the runway", () => {
     const before = scenarioImpact(base(), emptyScenario()).months;
-    const after = scenarioImpact(base(), { patches: [{ kind: "remove", collection: "employees", id: "e2" }] }).months;
+    // TOGGLES STATED EXPLICITLY, because the point is the AXIS and not the default. This test used to
+    // rely on financing defaulting to off; the default is now on, and a test that depends on a default
+    // is a test that breaks when somebody changes one for a good reason.
+    const noFinancing = { ...base(), settings: { ...base().settings,
+      toggles: { ...base().settings?.toggles, financing: false } } };
+    const after = scenarioImpact(noFinancing, { patches: [{ kind: "remove", collection: "employees", id: "e2" }] }).months;
     expect(after).toBeGreaterThan(before);
   });
 });
@@ -196,13 +201,16 @@ describe("adding something that isn't in the plan at all", () => {
     expect(d.rounds).toHaveLength(0);
   });
 
-  it("does NOTHING on its own, because financing is a separate axis that defaults to off", () => {
+  it("MOVES THE RUNWAY now that financing defaults to on", () => {
     // Documented here because it is the trap the UI has to handle: a round added with no other change
     // moves the runway not at all, at ANY status, and looks like a broken feature.
     const after = scenarioImpact(base(), { patches: [
       { kind: "add", collection: "rounds", item: scenarioRound({ amount: 3000000, closeMonth: 2 }) },
     ] });
-    expect(after.delta).toBeCloseTo(0, 6);
+    // THE TRAP THIS DOCUMENTED IS GONE, and its disappearance is the point of the default change.
+    // Adding a round used to move the runway NOT AT ALL because financing defaulted to off, which read
+    // as a broken feature to anybody modelling a raise. It now does what somebody would expect.
+    expect(after.delta).toBeGreaterThan(0);
   });
 
   it("and reaches the runway once financing is on", () => {
