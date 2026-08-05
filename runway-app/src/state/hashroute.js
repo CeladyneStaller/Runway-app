@@ -10,7 +10,12 @@ import { useEffect, useState, useCallback } from "react";
 // change to THIS FILE's internals, not to the 9 views — they just call route/navigate.
 
 // The valid top-level views. An unknown hash falls back to the default rather than showing nothing.
-export const VIEWS = ["dash", "flow", "pay", "proj", "sales", "inv", "hist", "ms", "scn"];
+// ⚠️ ADDING A TAB TO THE NAV IS NOT ENOUGH — IT MUST BE HERE TOO. A view missing from this list parses
+// back to the default, so the hash change is silently rewritten to `dash` and the person lands on the
+// dashboard. The failure is confusing because it LOOKS tab-specific and is not: from the dashboard the
+// hash does not change, React state alone carries the click, and the tab appears to work. From anywhere
+// else the route is re-parsed and the fallback bites. `cmt` was missing for exactly that reason.
+export const VIEWS = ["dash", "flow", "pay", "proj", "sales", "inv", "hist", "ms", "cmt", "scn"];
 export const DEFAULT_VIEW = "dash";
 
 // #view/tab  <->  { view, tab }. Tab is optional (a view may have no sub-tabs, or be at its default).

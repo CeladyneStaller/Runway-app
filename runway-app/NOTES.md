@@ -1429,6 +1429,24 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Commitments opened the dashboard from every tab but the dashboard
+
+**`cmt` was in the NAV and not in `VIEWS`.** `parse()` in `hashroute.js` falls back to the default for
+an unknown view, so clicking Commitments rewrote the hash to `dash`.
+
+**WHY IT SEEMED TO WORK FROM THE DASHBOARD**, which is what made it confusing: from `dash` the hash does
+not change, so nothing is re-parsed and React state alone carries the click. From anywhere else the
+route is re-read and the fallback bites. The symptom looked tab-specific and the cause was routing-wide.
+
+**ADDING A TAB TO THE NAV IS NOT ENOUGH — IT MUST BE IN `VIEWS` TOO.** A comment now says so at the
+list, and `test/state/navroutable.test.js` compares the two in BOTH directions, reading the NAV out of
+`App.jsx` rather than restating it: a list retyped in a test is a list that drifts, and the test would
+then pass while the bug returned.
+
+**This bug shipped a week of work ago and was found by using the app, not by testing it.** Every
+commitment test mounted the view directly and so never touched the router — a whole feature was
+unreachable and 1047 tests were green.
+
 ## Mobile audit — measured, not eyeballed
 
 Audited by parsing every rule in `styles.css` and testing it against a 360px viewport, because the
