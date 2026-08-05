@@ -1,13 +1,25 @@
 {
   "name": "Waterline",
   "short_name": "Waterline",
-  "description": "Cash runway modeling for grant-funded organizations",
+  "description": "Cash runway modelling for funded work \u2014 grants, subcontracts, joint ventures and split funding.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0a2846",
+  "background_color": "#F3EFE6",
+  "theme_color": "#16352C",
   "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",

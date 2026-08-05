@@ -1249,3 +1249,11 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .ncebox{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted);
   text-transform:uppercase;letter-spacing:.05em;font-weight:600}
 .ncebox .sel{font-size:12px;padding:3px 6px}
+
+/* ---- terms agreement on create-account ---- */
+.agree{display:flex;align-items:flex-start;gap:9px;margin:14px 0 4px;font-size:12.5px;
+  color:var(--ink-2);line-height:1.5;cursor:pointer}
+.agree input{margin:2px 0 0;flex:none;width:16px;height:16px;accent-color:var(--signal)}
+.agree a{color:var(--signal-ink)}
+@media(max-width:900px){ .agree input{width:20px;height:20px} }
+.setup-trial{border-left:2px solid var(--signal-2);padding-left:10px;margin-top:10px}

@@ -643,7 +643,7 @@ function RunwayApp({ doc, setDoc, onOpenAccount, onOpenSettings, demo = false, o
             // ONE navigate call. setView(...) then setTab(...) races: setTab reads `route.view` from
             // state that the first call has not committed yet, so the tab lands on the OLD view.
             navigate({ view: "sales", tab: "subs" });
-          }} routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
+          }} doc={doc} rows={rows} routeTab={routeTab} setRouteTab={setTab} lines={lines} setLines={setLines} projWeeks={projWeeks} projectCount={projects.length} payrollMonthly={payrollNow} empCount={employees.length} baselineOpex={baselineOpex} employees={employees} fringePct={fringePct} projectLines={projectLines} />}
           {view === "pay" && <Payroll routeTab={routeTab} setRouteTab={setTab} baseDoc={doc} employees={employees} setEmployees={setEmployees} fringeConfig={fringeConfig} setFringe={setFringe} fringePct={fringePct} setFringePct={setFringePct} derivedBurn={derivedBurn} companyOpexNow={companyOpexNow} rProjects={rProjects} toggles={toggles} />}
           {view === "proj" && (
             <StaleProjects doc={doc} onLoad={(id, body) => setDoc(d => ({

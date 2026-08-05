@@ -68,12 +68,24 @@ export function createSession(authClient) {
     /** Create an account with a password. Depending on the project's "Confirm email" setting this
      *  either signs you straight in or sends a confirmation mail — the caller is told which, because
      *  "nothing happened" is the worst possible outcome here. */
-    async signUpWithPassword(email, password, { redirectTo } = {}) {
+    async signUpWithPassword(email, password, { redirectTo, termsVersion } = {}) {
       try {
+        // THE ACCEPTANCE TRAVELS IN SIGNUP METADATA, not through an RPC.
+        //
+        // With email confirmation on, `signUp` returns no session — so nothing can be written to
+        // `profiles` until the user confirms and signs in, which may be days later or never. Recording
+        // it then would timestamp the confirmation rather than the agreement. `my_profile()` copies
+        // this across the first time it runs with a session.
+        const data_ = termsVersion
+          ? { terms_version: termsVersion, terms_accepted_at: new Date().toISOString() }
+          : undefined;
         const { data, error } = await authClient.signUp({
           email: String(email || "").trim(),
           password,
-          options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
+          options: (redirectTo || data_)
+            ? { ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
+                ...(data_ ? { data: data_ } : {}) }
+            : undefined,
         });
         if (error) return { ok: false, message: error.message };
         // A user with no session came back pending confirmation.

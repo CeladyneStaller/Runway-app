@@ -11,6 +11,14 @@
 
 export const TRIAL_DAYS = 14;
 
+// WHICH TERMS THIS BUILD ASKS PEOPLE TO ACCEPT. A DATE, NOT A NUMBER: it names when the document was
+// published, which is what anybody investigating an acceptance actually wants to know.
+//
+// MUST MATCH `terms_current()` in migration 046, and a test reads both — a client one deploy behind
+// that writes an old version string would read as accepted, which makes the whole record worthless.
+// Bump this ONLY when the published terms change, because bumping it asks every existing user again.
+export const TERMS_VERSION = "2026-08-04";
+
 export const PLANS = [
   {
     id: "solo",

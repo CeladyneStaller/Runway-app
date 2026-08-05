@@ -1407,6 +1407,120 @@ covered on money that leaves later the same month.
 **Recurring lines are NOT promotable.** A lease's whole remaining term being "uncovered" is true and
 useless — six figures of unavoidable rent permanently at the top of a list meant for discrete decisions.
 
+## Commitments on the Cash flow → Costs sub-tab
+
+Read-only, using the existing `roTable` helper that Payroll and Project costs already use — so it looks
+like the other derived sections rather than a new kind of thing.
+
+**IT ADDS NOTHING TO THE PROJECTION AND THE PANEL SAYS SO.** A promoted commitment references a line
+that was always in the plan; a manual one created its own; cost share is derived from the award. The
+money is already below. A reader who thought this section ADDED to the projection would conclude the
+runway was wrong, so the subtitle states it outright and a test asserts the sentence is present.
+
+**Editing stays on the Commitments tab.** Two places to change one obligation is how the two disagree.
+A test checks no writing control appears here.
+
+**THE ANCHOR APPEARED TWICE.** `{baselineOpex > 0.5 && (` exists in both the net-cash-flow branch and
+the costs branch, and a first-occurrence replace put the section on the Net tab — where it rendered
+nothing at all, because that tab never shows it. The tests failed with the section apparently missing
+rather than misplaced, which is the confusing version of that bug. Anchor on `{tab === "costs"` first,
+then find the marker within it.
+
+Degrades without `rows`: some render paths mount the view before the projection exists, and a table
+missing its cover column beats a tab that does not render.
+
+## Terms acceptance — migration 046
+
+**A CHECKBOX THAT WRITES NOTHING IS WORTH NOTHING.** If anybody ever asks whether a given user agreed to
+a given version of the terms, the answer has to be a row with a timestamp, not "the form required it".
+
+**THE ACCEPTANCE TRAVELS IN SIGNUP METADATA, NOT THROUGH AN RPC.** With email confirmation on, `signUp`
+returns NO SESSION — so nothing can be written to `profiles` until the user confirms and signs in, which
+may be days later or never. Recording it then would timestamp the CONFIRMATION rather than the
+AGREEMENT. The client passes `terms_version` and `terms_accepted_at` in `options.data`; `my_profile()`
+copies them across the first time it runs with a session.
+
+**Copied ONLY when nothing is recorded yet**, so a later sign-in cannot overwrite a real acceptance with
+a fresher timestamp, and a stale client cannot backdate somebody into terms they never saw.
+
+**`accept_terms` refuses anything but the current version.** A client one deploy behind would otherwise
+write an old version string and read as accepted, which makes the whole record worthless. It exists for
+when the terms CHANGE; new accounts come through the metadata path.
+
+**The version is a DATE, not a counter** — "2026-08-04" names when the document was published, which is
+what anybody investigating an acceptance actually wants to know. `TERMS_VERSION` in `plans.js` must
+match `terms_current()`, and a test reads both.
+
+**THE SCANNER CAUGHT A REAL APPLY FAILURE**: `my_profile()` gains three return columns, and Postgres
+refuses `create or replace` when the return type changes. Without `drop function if exists my_profile()`
+the migration would have failed on apply with "cannot change return type of existing function" — found
+here rather than at 2am against production.
+
+**Not asked when resetting a password.** Somebody resetting agreed long ago, and asking again would
+imply the reset was itself a new agreement.
+
+**The wizard now states the trial at step 0** — creating a company is what starts the clock, and under
+the one-trial rule that is a decision rather than a free action. Saying it on a billing page they have
+to go and find is saying it too late.
+
+## App icon — the duck's head
+
+Cropped to the head from the existing mark. The frame was MEASURED, not eyeballed: rendering the artwork
+on magenta and finding the non-background pixels gave content at x 0..857, y 23..1018 and the red
+crown-and-beak at x 377..804, y 169..453. My first four candidate crops were built from reading a
+coordinate grid by eye, were wrong by a factor of the render scale, and cut the beak off.
+
+**The maskable variant is zoomed out by 1/0.8** so the whole head sits inside Android's 80% safe circle.
+Verified by actually circle-cropping the render rather than trusting the arithmetic — a beak shaved off
+on somebody's launcher is not visible from here.
+
+**Pine was tried as a background and rejected**: the green crest disappears into it. Bone.
+
+**⚠️ THE PWA TEST WAS READING A MANIFEST THE APP NEVER SERVED.** `index.html` references
+`/site.webmanifest`; `test/engine/pwa.test.js` read `public/manifest.webmanifest`. Two manifests
+existed with different colours and different icon lists, and the tested one was the one no browser ever
+loaded — so the icons could have been wrong in every install and the file would still have been green.
+It only surfaced because deleting the unused manifest broke the read.
+
+The test now DERIVES the path from `index.html`, which makes that drift impossible. Two checks added
+while there: the manifest's `theme_color` must match the page's own `theme-color` meta (they disagreed —
+#0a2846 in the page, #10876B in the untested manifest, and neither was the current palette), and every
+icon the manifest promises must exist on disk.
+
+## One trial clock per account — migration 045
+
+**A REGRESSION, NOT A MISSING FEATURE.** 008 entitled "the oldest company you own" — an account-level
+free slot. 022 replaced that clause with `c.trial_ends_at > now()`, which is right for a per-company
+subscription model and silently removed the account-level limit the old clause had been providing.
+`trial_ends_at` is NOT NULL with a default, so every company created got a fresh fourteen days.
+
+**Limiting it to one unpaid company at a time does not close it.** Create on day 1, delete on day 13,
+create again, get another fourteen. Corey caught this in the proposal before it was built. The clock has
+to belong to something the user cannot delete.
+
+**`profiles.trial_started_at` is the clock**, started on the FIRST COMPANY rather than at signup —
+somebody who signs up, is invited to a colleague's company and returns a month later has not used
+anything up. Backfilled from each account's oldest owned company so nobody mid-trial loses time.
+
+**THE FIX NEEDS NO CHANGE TO `company_entitled`.** `create_company` writes the ACCOUNT'S end date into
+`companies.trial_ends_at` instead of letting the column default. A company created on day 10 gets four
+days; one created on day 20 is born expired. The read path is untouched.
+
+**Two rules, neither sufficient alone:** one clock per account (stops create-delete-create), and one
+unpaid company at a time (stops ten companies riding one trial and then expiring into ten separate
+subscription decisions).
+
+**`trialing` is deliberately absent from the paid check** — that is Stripe's trial vocabulary, not this
+product's, and accepting it would let a card-less checkout unlock a second company.
+
+**Ownership, not membership.** An advisor in five client companies owns none of them. Counting
+memberships would repeat the `advisor_usage.companies` mistake exactly.
+
+**A TEST MODEL SUBTLY STRICTER THAN THE RULE IS WORSE THAN NO TEST.** My JS mirror of the SQL required a
+status before checking the period; the SQL's OR does not (`status in (...) or current_period_end >
+now()`), so a cancelled subscription inside its paid period counts as paid. The test failed and the SQL
+was right.
+
 ## QuickBooks unpaid bills -> commitments
 
 `AgedPayableDetail`, a DIFFERENT REPORT answering a different question: `ProfitAndLossDetail` is money

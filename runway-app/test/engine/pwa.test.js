@@ -2,10 +2,21 @@
 // CACHE THE APP, NEVER THE DATA. A stale runway number is worse than an error — an error is obviously
 // wrong, and a cached figure from last week looks exactly like this week's.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 const sw = readFileSync("public/sw.js", "utf8");
-const manifest = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
+// READ THE MANIFEST THE PAGE ACTUALLY REFERENCES, rather than a path typed in here.
+//
+// This test spent its whole life validating `public/manifest.webmanifest` while `index.html` pointed at
+// `/site.webmanifest`. Two manifests existed with different colours and different icon lists, and the
+// tested one was the one no browser ever loaded — so the icons could have been wrong in every install
+// and this file would still have been green.
+//
+// Deriving the path from `index.html` makes that class of drift impossible.
+const html = readFileSync("index.html", "utf8");
+const href = /<link[^>]+rel="manifest"[^>]+href="([^"]+)"/.exec(html)?.[1];
+if (!href) throw new Error("index.html declares no manifest");
+const manifest = JSON.parse(readFileSync("public" + href, "utf8"));
 
 describe("what the worker refuses to cache", () => {
   it("bails out on any cross-origin request", () => {
@@ -46,7 +57,27 @@ describe("installability", () => {
   });
 
   it("uses the app's own colours rather than a browser default", () => {
-    expect(manifest.theme_color).toBe("#10876B");
-    expect(manifest.background_color).toBe("#E9EEEC");
+    // Pine and bone, matching the icons and the mark. The old values here (#10876B teal on #E9EEEC)
+    // were from a palette the product had already left — and because this test was reading the wrong
+    // manifest, nothing ever noticed.
+    expect(manifest.theme_color).toBe("#16352C");
+    expect(manifest.background_color).toBe("#F3EFE6");
+  });
+
+  it("AGREES WITH THE PAGE'S OWN theme-color meta", () => {
+    // Two places state the chrome colour and a browser reads both. When they disagree the address bar
+    // and the splash screen are different colours, which looks like a rendering fault rather than a
+    // configuration one.
+    const meta = /<meta[^>]+name="theme-color"[^>]+content="([^"]+)"/.exec(html)?.[1];
+    expect(meta?.toLowerCase()).toBe(manifest.theme_color.toLowerCase());
+  });
+
+  it("ships every icon the manifest promises", () => {
+    // A manifest entry pointing at a file that is not there fails silently: the launcher falls back to
+    // a screenshot of the page, which is how an app ends up with a white square on somebody's home
+    // screen and nobody finds out.
+    for (const i of manifest.icons) {
+      expect(existsSync("public" + i.src), i.src).toBe(true);
+    }
   });
 });

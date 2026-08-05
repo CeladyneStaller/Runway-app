@@ -1,4 +1,8 @@
 import React, { useState } from "react";
+
+// The published documents live on the marketing site, which is the version anybody could also have read
+// before signing up. Linking to an in-app copy would create two texts to keep in step.
+const SITE = "https://waterline-runway.com";
 import { passwordRules, passwordScore } from "../engine/password";
 
 // ONE component, two entry points: choosing a password while creating an account, and choosing a new one
@@ -23,8 +27,12 @@ export function SetPassword({
 
   const rules = passwordRules(password, { email, confirm });
   const { passed, total } = passwordScore(password, { email, confirm });
-  const ready = rules.every(r => r.ok);
   const resetting = mode === "reset";
+  const [agreed, setAgreed] = useState(false);
+
+  // AGREEMENT IS PART OF READINESS, so the same disabled button covers both. A separate validation
+  // message for the checkbox would be a second way to be blocked, and people read neither.
+  const ready = rules.every(r => r.ok) && (resetting || agreed);
 
   const submit = () => { if (ready && !busy) onSubmit(password); };
 
@@ -84,6 +92,21 @@ export function SetPassword({
       />
 
       {error && <div className="signin-error" role="alert">{error}</div>}
+
+      {/* ONLY WHEN CREATING AN ACCOUNT. Somebody resetting a password agreed a long time ago, and
+          asking again would imply the reset was a new agreement. */}
+      {!resetting && (
+        <label className="agree">
+          <input type="checkbox" checked={agreed} disabled={busy}
+                 onChange={e => setAgreed(e.target.checked)} />
+          <span>
+            I agree to the{" "}
+            <a href={`${SITE}/terms/`} target="_blank" rel="noreferrer">terms</a>
+            {" "}and the{" "}
+            <a href={`${SITE}/privacy/`} target="_blank" rel="noreferrer">privacy notice</a>.
+          </span>
+        </label>
+      )}
 
       <button className="addbtn signin-go" disabled={!ready || busy} onClick={submit}>
         {busy ? "Saving…" : resetting ? "Set password and sign in" : "Create account"}

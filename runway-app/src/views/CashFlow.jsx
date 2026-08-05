@@ -1,10 +1,11 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { TabInsights } from "./chrome/TabInsights";
 import { money, moneyFull } from "../engine/money";
+import { commitmentPressure, unpaidCommitments } from "../engine/commitments";
 import { empCostAt, empTitleAt } from "../engine/payroll";
 import { TIERS, lineSpan } from "../engine/projection";
-import { monthLabel, uid } from "../engine/time";
+import { monthLabel, uid, dateShort } from "../engine/time";
 import { useStart } from "../state/StartCtx";
 import { Payroll } from "./Payroll";
 import { Projects } from "./Projects";
@@ -12,7 +13,7 @@ import { I } from "./chrome/icons";
 import { saasSeries } from "../engine/saas";
 import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
-export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [], saas = [], onGoSubs }) {
+export function CashFlow({ doc, rows, routeTab, setRouteTab = () => {}, lines, setLines, projWeeks, projectCount, payrollMonthly, empCount, baselineOpex, employees = [], fringePct = 0, projectLines = [], saas = [], onGoSubs }) {
   const { START_Y, START_M } = useStart();
   const tabPrefs = useTabPrefs();
   const tab = resolveTab("flow", routeTab, "net", tabPrefs);
@@ -118,6 +119,26 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
   const subCount = includedSaas.length;
   const saasNow = includedSaas.reduce((a, x) => a + (saasSeries(x).find(p => p.month === 0)?.mrr || 0), 0);
 
+  // Unpaid obligations, in payment order, with cover where the projection can tell us. `rows` is absent
+  // in some render paths (and in tests that mount this view bare), so cover degrades to a date rather
+  // than throwing — a table that renders without the extra column is better than a tab that does not
+  // render at all.
+  const commitmentRows = useMemo(() => {
+    let pressure = null;
+    try { pressure = rows?.length ? commitmentPressure(doc, rows) : null; } catch { pressure = null; }
+    const list = pressure?.rows || (() => {
+      try { return unpaidCommitments(doc); } catch { return []; }
+    })();
+    return list.map(c => ({
+      label: c.label,
+      src: c.source === "grant" ? "cost share" : c.source === "qbo" ? "unpaid bill" : c.source,
+      amount: c.amount,
+      when: c.dueAt
+        ? `${dateShort(c.dueAt)}${c.covered === false ? " · not covered" : ""}`
+        : `month ${c.payMonth}`,
+    }));
+  }, [doc, rows]);
+
   const TABS = [["net", "Net cash flow"], ["revenue", "Revenue"], ["costs", "Costs"]];
   // Hidden sub-tabs are dropped here, and the active one is resolved against what is LEFT —
   // falling back to the view's own default could land on a tab the person asked not to see.
@@ -207,6 +228,17 @@ export function CashFlow({ routeTab, setRouteTab = () => {}, lines, setLines, pr
             when: (e.start || 0) > 0 ? `starts ${monthLabel(START_Y, START_M, e.start)}` : (e.end != null ? `ends ${monthLabel(START_Y, START_M, e.end)}` : "ongoing") })), "Payroll")}
         {roTable("Project & grant costs", "Internal project spend and the cash portion of grant budgets.",
           projOut.map(l => ({ label: l.label || "Cost", src: l.projectName, amount: l.amount, per: l.cadence === "recurring", when: timing(l) })), "Projects")}
+                {/* COMMITMENTS, READ ONLY. They already move the cash — a promoted line was always in the plan
+            and a manual one created its own — so this does not add anything to the projection. What it
+            adds is the ANSWER TO "why is there money leaving in March", which was previously visible
+            only on a tab somebody had to know to open.
+            Editing stays on the Commitments tab: two places to change one obligation is how the two
+            disagree. */}
+        {commitmentRows.length > 0 && roTable(
+          "Commitments",
+          "Signed and not yet paid. These already move the cash below; edit them on the Commitments tab.",
+          commitmentRows, "commitment")}
+
         {baselineOpex > 0.5 && (
           <div className="callout" style={{ marginTop: 16, marginBottom: 0, borderLeftColor: "var(--muted)" }}>
             A derived <b>Other operating costs</b> baseline of <b className="num">{moneyFull(baselineOpex)}/mo</b> is also counted, anchoring forward burn to your historical run-rate. Adjust it in the <b>Spend history</b> tab.

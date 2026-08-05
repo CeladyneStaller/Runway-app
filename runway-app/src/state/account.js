@@ -5,7 +5,7 @@
 // SECURITY DEFINER function. Takes the same injected `auth` adapter, so it is fully testable without a
 // network.
 
-import { BackendError, ERR_FORBIDDEN, ERR_UNREACHABLE } from "./backends/errors.js";
+import { BackendError, ERR_FORBIDDEN, ERR_UNREACHABLE, ERR_PAYMENT_REQUIRED } from "./backends/errors.js";
 import { track } from "./funnel.js";
 import { assembleFromStorage } from "./sections.js";
 
@@ -50,8 +50,35 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
     },
 
     /** Creates an EMPTY company — no document row, so the app renders a blank model. */
+    /** Record agreement to the current terms. Used when the published terms CHANGE — a new account
+     *  records its agreement through signup metadata instead, because at that moment there is no
+     *  session to write with. */
+    async acceptTerms(version) {
+      await rpc("accept_terms", { p_version: String(version || "") });
+    },
+
     async createCompany(name) {
-      const out = await rpc("create_company", { p_name: String(name || "").trim() });
+      // THE TRIAL GUARD RAISES `trial_limit:<uuid>`, which is a correct error and an unreadable one.
+      // Translate it here, once, rather than in each caller — and name the company in the way, because
+      // "you cannot do that" with no object is a support email.
+      let out;
+      try {
+        out = await rpc("create_company", { p_name: String(name || "").trim() });
+      } catch (e) {
+        const m = /trial_limit:([0-9a-f-]{36})/i.exec(e?.message || "");
+        if (!m) throw e;
+        let nm = "another company";
+        try {
+          const rows = await this.listCompanies?.();
+          nm = (rows || []).find(c => c.id === m[1])?.name || nm;
+        } catch { /* the name is a courtesy; the refusal is the point */ }
+        // ERR_PAYMENT_REQUIRED, not a new kind — this IS that case, and anything already handling
+        // payment_required (retry suppression, the unpaid bar) handles this correctly for free.
+        throw new BackendError(
+          ERR_PAYMENT_REQUIRED,
+          `${nm} is already on your free trial. Choose a plan for it to start another company.`,
+          { companyId: m[1] });
+      }
       const id = typeof out === "string" ? out : unwrapOne(out)?.create_company ?? unwrapOne(out);
       if (!id) throw new BackendError(ERR_UNREACHABLE, "Could not create the company");
       return id;

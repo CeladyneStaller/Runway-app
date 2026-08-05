@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { TERMS_VERSION } from "../state/plans";
 import { siteOrigin, linkDestination } from "../state/siteurl";
 import { SetPassword } from "./SetPassword";
 import { track } from "../state/funnel";
@@ -60,7 +61,10 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
         // signup_completed a conversion worth reading: a gap between them means accounts are being
         // created and not reached, which is almost always the confirmation email.
         void track("signup_started");
-        const r = await run("signup", () => session.signUpWithPassword(email, pw, { redirectTo }));
+        // The version the person actually saw beside the checkbox travels with the signup, so the
+        // record names the document rather than "whatever was current when they confirmed".
+        const r = await run("signup", () =>
+          session.signUpWithPassword(email, pw, { redirectTo, termsVersion: TERMS_VERSION }));
         if (r?.ok) {
           setChoosing(false);
           // Told explicitly, because "nothing happened" is the worst outcome at this point: with email

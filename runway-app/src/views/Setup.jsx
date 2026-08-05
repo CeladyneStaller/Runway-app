@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { TRIAL_DAYS } from "../state/plans";
 import { docFromSetup, missingSalaries, setupHasSubstance, num, classifyRunway } from "../state/setup";
 import { buildModelFromDoc } from "../engine/buildmodel";
 import { buildProjection } from "../engine/projection";
@@ -97,6 +98,15 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
           <label className="signin-label" htmlFor="su-cash">Cash on hand</label>
           <input id="su-cash" className="signin-input" value={cash} onChange={e => setCash(e.target.value)} placeholder="500,000" inputMode="decimal" />
           <p className="setup-fine">What's in the bank today. You can correct it any time.</p>
+          {/* SAID AT THE MOMENT OF CREATION, not on a billing page they have to find. Creating a
+              company is what starts the clock — and under the one-trial rule it is a decision, not a
+              free action, so the person taking it should know that while they are taking it. */}
+          {mode === "company" && (
+            <p className="setup-fine setup-trial">
+              This starts your {TRIAL_DAYS}-day free trial. No card needed, and you can export your
+              model at any time.
+            </p>
+          )}
           {onImport && (
             <div className="setup-alt">
               <span>Already have a model in a file?</span>
