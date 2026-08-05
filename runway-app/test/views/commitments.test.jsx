@@ -7,13 +7,20 @@ import { buildModelFromDoc } from "../../src/engine/buildmodel";
 import { addManual, promote } from "../../src/engine/commitments";
 import { demoDoc } from "../../src/state/document";
 
+// The demo now ships five commitments to demonstrate them, so it is the wrong fixture for a test about
+// an empty tab or about what a single commitment does.
+const bare = () => {
+  const d = demoDoc();
+  return { ...d, commitments: [], lines: (d.lines || []).filter(l => !String(l.id).startsWith("l_demo_")) };
+};
+
 afterEach(cleanup);
 const rowsOf = (d) => buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
 const draw = (doc, over = {}) =>
   render(<Commitments doc={doc} setDoc={() => {}} rows={rowsOf(doc)} {...over} />);
 
 describe("the Commitments tab", () => {
-  const base = demoDoc();
+  const base = bare();
 
   it("EXPLAINS THE CONCEPT when empty", () => {
     // Unlike every other tab, this one is not populated by using the product normally. Somebody
@@ -21,7 +28,7 @@ describe("the Commitments tab", () => {
     //
     // Needs a model with NO AWARDS: the demo carries a derived cost-share obligation now, so it is
     // never truly empty — which is the cost-share feature working, not this test failing.
-    const v = draw({ ...base, projects: [], commitments: [] });
+    const v = draw({ ...bare(), projects: [], commitments: [] });
     expect(v.container.textContent).toMatch(/Nothing signed yet/);
     expect(v.container.textContent).toMatch(/agreed to pay and have not paid/);
   });
@@ -82,7 +89,7 @@ describe("the Commitments tab", () => {
 });
 
 describe("pulling unpaid bills", () => {
-  const base = demoDoc();
+  const base = bare();
   const account = (grid) => ({ qboSync: vi.fn().mockResolvedValue({ grid }) });
   const payGrid = {
     headers: ["Tx Date", "Doc Num", "Vendor", "Due Date", "Open Balance"],
@@ -132,7 +139,7 @@ describe("pulling unpaid bills", () => {
 });
 
 describe("the Grant cost share table", () => {
-  const base = demoDoc();
+  const base = bare();
 
   it("gets its own table, not a row among the signed obligations", () => {
     const v = draw(base);
@@ -159,7 +166,7 @@ describe("the Grant cost share table", () => {
 });
 
 describe("the debt / planned badge", () => {
-  const base = demoDoc();
+  const base = bare();
   const withPay = (over = {}) => addManual(base,
     { label: "Bill", signedMonth: 0, payMonth: 3, amount: 1000, ...over });
 
@@ -208,7 +215,7 @@ describe("the debt / planned badge", () => {
 });
 
 describe("the notice assumption", () => {
-  const base = demoDoc();
+  const base = bare();
   const d = addManual(base, { label: "x", signedMonth: 0, payMonth: 3, amount: 1000 });
 
   it("IS STATED WHERE THE NUMBER IS, not buried in settings", () => {

@@ -1429,6 +1429,31 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## The demo now demonstrates the commitment flavours
+
+Five commitments, one of each shape: a dated DEBT (tooling PO), a dated PLANNED cost (patent renewal),
+a CLOSURE-TRIGGERED payment with no date (lease break), a RECURRING lease, and an INDEXED royalty at 2%
+of revenue. Plus `noticeWeeks: 4` and a saved scenario.
+
+**⚠️ THE DEMO NOW DIVERGES FROM THE SEED DATA, deliberately.** Two tests asserted the demo reproduces
+the golden 5.6 — a contract keeping the two in step. The seed has no commitments, so the demo cannot
+both carry them and match.
+
+I tried raising the demo's cash to restore 5.6 and reverted it: that keeps the NUMBER while making the
+two documents different companies, which is worse than an honest divergence. **The demo keeps the seed's
+cash and reads 3.9.** The golden canary still guards the SEED, which is what it was for; the demo's own
+number is asserted separately, so a change to either is still caught. Two numbers now, not one.
+
+**SaaS was seeded and then removed.** `saas-integration.test.js` asserts the demo carries no
+subscription, and its premise is sound — it isolates the engine by starting without one. Seeding a
+product would have meant rewriting that test to accommodate the demo, which is the wrong way round.
+**Recurring revenue remains unexercised in the demo**, noted rather than hidden.
+
+**Fifteen tests broke on the change**, all measuring the fixture rather than behaviour. Two lessons
+recorded: `demoDoc()` is no longer a blank slate, so tests that measure what a commitment DOES need a
+stripped model; and a hardcoded `payMonth: 9` was "after the cash runs out" only for one cash figure —
+derived from the runway now.
+
 ## Covered runway rebuilt as the SOLVENT WIND-DOWN DATE — steps 1-4
 
 **The old definition had no correct case.** "Cash minus what you have signed" double-counted, because

@@ -5,13 +5,25 @@ import { commitmentPressure, promote, addManual, promotable, removeCommitment, m
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { demoDoc } from "../../src/state/document.js";
+
+// THE DEMO NOW CARRIES FIVE COMMITMENTS, one of each flavour, because its job is to demonstrate the
+// product. That makes it the wrong fixture for tests that measure what a commitment DOES — they need a
+// model with none, or they are measuring the seeds. Stripping them is one line and says which is meant.
+const bare = () => {
+  const d = demoDoc();
+  return { ...d, commitments: [], lines: (d.lines || []).filter(l => !String(l.id).startsWith("l_demo_")) };
+};
 import { computeGrant } from "../../src/engine/grant.js";
 
 const rowsOf = (d) => buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
 const runway = (d) => zeroInfo(rowsOf(d), d.startY, d.startM)?.months ?? null;
 
+// A MONTH COMFORTABLY PAST THE CROSSING, derived rather than hardcoded. Month 9 used to be past it and
+// stopped being when the demo's cash changed — a test about the fixture rather than the behaviour.
+const afterCashOut = (d) => Math.ceil((runway(d) ?? 6) + 3);
+
 describe("commitments", () => {
-  const base = demoDoc();
+  const base = bare();
 
   it("PROMOTING A PLANNED LINE MOVES NO CASH", () => {
     // THE INVARIANT: every commitment owns exactly one outflow. A promoted line already exists and
@@ -123,7 +135,7 @@ describe("commitments", () => {
 });
 
 describe("cost share, derived from the award", () => {
-  const base = demoDoc();
+  const base = bare();
 
   it("finds the obligation the model already knows the size of", () => {
     // A cost-share award commits you to spending your own money to unlock theirs, and it appeared
@@ -203,7 +215,7 @@ describe("cost share, derived from the award", () => {
 });
 
 describe("cost share accrues per period", () => {
-  const base = demoDoc();
+  const base = bare();
 
   it("is ONE OBLIGATION PER BUDGET PERIOD, not one per award", () => {
     // A funder does not let you under-match in year one and make it up in year three. Modelling it as a
@@ -244,7 +256,7 @@ describe("cost share accrues per period", () => {
 });
 
 describe("no-cost extension", () => {
-  const base = demoDoc();
+  const base = bare();
   const withNce = (months) => ({
     ...base,
     projects: (base.projects || []).map(p => (p.grant
@@ -278,7 +290,7 @@ describe("no-cost extension", () => {
 });
 
 describe("cost share follows the BILLING RHYTHM", () => {
-  const base = demoDoc();
+  const base = bare();
   const retime = (t) => ({
     ...base,
     projects: (base.projects || []).map(p => (p.grant
@@ -347,7 +359,7 @@ describe("cost share follows the BILLING RHYTHM", () => {
 });
 
 describe("cost share against ACTUAL billings", () => {
-  const base = demoDoc();
+  const base = bare();
   const billed = (actuals) => ({
     ...base,
     projects: (base.projects || []).map(p => (p.grant
@@ -401,7 +413,7 @@ describe("cost share against ACTUAL billings", () => {
 });
 
 describe("covered runway is the solvent wind-down date", () => {
-  const base = demoDoc();
+  const base = bare();
   const covered = (d) => commitmentPressure(d, rowsOf(d))?.coveredMonths;
   const runway = (d) => zeroInfo(rowsOf(d), d.startY, d.startM)?.months;
 
@@ -420,7 +432,7 @@ describe("covered runway is the solvent wind-down date", () => {
   it("A DEBT AFTER THE CASH RUNS OUT SHORTENS IT, and runway is untouched", () => {
     // The case the whole feature exists for. You are insolvent before the bill arrives, so runway does
     // not move — but you lost the ability to close cleanly long before that.
-    const d = addManual(base, { label: "A", signedMonth: 0, payMonth: 9, amount: 150000 });
+    const d = addManual(base, { label: "A", signedMonth: 0, payMonth: afterCashOut(base), amount: 150000 });
     expect(runway(d)).toBeCloseTo(runway(base), 2);
     expect(covered(d)).toBeLessThan(covered(base));
   });
@@ -428,7 +440,7 @@ describe("covered runway is the solvent wind-down date", () => {
   it("A PLANNED COST DOES NOT, because you would not incur it", () => {
     // The badge earning its place: a patent renewal you would abandon is not a reason to think you are
     // heading for bankruptcy.
-    const d = addManual(base, { label: "B", signedMonth: 0, payMonth: 9, amount: 150000, kind: "planned" });
+    const d = addManual(base, { label: "B", signedMonth: 0, payMonth: afterCashOut(base), amount: 150000, kind: "planned" });
     expect(covered(d)).toBeCloseTo(covered(base), 2);
   });
 
@@ -463,12 +475,12 @@ describe("covered runway is the solvent wind-down date", () => {
 });
 
 describe("uncovered is two distinct failures", () => {
-  const base = demoDoc();
+  const base = bare();
 
   it("UNPAYABLE is money, UNMATCHABLE is non-grant money specifically", () => {
     // Folding them together hides that they have different remedies. A bank balance made entirely of
     // drawdowns against an award cannot match that award, however large it is.
-    const d = addManual(base, { label: "A", signedMonth: 0, payMonth: 9, amount: 150000 });
+    const d = addManual(base, { label: "A", signedMonth: 0, payMonth: afterCashOut(base), amount: 150000 });
     const p = commitmentPressure(d, rowsOf(d));
     expect(p.unpayable).toBe(150000);
     expect(p.unmatchable).toBe(0);              // the demo has non-grant income covering the match
@@ -490,7 +502,7 @@ describe("uncovered is two distinct failures", () => {
   it("UNPAYABLE COUNTS PLANNED COSTS, unlike the clean-exit date", () => {
     // The questions differ. "Will I be able to pay this" is true of a patent fee; "can I close cleanly"
     // is not. The same commitment can be unpayable and irrelevant to bankruptcy.
-    const d = addManual(base, { label: "B", signedMonth: 0, payMonth: 9, amount: 150000, kind: "planned" });
+    const d = addManual(base, { label: "B", signedMonth: 0, payMonth: afterCashOut(base), amount: 150000, kind: "planned" });
     const p = commitmentPressure(d, rowsOf(d));
     expect(p.unpayable).toBe(150000);
     expect(p.coveredMonths).toBeCloseTo(commitmentPressure(base, rowsOf(base)).coveredMonths, 2);
@@ -511,7 +523,7 @@ describe("uncovered is two distinct failures", () => {
 });
 
 describe("the three flavours", () => {
-  const base = demoDoc();
+  const base = bare();
   const rows = (d) => rowsOf(d);
   const runway = (d) => zeroInfo(rows(d), d.startY, d.startM)?.months;
 

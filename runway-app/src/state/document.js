@@ -43,20 +43,93 @@ export const emptyDoc = () => {
     categoryMap: {},   // { importedCategoryLabel -> object-class key }, for grant reconciliation
     importProfiles: [], // saved column-mapping profiles for re-importing from the same source
     scenarios: [],      // saved what-if scenarios (overlay patches over this base doc)
-    settings: settings(),
+    settings: { ...settings(), noticeWeeks: 4 },
   };
 };
 
 /** The demo company. Explicitly loaded, never the default — nobody's real data should have to be
  *  deleted around someone else's example. */
+
+// ── demo seeds ────────────────────────────────────────────────────────────────────────────────────
+
+/** One commitment of every flavour and kind, because each behaves differently at closure and a demo
+ *  that shows only payments teaches the wrong model. */
+const SEED_COMMITMENTS = [
+  // A DEBT with a date: goods ordered, invoice to follow. Counts against the clean-exit date.
+  { id: "cm_demo_po", label: "Stack tooling — Meridian Grid", flavor: "payment", kind: "debt",
+    signedMonth: 0, payMonth: 3, amount: 62000, source: "manual",
+    lineId: "l_demo_po", status: "committed", paidRef: null },
+
+  // A PLANNED cost with a date: you would simply not renew if you closed. Shows the badge doing work.
+  { id: "cm_demo_pat", label: "Patent renewal — US 11,482,003", flavor: "payment", kind: "planned",
+    signedMonth: 0, payMonth: 8, amount: 4200, source: "manual",
+    lineId: "l_demo_pat", status: "committed", paidRef: null },
+
+  // A CLOSURE-TRIGGERED payment: no date, and the badge is not offered because it exists BECAUSE you
+  // closed. This is the row that makes the clean-exit date mean something.
+  { id: "cm_demo_break", label: "Lease break — Fulton St", flavor: "payment", kind: "debt",
+    signedMonth: 0, payMonth: null, amount: 38000, source: "manual",
+    lineId: null, status: "committed", paidRef: null },
+
+  // RECURRING: overhead that stops when the business does, so it is never a closure debt.
+  { id: "cm_demo_lease", label: "Office lease — Fulton St", flavor: "recurring", kind: "planned",
+    signedMonth: 0, payMonth: null, amount: 6500, source: "manual",
+    lineId: "l_demo_lease", status: "committed", paidRef: null },
+
+  // INDEXED: scales with revenue and creates no line of its own — `indexedLines` builds it at
+  // projection time. Deliberately small, so the demo still reads as a going concern.
+  { id: "cm_demo_roy", label: "Licence royalty — Ferrous Labs", flavor: "indexed", kind: "debt",
+    signedMonth: 0, payMonth: null, amount: 0, index: { of: "revenue", ref: null, pct: 0.02 },
+    source: "manual", lineId: null, status: "committed", paidRef: null },
+];
+
+/** One subscription product, so the recurring-revenue engine has something to show. */
+const SEED_SAAS = [
+  { id: "saas_demo", name: "Cellsight monitoring", price: 480, unit: "month",
+    customers: 34, growth: 0.06, churn: 0.02, start: 0, confidence: "expected" },
+];
+
+/** One saved scenario: the change a founder reaches for first. */
+const SEED_SCENARIOS = [
+  { id: "scn_demo", name: "Delay two hires to Q3", createdMonth: 0,
+    patch: { employees: { defer: 3 } },
+    note: "What the runway looks like if the two open roles start a quarter later." },
+];
+
+// The seed's cash, named so the divergence above is about commitments and nothing else.
+const SEED_CASH_DEMO = 560000;
+
 export const demoDoc = () => ({
   ...emptyDoc(),
   // HARDCODED on purpose, and the only name in the app that is. Every other document takes its name
   // from the account's company; a demo has no account, so there is nothing to take one from.
   name: "Demo Company",
   startY: 2026, startM: 6,
-  cash: 560000,
-  lines: SEED_LINES,
+  // ⚠️ THE DEMO NOW DIFFERS FROM THE SEED DATA, deliberately, and this is the line where that happens.
+  //
+  // Two tests assert the demo reproduces the golden runway — a contract keeping the demo and the seed
+  // in step. Adding commitments to demonstrate them breaks it: the seed has none, so the demo cannot
+  // both carry them and match. Raising cash to compensate would restore the NUMBER while making the
+  // two documents different companies, which is worse than an honest divergence.
+  //
+  // So the demo keeps the seed's cash and reads SHORTER than the golden 5.6. The golden canary still
+  // guards the seed, which is what it was for; the demo's own runway is asserted separately.
+  cash: SEED_CASH_DEMO,
+  // SEED_LINES PLUS THE DEMO'S OWN. The golden canary builds from `SEED_LINES` directly, so anything
+  // added there moves the number the whole suite is anchored to — these belong to the demo document
+  // and nowhere else.
+  //
+  // They exist because a commitment OWNS EXACTLY ONE OUTFLOW: without them the tab would show
+  // obligations with no cash behind them, which is the one thing the invariant forbids.
+  lines: [
+    ...SEED_LINES,
+    { id: "l_demo_po", label: "Stack tooling — Meridian Grid", cadence: "onetime", kind: "cost",
+      amount: 62000, start: 3, confidence: "committed" },
+    { id: "l_demo_pat", label: "Patent renewal", cadence: "onetime", kind: "cost",
+      amount: 4200, start: 8, confidence: "committed" },
+    { id: "l_demo_lease", label: "Office lease — Fulton St", cadence: "recurring", kind: "cost",
+      amount: 6500, start: 0, confidence: "committed" },
+  ],
   employees: SEED_EMPLOYEES,
   // one project carries recorded spend so the budget-vs-actual tag is visible in the demo
   projects: [...SEED_PROJECTS, ...SEED_FULFIL].map(p =>
@@ -81,6 +154,15 @@ export const demoDoc = () => ({
     3: { cash: 216000, revenue: 17000, additional: 0, grants: {} },
     4: { cash: 108000, revenue: 18000, additional: 0, grants: {} },
   },
+  // ── EVERY FEATURE, DEMONSTRATED ONCE ──────────────────────────────────────────────────────────
+  // A demo whose job is to be read in a minute, so one representative example of each thing rather
+  // than a maximal one. Anything that appears twice here is doing two different jobs.
+  commitments: SEED_COMMITMENTS,
+  // ⚠️ SAAS DELIBERATELY NOT SEEDED.  asserts the demo carries none, and its
+  // premise is sound: it isolates the subscription engine by starting from a model without one.
+  // Seeding a product here would have meant rewriting that test to accommodate the demo, which is the
+  // wrong way round. Recurring revenue stays unexercised in the demo — noted rather than hidden.
+  scenarios: SEED_SCENARIOS,
 });
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { emptyDoc, demoDoc, migrate, toJSON, fromJSON, SCHEMA_VERSION } from "../../src/state/document";
 import { burnStats } from "../../src/engine";
 import { seedZero } from "../helpers";
+import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
+import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
 
 describe("the document", () => {
   it("starts empty, not as someone else's demo", () => {
@@ -22,11 +24,22 @@ describe("the document", () => {
   it("refuses a document from a future build rather than mangling it", () => {
     expect(() => migrate({ ...emptyDoc(), schemaVersion: 99 })).toThrow(/upgrade the app/i);
   });
-  it("the demo document reproduces the golden runway", () => {
+  it("the demo document's runway, which is NOT the golden one", () => {
+    // ⚠️ THE DEMO NO LONGER MATCHES THE SEED, deliberately. The seed data has no commitments; the demo
+    // carries five, one of each flavour, because its job is to demonstrate the product. So the demo's
+    // runway is SHORTER than the golden 5.6 and asserting equality would force one of two bad choices:
+    // strip the demo of the feature, or raise its cash and make the two documents different companies.
+    //
+    // The golden canary still guards the SEED, which is what it was for. This asserts the demo's own
+    // number, so a change to either is still caught — there are simply two numbers now, not one.
     const d = demoDoc();
-    expect(d.cash).toBe(560000);
+    expect(d.cash).toBe(560000);   // same cash as the seed — the divergence is commitments alone
+    // The SEED still yields the golden number — that canary is untouched.
     expect(seedZero({ committed: true, expected: true, speculative: false, financing: false }).zero.months)
       .toBeCloseTo(5.6, 1);
+    // The DEMO is shorter, because it carries five commitments the seed does not.
+    const dz = zeroInfo(buildProjection(buildModelFromDoc(d), d.settings?.toggles || {}), d.startY, d.startM);
+    expect(dz.months).toBeCloseTo(3.9, 1);
   });
 });
 
