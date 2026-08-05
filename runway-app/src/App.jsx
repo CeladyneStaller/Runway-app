@@ -1465,14 +1465,35 @@ export default function App() {
   // Arriving from a reset link LOOKS like an ordinary sign-in — Supabase hands you a session. Sending
   // that person to the dashboard is a dead end: they came to change their password and there is now
   // nothing on screen that lets them. The PASSWORD_RECOVERY event is the only thing that distinguishes it.
-  const [recovering, setRecovering] = useState(false);
+  // RECOVERY IS READ FROM THE URL, NOT ONLY FROM THE EVENT.
+  //
+  // `PASSWORD_RECOVERY` fires once, when supabase-js consumes the link's hash. If the listener is not
+  // subscribed at that instant — a slow first paint, a reload, anything — the event is missed and the
+  // user is left holding an ORDINARY SESSION. That is why the reset link behaved like a magic link and
+  // dropped people straight into the account.
+  //
+  // The hash is the durable evidence: `type=recovery` is in the URL when the link opens, whether or not
+  // anybody was listening. Read once, synchronously, before the router touches it.
+  const [recovering, setRecovering] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return /(^|[#&?])type=recovery(&|$)/.test(window.location.hash || "");
+  });
   const [pwBusy, setPwBusy] = useState(false);
+  const [justReset, setJustReset] = useState(false);
   const [pwError, setPwError] = useState(null);
 
   useEffect(() => {
     if (!gated) return;
     let alive = true;
     session.current().then(s => { if (alive) setUser(s); }).catch(() => { if (alive) setUser(null); });
+    // AND CLEAR THE MARKER ONCE READ. The app is hash-routed, so Supabase's `#access_token=…&type=
+    // recovery` sits in the same place the router keeps its view — leaving it there meant every later
+    // navigation, including signing out, re-read `type=recovery` and bounced back to the new-password
+    // screen. That was the third symptom, and it is the same one line.
+    if (typeof window !== "undefined" && /type=recovery/.test(window.location.hash || "")) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+
     const off = session.onChange((s, event) => {
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
       setUser(s);
@@ -1517,8 +1538,16 @@ export default function App() {
         setPwError(null); setPwBusy(true);
         const r = await session.updatePassword(pw);
         setPwBusy(false);
-        if (r.ok) setRecovering(false);          // the recovery session becomes an ordinary one
-        else setPwError(r.message);
+        if (!r.ok) { setPwError(r.message); return; }
+        // SIGN OUT AND MAKE THEM LOG IN.
+        //
+        // The recovery session came from a link in an inbox. Anybody with that inbox — or a forwarded
+        // mail, or a shared machine with the tab still open — is holding it. Ending it means the new
+        // password is used at least once by the person who set it, and it is the difference between
+        // "reset your password" and "here is a way into the account".
+        setRecovering(false);
+        await session.signOut();
+        setJustReset(true);
       }}
     />
   );
@@ -1529,7 +1558,7 @@ export default function App() {
     // The landing screen is the DEFAULT, and SignIn is reached through it. Rendering the form first
     // and hanging the demo off the bottom of it was the old arrangement, and it asked people to
     // authenticate to a product they had not yet decided they wanted.
-    if (entry === null) return (
+    if (entry === null && !justReset) return (
       <>
         <LandedOnce />
         <Landing onDemo={() => { void track("demo_started"); enterDemo(); }}
@@ -1538,7 +1567,10 @@ export default function App() {
       </>
     );
     return <SignIn session={session} onDemo={enterDemo} onBack={() => setEntry(null)}
-                   initialMode={entry === "signin" ? "signin" : "create"} />;
+                   initialMode={justReset ? "signin" : (entry === "signin" ? "signin" : "create")}
+                   banner={justReset
+                     ? "Your password has been changed. Sign in with the new one."
+                     : null} />;
   }
   return <DocumentHost />;
 }

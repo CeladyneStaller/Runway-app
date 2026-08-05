@@ -21,7 +21,7 @@ import { track } from "../state/funnel";
 const CREATE = "create";
 const SIGNIN = "signin";
 
-export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
+export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner = null }) {
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -166,6 +166,10 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack }) {
 
   return (
     <div className="rw"><div className="splash signin">
+      {/* WHY THEY ARE LOOKING AT A SIGN-IN FORM. Signing somebody out after they successfully set a
+          password looks like a failure unless you say what happened — and the one thing they must not
+          conclude is that the reset did not work. */}
+      {banner && <p className="signin-note" role="status">{banner}</p>}
       <span className="eyebrow">Startup runway</span>
       <h2>Know your runway</h2>
       <p>Your model lives in your account, so it follows you between devices.</p>

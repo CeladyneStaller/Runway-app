@@ -1429,6 +1429,33 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Password reset — three bugs, two of them the same line
+
+**1 · THE LINK BEHAVED LIKE A MAGIC LINK.** `setRecovering(true)` fired only on the `PASSWORD_RECOVERY`
+event, which supabase-js emits ONCE, when it consumes the link's hash. Miss that instant — a slow first
+paint, a reload — and the user is left holding an ordinary session and lands in the account. The hash is
+the durable evidence: `type=recovery` is in the URL whether or not anybody was listening, so recovery is
+now read from it synchronously at mount.
+
+**2 · SIGNING OUT WENT BACK TO THE NEW-PASSWORD SCREEN.** The app is hash-routed, so Supabase's
+`#access_token=…&type=recovery` sits exactly where the router keeps its view. Nothing cleared it, so
+every later navigation re-read it. One `history.replaceState` once the marker has been consumed.
+
+**3 · A SUCCESSFUL RESET LEFT THEM SIGNED IN.** Now `signOut()` and back to the form with a banner
+saying why. The recovery session came from a link in an inbox — anybody with that inbox, a forwarded
+mail, or a shared machine with the tab still open is holding it. Ending it means the new password is
+used at least once by the person who set it.
+
+**The old-URL warning is not a bug**: `siteOrigin()` returns `VITE_SITE_URL` or the current origin, so
+it names the vercel host because that is where the app is deployed. It resolves when the app moves to
+`app.waterline-runway.com` — see GO-LIVE.
+
+**Two placement mistakes again.** The banner first landed inside `if (resetting) return (` — a screen
+only reachable by ASKING for a reset, which is exactly where somebody arriving FROM a completed reset
+never is. Then `rindex("return (")` put it before the JSX root rather than inside it. And `notice` was
+already local state driving the "we sent a link" screen, so the prop had to be `banner`; had it parsed,
+it would have shadowed and broken that screen.
+
 ## Commitments opened the dashboard from every tab but the dashboard
 
 **`cmt` was in the NAV and not in `VIEWS`.** `parse()` in `hashroute.js` falls back to the default for
