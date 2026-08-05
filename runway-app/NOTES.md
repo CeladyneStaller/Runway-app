@@ -1429,6 +1429,24 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## A royalty trigger of zero reported "never fires"
+
+**`cum >= trig && trig > 0`.** A note with NO threshold — the common case, and the most aggressive terms
+— could never fire, because the guard required the trigger to be positive. Zero means "from the first
+dollar", not "never".
+
+**The app then printed "the obligation is real and it is not in this picture" about an obligation that
+starts immediately**, which is the opposite of the truth and the most misleading thing it could say
+about a royalty note. Found because Corey read the sentence and asked what the number referred to.
+
+**And the sentence never said what its number was.** "At its most optimistic this projection reaches
+$3,492,098" — reaches with what? It is CUMULATIVE REVENUE over the whole horizon on the most optimistic
+toggles. Now named, with the horizon stated: "Cumulative revenue reaches $X over 36 months even at its
+most optimistic, short of the $Y threshold."
+
+**A number in a sentence that does not say what it measures is a number nobody can check** — and this
+one was wrong, which is what unnameable numbers hide.
+
 ## Convertible notes, and a toggle for drawn debt
 
 **A NOTE THAT REPAYS AT MATURITY IS DEBT IN EVERYTHING BUT NAME** — principal plus accrued, due on a

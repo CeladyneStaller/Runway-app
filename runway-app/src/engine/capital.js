@@ -158,8 +158,17 @@ export const royaltyVerdict = (x, rows) => {
   if (x.kind !== "note" || x.atMaturity !== "royalty" || !rows?.length) return null;
   const trig = x.triggerAmount || 0;
   let cum = 0, fires = null;
-  for (let m = 0; m < rows.length; m++) { cum += rows[m].rev || 0; if (fires === null && cum >= trig && trig > 0) fires = m; }
-  return { cum, fires, trig, cap: (x.amount || 0) * (x.capMultiple || 5), knowable: (x.royaltyBase || "profit") === "revenue" };
+  // ⚠️ A TRIGGER OF ZERO MEANS "FROM THE FIRST DOLLAR", NOT "NEVER".
+  //
+  // The guard was `cum >= trig && trig > 0`, so a note with no threshold — the common case, and the
+  // most aggressive terms — reported that the trigger never fires. It then printed "the obligation is
+  // real and it is not in this picture" about an obligation that starts immediately, which is the
+  // opposite of the truth and the most misleading thing the app could say about a royalty note.
+  for (let m = 0; m < rows.length; m++) {
+    cum += rows[m].rev || 0;
+    if (fires === null && cum >= trig) fires = m;
+  }
+  return { cum, fires, trig, months: rows.length, cap: (x.amount || 0) * (x.capMultiple || 5), knowable: (x.royaltyBase || "profit") === "revenue" };
 };
 
 // The covenant is what actually kills you. Interest is a rounding error next to a minimum-cash floor

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { royaltyVerdict } from "../../src/engine/capital.js";
 import { commitmentPressure, outstandingDebt, royaltyCommitments } from "../../src/engine/commitments.js";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
@@ -91,5 +92,39 @@ describe("the drawn-debt toggle", () => {
     const off = commitmentPressure(d, rowsOf(d), { withDebt: false });
     expect(off.withDebt).toBe(false);
     expect(off.debtTotal).toBe(commitmentPressure(d, rowsOf(d)).debtTotal);   // still reported
+  });
+});
+
+describe("when a royalty actually starts", () => {
+
+  const rows = Array.from({ length: 36 }, () => ({ rev: 100000 }));
+
+  it("A TRIGGER OF ZERO FIRES IMMEDIATELY, not never", () => {
+    // THE BUG. The guard was `cum >= trig && trig > 0`, so a note with no threshold — the common case,
+    // and the most aggressive terms — reported that the trigger never fires. The app then printed "the
+    // obligation is real and it is not in this picture" about an obligation that starts on the first
+    // dollar, which is the opposite of the truth.
+    const v = royaltyVerdict({ kind: "note", atMaturity: "royalty", amount: 500000,
+                               triggerAmount: 0, capMultiple: 4 }, rows);
+    expect(v.fires).toBe(0);
+  });
+
+  it("a real threshold fires when cumulative revenue reaches it", () => {
+    const v = royaltyVerdict({ kind: "note", atMaturity: "royalty", amount: 500000,
+                               triggerAmount: 250000, capMultiple: 4 }, rows);
+    expect(v.fires).toBe(2);          // 100k a month, so month index 2 crosses 250k
+  });
+
+  it("never fires when the horizon does not reach the threshold", () => {
+    const v = royaltyVerdict({ kind: "note", atMaturity: "royalty", amount: 500000,
+                               triggerAmount: 99000000, capMultiple: 4 }, rows);
+    expect(v.fires).toBeNull();
+    expect(v.cum).toBe(3600000);      // and the copy can name what this number IS
+  });
+
+  it("reports the horizon it measured over, so the sentence can say so", () => {
+    const v = royaltyVerdict({ kind: "note", atMaturity: "royalty", amount: 1,
+                               triggerAmount: 99000000 }, rows);
+    expect(v.months).toBe(36);
   });
 });
