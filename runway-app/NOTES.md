@@ -1429,6 +1429,40 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## A round marked CLOSED deleted its own money
+
+**THE WORST SHAPE A BUG CAN TAKE: a destructive no-op triggered by recording good news.**
+
+`compileInstrument` skipped the draw for ANY closed round, reasoning that closed money is already in
+cash on hand. True of a round closed last month. FALSE of one closing in month four — so marking a
+future round closed produced no line, no warning, and a runway that shortened as though the raise had
+never happened. The user's instinct in that situation is that they did something wrong.
+
+**`close <= 0` is the test.** At or before the model's start the cash is on the balance sheet; after it,
+the cash still has to arrive. Obligations were never skipped and still are not — a drawn loan is repaid
+either way.
+
+Reproduced by noticing that six-month revenue was IDENTICAL with financing on and off. A toggle that
+changes nothing is either useless or hiding something.
+
+## Two smaller changes
+
+**FINANCING DEFAULTS ON.** It was off, so a company with a closed round saw a runway ignoring money in
+the bank. A test documented the trap — "a round added moves the runway not at all, at ANY status, and
+looks like a broken feature" — and **that trap no longer exists**, which is the best argument for the
+change.
+
+**CASH FLOW LEADS WITH NET FLOW, not the runway band.** `defaultChartFor` takes the first chart
+registered for a tab, and Cash flow led with the runway line inside its band — the DASHBOARD's question
+asked twice. Somebody who has opened Cash flow has already seen the runway and wants to know what moves
+it. The existing sub-tab lenses then narrow the same chart to money in or money out.
+
+**`outstandingDebt` filtered on `x.stage`; the field is `x.status`.** Nothing was ever drawn, so the
+whole term was silently zero on real data — and the test passed because it set the same wrong field.
+**A test that agrees with the bug is not a test.** Drawn debt now also has its own section on the tab,
+because an obligation that moves a headline figure and appears on no screen is one people stop
+believing.
+
 ## Drawn debt is a closure obligation — it was in neither place it belonged
 
 **Venture debt moved the runway and never the clean-exit date.** The repayments are cost lines, so the

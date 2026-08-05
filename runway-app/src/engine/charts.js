@@ -830,13 +830,19 @@ const histRolling = (doc) => {
  *  The default matters more than the tuning: most people never open a picker, so most people get the
  *  default. The other two are for the person whose question is different. */
 export const CHARTS = Object.freeze([
+  // ⚠️ FIRST, AND THEREFORE THE DEFAULT — `defaultChartFor` takes the first chart registered for a
+  // tab. The Cash flow tab led with the runway line inside its band, which is the DASHBOARD's question
+  // asked twice: somebody who has opened Cash flow has already seen the runway and wants to know what
+  // is moving it. Net flow by month answers that, and the sub-tab lenses then narrow it to money in or
+  // money out without changing chart.
+  { id: "flow.inout", tab: "flow", name: "In and out, by month",
+    why: "Inflow above the line, outflow below. Makes lumpy grant receipts visible.", build: flowInOut },
+
   { id: "flow.runway", tab: "flow", name: "Runway, with its range",
     why: "The balance line inside its confidence band. Says where the answer sits, not a date that sounds certain.",
     build: flowRunway },
   { id: "flow.composition", tab: "flow", name: "What the burn is made of",
     why: "Payroll against everything else. Shows which half you could actually change.", build: flowComposition },
-  { id: "flow.inout", tab: "flow", name: "In and out, by month",
-    why: "Inflow above the line, outflow below. Makes lumpy grant receipts visible.", build: flowInOut },
 
   { id: "pay.timeline", tab: "pay", name: "Payroll, with starts marked",
     why: "Each step is a hire landing, visible before it happens.", build: payTimeline },

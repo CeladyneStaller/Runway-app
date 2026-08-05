@@ -112,7 +112,18 @@ export const debtLines = (x, conf) => {
 export const compileInstrument = (x, all) => {
   const lines = [], conf = instConf(x), amt = x.amount || 0, close = floorM(x.closeMonth ?? 6);
   const tag = { financing: true, instId: x.id };
-  if (x.status !== "closed" && amt > 0) {
+  // ⚠️ ONLY A ROUND THAT CLOSED IN THE PAST IS ALREADY IN CASH ON HAND.
+  //
+  // The old guard skipped the draw for ANY closed round, on the reasoning that closed money is in the
+  // opening balance. True of a round closed last month; false of one closing in month four. Marking a
+  // future round "closed" therefore DELETED its money — no line, no warning, and the runway shortened
+  // as though the raise had never happened. That is the worst shape a bug can take: a destructive
+  // no-op triggered by recording good news.
+  //
+  // `close <= 0` is the test. At or before the model's start, the cash is on the balance sheet; after
+  // it, the cash still has to arrive.
+  const alreadyBanked = x.status === "closed" && close <= 0;
+  if (!alreadyBanked && amt > 0) {
     if (x.kind === "equity" && (x.committedAmount || 0) > 0) {
       // A round is not one tier. $2M circled of $6M is two certainties in one row.
       const c = Math.min(x.committedAmount, amt);

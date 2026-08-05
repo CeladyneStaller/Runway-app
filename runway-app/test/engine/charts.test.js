@@ -28,7 +28,9 @@ describe("the registry", () => {
   });
 
   it("defaults to the first, because most people never open a picker", () => {
-    expect(defaultChartFor("flow")).toBe("flow.runway");
+    // NET FLOW, not the runway line. Cash flow led with the dashboard's question asked twice —
+    // somebody who opened this tab has already seen the runway and wants to know what moves it.
+    expect(defaultChartFor("flow")).toBe("flow.inout");
     expect(defaultChartFor("proj")).toBe("proj.pace");
     // Cover rather than forecast: a default must draw for everybody, and plenty of grant-funded
     // organisations have no subscription revenue at all.
