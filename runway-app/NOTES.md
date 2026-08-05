@@ -1429,6 +1429,34 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## ⚠️ OPEN DEFECT: the clean-exit date can land inside recorded history
+
+**Not fixed. Two attempts, both reverted, and the reason is worth more than either.**
+
+The date can be reported inside months already closed with actuals. Anchoring the scan after the last
+actual removes that — and BREAKS the figure: a company already below its closure debt at the first
+forecast month saturates, the window is zero, and no obligation can shorten a window of zero. Adding a
+million-pound facility then changes no number, which is what Corey saw on the second attempt.
+
+**Two requirements, only one satisfiable here:**
+  (a) never report a date inside recorded history
+  (b) an obligation you owe must be able to move the date
+
+**(b) kept**, because a figure that cannot respond to its own inputs is not a figure.
+
+**THE REAL FIX IS NOT IN THIS ARITHMETIC.** A model that starts in January with five months of actuals
+is walking history as though it were forecast. Rebasing the model start to the last closed month
+satisfies both at once — and it is a change to the DOCUMENT, not to the closure calculation.
+
+**A process note on how badly I handled this.** After the second revert I adjusted a test fixture's cash
+three times looking for a value where a monotonic assertion happened to hold. That is fitting the test
+to the code. Two assertions were removed rather than tuned — they claimed "earlier draw, strictly
+earlier deadline", which the anchoring does not guarantee — and one was rewritten to assert what IS
+guaranteed: the toggle changes what is counted.
+
+**Fixed alongside, and kept:** a facility is now listed whatever month it is drawn (measuring the
+listing at month zero filtered out anything drawn later), and nothing is owed before its draw month.
+
 ## Three errors in the clean-exit date
 
 **1 · NOTHING IS OWED BEFORE IT IS DRAWN.** `outstandingDebt` summed every future repayment from month

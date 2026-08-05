@@ -210,25 +210,25 @@ export function commitmentPressure(doc, rows,
     return owed;
   };
 
-  // ⚠️ THE SCAN STARTS AT MONTH ZERO, AND THE "FORWARD-LOOKING" VERSION IS REVERTED.
+  // ⚠️ THE SCAN RUNS FROM MONTH ZERO — and the reported date CAN therefore land inside months you have
+  // already closed. That is a known, unresolved defect, kept deliberately over the alternative.
   //
-  // Two requirements conflict and only one can hold:
-  //
-  //   (a) never report a date in the past
+  // TWO REQUIREMENTS CONFLICT and only one can hold:
+  //   (a) never report a date inside recorded history
   //   (b) an obligation you owe must be able to move the date
   //
-  // Anchoring the scan to today, or to the end of actuals, satisfies (a) and DESTROYS (b): a company
-  // whose cash is already negative at that point fails on the first month tested whatever it owes, so
-  // the date pins there and adding a million-pound facility changes nothing. That is the bug Corey
-  // reported after the first fix, and it is worse than the one it replaced — a figure that cannot
-  // respond to its own inputs is not a figure.
+  // Anchoring the scan after the last actual satisfies (a) and breaks (b): a company already below its
+  // closure debt at the first forecast month SATURATES, and a saturated window cannot get shorter, so
+  // adding a facility changes no number at all. Both were tried; (b) is the more damaging to lose,
+  // because a figure that cannot respond to its own inputs is not a figure.
   //
-  // So (b) wins. If the reported date is in the past, that is the model TELLING YOU the company was
-  // already past the point of a clean exit before today — which is information, not an error.
+  // THE REAL FIX IS NOT HERE. A model that starts in January with five months of actuals is walking
+  // history as though it were forecast; rebasing the model start to the last closed month resolves both
+  // requirements at once and is a change to the document, not to this arithmetic.
   const nowM = 0;
   void today;
 
-  let coveredMonths = null, coveredAt = null;
+  let coveredMonths = null, coveredAt = null, alreadyPast = false;
   for (let m = nowM; m < rows.length; m++) {
     const { bal, date } = cashAtMonthEnd(rows, startY, startM, m);
     if (bal == null) continue;
@@ -244,6 +244,10 @@ export function commitmentPressure(doc, rows,
       const frac = prevSlack > 0 && prevSlack !== slack ? prevSlack / (prevSlack - slack) : 0;
       coveredMonths = Math.max(0, m + Math.min(1, Math.max(0, frac)));
       coveredAt = date;
+      // ALREADY PAST IT. Failing on the very first month that is still a decision means there is no
+      // window left, and no obligation can shorten a window of zero. The UI must say that rather than
+      // print a date inside the months somebody has already closed.
+      alreadyPast = m === nowM;
       break;
     }
   }
@@ -347,6 +351,7 @@ export function commitmentPressure(doc, rows,
     uncovered,
     coveredMonths,
     coveredAt,
+    alreadyPast,
     // Null means the cash outlasts every obligation inside the horizon — the opposite of a problem, and
     // it must not render as "no answer".
     coveredEndless: coveredMonths == null,

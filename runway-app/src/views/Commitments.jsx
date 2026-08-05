@@ -74,12 +74,17 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
                 like a rounding artefact. */}
             {/* MONTHS, PLAINLY. "not now" read as an error message rather than a number, and the
                 sentence underneath already carries the date and the consequence. */}
-            {!p ? "—" : p.coveredEndless ? "beyond" : `${p.coveredMonths.toFixed(1)} mo`}
+            {/* SATURATION IS AN ANSWER, not a small number. Failing on the first month that is still a
+                decision means there is no window left — printing "0.2 mo" invites somebody to think
+                they have a fortnight. */}
+            {!p ? "—" : p.coveredEndless ? "beyond"
+              : p.alreadyPast ? "none" : `${p.coveredMonths.toFixed(1)} mo`}
           </div>
           <div className="meta">
-            {p?.coveredAt
-              ? `after ${dateShort(p.coveredAt)} you could not pay everyone`
-              : "you can close and pay everyone"}
+            {!p?.coveredAt ? "you can close and pay everyone"
+              : p.alreadyPast
+                ? "you could not pay everyone today"
+                : `after ${dateShort(p.coveredAt)} you could not pay everyone`}
           </div>
         </div>
         <div className="stat">
