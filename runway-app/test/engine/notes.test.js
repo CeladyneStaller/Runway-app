@@ -128,3 +128,50 @@ describe("when a royalty actually starts", () => {
     expect(v.months).toBe(36);
   });
 });
+
+describe("everything counted is also shown", () => {
+  // TWICE NOW I HAVE COUNTED AN OBLIGATION AND LISTED IT NOWHERE — first drawn debt, then notes. A
+  // figure that moves a headline number and appears on no screen is one people stop believing, so this
+  // asserts the invariant directly rather than trusting the next addition to remember it.
+  const rowsOf2 = (d) => buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
+  const base = () => {
+    const d = demoDoc();
+    return { ...d, commitments: [], rounds: [],
+             lines: (d.lines || []).filter(l => !String(l.id).startsWith("l_demo_")) };
+  };
+  const withRound = (r) => ({ ...base(), rounds: [{ id: "r1", name: "Note", kind: "note",
+    status: "closed", amount: 500000, closeMonth: 0, maturityMonths: 24, ...r }] });
+
+  it("a note repaying at maturity is LISTED, not just counted", () => {
+    const d = withRound({ atMaturity: "repay" });
+    const p = commitmentPressure(d, rowsOf2(d));
+    expect(p.debt.length).toBe(1);
+    expect(p.debt[0].what).toBe("repaid at maturity");
+    expect(p.debtTotal).toBeGreaterThan(0);
+  });
+
+  it("a royalty note is listed with its rate and cap", () => {
+    const d = withRound({ atMaturity: "royalty", royaltyPct: 0.05, capMultiple: 4 });
+    const p = commitmentPressure(d, rowsOf2(d));
+    expect(p.royalties).toHaveLength(1);
+    expect(p.royalties[0].pct).toBe(0.05);
+    expect(p.royalties[0].cap).toBe(2000000);
+  });
+
+  it("a converting note appears in neither, because it owes nothing", () => {
+    const d = withRound({ atMaturity: "convert" });
+    const p = commitmentPressure(d, rowsOf2(d));
+    expect(p.debt).toHaveLength(0);
+    expect(p.royalties).toHaveLength(0);
+  });
+
+  it("WHATEVER THE CLOSURE FIGURE COUNTS, THE TAB SHOWS", () => {
+    // The invariant, asserted as one: if `outstandingDebt` is non-zero, something is listed.
+    for (const r of [{ atMaturity: "repay" }, { kind: "debt", atMaturity: undefined }]) {
+      const d = withRound(r);
+      const owed = outstandingDebt(d, 0);
+      const p = commitmentPressure(d, rowsOf2(d));
+      if (owed > 0) expect(p.debt.length, JSON.stringify(r)).toBeGreaterThan(0);
+    }
+  });
+});

@@ -234,16 +234,34 @@ export function commitmentPressure(doc, rows, { today = new Date(), withDebt = t
 
   // Drawn facilities, so the tab can SHOW what the exit date is counting. An obligation that moves a
   // headline figure and appears nowhere is one somebody eventually stops believing.
+  // NOTES THAT REPAY AT MATURITY BELONG HERE TOO. `outstandingDebt` counts them; this list filtered on
+  // `kind === "debt"` and left them out — so the exit date moved for an obligation shown on no screen.
+  // That is the second time I have counted something and listed it nowhere, which is how a figure stops
+  // being believed.
   const debt = (doc?.rounds || [])
-    .filter(x => x && x.kind === "debt" && x.status === "closed")
-    .map(x => ({ id: x.id, label: x.name || "Facility", amount: outstandingDebt({ rounds: [x] }, 0) }))
+    .filter(x => x && x.status === "closed"
+      && (x.kind === "debt"
+          || (x.kind === "note" && x.atMaturity !== "convert" && x.atMaturity !== "royalty"
+              && !x.assumeExtended)))
+    .map(x => ({
+      id: x.id,
+      label: x.name || (x.kind === "note" ? "Note" : "Facility"),
+      what: x.kind === "note" ? "repaid at maturity" : "drawn",
+      amount: outstandingDebt({ rounds: [x] }, 0),
+    }))
     .filter(x => x.amount > 0);
   const debtTotal = debt.reduce((a, x) => a + x.amount, 0);
+
+  // Royalty notes, which generate cost through `indexedLines` and appeared on no screen either.
+  const royalties = royaltyCommitments(doc).map(c => ({
+    id: c.id, label: c.label, pct: c.index?.pct || 0, of: c.index?.of || "revenue", cap: c.cap || 0,
+  }));
 
   return {
     debt,
     debtTotal,
     withDebt,
+    royalties,
     costShare,
     costShareTotal,
     unpaid,

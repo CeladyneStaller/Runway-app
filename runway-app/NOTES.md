@@ -1429,6 +1429,25 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Counted and shown nowhere — TWICE
+
+A convertible note did not appear on the Commitments tab despite moving the clean-exit date. Two
+separate omissions, both mine, both the same mistake:
+
+- **`debt` filtered on `kind === "debt"`** while `outstandingDebt` counted notes too, so a note repaying
+  at maturity moved the figure and appeared in no table.
+- **Royalty notes generate cost through `indexedLines`** and were listed nowhere at all.
+
+**I NAMED THIS FAILURE WHEN ADDING THE DEBT SECTION** — "an obligation that moves a headline figure and
+appears on no screen is one people stop believing" — and then did it again in the same feature, twice.
+Writing the principle down did not prevent it; the missing piece was a test that ASSERTS it.
+
+There is now one: if `outstandingDebt` is non-zero for a round, `commitmentPressure().debt` must list
+something. It runs over both shapes.
+
+**Also renamed "Drawn debt" to "Debt and notes"**, with a per-row `what` — "drawn" or "repaid at
+maturity" — because the section heading was part of why a note looked out of place there.
+
 ## A royalty trigger of zero reported "never fires"
 
 **`cum >= trig && trig > 0`.** A note with NO threshold — the common case, and the most aggressive terms

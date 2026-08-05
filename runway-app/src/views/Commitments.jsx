@@ -387,7 +387,7 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
         <section className="panel">
           <div className="panel-h">
             <div>
-              <h3>Drawn debt</h3>
+              <h3>Debt and notes</h3>
               {/* COUNTED IN THE EXIT DATE AND PREVIOUSLY SHOWN NOWHERE. An obligation that moves a
                   headline figure and appears on no screen is one somebody eventually stops believing.
                   The repayments are already in the runway; what this adds is the balance you would owe
@@ -405,12 +405,41 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
             <span className="chip">{money(p.debtTotal)}</span>
           </div>
           <table className="tbl">
-            <thead><tr><th>Facility</th><th style={{ textAlign: "right" }}>Outstanding</th></tr></thead>
+            <thead><tr><th>Facility or note</th><th style={{ textAlign: "right" }}>Outstanding</th></tr></thead>
             <tbody>
               {p.debt.map(x => (
                 <tr key={x.id}>
-                  <td>{x.label}<div className="meta"><span className="src">drawn</span></div></td>
+                  <td>{x.label}<div className="meta"><span className="src">{x.what}</span></div></td>
                   <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(x.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {(p?.royalties || []).length > 0 && (
+        <section className="panel">
+          <div className="panel-h">
+            <div>
+              <h3>Royalties</h3>
+              {/* NOT IN THE CLEAN-EXIT DATE, and the panel says why rather than leaving somebody to
+                  wonder whether it was forgotten. A royalty is paid out of revenue you are earning;
+                  stop trading and there is no revenue and nothing further owed. */}
+              <p>
+                A share of revenue until a cap is met. Already in your costs. Not counted in your clean
+                exit — stop trading and there is nothing further owed.
+              </p>
+            </div>
+          </div>
+          <table className="tbl">
+            <thead><tr><th>Note</th><th>Rate</th><th style={{ textAlign: "right" }}>Until</th></tr></thead>
+            <tbody>
+              {p.royalties.map(x => (
+                <tr key={x.id}>
+                  <td>{x.label}<div className="meta"><span className="src">derived</span></div></td>
+                  <td className="meta">{Math.round(x.pct * 100)}% of {x.of}</td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(x.cap)}</td>
                 </tr>
               ))}
             </tbody>
