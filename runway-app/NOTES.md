@@ -1429,6 +1429,25 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## The dashboard showed a green tick for a milestone it could not reach
+
+**`pass` ASKS WHETHER THE BALANCE IS POSITIVE ON THE DAY.** It says nothing about whether the company
+survives to see it — so a projection that dips below zero in January and recovers by March, because a
+milestone payment lands, showed a healthy figure and a checkmark. The company died in February.
+
+**The Milestones tab has asked both questions since the false-green audit.** `msWithBal` has carried
+`stranded` and `bridge` the whole time; the dashboard tile was reading `pass` alone. The fix is three
+lines and no new arithmetic — the data was already there, being ignored.
+
+Now: danger accent when stranded, and the meta reads **"$120k projected — needs $90k to reach it"**.
+"You cannot get there" is a dead end; "you need this much to get there" is the next thing to do, and
+`solvency().bridgeTo(t)` already computes it — the deepest deficit BEFORE the date, not the global
+worst.
+
+**A lesson about where this class of bug hides:** the audit that found the original five false-greens
+scanned the tabs. The dashboard summarises the tabs and was not on the list, so it kept a stale copy of
+a question everything else had stopped asking.
+
 ## The demo now demonstrates the commitment flavours
 
 Five commitments, one of each shape: a dated DEBT (tooling PO), a dated PLANNED cost (patent renewal),

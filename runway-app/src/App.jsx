@@ -541,11 +541,28 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                   <div className="meta">as of {dateStamp(startY, startM)}</div>
                 </div>
                 <div className="stat">
-                  <div className="accent" style={{ background: nextMs && nextMs.pass ? "var(--signal)" : "var(--caution)" }} />
+                  {/* PASS IS NOT ENOUGH. `pass` asks whether the balance is positive ON THE DAY; it
+                      says nothing about whether the company survives to see it. A projection that dips
+                      below zero in January and recovers by March because a milestone payment lands
+                      shows a healthy balance and a tick — and the company died in February.
+
+                      `stranded` is the other half, and the Milestones tab has shown both since the
+                      false-green audit. The dashboard was still asking the easier question. */}
+                  <div className="accent" style={{ background:
+                    nextMs && nextMs.stranded ? "var(--danger)"
+                      : nextMs && nextMs.pass ? "var(--signal)" : "var(--caution)" }} />
                   <div className="lab">Next milestone</div>
-                  <div className="big" style={{ fontSize: 19, marginTop: 13 }}>{nextMs ? nextMs.label : "—"}</div>
-                  <div className="meta" style={{ color: nextMs && nextMs.pass ? "var(--signal-ink)" : "var(--caution)" }}>
-                    {nextMs ? `${money(nextMs.bal)} projected ${nextMs.pass ? "✓" : "✗"}` : ""}
+                  <div className="big" style={{ fontSize: 19, marginTop: 13 }}>{nextMs ? nextMs.label : "None set"}</div>
+                  <div className="meta" style={{ color:
+                    nextMs && nextMs.stranded ? "var(--danger)"
+                      : nextMs && nextMs.pass ? "var(--signal-ink)" : "var(--caution)" }}>
+                    {!nextMs ? ""
+                      : nextMs.stranded
+                        // THE BRIDGE, NAMED. "You cannot get there" is a dead end; "you need this much
+                        // to get there" is the next thing to do, and it is a figure `solvency()`
+                        // already computes.
+                        ? `${money(nextMs.bal)} projected — needs ${money(nextMs.bridge)} to reach it`
+                        : `${money(nextMs.bal)} projected ${nextMs.pass ? "✓" : "✗"}`}
                   </div>
                 </div>
               </div>

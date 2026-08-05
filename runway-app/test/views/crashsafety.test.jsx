@@ -49,7 +49,7 @@ describe("Scenarios opens for a runway that never ends", () => {
 
   it("still reports a finite runway when there IS burn", () => {
     const c = openView(demoDoc(), "Scenarios");
-    expect(c.textContent).toMatch(/3\.9 mo/   // the DEMO carries five commitments; the seed still reads 5.6);
+    expect(c.textContent).toMatch(/3\.9 mo/);   // the DEMO carries five commitments; the seed still reads 5.6;
   });
 });
 
