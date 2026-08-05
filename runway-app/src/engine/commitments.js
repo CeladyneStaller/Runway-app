@@ -210,8 +210,15 @@ export function commitmentPressure(doc, rows,
     return owed;
   };
 
+  // ⚠️ FORWARD-LOOKING ONLY. The scan started at month zero, so a model beginning in January 2025 and
+  // dipping in month two reported a clean-exit date in the PAST — a decision deadline that has already
+  // gone by is not a deadline, it is a history lesson, and it made the figure look broken.
+  //
+  // The question is "from today, how long can I still close cleanly", so the scan starts at today.
+  const nowM = Math.max(0, (today.getFullYear() - startY) * 12 + (today.getMonth() - startM));
+
   let coveredMonths = null, coveredAt = null;
-  for (let m = 0; m < rows.length; m++) {
+  for (let m = nowM; m < rows.length; m++) {
     const { bal, date } = cashAtMonthEnd(rows, startY, startM, m);
     if (bal == null) continue;
     const debt = closureDebt(m);
@@ -219,8 +226,9 @@ export function commitmentPressure(doc, rows,
       // FRACTIONAL, so it is comparable with runway. Reporting whole months is what produced a covered
       // runway of 6.0 against a runway of 5.6 in the first version — longer, which is nonsense, and a
       // units mismatch reading as a finding. Interpolate across the month in which the cushion is lost.
-      const prev = m > 0 ? cashAtMonthEnd(rows, startY, startM, m - 1) : { bal: rows[0]?.start ?? 0 };
-      const prevSlack = (prev.bal ?? 0) - closureDebt(Math.max(0, m - 1));
+      const prev = m > nowM ? cashAtMonthEnd(rows, startY, startM, m - 1)
+                            : { bal: rows[nowM]?.start ?? rows[0]?.start ?? 0 };
+      const prevSlack = (prev.bal ?? 0) - closureDebt(Math.max(nowM, m - 1));
       const slack = bal - debt;
       const frac = prevSlack > 0 && prevSlack !== slack ? prevSlack / (prevSlack - slack) : 0;
       coveredMonths = Math.max(0, m + Math.min(1, Math.max(0, frac)));
@@ -823,6 +831,13 @@ export function outstandingDebt(doc, month) {
     // date, owed whether or not you close — and it was counted nowhere, because this only looked at
     // `kind === "debt"`. A convertible that converts owes nothing; one that repays owes everything.
     if (!x || x.status !== "closed") continue;
+    // ⚠️ NOTHING IS OWED BEFORE IT IS DRAWN. A facility closing in April is not a liability in
+    // January — you have not taken the money. This counted every future repayment from month zero, so
+    // including a not-yet-drawn facility said "you could not pay everyone" about a month in which you
+    // owed the lender nothing at all.
+    const drawnAt = clean(x.closeMonth);
+    if (drawnAt > m) continue;
+
     const isNote = x.kind === "note" && x.atMaturity !== "convert" && x.atMaturity !== "royalty"
                    && !x.assumeExtended;
     if (isNote) {

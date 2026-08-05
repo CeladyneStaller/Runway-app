@@ -26,8 +26,14 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
 
   // DEFAULTS TO INCLUDING DEBT, because a lender is owed whether or not you close. Excluding it answers
   // the other question worth asking: could everybody ELSE be made whole, and by when.
-  const [withVentureDebt, setWithVentureDebt] = useState(true);
-  const [withNoteDebt, setWithNoteDebt] = useState(true);
+  // THE TOGGLES LIVE IN THE DOCUMENT. They were component state, so leaving the tab reset them — and a
+  // setting that silently reverts is worse than no setting, because the next reading is wrong in a way
+  // nobody notices. Both default to counting, so an absent value behaves as before.
+  const withVentureDebt = doc?.settings?.exitCountsVentureDebt !== false;
+  const withNoteDebt = doc?.settings?.exitCountsNoteDebt !== false;
+  const setExit = (key, on) => setDoc(d => ({ ...d,
+    settings: { ...(d.settings || {}), [key]: on } }));
+
   const p = useMemo(() => commitmentPressure(doc, rows, { withVentureDebt, withNoteDebt }),
                     [doc, rows, withVentureDebt, withNoteDebt]);
   const ready = useMemo(() => promotable(doc), [doc]);
@@ -66,11 +72,14 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
             {/* ZERO IS AN ANSWER AND "0.0 mo" IS NOT A SENTENCE. A company that already owes more than
                 it holds cannot close cleanly today, and saying so plainly beats a number that looks
                 like a rounding artefact. */}
-            {!p ? "—" : p.coveredEndless ? "beyond"
-              : p.coveredMonths < 0.05 ? "not now" : `${p.coveredMonths.toFixed(1)} mo`}
+            {/* MONTHS, PLAINLY. "not now" read as an error message rather than a number, and the
+                sentence underneath already carries the date and the consequence. */}
+            {!p ? "—" : p.coveredEndless ? "beyond" : `${p.coveredMonths.toFixed(1)} mo`}
           </div>
           <div className="meta">
-            {p?.coveredAt ? `after ${dateShort(p.coveredAt)} you could not pay everyone` : "you can close and pay everyone"}
+            {p?.coveredAt
+              ? `after ${dateShort(p.coveredAt)} you could not pay everyone`
+              : "you can close and pay everyone"}
           </div>
         </div>
         <div className="stat">
@@ -398,14 +407,14 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
 
           {p.ventureDebt?.length > 0 && (
             <Group label="Venture debt" total={p.ventureDebtTotal}
-                   toggle={{ on: withVentureDebt, set: setWithVentureDebt }}>
+                   toggle={{ on: withVentureDebt, set: (v) => setExit("exitCountsVentureDebt", v) }}>
               {p.ventureDebt.map(x => <Row key={x.id} label={x.label} tag={x.what} amount={x.amount} />)}
             </Group>
           )}
 
           {p.noteDebt?.length > 0 && (
             <Group label="Note debt" total={p.noteDebtTotal}
-                   toggle={{ on: withNoteDebt, set: setWithNoteDebt }}>
+                   toggle={{ on: withNoteDebt, set: (v) => setExit("exitCountsNoteDebt", v) }}>
               {p.noteDebt.map(x => <Row key={x.id} label={x.label} tag={x.what} amount={x.amount} />)}
             </Group>
           )}

@@ -578,7 +578,10 @@ describe("drawn debt is a closure obligation", () => {
   const drawn = () => ({ ...base,
     // `status`, not `stage`. The original version of this test set the same wrong field the code read,
     // so both agreed and neither was right — a test that agrees with the bug is not a test.
-    rounds: (base.rounds || []).map(r => (r.kind === "debt" ? { ...r, status: "closed" } : r)) });
+    // `closeMonth: 0` TOO. Marking a facility closed while leaving its close month in the future means
+    // it is not yet drawn — and nothing is owed before it is drawn, which is the point of that fix.
+    rounds: (base.rounds || []).map(r => (r.kind === "debt"
+      ? { ...r, status: "closed", closeMonth: 0 } : r)) });
 
   it("AN UNDRAWN FACILITY OWES NOTHING", () => {
     // A commitment letter is not a debt. Counting one would make the exit date depend on a decision

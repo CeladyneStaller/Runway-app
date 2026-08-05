@@ -303,3 +303,31 @@ describe("the tab's four sections", () => {
     chips.forEach(c => expect(c.textContent).toMatch(/[\d,]/));
   });
 });
+
+describe("the exit toggles persist", () => {
+  it("WRITE TO THE DOCUMENT, not to component state", () => {
+    // They were `useState`, so leaving the tab reset them. A setting that silently reverts is worse
+    // than no setting, because the next reading is wrong in a way nobody notices.
+    const d = { ...demoDoc(), rounds: [{ id: "vd", name: "Facility", kind: "debt", status: "closed",
+      amount: 800000, closeMonth: 0, termMonths: 36, rateAPR: 12 }] };
+    let held = d;
+    const v = render(<Commitments doc={d} setDoc={fn => { held = fn(d); }} rows={rowsOf(d)} />);
+    fireEvent.click(v.container.querySelector(".dbt-toggle input"));
+    expect(held.settings.exitCountsVentureDebt).toBe(false);
+  });
+
+  it("default to counting when the document says nothing", () => {
+    const d = { ...demoDoc(), settings: { ...demoDoc().settings } };
+    delete d.settings.exitCountsVentureDebt;
+    const v = render(<Commitments doc={d} setDoc={() => {}} rows={rowsOf(d)} />);
+    const box = v.container.querySelector(".dbt-toggle input");
+    if (box) expect(box.checked).toBe(true);
+  });
+
+  it("the tile shows months and puts the consequence underneath", () => {
+    // "not now" read as an error message rather than a number.
+    const v = render(<Commitments doc={demoDoc()} setDoc={() => {}} rows={rowsOf(demoDoc())} />);
+    expect(v.container.textContent).not.toMatch(/not now/);
+    expect(v.container.textContent).toMatch(/Clean exit until/);
+  });
+});

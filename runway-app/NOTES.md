@@ -1429,6 +1429,30 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Three errors in the clean-exit date
+
+**1 · NOTHING IS OWED BEFORE IT IS DRAWN.** `outstandingDebt` summed every future repayment from month
+zero, so a facility closing in April was a liability in January. Corey's example: clean until 2/28 with
+the debt excluded, "not now — after Jan 31" with it included, for money not yet taken. `closeMonth > m`
+now skips it entirely. **A liability that predates its own cause is the clearest kind of wrong**, and it
+made the toggle look broken rather than the arithmetic.
+
+**2 · THE SCAN WAS NOT FORWARD-LOOKING.** It started at month zero, so a model beginning in January 2025
+that dipped in month two reported an exit date already in the past. A decision deadline that has gone by
+is not a deadline. The scan now starts at today, and the interpolation no longer reaches behind it.
+
+**3 · THE TOGGLES WERE COMPONENT STATE** and reset on leaving the tab. They live in
+`settings.exitCountsVentureDebt` / `exitCountsNoteDebt` now, defaulting to counting so an absent value
+behaves as before. **A setting that silently reverts is worse than no setting** — the next reading is
+wrong in a way nobody notices.
+
+**Wording:** the tile shows months and nothing else; "not now" read as an error message rather than a
+number, and the sentence underneath already carries the date and the consequence.
+
+**Three earlier tests marked a facility `closed` and left its close month in the future**, which under
+the fix means not yet drawn. Corrected to draw at month zero — the tests were describing a state that
+cannot exist.
+
 ## The Commitments tab, restructured into four sections
 
     Debt and notes        total

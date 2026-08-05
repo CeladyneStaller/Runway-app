@@ -519,7 +519,9 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                     <div className="accent" style={{ background: "var(--commit)" }} />
                     <div className="lab">Clean exit until</div>
                     <div className="big">{pressure.coveredMonths.toFixed(1)} mo</div>
-                    <div className="meta">last point you could close and pay everyone</div>
+                    <div className="meta">{pressure.coveredAt
+                      ? "after " + dateShort(pressure.coveredAt) + " you could not pay everyone"
+                      : "you can close and pay everyone"}</div>
                   </div>
                 )}
                 <div className="stat">
