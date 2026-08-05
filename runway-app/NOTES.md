@@ -1444,6 +1444,16 @@ Now: danger accent when stranded, and the meta reads **"$120k projected — need
 `solvency().bridgeTo(t)` already computes it — the deepest deficit BEFORE the date, not the global
 worst.
 
+**AND THE GRAPHIC BESIDE IT WAS STILL WRONG AFTER THE TILE WAS FIXED.** `RunwayChart` had
+`const pass = ms.bal >= 0` — its OWN second definition of whether a milestone passes, ignoring
+`stranded` entirely. So the corrected tile sat next to a chart drawing a green dot and a tick for the
+same unreachable milestone.
+
+**A second definition of one question is what let one of them stay wrong.** `msWithBal` already carried
+both answers; two consumers derived it independently and only one was updated. The chart now reads
+`ms.stranded`, uses the dot-and-ring convention the milestones chart uses (dot is the balance, ring is
+whether you survive to it), and names the bridge rather than drawing a cross.
+
 **A lesson about where this class of bug hides:** the audit that found the original five false-greens
 scanned the tabs. The dashboard summarises the tabs and was not on the list, so it kept a stale copy of
 a question everything else had stopped asking.

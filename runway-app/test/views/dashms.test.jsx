@@ -39,3 +39,27 @@ describe("a milestone reached after insolvency", () => {
     expect(tile).toMatch(/nextMs\.bridge/);
   });
 });
+
+describe("the dashboard GRAPHIC, not just the tile", () => {
+  const src = require("node:fs").readFileSync("src/views/chrome/RunwayChart.jsx", "utf8");
+
+  it("READS `stranded` RATHER THAN RECOMPUTING pass", () => {
+    // The chart had `const pass = ms.bal >= 0` — its own second definition of whether a milestone
+    // passes, which ignored `stranded`. So the tile was fixed and the graphic beside it kept drawing a
+    // green dot and a tick for a milestone the company cannot reach.
+    //
+    // A SECOND DEFINITION OF THE SAME QUESTION is exactly what let one of them stay wrong.
+    expect(src).toMatch(/ms\.stranded/);
+    expect(src).not.toMatch(/const pass = ms\.bal >= 0;\s*$/m);
+  });
+
+  it("names the bridge instead of drawing a cross", () => {
+    // "Needs $90k" is the next thing to do. A cross is not.
+    expect(src).toMatch(/needs \$\{money\(ms\.bridge/);
+  });
+
+  it("uses the ring convention the milestones chart uses", () => {
+    // Dot is the balance, ring is whether you survive to it — so the two charts read the same way.
+    expect(src).toMatch(/stroke=\{stranded \? "var\(--danger\)"/);
+  });
+});

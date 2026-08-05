@@ -168,17 +168,31 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
 
       {/* milestone gates */}
       {milestones.map((ms, i) => {
-        const pass = ms.bal >= 0;
+        // ⚠️ THIS RECOMPUTED `pass` LOCALLY and ignored `stranded`, so the chart kept drawing a green
+        // dot and a tick for a milestone the company cannot reach — the same false green the tile had,
+        // surviving in the graphic beside it because the two derived the answer independently.
+        //
+        // `msWithBal` already carries both. A SECOND DEFINITION of "does this milestone pass" is
+        // exactly what let one of them stay wrong.
+        const stranded = !!ms.stranded;
+        const pass = ms.bal >= 0 && !stranded;
         const lx = x(ms.t); if (ms.t > tMax) return null;
         const ly = 34 + (i % 2) * 30;
         return (
           <g key={ms.id}>
             <line x1={lx} x2={lx} y1={T} y2={H - B} stroke="#fff" strokeOpacity="0.16" strokeDasharray="3 4"/>
-            <circle cx={lx} cy={yc(ms.bal)} r="3.5" fill={pass ? "var(--signal-2)" : "var(--danger)"} stroke="var(--ink)" strokeWidth="1.5"/>
+            {/* DOT IS THE BALANCE, RING IS WHETHER YOU GET THERE — the convention the milestones
+                chart uses, so the two read the same way. A hollow ring on a pale dot is a milestone
+                with money on the day and no company left to collect it. */}
+            <circle cx={lx} cy={yc(ms.bal)} r="3.5"
+                    fill={stranded ? "none" : (pass ? "var(--signal-2)" : "var(--danger)")}
+                    stroke={stranded ? "var(--danger)" : "none"} strokeWidth="1.6" />
             <g transform={`translate(${Math.min(lx, W - R - 96)}, ${ly})`}>
               <text x="0" y="0" fontSize="11" fontFamily="var(--fb)" fontWeight="600" fill="var(--on-dark)">{ms.label}</text>
-              <text x="0" y="15" fontSize="11.5" fontFamily="var(--fm)" fill={pass ? "var(--signal-2)" : "var(--danger)"}>
-                {money(ms.bal, false)} {pass ? "✓" : "✗"}
+              <text x="0" y="15" fontSize="11.5" fontFamily="var(--fm)" fill={stranded ? "var(--danger)" : pass ? "var(--signal-2)" : "var(--danger)"}>
+                {/* NAMED, not just marked. "Needs $90k" is the next thing to do; a cross is not. */}
+                {money(ms.bal, false)}{" "}
+                {stranded ? `needs ${money(ms.bridge || 0, false)}` : (pass ? "✓" : "✗")}
               </text>
             </g>
           </g>
