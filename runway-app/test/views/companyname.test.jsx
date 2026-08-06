@@ -65,7 +65,10 @@ const goHosted = () => {
   });
 };
 
-const sub = (c) => c.querySelector(".sub")?.textContent || "";
+// THE COMPANY NAME MOVED TO THE EYEBROW. The sub line now carries plan, cash-on-hand date and cash
+// now — the name was removed from it precisely because it was already above. This helper still exists
+// because every assertion here is about WHERE THE NAME COMES FROM, and the eyebrow is where it is.
+const sub = (c) => c.querySelector(".eyebrow")?.textContent || "";
 const btn = (c, re) => [...c.querySelectorAll("button")].find(b => re.test(b.textContent));
 
 describe("a new company's first model", () => {
@@ -82,7 +85,7 @@ describe("a new company's first model", () => {
     fireEvent.click(btn(container, /^Done$/));
 
     // The rail's name field is gone; the subtitle reads the COMPANY name, which is now the only name.
-    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs$/));
   });
 
   it("needs no seeding at all, because nothing copies the company name into the document", async () => {
@@ -93,7 +96,7 @@ describe("a new company's first model", () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Set up your company/i));
     fireEvent.click(btn(container, /^Cancel$/));
-    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs$/));
   });
 
   it("writes NOTHING to the account until that action happens", async () => {
@@ -113,7 +116,7 @@ describe("what it must not overwrite", () => {
     serverDoc = { ...docs.demoDoc(), name: "Acme Holdings" };
     goHosted();
     const { container } = render(<App />);
-    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs$/));
     await new Promise(r => setTimeout(r, 400));
     expect(uploaded).toEqual([]);   // no unrequested rewrite of real data
   });
@@ -124,7 +127,7 @@ describe("what it must not overwrite", () => {
     serverDoc = { ...docs.demoDoc(), name: "Untitled" };
     goHosted();
     const { container } = render(<App />);
-    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs ·/));
+    await waitFor(() => expect(sub(container)).toMatch(/^Harbor Point Labs$/));
     await new Promise(r => setTimeout(r, 400));
     expect(uploaded).toEqual([]);
     expect(serverDoc.name).toBe("Untitled");   // the stored document, untouched
@@ -143,11 +146,11 @@ describe("the model name is gone", () => {
 
     const a = render(<RunwayApp doc={{ ...withCash, name: "A stale model name" }} setDoc={() => {}}
                                 companyName="Harbor Point" />);
-    expect(sub(a.container)).toMatch(/^Harbor Point ·/);
+    expect(sub(a.container)).toMatch(/^Harbor Point$/);
     a.unmount();
 
     const b = render(<RunwayApp doc={{ ...withCash, name: "" }} setDoc={() => {}} />);
-    expect(sub(b.container)).toMatch(/^Untitled model ·/);
+    expect(sub(b.container)).toMatch(/^Untitled model$/);
   });
 
   it("offers no name field in the rail", async () => {
@@ -180,6 +183,6 @@ describe("the demo", () => {
     });
     const { container } = render(<App />);
     await waitFor(() => expect(container.textContent).toMatch(/Demo ·/));
-    expect(sub(container)).toMatch(/^Demo Company ·/);
+    expect(sub(container)).toMatch(/^Demo Company$/);
   });
 });

@@ -1429,6 +1429,18 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## "Last updated" renamed to "Cash on hand updated"
+
+It is the latest month with a recorded cash figure, so it moves when you CLOSE A MONTH, not when you
+touch anything. Calling it "last updated" implied the whole model — somebody who had just edited a
+payroll line would read a months-old date and think the app had lost their work.
+
+**Two test files had to follow the header change**, and both had been failing since it landed:
+`header.test.jsx` asserted the old string, and `companyname.test.jsx` looked for the company name in
+the SUB line, where it no longer is — the name moved to the eyebrow precisely because the sub line was
+repeating what sat directly above it. Its assertions were also anchored on "name ·", a separator that
+went with the rest of the old line.
+
 ## Projection setup moved to Company settings
 
 It sat at the top of Spend history, above a table of recorded months, and read as part of them. It is a

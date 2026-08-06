@@ -7,6 +7,11 @@ import { Commitments } from "./views/Commitments";
 import { atLeast } from "./engine/roles";
 import { commitmentPressure } from "./engine/commitments";
 import { forecastFrom } from "./engine/projection";
+import { lastActualMonth } from "./engine/summary";
+import { PLANS } from "./state/plans";
+
+// id -> display name, so the header says "Collaborative" rather than "collaborative".
+const PLAN_LABEL = Object.fromEntries(PLANS.map(p => [p.id, p.name]));
 import { AdvisorHome } from "./views/chrome/AdvisorHome";
 import { landingFor, portfolioAllowed, PORTFOLIO } from "./engine/landing";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
@@ -265,6 +270,33 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
     } catch { return null; }
   }, [doc, rows]);
 
+  // WHAT THE HEADER NEEDS, derived here so the three values cannot disagree with each other.
+  const [planName, setPlanName] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const id = getAuthAdapter()?.activeCompany?.();
+    if (!id) return () => { alive = false; };
+    getAccountApi()?.companyPlan?.(id)
+      ?.then(row => { if (alive) setPlanName(PLAN_LABEL[row?.plan] || null); })
+      ?.catch(() => {});
+    return () => { alive = false; };
+  }, [doc?.id]);
+
+  // THE LATEST RECORDED MONTH, not the file's modified time. "Last updated" about a model means how
+  // current its FIGURES are — a document saved this morning with actuals ending in March is three
+  // months stale, and the modified date would hide exactly that.
+  const lastInput = useMemo(() => {
+    const m = lastActualMonth(doc?.cashActuals || {});
+    return m == null ? null : monthLong(startY, startM + m);
+  }, [doc, startY, startM]);
+
+  // CASH NOW, not cash at the model's start. The start figure is a setting; this is the answer to
+  // "what is in the bank", which is the question somebody glancing at a header is asking.
+  const cashNow = useMemo(() => {
+    const w = Math.min(Math.max(0, forecastFrom(doc)), Math.max(0, rows.length - 1));
+    return rows[w]?.start ?? doc?.cash ?? 0;
+  }, [rows, doc]);
+
   const netBurn = rows.slice(0, 3).reduce((a, r) => a + r.net, 0) / 3;
   const grossBurn = rows.slice(0, 3).reduce((a, r) => a + r.cost, 0) / 3;
   const opBurn = itemizedOpex + baselineOpex; // steady operating run-rate (payroll + opex + untracked; excludes projects/grants/one-offs)
@@ -478,7 +510,9 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
         <main className="main">
           <div className="topbar">
             <div>
-              <span className="eyebrow">Startup runway</span>
+              {/* THE COMPANY, not the product. Somebody with three companies open in three tabs needs
+                  the tab to say which one they are in — "Startup runway" is the same on all of them. */}
+              <span className="eyebrow">{companyName || (demo ? doc.name : null) || "Untitled model"}</span>
               {demo
                 ? <DemoPill onLeave={onLeaveDemo} onKeep={() => onKeepDemo(doc)} />
                 : <><SyncPill />
@@ -490,7 +524,19 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
               <h1 className="h1">{view === "dash" ? "Runway projection" : view === "flow" ? "Cash-flow lines" : view === "pay" ? "Payroll" : view === "proj" ? "Projects" : view === "sales" ? "Sales & purchase orders" : view === "inv" ? "Investment & fundraising" : view === "hist" ? "Spend history & burn" : "Critical dates"}</h1>
               {/* THE DEMO HAS NO COMPANY to take a name from, so it is the one place the document's own name is
                   still read — `demoDoc()` sets it, and there is no account behind it that could. */}
-              <p className="sub">{companyName || (demo ? doc.name : null) || "Untitled model"} · projecting from {monthLong(startY, startM)} · cash on hand {moneyFull(model.cashOnHand)}</p>
+              {/* PLAN · LAST INPUT · CASH NOW. The old line repeated the company name that is now in
+                  the eyebrow above it, and then said where the model STARTS — which never changes and
+                  which nobody needs on every screen. What is worth carrying everywhere is what you are
+                  paying for, how stale the data is, and what is in the bank. */}
+              <p className="sub">
+                {planName || (demo ? "Demo" : "\u2014")}
+                {/* "CASH ON HAND UPDATED", not "last updated". It is the latest month with a recorded
+                    cash figure — so it moves when you close a month, not when you change a payroll
+                    line. Calling it "last updated" implied the second and would read as stale to
+                    somebody who had just edited the model. */}
+                {" \u00b7 Cash on hand updated: "}{lastInput || "no entries yet"}
+                {" \u00b7 "}{money(cashNow)}
+              </p>
             </div>
             <div className="statuspill">
               <span>Runway</span>
