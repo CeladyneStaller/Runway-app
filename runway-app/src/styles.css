@@ -1553,3 +1553,4 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .plan-confirm{display:inline-flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11.5px;
   color:var(--danger);background:#FBEAE7;border-radius:7px;padding:6px 10px}
 .plan-confirm b{font-weight:600}
+.railfoot .railset{margin:0 0 10px;width:100%}

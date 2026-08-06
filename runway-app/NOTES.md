@@ -1467,6 +1467,23 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Tab order, and Company settings at the foot
+
+Dashboard · Spend history · Cash flow · Sales · Payroll · Projects · Milestones · Investment ·
+Commitments · Scenarios.
+
+**The order reads as the sequence somebody works in**: what happened, what is happening, what brings
+money in, what it costs, what is promised, what might change.
+
+**⚠️ COMPANY SETTINGS WAS ALREADY ABOVE `.railfoot` IN THE MARKUP AND STILL NOT AT THE BOTTOM.**
+`.railfoot` carries `margin-top:auto`, so a button placed above it is pushed to the TOP of that gap —
+sitting under the last tab while the meta line sat at the bottom. **Markup order said "bottom"; the
+layout said otherwise**, which is why reading the JSX was not enough to see the bug. Moved INSIDE the
+foot, above the projection-start line.
+
+`navorder.test.jsx` asserts the full label sequence and the settings placement, so a future reorder that
+drops or duplicates a tab fails rather than shipping.
+
 ## The Milestone Number column — filled in, per kind
 
     thrust     blank — it is a heading

@@ -322,9 +322,18 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
   // the persistent runway pill should say when the number it's showing leans on money that may not arrive
   const specInRunway = toggles.speculative && tierSum("speculative").count > 0;
 
+  // ORDER IS THE ARGUMENT. It reads as the sequence somebody actually works in: what happened
+  // (Spend history), what is happening (Cash flow), what brings money in (Sales, Projects), what it
+  // costs (Payroll), what is promised (Milestones, Commitments), and what might change (Scenarios).
   const NAV = [
-    ["dash", "Dashboard", I.dash], ["flow", "Cash flow", I.flow], ["pay", "Payroll", I.pay], ["proj", "Projects", I.proj],
-    ["sales", "Sales", I.sales], ["inv", "Investment", I.invest], ["hist", "Spend history", I.hist], ["ms", "Milestones", I.flag],
+    ["dash", "Dashboard", I.dash],
+    ["hist", "Spend history", I.hist],
+    ["flow", "Cash flow", I.flow],
+    ["sales", "Sales", I.sales],
+    ["pay", "Payroll", I.pay],
+    ["proj", "Projects", I.proj],
+    ["ms", "Milestones", I.flag],
+    ["inv", "Investment", I.invest],
     ["cmt", "Commitments", I.invest],
     ["scn", "Scenarios", I.invest],
   ];
@@ -464,12 +473,16 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                 <span aria-hidden="true">←</span>Back to your portfolio
               </button>
             )}
-          {!demo && (
-            <button className="nav navset" onClick={() => onOpenSettings?.("company", "general")}>
-              <span aria-hidden="true">⚙</span>Company settings
-            </button>
-          )}
+          {/* ⚠️ COMPANY SETTINGS MOVED INSIDE `.railfoot`. It sat above it — and `.railfoot` carries
+              `margin-top:auto`, so the settings button was pushed to the TOP of that gap, sitting under
+              the last tab while the meta line sat at the bottom. Markup order said "bottom"; the layout
+              said otherwise. */}
           <div className="railfoot">
+            {!demo && (
+              <button className="nav navset railset" onClick={() => onOpenSettings?.("company", "general")}>
+                <span aria-hidden="true">⚙</span>Company settings
+              </button>
+            )}
             {/* THE MODEL NAME IS GONE. Every company has a name; the model name was a SECOND string for the
                 same object, and the sidebar already fell back to the company name whenever it could.
                 Two names for one thing is a question nobody should have to answer. The field is
