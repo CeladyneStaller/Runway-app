@@ -24,8 +24,10 @@ describe("the plan list", () => {
     const v = draw();
     // GATES ARE UNNUMBERED NOW, per the form. The seeded fixture's third row is a gate, so its number
     // cell is empty rather than "1.2" — the assertion was written when gates shared the sequence.
-    const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent);
-    expect(nums).toEqual(["1.1", "1.1.1", ""]);
+    const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent.replace(/^[+\u2212]/, ""));
+// An unnumbered gate renders an em dash rather than an empty cell — a blank in a number column
+    // reads as a value somebody failed to enter, and this one is blank by the form's design.
+    expect(nums).toEqual(["1.1", "1.1.1", "—"]);
   });
 
   it("distinguishes a gate from a milestone in the row itself", () => {
@@ -83,7 +85,11 @@ describe("the editor", () => {
     // agreed to.
     const v = draw();
     fireEvent.click(v.container.querySelectorAll(".plan-r")[2]);
-    const sel = v.container.querySelector("select");
+    // THE TYPE CONTROL IS NOW THE FIRST SELECT in the editor, so "the select" is ambiguous. Find the
+    // outcome one by its options rather than by position — a positional selector in a form that gains
+    // fields is a test that breaks every time the form grows.
+    const sel = [...v.container.querySelectorAll(".plan-ed select")]
+      .find(x => [...x.options].some(o => /stops entirely/.test(o.textContent)));
     expect(sel.value).toBe("");
     expect(v.container.textContent).toMatch(/no safe default/);
   });
@@ -191,13 +197,15 @@ describe("thrusts in the list", () => {
     expect(t).toMatch(/\+ Task under 1\.1/);
   });
 
-  it("ONLY MILESTONES AND GATES ARE DRAGGABLE", () => {
-    // A task moves with its milestone and a thrust is the destination — making everything draggable
-    // would let somebody drop a thrust into itself.
+  it("EVERYTHING BUT A THRUST IS DRAGGABLE", () => {
+    // Tasks move between milestones now. A thrust stays fixed because it is the top of the tree —
+    // there is nothing to drop it into, and making it draggable would offer a move with no destination.
     const rows = [...draw(three()).container.querySelectorAll(".plan-r")];
     // React writes `draggable={false}` as the string "false", not as an absent attribute.
     const drag = rows.map(r => r.getAttribute("draggable") === "true");
-    expect(drag).toEqual([false, true, false, true, false]);
+// thrust, milestone, task, GATE, thrust — the gate is draggable too, which is right: it belongs
+    // to a thrust and can be moved between them.
+    expect(drag).toEqual([false, true, true, true, false]);
   });
 
   it("DRAGGING A MILESTONE INTO A THRUST RENUMBERS IT AND ITS TASK", () => {
@@ -208,7 +216,7 @@ describe("thrusts in the list", () => {
     fireEvent.dragStart(rows[1]);
     fireEvent.dragOver(rows[4]);
     fireEvent.drop(rows[4]);
-    const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent);
+    const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent.replace(/^[+\u2212]/, ""));
     expect(nums).toContain("2.1");
     expect(nums).toContain("2.1.1");
   });
@@ -224,5 +232,183 @@ describe("thrusts in the list", () => {
   it("a viewer cannot drag", () => {
     const rows = [...draw(three(), { canWrite: false }).container.querySelectorAll(".plan-r")];
     expect(rows.every(r => r.getAttribute("draggable") !== "true")).toBe(true);
+  });
+});
+
+describe("collapsing", () => {
+  const three = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "Catalyst" });
+    const t1 = p.plan[0].id;
+    p = addPlanEntry(p, { kind: "milestone", parentId: t1, title: "3 A/cm2", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "Ink", month: 2 });
+    p = addPlanEntry(p, { kind: "thrust", title: "Stack" });
+    return p;
+  };
+  const carets = (v) => [...v.container.querySelectorAll(".plan-rows .fold-c")];
+
+  it("ARRIVES EXPANDED — collapse state is what is SHUT, not what is open", () => {
+    // A new thrust arrives expanded, which is what somebody who just created it expects; the opposite
+    // default would hide the thing they made.
+    expect(draw(three()).container.querySelectorAll(".plan-r").length).toBe(4);
+  });
+
+  it("a thrust hides everything under it", () => {
+    const v = draw(three());
+    fireEvent.click(carets(v)[0]);
+    expect(v.container.querySelectorAll(".plan-r").length).toBe(2);   // both thrusts, nothing inside
+  });
+
+  it("a milestone hides its tasks and leaves the thrust alone", () => {
+    const v = draw(three());
+    fireEvent.click(carets(v)[1]);
+    expect(v.container.querySelectorAll(".plan-r").length).toBe(3);
+  });
+
+  it("A SHUT ROW SAYS WHAT IT IS HIDING", () => {
+    // A caret with nothing beside it is a control people learn not to open.
+    const v = draw(three());
+    fireEvent.click(carets(v)[0]);
+    expect(v.container.textContent).toMatch(/1 hidden/);
+  });
+
+  it("offers NO CARET on a row with nothing inside", () => {
+    const v = draw(three());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    expect(rows[3].querySelector(".fold-c")).toBeNull();   // the empty second thrust
+  });
+
+  it("A TASK STAYS HIDDEN when its thrust is shut, even if its milestone is open", () => {
+    const v = draw(three());
+    fireEvent.click(carets(v)[0]);
+    expect(v.container.textContent).not.toMatch(/Ink/);
+  });
+
+  it("the whole panel collapses, and its add buttons go with it", () => {
+    const v = draw(three());
+    fireEvent.click(v.container.querySelector(".panel-fold"));
+    expect(v.container.querySelectorAll(".plan-r").length).toBe(0);
+    expect(v.container.textContent).not.toMatch(/\+ Thrust/);
+  });
+
+  it("but the import/export trigger stays reachable", () => {
+    // Collapsing to get it out of the way should not take the control with it.
+    const v = draw(three());
+    fireEvent.click(v.container.querySelector(".panel-fold"));
+    expect(v.container.querySelector(".iobtn")).toBeTruthy();
+  });
+});
+
+describe("changing an entry's type", () => {
+  const built = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M2", month: 9 });
+    return p;
+  };
+  const openRow = (v, i) => fireEvent.click(v.container.querySelectorAll(".plan-r")[i]);
+  const typeSel = (v) => v.container.querySelector(".plan-ed select");
+
+  it("offers all four kinds", () => {
+    const v = draw(built());
+    openRow(v, 1);
+    expect([...typeSel(v).options].map(o => o.value))
+      .toEqual(["thrust", "milestone", "gate", "task"]);
+  });
+
+  it("A TASK BECOMING A MILESTONE MOVES IN THE TREE and renumbers", () => {
+    // The kind decides what an entry's parent may be and what its number means — it is not a field edit.
+    const v = draw(built());
+    openRow(v, 2);                                  // the task
+    fireEvent.change(typeSel(v), { target: { value: "milestone" } });
+    const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent.replace(/^[+\u2212]/, ""));
+    expect(nums).toContain("1.3");
+  });
+
+  it("SAYS WHEN IT CUT TASKS LOOSE, and marks them", () => {
+    // Nothing is refused and nothing is re-homed — but a dropdown that quietly detaches rows is how
+    // somebody loses work they then cannot find.
+    const v = draw(built());
+    openRow(v, 1);                                  // the milestone with a task
+    fireEvent.change(typeSel(v), { target: { value: "task" } });
+    expect(v.container.textContent).toMatch(/1 task left without a milestone/);
+    expect(v.container.querySelectorAll(".plan-r.orphan").length).toBeGreaterThan(0);
+    expect(v.container.textContent).toMatch(/no milestone/);
+  });
+
+  it("REFUSES NOTHING — the only milestone can become a task", () => {
+    // The refusal was the same mistake as guessing a parent: the app deciding structure for somebody.
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "Only", month: 1 });
+    const v = draw(p);
+    openRow(v, 1);
+    fireEvent.change(v.container.querySelector(".plan-ed select"), { target: { value: "task" } });
+    expect(v.container.querySelectorAll(".plan-r.ms").length).toBe(0);
+    expect(v.container.querySelectorAll(".plan-r.orphan").length).toBe(1);
+  });
+
+  it("becoming a gate drops the number", () => {
+    const v = draw(built());
+    openRow(v, 3);                                  // M2
+    fireEvent.change(typeSel(v), { target: { value: "gate" } });
+    expect(v.container.querySelectorAll(".plan-r.gate").length).toBe(1);
+  });
+
+  it("a viewer cannot change it", () => {
+    const v = draw(built(), { canWrite: false });
+    openRow(v, 1);
+    expect(typeSel(v).disabled).toBe(true);
+  });
+});
+
+describe("dragging a task", () => {
+  const two = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M1", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M2", month: 9 });
+    return p;
+  };
+  const nums = (v) => [...v.container.querySelectorAll(".pn")]
+    .map(n => n.textContent.replace(/^[+\u2212]/, ""));
+
+  it("MOVES IT INTO ANOTHER MILESTONE AND RENUMBERS", () => {
+    // 1.1.1 under milestone 1.2 has to become 1.2.n or the filed table contradicts itself.
+    const v = draw(two());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[2]);            // the task
+    fireEvent.dragOver(rows[3]);             // M2
+    fireEvent.drop(rows[3]);
+    expect(nums(v)).toContain("1.2.1");
+  });
+
+  it("A MILESTONE DOES NOT ACCEPT A MILESTONE", () => {
+    // Letting anything land anywhere would create shapes the form cannot print.
+    const v = draw(two());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[1]);            // M1
+    fireEvent.dragOver(rows[3]);             // M2
+    expect(v.container.querySelector(".plan-r.dropping")).toBeNull();
+  });
+
+  it("A THRUST DOES NOT ACCEPT A TASK", () => {
+    // A task under a thrust has no number the form can print.
+    const v = draw(two());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[2]);            // the task
+    fireEvent.dragOver(rows[0]);             // the thrust
+    expect(v.container.querySelector(".plan-r.dropping")).toBeNull();
+  });
+
+  it("highlights only what will actually take the drop", () => {
+    const v = draw(two());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[2]);
+    fireEvent.dragOver(rows[3]);
+    expect(v.container.querySelectorAll(".plan-r.dropping").length).toBe(1);
   });
 });

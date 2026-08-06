@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { planRows, appendixERows, planGaps, addPlanEntry, updatePlanEntry,
-         removePlanEntry, moveToThrust, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
+         removePlanEntry, moveToThrust, moveTask, setPlanKind, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
 import { monthLabel } from "../../engine/time";
 import { PlanIOModal } from "./PlanIOModal";
 
@@ -13,6 +13,26 @@ import { PlanIOModal } from "./PlanIOModal";
 export function ProjectPlan({ project, setProject, startY, startM, canWrite = true }) {
   const [openId, setOpenId] = useState(null);
   const [io, setIo] = useState(false);
+  // COLLAPSE STATE IS A SET OF WHAT IS SHUT, not of what is open. A new thrust arrives expanded, which
+  // is what somebody who just created it expects — the opposite default would hide the thing they made.
+  const [shut, setShut] = useState(() => new Set());
+  const [panelShut, setPanelShut] = useState(false);
+  const toggle = (id) => setShut(sh => {
+    const n = new Set(sh); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const hiddenBy = (e) => {
+    // A row is hidden if ANY ancestor is shut — a task under a collapsed milestone stays hidden even
+    // when its thrust is open.
+    if (e.kind === "thrust") return false;
+    const all = project?.plan || [];
+    let cur = e;
+    while (cur?.parentId) {
+      if (shut.has(cur.parentId)) return true;
+      cur = all.find(x => x.id === cur.parentId);
+    }
+    return false;
+  };
+
   const [drag, setDrag] = useState(null);        // id of the target being dragged
   const [over, setOver] = useState(null);        // thrust id it is over
   const rows = planRows(project);
@@ -25,6 +45,17 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
     return next;
   });
   const set = (id, patch) => setProject(p => updatePlanEntry(p, id, patch));
+  const [kindMsg, setKindMsg] = useState(null);
+  const setKind = (id, kind) => setProject(p => {
+    const { project: next, orphaned } = setPlanKind(p, id, kind);
+    // ⚠️ SAY WHEN TASKS WERE CUT LOOSE. Nothing is refused and nothing is re-homed — but a dropdown
+    // that quietly detaches three rows is how somebody loses work they then cannot find. They are at
+    // the end of the list, and this says so.
+    setKindMsg(orphaned
+      ? `${orphaned} task${orphaned === 1 ? "" : "s"} left without a milestone — they are at the end of the list.`
+      : null);
+    return next;
+  });
 
   // ONE ROUTE. The inline paste box and file button were replaced by a single trigger opening the same
   // modal the budget uses for SF-424A — two routes to one action is how somebody learns the app has two
@@ -70,6 +101,11 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
         <div className="plan-h-r">
           <span className="chip">{targets.length} target{targets.length === 1 ? "" : "s"} · {rows.length} rows</span>
           {ioBtn}
+          {/* THE WHOLE PANEL COLLAPSES, but the trigger above stays — collapsing to get the table out
+              of the way should not take the import/export control with it. */}
+          <button className="fold-c panel-fold" aria-expanded={!panelShut}
+                  aria-label={panelShut ? "Expand milestones" : "Collapse milestones"}
+                  onClick={() => setPanelShut(v => !v)}>{panelShut ? "+" : "\u2212"}</button>
         </div>
       </div>
 
@@ -83,17 +119,36 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
         </p>
       )}
 
-      <div className="plan-rows">
-        {rows.map(e => {
+      {!panelShut && <div className="plan-rows">
+        {rows.filter(e => !hiddenBy(e)).map(e => {
           const open = openId === e.id;
+          const foldable = e.kind === "thrust" || e.kind === "milestone";
+          const isShut = shut.has(e.id);
+          const inside = foldable
+            ? (project?.plan || []).filter(x => x?.parentId === e.id).length : 0;
+          // ⚠️ AN ORPHAN IS MARKED, not hidden. A task with no milestone still prints in the filed
+          // table under whatever precedes it, so it has to be findable and obviously wrong.
+          const orphan = e.kind === "task" && !(project?.plan || []).some(x => x.id === e.parentId);
+          // ⚠️ EVERYTHING BUT A THRUST IS DRAGGABLE NOW. A thrust stays fixed because it is the top of
+          // the tree — there is nothing to drop it into, and making it draggable would offer a move
+          // with no destination.
+          const canDrag = canWrite && e.kind !== "thrust";
+
+          // WHAT ACCEPTS A DROP DEPENDS ON WHAT IS BEING DRAGGED. A task goes into a milestone; a
+          // milestone or gate goes into a thrust. Letting anything land anywhere would create shapes
+          // the form cannot print — a task under a thrust has no number, and a milestone inside a
+          // milestone has no meaning.
+          const dragged = drag ? (project?.plan || []).find(x => x.id === drag) : null;
+          const accepts = !!dragged && dragged.id !== e.id && (
+            dragged.kind === "task" ? e.kind === "milestone" : e.kind === "thrust");
           const cls = "plan-r"
             + (e.kind === "task" ? " task" : e.kind === "gate" ? " gate"
                : e.kind === "thrust" ? " thrust" : " ms")
             + (open ? " open" : "")
-            + (over === e.id && e.kind === "thrust" ? " dropping" : "");
+            + (over === e.id && accepts ? " dropping" : "")
+            + (orphan ? " orphan" : "");
           // ⚠️ ONLY A MILESTONE OR GATE IS DRAGGABLE. A task moves with its milestone and a thrust is
           // the destination — making everything draggable would let somebody drop a thrust into itself.
-          const canDrag = canWrite && (e.kind === "milestone" || e.kind === "gate");
           return (
             <div key={e.id}>
               <div className={cls} onClick={() => setOpenId(open ? null : e.id)}
@@ -101,34 +156,54 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
                    draggable={canDrag}
                    onDragStart={canDrag ? (ev => { setDrag(e.id); ev.dataTransfer.effectAllowed = "move"; }) : undefined}
                    onDragEnd={() => { setDrag(null); setOver(null); }}
-                   onDragOver={e.kind === "thrust" && drag ? (ev => { ev.preventDefault(); setOver(e.id); }) : undefined}
-                   onDragLeave={e.kind === "thrust" ? (() => setOver(null)) : undefined}
-                   onDrop={e.kind === "thrust" && drag ? (ev => {
+                   onDragOver={accepts ? (ev => { ev.preventDefault(); setOver(e.id); }) : undefined}
+                   onDragLeave={accepts ? (() => setOver(null)) : undefined}
+                   onDrop={accepts ? (ev => {
                      ev.preventDefault();
-                     setProject(p2 => moveToThrust(p2, drag, e.id));
+                     setProject(p2 => (dragged.kind === "task"
+                       ? moveTask(p2, drag, e.id)
+                       : moveToThrust(p2, drag, e.id)));
                      setDrag(null); setOver(null);
                    }) : undefined}
                    onKeyDown={ev => ev.key === "Enter" && setOpenId(open ? null : e.id)}>
-                <span className="pn">{e.number}</span>
+                {/* THE CARET IS PART OF THE NUMBER CELL, not a separate column — a column that is
+                    empty on two of four row kinds reads as a missing control. */}
+                <span className="pn">
+                  {foldable && inside > 0 && (
+                    <button className="fold-c" aria-expanded={!isShut}
+                            aria-label={isShut ? "Expand" : "Collapse"}
+                            onClick={ev => { ev.stopPropagation(); toggle(e.id); }}>
+                      {isShut ? "+" : "\u2212"}
+                    </button>
+                  )}
+                  {e.kind === "thrust" ? `TASK ${e.number}` : (e.number || "\u2014")}
+                </span>
                 <span className="pt">{e.title || <i className="meta">untitled</i>}</span>
                 <span className="py">
                   {e.kind === "thrust"
                     ? <span className="chip th">thrust</span>
                     : e.kind === "task"
-                    ? <span className="chip">task</span>
+                    ? <span className={"chip" + (orphan ? " warn" : "")}>
+                        {orphan ? "no milestone" : "task"}
+                      </span>
                     : <span className={"chip " + (e.kind === "gate" ? "gate" : "ms")}>
                         {e.kind === "gate" ? "go/no-go" : "milestone"} · {e.label}
                       </span>}
                 </span>
                 {/* A THRUST'S DATES ARE DERIVED — the span of what sits inside it. Letting somebody
                     type one creates a fourth place for a date to live, and the form has no cell. */}
-                <span className="pm">{e.kind === "thrust" ? spanOf(project, e) : `mo ${e.month}`}</span>
+                <span className="pm">
+                  {/* A SHUT ROW SAYS WHAT IT IS HIDING. A caret with nothing beside it is a control
+                      people learn not to open. */}
+                  {isShut && inside > 0 && <em className="pn-hid">{inside} hidden · </em>}
+                  {e.kind === "thrust" ? spanOf(project, e) : `mo ${e.month}`}
+                </span>
               </div>
-              {open && <Editor entry={e} set={set} canWrite={canWrite}
+              {open && <Editor entry={e} set={set} setKind={setKind} kindMsg={kindMsg} canWrite={canWrite}
                                startY={startY} startM={startM}
                                onAddSibling={() => add("task", e.kind === "task" ? e.parentId : e.id)}
                                onDelete={() => { setOpenId(null); setProject(p => removePlanEntry(p, e.id)); }} />}
-              {e.kind === "thrust" && canWrite && (
+              {e.kind === "thrust" && canWrite && !isShut && (
                 <div className="plan-add sub">
                   <button className="linkbtn" onClick={() => add("milestone", e.id)}>
                     + Milestone in TASK {e.number}
@@ -138,7 +213,7 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
                   </button>
                 </div>
               )}
-              {(e.kind === "milestone" || e.kind === "gate") && canWrite && (
+              {(e.kind === "milestone" || e.kind === "gate") && canWrite && !isShut && (
                 <div className="plan-add sub deep">
                   {/* NAMES ITS PARENT. A bare "+ Task" in a list this shape adds to whichever target the
                       cursor last touched, which is how work lands under the wrong milestone. */}
@@ -150,9 +225,9 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
             </div>
           );
         })}
-      </div>
+      </div>}
 
-      {canWrite && <div className="plan-add">
+      {canWrite && !panelShut && <div className="plan-add">
         <button className="linkbtn" onClick={() => add("thrust")}>+ Thrust</button>
         <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
       </div>}
@@ -161,11 +236,21 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
   );
 }
 
-function Editor({ entry: e, set, canWrite, startY, startM, onAddSibling, onDelete }) {
+function Editor({ entry: e, set, setKind, kindMsg, canWrite, startY, startM, onAddSibling, onDelete }) {
   const at = monthLabel(startY, startM, e.month || 0);
   return (
     <div className={"plan-ed" + (e.kind === "gate" ? " gate" : "") + (e.kind === "task" ? " notarget" : "")}>
       <>
+        <label className="fl">Type
+          {/* THE ONE CONTROL THAT MOVES THE ROW. Everything else here edits a cell. */}
+          <select className="sel" value={e.kind} disabled={!canWrite}
+                  onChange={ev => setKind(e.id, ev.target.value)}>
+            <option value="thrust">Thrust (TASK n)</option>
+            <option value="milestone">Milestone</option>
+            <option value="gate">Go/No-Go</option>
+            <option value="task">Task</option>
+          </select>
+        </label>
         <label className="fl">Title
           <input className="inp" value={e.title} disabled={!canWrite}
                  onChange={ev => set(e.id, { title: ev.target.value })} />
@@ -210,6 +295,7 @@ function Editor({ entry: e, set, canWrite, startY, startM, onAddSibling, onDelet
         </label>
       )}
 
+      {kindMsg && <p className="plan-kindmsg">{kindMsg}</p>}
       {canWrite && (
         <div className="plan-acts">
           {/* TASKS ARRIVE IN GROUPS. Closing the editor and hunting for the right "+" between each one

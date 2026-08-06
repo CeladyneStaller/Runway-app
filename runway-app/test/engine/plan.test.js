@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { addPlanEntry, updatePlanEntry, removePlanEntry, planRows, nextNumber,
-         quarterOf, appendixERows, planGaps, moveToThrust } from "../../src/engine/plan.js";
+         quarterOf, appendixERows, planGaps, moveToThrust, moveTask, setPlanKind } from "../../src/engine/plan.js";
 
 const P = () => ({ id: "pr1", name: "Catalyst scale-up", plan: [] });
 const withPlan = () => {
@@ -231,5 +231,124 @@ describe("thrusts — the level above milestones", () => {
     let p = { id: "pr", plan: [] };
     p = addPlanEntry(p, { kind: "thrust", title: "Named" });
     expect(planGaps(p)).toEqual([]);
+  });
+});
+
+describe("changing an entry's kind", () => {
+  const built = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "B", month: 3 });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M2", month: 9 });
+    return p;
+  };
+  const id = (p, t) => p.plan.find(e => e.title === t).id;
+
+  it("A TASK BECOMING A MILESTONE PARENTS TO ITS THRUST and renumbers", () => {
+    // The kind decides what an entry's parent may be and what its number means, so changing it moves
+    // the row in the tree — it is not a field edit.
+    const p = built();
+    const { project } = setPlanKind(p, id(p, "A"), "milestone");
+    const a = project.plan.find(e => e.title === "A");
+    expect(a.parentId).toBe(id(p, "T1"));
+    expect(a.number).toBe("1.3");
+  });
+
+  it("A MILESTONE BECOMING A TASK ORPHANS ITS TASKS WITH IT", () => {
+    // Not re-homed to a milestone nobody picked. An earlier version guessed a parent and refused the
+    // change when it could not find one — both were the app making a structural decision on somebody's
+    // behalf, silently, in a document they file. An orphan is visible and one drag from correct; a
+    // wrong parent is invisible and prints.
+    const p = built();
+    const { project, orphaned } = setPlanKind(p, id(p, "M"), "task");
+    expect(orphaned).toBe(2);
+    expect(project.plan.find(e => e.title === "M").parentId).toBeNull();
+    expect(project.plan.find(e => e.title === "A").parentId).toBeNull();
+    expect(project.plan.find(e => e.title === "B").parentId).toBeNull();
+  });
+
+  it("THE ONLY MILESTONE CAN STILL BECOME A TASK — nothing is refused", () => {
+    // The refusal was the same mistake as the guess: the app deciding structure for somebody. It
+    // becomes an orphan, which the list shows at the end.
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "Only", month: 1 });
+    const { project } = setPlanKind(p, id(p, "Only"), "task");
+    expect(project.plan.find(e => e.title === "Only").kind).toBe("task");
+    expect(project.plan.find(e => e.title === "Only").parentId).toBeNull();
+  });
+
+  it("BECOMING A GATE LOSES THE NUMBER, because the form leaves that cell blank", () => {
+    const p = built();
+    const { project } = setPlanKind(p, id(p, "M2"), "gate");
+    const g = project.plan.find(e => e.title === "M2");
+    expect(g.kind).toBe("gate");
+    expect(g.number).toBe("");
+    expect(g.parentId).toBe(id(p, "T1"));
+  });
+
+  it("becoming a thrust loses its parent — a thrust is the top of the tree", () => {
+    const p = built();
+    const { project } = setPlanKind(p, id(p, "M2"), "thrust");
+    const t = project.plan.find(e => e.title === "M2");
+    expect(t.parentId).toBeNull();
+    expect(t.number).toBe("2");
+  });
+
+  it("keeps its tasks when it stays a milestone-like parent", () => {
+    const p = built();
+    const { project, orphaned } = setPlanKind(p, id(p, "M"), "milestone");
+    expect(orphaned).toBe(0);
+    expect(project.plan).toEqual(p.plan);        // no change at all
+  });
+});
+
+describe("moving a task", () => {
+  const built = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M1", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M2", month: 9 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[3].id, title: "B", month: 8 });
+    return p;
+  };
+  const id = (p, t) => p.plan.find(e => e.title === t).id;
+
+  it("RENUMBERS INTO ITS NEW MILESTONE", () => {
+    // 1.1.1 under milestone 1.2 has to become 1.2.n or the filed table contradicts itself.
+    const p = built();
+    const after = moveTask(p, id(p, "A"), id(p, "M2"));
+    expect(after.plan.find(e => e.title === "A").number).toBe("1.2.2");
+    expect(after.plan.find(e => e.title === "A").parentId).toBe(id(p, "M2"));
+  });
+
+  it("leaves the milestone it came from alone", () => {
+    const p = built();
+    const after = moveTask(p, id(p, "A"), id(p, "M2"));
+    expect(after.plan.find(e => e.title === "M1").number).toBe("1.1");
+    expect(after.plan.find(e => e.title === "B").number).toBe("1.2.1");
+  });
+
+  it("A NULL DESTINATION ORPHANS IT, deliberately", () => {
+    // The same escape the type control offers: the app never invents a parent, so it must let somebody
+    // remove one.
+    const p = built();
+    const after = moveTask(p, id(p, "A"), null);
+    expect(after.plan.find(e => e.title === "A").parentId).toBeNull();
+  });
+
+  it("REFUSES A THRUST OR A GATE as a destination", () => {
+    // A thrust owns milestones and a gate owns nothing — dropping a task on either would create a shape
+    // the form cannot print.
+    const p = built();
+    expect(moveTask(p, id(p, "A"), id(p, "T1"))).toBe(p);
+  });
+
+  it("ignores anything that is not a task", () => {
+    const p = built();
+    expect(moveTask(p, id(p, "M1"), id(p, "M2"))).toBe(p);
   });
 });

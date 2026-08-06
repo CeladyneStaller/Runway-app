@@ -218,3 +218,78 @@ export function planGaps(project) {
   }
   return gaps;
 }
+
+/** Change an entry's kind, moving it in the tree.
+ *
+ *  ⚠️ THIS IS NOT A FIELD EDIT. The kind decides what an entry's PARENT may be and what its number
+ *  means:
+ *
+ *    → thrust     loses its parent; a thrust is the top of the tree
+ *    → milestone  parents to a thrust — the one it was under, or the one its old parent was under
+ *    → gate       same, and loses its number, because the form leaves that cell blank
+ *    → task       ORPHANED. It keeps no parent and none is chosen for it.
+ *
+ *  ⚠️ AND ITS CHILDREN ARE ORPHANED WITH IT. A milestone demoted to a task cannot keep its tasks — a
+ *  task owns nothing — so they are cut loose alongside it rather than re-homed to a milestone somebody
+ *  did not pick.
+ *
+ *  AN EARLIER VERSION GUESSED A NEW PARENT and refused the change when it could not find one. Both were
+ *  wrong in the same way: **the app was making a structural decision on the person's behalf, silently,
+ *  in a document they file.** An orphan is visible, sits at the end of the list, and is one drag from
+ *  correct. A wrong parent is invisible and prints.
+ */
+export function setPlanKind(project, id, kind) {
+  const all = project?.plan || [];
+  const e = all.find(x => x?.id === id);
+  if (!e || e.kind === kind) return { project, orphaned: 0 };
+
+  const parentOf = (x) => all.find(y => y?.id === x?.parentId) || null;
+  const thrustFor = (x) => {
+    const p = parentOf(x);
+    if (!p) return null;
+    if (p.kind === "thrust") return p.id;
+    return p.parentId || null;                    // a task's milestone's thrust
+  };
+
+  const parentId = (kind === "milestone" || kind === "gate") ? thrustFor(e) : null;
+  const kids = all.filter(x => x?.kind === "task" && x.parentId === id);
+  const keepsKids = kind === "milestone";
+  const number = kind === "gate" ? ""
+    : nextNumber({ plan: all.filter(x => x.id !== id) }, kind, parentId);
+
+  let i = 0;
+  const plan = all.map(x => {
+    if (x.id === id) {
+      return { ...x, kind, parentId, number,
+               label: (kind === "task" || kind === "thrust") ? null : (x.label || autoLabel(project, kind)),
+               outcome: kind === "gate" ? (x.outcome || null) : null };
+    }
+    if (x.kind === "task" && x.parentId === id) {
+      if (keepsKids) { i += 1; return { ...x, number: `${number}.${i}` }; }
+      return { ...x, parentId: null };            // cut loose, not re-homed
+    }
+    return x;
+  });
+  return { project: { ...project, plan }, orphaned: keepsKids ? 0 : kids.length };
+}
+
+/** Move a task under a different milestone, or cut it loose.
+ *
+ *  ⚠️ RENUMBERS THE TASK, because its number is its milestone's number plus a position — 1.1.2 under
+ *  milestone 2.3 has to become 2.3.n or the filed table contradicts itself.
+ *
+ *  A NULL DESTINATION ORPHANS IT DELIBERATELY, which is the same escape the type control offers: the
+ *  app never invents a parent, so it must let somebody remove one.
+ */
+export function moveTask(project, taskId, milestoneId) {
+  const all = project?.plan || [];
+  const t = all.find(e => e?.id === taskId);
+  if (!t || t.kind !== "task") return project;
+  const m = milestoneId ? all.find(e => e?.id === milestoneId && e.kind === "milestone") : null;
+  if (milestoneId && !m) return project;                  // gates and thrusts do not own tasks
+  const number = m ? nextNumber(project, "task", m.id) : "";
+  return {
+    ...project,
+    plan: all.map(e => (e.id === taskId ? { ...e, parentId: m ? m.id : null, number } : e)),
+  };
+}

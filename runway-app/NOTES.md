@@ -1467,6 +1467,89 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Dragging tasks
+
+**EVERYTHING BUT A THRUST IS DRAGGABLE.** A thrust is the top of the tree — there is nothing to drop it
+into, and making it draggable would offer a move with no destination.
+
+**⚠️ WHAT ACCEPTS A DROP DEPENDS ON WHAT IS BEING DRAGGED.** A task goes into a milestone; a milestone
+or gate goes into a thrust. Letting anything land anywhere would create shapes the form cannot print —
+a task under a thrust has no number, and a milestone inside a milestone has no meaning. Only the row
+that will actually take the drop highlights.
+
+**A task RENUMBERS into its new milestone** — 1.1.1 under milestone 1.2 becomes 1.2.n, or the filed
+table contradicts itself. The milestone it left keeps its own numbering, per the delete rule.
+
+**A null destination orphans it deliberately**, the same escape the type control offers: the app never
+invents a parent, so it must let somebody remove one.
+
+**⚠️ THE TEMPORAL DEAD ZONE AGAIN — SECOND TIME THIS SESSION.** `cls` reads `accepts`, and the
+declaration landed below it. Lint does not catch a TDZ and React only reports it at render, as "Cannot
+access X before initialization". Caught proactively this time by remembering the last one; the pattern
+is that adding a derived value to a row's className means the declaration must move ABOVE the className,
+not sit where the old one did.
+
+**And a test expectation was wrong rather than the code:** I asserted the gate was not draggable. It is,
+and should be — a gate belongs to a thrust and can move between them.
+
+## Changing an entry's type
+
+**⚠️ THIS IS NOT A FIELD EDIT.** The kind decides what an entry's PARENT may be and what its number
+means, so `setPlanKind` moves the row in the tree:
+
+- **→ thrust** loses its parent entirely; a thrust is the top of the tree
+- **→ milestone / gate** parents to a thrust — its own, or the one its old parent sat under
+- **→ gate** also loses its number, because the form leaves that cell blank
+- **→ task** parents to a milestone, and is REFUSED if there is none
+
+**⚠️ ITS CHILDREN ARE ORPHANED WITH IT.** A milestone demoted to a task cannot keep its tasks — a task
+owns nothing — so they are cut loose alongside it.
+
+**I BUILT THIS TWICE AND THE FIRST VERSION WAS WRONG IN TWO DIRECTIONS**: it guessed a new parent for
+the tasks, and it REFUSED the change when it could not find one. Both are the same mistake — **the app
+making a structural decision on somebody's behalf, silently, in a document they file.** An orphan is
+visible, sits at the end of the list, and is one drag from correct. A wrong parent is invisible and
+prints.
+
+**Nothing is refused now.** Orphans are marked — a caution tint and a "no milestone" chip instead of
+"task" — and the editor says "1 task left without a milestone; they are at the end of the list",
+because a dropdown that quietly detaches rows is how somebody loses work they cannot then find.
+
+**`const orphan` landed BELOW the `cls` that used it** — a temporal dead zone crash React reported as
+"Cannot access 'orphan' before initialization", visible only because three tests went red at once.
+
+**A test broke on `querySelector("select")`** — the type control is now the first select in the editor,
+so the gate-outcome test was reading the wrong one. Rewritten to find it by its options: **a positional
+selector in a form that gains fields is a test that breaks every time the form grows.**
+
+## Collapsing — four levels
+
+Budget, the milestones panel, thrusts, and milestones.
+
+**COLLAPSE STATE IS A SET OF WHAT IS SHUT, not of what is open.** A new thrust arrives expanded, which
+is what somebody who just created it expects — the opposite default would hide the thing they made.
+
+**A ROW IS HIDDEN IF ANY ANCESTOR IS SHUT**, walked up the parent chain rather than checked one level.
+A task under a collapsed milestone stays hidden even when its thrust is reopened.
+
+**THE CARET LIVES IN THE NUMBER CELL**, not a column of its own — a column empty on two of four row
+kinds reads as a missing control. Two test assertions read `.pn` textContent and had to strip it.
+
+**A SHUT ROW SAYS WHAT IT IS HIDING** — "3 hidden" beside the dates. A caret with nothing beside it is a
+control people learn not to open.
+
+**NO CARET ON A ROW WITH NOTHING INSIDE**, so an empty thrust does not offer a control that does
+nothing.
+
+**THE IMPORT/EXPORT TRIGGER SURVIVES A COLLAPSED PANEL.** Collapsing the table to get it out of the way
+should not take the control with it — asserted, because it was the obvious thing to break.
+
+**The budget collapses too**, and it is the tallest block on a grant card by a wide margin: somebody
+working on deliverables should not have to scroll past every category to reach them.
+
+**A replacement targeting the wrong indentation silently did nothing** — the panel toggle never landed
+and two tests caught it. `grep -c` on the new class confirmed zero before the fix.
+
 ## Thrusts — the third level (schema v8)
 
 The template's `TASK 1` rows are a real structural level and the import was DISCARDING them as headings.

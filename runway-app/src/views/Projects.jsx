@@ -263,6 +263,7 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP }) 
 }
 
 export function GrantCard({ p, setP, setGrant, setType, delP, employees = [] }) {
+  const [budgetShut, setBudgetShut] = useState(false);
   const g = p.grant, R = computeGrant(g);
   const prospective = p.stage === "prospective";
   const [io, setIo] = useState(false);
@@ -303,7 +304,16 @@ export function GrantCard({ p, setP, setGrant, setType, delP, employees = [] }) 
           {<label className="fl" style={g.assumeFunded ? { opacity: .45, pointerEvents: "none" } : null}>Lag (months)<input className="inp sm" type="number" value={g.reimburseLagMonths || 0} onChange={e => setGrant(p.id, { reimburseLagMonths: +e.target.value })} /></label>}
         </div>
         {ms && <MilestoneTable p={p} g={g} setGrant={setGrant} />}
-        <GrantBudget p={p} g={g} R={R} setGrant={setGrant} employees={employees} />
+        {/* THE BUDGET COLLAPSES. It is the tallest block on a grant card by a wide margin, and somebody
+            working on deliverables should not have to scroll past every category to reach them. */}
+        <div className="budget-h">
+          <button className="fold-c" aria-expanded={!budgetShut}
+                  aria-label={budgetShut ? "Expand budget" : "Collapse budget"}
+                  onClick={() => setBudgetShut(v => !v)}>{budgetShut ? "+" : "\u2212"}</button>
+          <b>Budget</b>
+          {budgetShut && <span className="meta">collapsed</span>}
+        </div>
+        {!budgetShut && <GrantBudget p={p} g={g} R={R} setGrant={setGrant} employees={employees} />}
       </div>
 
       {!prospective && <CostShareWrap p={p} />}
