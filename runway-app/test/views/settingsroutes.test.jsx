@@ -1,5 +1,6 @@
-import { it, vi, expect } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { describe, it, vi, expect } from "vitest";
+import { CompanyGeneral } from "../../src/views/chrome/CompanyGeneral";
+import { render, waitFor, fireEvent } from "@testing-library/react";
 import React from "react";
 import { Account } from "../../src/views/Account";
 import * as sync from "../../src/state/sync";
@@ -55,4 +56,47 @@ it("does not claim you are not the owner while the role is still unknown", async
                             onClose={() => {}} onGo={() => {}} />);
   await waitFor(() => expect(v.container.querySelector(".setbody")).toBeTruthy());
   expect(v.container.textContent).not.toMatch(/Only the owner/i);
+});
+
+describe("projection setup lives in company settings", () => {
+  it("THE CONTROL IS THERE, and editable", () => {
+    // MOVED FROM SPEND HISTORY, where it sat above a table of recorded months and read as part of them.
+    // It is a property of the COMPANY — the origin every month index is measured from — so it belongs
+    // beside the company's name.
+    const doc = { startY: 2026, startM: 6, cash: 500000 };
+    let held = doc;
+    const v = render(<CompanyGeneral company={{ id: "c1", name: "Co", startLabel: "Jul 2026" }}
+                                     account={{}} doc={doc} setDoc={fn => { held = fn(doc); }} />);
+    const month = v.container.querySelector('[aria-label="Projection start month"]');
+    expect(month).toBeTruthy();
+    expect(Number(month.value)).toBe(6);
+    fireEvent.change(month, { target: { value: "0" } });
+    expect(held.startM).toBe(0);
+  });
+
+  it("carries the warning WITH the control", () => {
+    // The old read-only spot explained that changing the start re-bases the document — while the
+    // editable control lived on another tab. The warning was being made in the one place the change
+    // could not be made.
+    const v = render(<CompanyGeneral company={{ id: "c1", name: "Co" }} account={{}}
+                                     doc={{ startY: 2026, startM: 6, cash: 1 }} setDoc={() => {}} />);
+    expect(v.container.textContent).toMatch(/re-bases the document/i);
+  });
+
+  it("cash on hand moved with it", () => {
+    const doc = { startY: 2026, startM: 6, cash: 500000 };
+    let held = doc;
+    const v = render(<CompanyGeneral company={{ id: "c1", name: "Co" }} account={{}}
+                                     doc={doc} setDoc={fn => { held = fn(doc); }} />);
+    fireEvent.change(v.container.querySelector('[aria-label="Cash on hand at start"]'),
+                     { target: { value: "750000" } });
+    expect(held.cash).toBe(750000);
+  });
+
+  it("is read-only for somebody who cannot edit", () => {
+    const v = render(<CompanyGeneral company={{ id: "c1", name: "Co" }} account={{}}
+                                     doc={{ startY: 2026, startM: 6, cash: 1 }} setDoc={() => {}}
+                                     canEdit={false} />);
+    expect(v.container.querySelector('[aria-label="Projection start month"]').disabled).toBe(true);
+  });
 });

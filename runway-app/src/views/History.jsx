@@ -84,26 +84,8 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
       </div>
 
       {tab === "summary" && (<>
-        <div className="panel" style={{ marginBottom: 18 }}>
-          <div className="panel-h">
-            <div><h3>Projection setup</h3><p>Month 0 of the model. Every month label, the whole projection, and the Dashboard follow from these two figures.</p></div>
-          </div>
-          <div className="startcfg">
-            <label className="fl">Projection start
-              <div className="mrow">
-                <select className="sel" value={startM} onChange={e => setStartM(+e.target.value)}>
-                  {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((mo, i) => <option key={i} value={i}>{mo}</option>)}
-                </select>
-                <input className="inp" type="number" style={{ width: 82 }} value={startY} onChange={e => setStartY(+e.target.value)} />
-              </div>
-            </label>
-            <label className="fl">Cash on hand at start
-              <input className="inp" type="number" style={{ width: 132 }} value={cash} onChange={e => setCash(+e.target.value)} />
-            </label>
-            <div className="cfghint">Recorded actuals and every projected month are measured from here.</div>
-          </div>
-        </div>
-
+        {/* PROJECTION SETUP MOVED TO COMPANY SETTINGS. It sat above a table of recorded months and read
+            as part of them, when it is a property of the company rather than of its history. */}
         <div className="stats">
           <div className="stat"><div className="accent" style={{ background: "var(--ink-2)" }} /><div className="lab">Measured burn</div><div className="big">{money(applied)}</div><div className="meta">{methodName}{flaggedCount ? `, ${flaggedCount} flagged out` : ""}</div></div>
           <div className="stat"><div className="accent" style={{ background: "var(--danger)" }} /><div className="lab">Itemized lines</div><div className="big">{money(itemizedOpex)}</div><div className="meta">payroll + company costs</div></div>

@@ -498,7 +498,7 @@ export const COMPANY_PAGES = [
 ];
 
 export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTabPrefs,
-                          scope = "profile", page = null, onGo, onExport, onImport }) {
+                          scope = "profile", page = null, onGo, onExport, onImport , setDoc = () => {} }) {
   const account = getAccountApi();
   const session = getSessionProvider();
   const auth = getAuthAdapter();
@@ -605,7 +605,8 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
     return shell(<>
       {at === "general" && activeCo && (
         <>
-          <CompanyGeneral company={activeCo} account={account} onRenamed={reload} />
+          <CompanyGeneral company={activeCo} account={account} onRenamed={reload}
+                          doc={doc} setDoc={setDoc} />
 
           {/* A TRIGGER AND A MODAL, not a panel. `DeleteCompany` is the confirmation dialog — it takes
               `onConfirm`/`onCancel` and renders only while a deletion is pending. Dropping it inline as

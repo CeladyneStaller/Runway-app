@@ -1355,6 +1355,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   if (showAccount) return (
     <Account
       doc={doc}
+      setDoc={setDoc}
       // WHICH SETTINGS, not just "settings". The two entry points open different scopes and the page
       // is part of the route so a link can land on one — "open your seat settings" in an email has to
       // go somewhere, which a modal could not offer.

@@ -1429,6 +1429,19 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Projection setup moved to Company settings
+
+It sat at the top of Spend history, above a table of recorded months, and read as part of them. It is a
+property of the COMPANY — the origin every month index is measured from — so it belongs beside the
+company's name.
+
+**THE SPOT WAS ALREADY THERE, AND ALREADY WRONG.** `CompanyGeneral` had a read-only row explaining that
+the start is set during setup "because changing it re-bases every line, actual and milestone" — while
+the editable control lived on another tab the whole time. **The warning was being made in the one place
+the change could not be made.** It now travels with the control.
+
+`setDoc` had to be threaded App -> Account -> CompanyGeneral; the page already had `doc`.
+
 ## Commitments tab: overflow, period grouping, and collapse
 
 **THE OVERFLOW WAS ONE MISSING `min-width: 0`.** `.crow-l` is a flex row holding a label and a tag, and

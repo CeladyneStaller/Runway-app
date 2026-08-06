@@ -5,7 +5,7 @@
 // rare one would be the wrong trade, and the old Companies panel did exactly that by holding both.
 import React, { useEffect, useState } from "react";
 
-export function CompanyGeneral({ company, account, onRenamed }) {
+export function CompanyGeneral({ company, account, onRenamed, doc, setDoc = () => {}, canEdit = true }) {
   const [name, setName] = useState(company?.name || "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -49,18 +49,42 @@ export function CompanyGeneral({ company, account, onRenamed }) {
         </div>
       </div>
 
-      {/* READ-ONLY, DELIBERATELY. The start month is the origin every month index in the document is
-          measured from, so changing it here would silently re-base every line, actual and milestone.
-          It belongs to the setup flow, where the consequence can be explained and the model rebuilt. */}
-      <div className="acct-row">
+      {/* MOVED HERE FROM SPEND HISTORY, where it sat above a table of recorded months and looked like
+          part of them. It is a property of the COMPANY — the origin every month index is measured from
+          — so it belongs beside the company's name.
+
+          The old comment in this spot said the control was read-only because changing the start
+          re-bases every line, actual and milestone. That reasoning was right and the control was
+          editable on the other tab anyway, so the warning was being made in the one place the change
+          could not be made. It travels with the control instead. */}
+      <div className="acct-row acct-row-stack">
         <div>
           <div className="acct-row-t">Model starts</div>
           <div className="acct-row-s">
-            Every date in the model is measured from here. Changing it re-bases the whole document, so
-            it is set during setup rather than here.
+            Month 0 of the model. Every month label, every recorded actual and the whole projection are
+            measured from here — <b>changing it re-bases the document</b>.
           </div>
         </div>
-        <div className="acct-row-a"><span className="chip">{company.startLabel || "—"}</span></div>
+        <div className="startcfg">
+          <label className="fl">Projection start
+            <div className="mrow">
+              <select className="sel" value={doc?.startM ?? 0} disabled={!canEdit}
+                      aria-label="Projection start month"
+                      onChange={e => setDoc(d => ({ ...d, startM: +e.target.value }))}>
+                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                  .map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+              <input className="inp" type="number" style={{ width: 82 }} disabled={!canEdit}
+                     aria-label="Projection start year" value={doc?.startY ?? 2026}
+                     onChange={e => setDoc(d => ({ ...d, startY: +e.target.value }))} />
+            </div>
+          </label>
+          <label className="fl">Cash on hand at start
+            <input className="inp" type="number" style={{ width: 132 }} disabled={!canEdit}
+                   aria-label="Cash on hand at start" value={doc?.cash ?? 0}
+                   onChange={e => setDoc(d => ({ ...d, cash: +e.target.value }))} />
+          </label>
+        </div>
       </div>
 
       {msg && <p className="acct-row-s">{msg}</p>}
