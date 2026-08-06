@@ -1429,6 +1429,48 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Project plan — milestones, gates and tasks (schema v7)
+
+**ONE FLAT LIST, ONE VOCABULARY.** `kind: "milestone" | "gate" | "task"`, a task carries `parentId`.
+Nesting tasks inside milestones reads better in a mockup and is worse here, because THE FILED TABLE IS
+FLAT — one row per entry in a fixed order — so every reorder, renumber and export would have to flatten
+it first.
+
+**⚠️ THE NAMING IS CONFUSING AND IT IS THE FORM'S FAULT.** On Appendix E a milestone occupies a TASK row
+(column 1 is "Task Number or Subtask Number") and the work beneath it occupies SUBTASK rows typed
+"Task". So `kind: "milestone"` prints in the task-number column and `kind: "task"` prints in the
+subtask-number column. Storing the form's words would mean a field called `task` that is sometimes a
+milestone; storing ours and translating once, at export, keeps every other file honest.
+
+**Order is TARGET FIRST, THEN ITS TASKS — never by date.** Sorting by month interleaves one milestone's
+tasks with another's, which is not the shape the agency asked for. Task 1.1.1 is month 3 and still
+prints after its month-6 milestone.
+
+**NUMBERS ARE ASSIGNED, NEVER TYPED**, and deleting does NOT renumber siblings — the numbers are in a
+filed document, so a gap is correct. An orphaned task is kept and shown rather than dropped.
+
+**MONTH 0 IS Q1**, not Q0. The form counts quarters the way people count them aloud, and an off-by-one
+here is printed in a filed table.
+
+**A GATE HAS NO DEFAULT OUTCOME.** What a failed gate does to an award is a term of that award;
+defaulting to "stops entirely" would put a cliff in the projection nobody agreed to. It is listed as a
+gap instead.
+
+**GAPS ARE REPORTED, NEVER ENFORCED.** Requiring verification text before a row saves would stop people
+recording the DATE, which is the part the model needs.
+
+**Verification is ONE field, not four** — the form prints a single cell, so four inputs would mean
+joining them back and guessing the punctuation.
+
+**Two mistakes of mine worth keeping:** a regex adding props to `Projects` stopped at the first `}`,
+which belonged to `setRouteTab = () => {}` rather than the parameter list; and `monthLabel(y, m, idx)`
+takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
+it.
+
+**NOT YET BUILT: the gate as a projection primitive.** A failed gate should stop the award, and the
+accrued cost share should survive it — which may make the clean-exit date WORSE at the same moment the
+runway shortens. That needs one real award's terms before the rule is written.
+
 ## "Last updated" renamed to "Cash on hand updated"
 
 It is the latest month with a recorded cash figure, so it moves when you CLOSE A MONTH, not when you

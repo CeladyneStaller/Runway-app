@@ -8,6 +8,7 @@ import { HRS_YR, empHourlyAt, empTitleAt } from "../engine/payroll";
 import { buildProjection, lineSpan } from "../engine/projection";
 import { blankGrant, blankInternal, compileProject } from "../engine/projects";
 import { projectSummary } from "../engine/summary";
+import { ProjectPlan } from "./chrome/ProjectPlan";
 import { ProjectChart } from "./chrome/ProjectChart";
 import { CostSharePanel } from "./chrome/CostSharePanel";
 import { codedActuals, effectiveActuals } from "../engine/coding";
@@ -24,7 +25,7 @@ const ActualsCtx = createContext({ setProjects: () => {}, hist: [], codeMap: {},
 const useProjectsSetter = () => useContext(ActualsCtx).setProjects;
 const useActualsCtx = () => useContext(ActualsCtx);
 
-export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} }) {
+export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} , startY = 2026, startM = 0 }) {
   const tabPrefs = useTabPrefs();
   const tab = resolveTab("proj", routeTab, "all", tabPrefs);
   const setTab = (t) => setRouteTab(t);
@@ -159,6 +160,13 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
               : p.type === "grant"
               ? <GrantCard p={p} setP={setP} setGrant={setGrant} setType={setType} delP={delP} employees={employees} />
               : <InternalCard p={p} setProjects={setProjects} setP={setP} setType={setType} delP={delP} />}
+            {/* THE PLAN SITS ON EVERY PROJECT TYPE, not just grants. A subcontract has deliverables
+                and an internal project has targets — the Appendix E shape is where it came from, not
+                where it is limited to. */}
+            <ProjectPlan
+              project={p}
+              setProject={fn => setProjects(ps => ps.map(x => (x.id === p.id ? fn(x) : x)))}
+              startY={startY} startM={startM} />
           </div>)}
       {shown.length === 0 && (
         <div className="emptytab"><b>{empty[0]}</b><span>{empty[1]}</span></div>

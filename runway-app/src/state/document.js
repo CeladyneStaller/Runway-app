@@ -4,7 +4,7 @@
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 const settings = () => ({
   fringePct: 0.30,
@@ -174,6 +174,15 @@ export const demoDoc = () => ({
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.
 const MIGRATIONS = {
+  // v6 -> v7: projects gain a PLAN — milestones, go/no-go gates, and the tasks that reach them.
+  //
+  // Purely additive. Every existing project gets an empty array, and a project with no plan behaves
+  // exactly as before: the feature is invisible until somebody uses it.
+  7: (d) => ({
+    ...d, schemaVersion: 7,
+    projects: (d.projects || []).map(p => ({ ...p, plan: p.plan || [] })),
+  }),
+
   // v5 -> v6: commitments gain a FLAVOUR and, for payments, a KIND.
   //
   //   recurring — overhead that stops the moment the business does (a lease's rent)
