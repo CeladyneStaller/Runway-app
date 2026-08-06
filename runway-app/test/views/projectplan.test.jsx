@@ -114,64 +114,24 @@ describe("a viewer", () => {
   });
 });
 
-describe("import", () => {
-  const TSV = [
-    "Task Number\tTitle\tType\tNumber\tDescription\tVerification\tMonth",
-    "1.1\tBaseline membrane\tMilestone\tM1.1\tCoupon at 78%\tReport to TPM\t6",
-    "1.1.1\tScreening\tTask\t\tScreen 12 ratios\tMatrix retained\t3",
-    "2.1\t5 kW stack\tGo/No-Go\tG1\t92% for 500 h\tWitnessed\tQ5",
-  ].join("\n");
-
-  it("is offered on an empty plan, as the primary path", () => {
-    // Nobody starts a project in this app — they start it in a proposal, where the table already exists.
-    const v = draw({ id: "p", plan: [] });
-    expect(v.container.textContent).toMatch(/Paste a table/);
+describe("the import/export trigger", () => {
+  // THE INLINE IMPORT MOVED INTO A MODAL, so the seven tests that lived here — paste box, review
+  // counts, quarter flagging, parenting — moved with it to `planio.test.jsx` rather than being
+  // deleted. What is left here is the panel's own contract: it offers ONE route, and a viewer gets
+  // none.
+  it("offers ONE route, not an inline box beside it", () => {
+    const v = draw();
+    expect(v.container.querySelector(".iobtn")).toBeTruthy();
+    expect(v.container.querySelector(".plan-import")).toBeNull();
   });
 
-  it("SHOWS WHAT IT READ BEFORE IT COMMITS", () => {
-    const v = draw({ id: "p", plan: [] });
-    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Paste a table/.test(b.textContent)));
-    fireEvent.change(v.container.querySelector(".plan-import textarea"), { target: { value: TSV } });
-    expect(v.container.textContent).toMatch(/3 rows read/);
-    expect(v.container.textContent).toMatch(/2 targets/);
-    expect(v.container.textContent).toMatch(/1 go\/no-go/);
-  });
-
-  it("FLAGS A QUARTER READ AS A MONTH, rather than guessing silently", () => {
-    // Appendix E has both columns; a silent guess puts a gate up to two months from where it belongs.
-    const v = draw({ id: "p", plan: [] });
-    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Paste a table/.test(b.textContent)));
-    fireEvent.change(v.container.querySelector(".plan-import textarea"), { target: { value: TSV } });
-    expect(v.container.textContent).toMatch(/quarter, not month/);
-  });
-
-  it("imports, and parents the task to the target above it", () => {
-    const v = draw({ id: "p", plan: [] });
-    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Paste a table/.test(b.textContent)));
-    fireEvent.change(v.container.querySelector(".plan-import textarea"), { target: { value: TSV } });
-    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Import 3 rows/.test(b.textContent)));
-    const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent);
-    expect(nums).toEqual(["1.1", "1.1.1", "2.1"]);
-  });
-
-  it("refuses to import nothing", () => {
-    const v = draw({ id: "p", plan: [] });
-    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Paste a table/.test(b.textContent)));
-    const btn = [...v.container.querySelectorAll("button")].find(b => /^Import/.test(b.textContent));
-    expect(btn.disabled).toBe(true);
-  });
-
-  it("offers the export only once there is something to export", () => {
-// The label changed when the workbook export landed beside it — "Copy as a table" is the text
-    // route, "Export SOPO workbook" the file one. Import is offered on an empty plan; export is not.
-    expect(draw({ id: "p", plan: [] }).container.textContent).not.toMatch(/Export SOPO workbook/);
-    expect(draw().container.textContent).toMatch(/Export SOPO workbook/);
-    expect(draw().container.textContent).toMatch(/Copy as a table/);
-    expect(draw({ id: "p", plan: [] }).container.textContent).toMatch(/Import SOPO workbook/);
+  it("is offered on an empty plan too, because that is where it matters most", () => {
+    // Nobody starts a project in this app — they start it in a proposal where the table already exists.
+    expect(draw({ id: "p", plan: [] }).container.querySelector(".iobtn")).toBeTruthy();
   });
 
   it("a viewer is offered neither", () => {
     const v = draw(seeded(), { canWrite: false });
-    expect(v.container.textContent).not.toMatch(/Paste a table/);
+    expect(v.container.querySelector(".iobtn")).toBeNull();
   });
 });

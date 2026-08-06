@@ -1467,6 +1467,40 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Milestone import/export moved into an SF-424A-style modal
+
+**ONE ROUTE.** The panel's inline paste box and file button are gone, replaced by a single `iobtn`
+trigger opening the same modal shape the budget uses. Two routes to one action is how somebody learns
+the app has two importers, and then finds out it does not.
+
+**⚠️ ONE DELIBERATE DIVERGENCE FROM SF-424A: import offers ADD as well as REPLACE.** The budget's
+import replaces everything with no undo, which is survivable for one screen of numbers somebody can
+retype. A milestone table can be an afternoon of typing. Both buttons name their OUTCOME — "Add 14
+rows", "Replace all 11" — so nobody has to remember which importer they are in, and NEITHER APPEARS
+UNTIL THE REVIEW HAS RUN, so the destructive one is never what you press to find out what is in a file.
+
+**THE REVIEW IS THE FILED TABLE — all eight columns, every cell editable.** The moment to fix a misread
+quarter is before it becomes a row somebody sends to an agency. The modal widens only when the review
+is showing.
+
+- **The quarter is DERIVED, not editable.** Two editable date columns is two places for a date to live
+  and disagree, and the form's quarter is a function of its month.
+- **Flagged cells are shaded with the reason UNDER THE CELL** — "quarter 5 read as month 12" is a claim
+  somebody can check against the file in front of them; a banner count is not.
+- **A row can be dropped here and nowhere else.** Importing something unwanted and deleting it after
+  leaves a numbering gap the app deliberately will not close.
+- **The clash column appears only when something clashes.** A conflict step shown for a clean import is
+  one people learn to click through, and then click through on the occasion it mattered.
+- **"Keep both" renumbers the INCOMING row.** The existing numbers may be in a filed document; the
+  arriving ones have not been anywhere.
+
+**Seven panel tests MOVED rather than being deleted** — paste box, review counts, quarter flagging,
+parenting — because the behaviour moved. What is left in `projectplan.test.jsx` is the panel's own
+contract: one route, and none for a viewer.
+
+**`afterEach(cleanup)` was missing** and two renders in one file made `data-testid` ambiguous — the
+failure reads as a broken assertion rather than a leaked DOM.
+
 ## Milestone import/export, matched to a REAL SOPO workbook
 
 Corey supplied an actual DOE SOPO template. **It differs from the printed appendix in four ways, and an

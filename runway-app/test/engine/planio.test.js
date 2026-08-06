@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parsePlanPaste, matchColumns, draftsToPlan, planToTSV, APPENDIX_E_HEADERS } from "../../src/engine/planio.js";
+import { parsePlanPaste, matchColumns, draftsToPlan, planToTSV, APPENDIX_E_HEADERS,
+         planCollisions, renumberIncoming } from "../../src/engine/planio.js";
 import { addPlanEntry } from "../../src/engine/plan.js";
 
 const TSV = [
@@ -119,5 +120,29 @@ describe("export", () => {
     expect(back.error).toBeNull();
     expect(back.rows[0].kind).toBe("milestone");
     expect(back.rows[0].month).toBe(6);
+  });
+});
+
+describe("collisions", () => {
+  const project = { plan: [{ id: "a", number: "1.1", title: "Mine" },
+                           { id: "b", number: "1.1.1", title: "Mine too" }] };
+  const drafts = [{ i: 0, number: "1.1" }, { i: 1, number: "1.3" }, { i: 2, number: "1.1.1" }];
+
+  it("reports only the rows that actually clash", () => {
+    const c = planCollisions(project, drafts);
+    expect(Object.keys(c)).toEqual(["0", "2"]);
+    expect(c[0].existing.title).toBe("Mine");
+  });
+
+  it("THE INCOMING ROW MOVES, never the existing one", () => {
+    // The numbers already in the table may be in a filed document; the arriving ones have not been
+    // anywhere yet.
+    const taken = new Set(["1.1", "1.2"]);
+    expect(renumberIncoming(taken, "1.1")).toBe("1.3");
+    expect(renumberIncoming(new Set(["1.1.1"]), "1.1.1")).toBe("1.1.2");
+  });
+
+  it("leaves a free number alone", () => {
+    expect(renumberIncoming(new Set(["1.1"]), "2.4")).toBe("2.4");
   });
 });

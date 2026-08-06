@@ -255,3 +255,37 @@ export function exportPlanWorkbook(XLSX, project, meta = {}) {
   XLSX.utils.book_append_sheet(wb, ws, SHEET);
   return wb;
 }
+
+/** Numbers arriving that already exist in the project.
+ *
+ *  Reported per row so the review can offer a choice on exactly the rows that need one — a conflict
+ *  step shown for a clean import is one people learn to click through, and then click through on the
+ *  occasion it mattered.
+ */
+export function planCollisions(project, drafts) {
+  const have = new Map((project?.plan || []).map(e => [String(e.number || "").trim(), e]));
+  const out = {};
+  for (const d of drafts) {
+    const n = String(d.number || "").trim();
+    if (n && have.has(n)) out[d.i] = { number: n, existing: have.get(n) };
+  }
+  return out;
+}
+
+/** Renumber an incoming row so it can sit beside one that already has its number.
+ *
+ *  ⚠️ THE INCOMING ROW MOVES, NEVER THE EXISTING ONE. The numbers already in the table may be in a
+ *  document that has been filed; the ones arriving have not been anywhere yet.
+ */
+export function renumberIncoming(taken, number) {
+  const base = String(number || "").trim() || "1";
+  const parts = base.split(".");
+  const head = parts.slice(0, -1).join(".");
+  let n = +parts[parts.length - 1] || 1;
+  let candidate = base;
+  while (taken.has(candidate)) {
+    n += 1;
+    candidate = head ? `${head}.${n}` : String(n);
+  }
+  return candidate;
+}

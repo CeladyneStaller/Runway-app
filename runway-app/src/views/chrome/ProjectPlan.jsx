@@ -2,7 +2,7 @@ import { useState } from "react";
 import { planRows, appendixERows, planGaps, addPlanEntry, updatePlanEntry,
          removePlanEntry, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
 import { monthLabel } from "../../engine/time";
-import { planToTSV, parsePlanPaste, draftsToPlan } from "../../engine/planio";
+import { PlanIOModal } from "./PlanIOModal";
 
 /** The milestone table, entered in the order it will be filed.
  *
@@ -12,8 +12,7 @@ import { planToTSV, parsePlanPaste, draftsToPlan } from "../../engine/planio";
  */
 export function ProjectPlan({ project, setProject, startY, startM, canWrite = true }) {
   const [openId, setOpenId] = useState(null);
-  const [paste, setPaste] = useState(null);          // null = closed, string = the textarea
-  const parsed = paste == null ? null : parsePlanPaste(paste);
+  const [io, setIo] = useState(false);
   const rows = planRows(project);
   const gaps = planGaps(project);
   const targets = rows.filter(e => e.kind !== "task");
@@ -25,81 +24,14 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
   });
   const set = (id, patch) => setProject(p => updatePlanEntry(p, id, patch));
 
-  const importPanel = !canWrite ? null : paste == null ? (
-    <div className="plan-add">
-      {/* SAME TWO DOORS AS SF-424A: a file for the workbook people already have, a paste box for the
-          table they can only get at as text. Both go through ONE parser, so they cannot disagree. */}
-      <label className="linkbtn plan-file">
-        Import SOPO workbook
-        <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }}
-               onChange={async ev => {
-                 const f = ev.target.files?.[0]; if (!f) return;
-                 try {
-                   const XLSX = await import("xlsx");
-                   const { sheetToText } = await import("../../engine/planio");
-                   const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
-                   const text = sheetToText(XLSX, wb);
-                   // A FILE THAT PARSES TO NOTHING OPENS THE PASTE BOX rather than failing silently —
-                   // the person can see what came out and fix it, which beats "nothing happened".
-                   setPaste(text || "");
-                 } catch { setPaste(""); }
-                 ev.target.value = "";
-               }} />
-      </label>
-      <button className="linkbtn" onClick={() => setPaste("")}>Paste a table</button>
-      {rows.length > 0 && (
-        <>
-          <button className="linkbtn" onClick={async () => {
-            const XLSX = await import("xlsx");
-            const { exportPlanWorkbook } = await import("../../engine/planio");
-            const wb = exportPlanWorkbook(XLSX, project);
-            XLSX.writeFile(wb, `${(project?.name || "project").replace(/[^\w -]/g, "")} milestones.xlsx`);
-          }}>Export SOPO workbook</button>
-          <button className="linkbtn" onClick={() => {
-            navigator.clipboard?.writeText?.(planToTSV(project));
-          }}>Copy as a table</button>
-        </>
-      )}
-    </div>
-  ) : (
-    <div className="plan-import">
-      <p className="meta">
-        Paste the milestone table from your proposal or award — columns are matched by name, so the
-        order does not matter and extra columns are ignored.
-      </p>
-      <textarea className="inp ta" rows={5} value={paste} autoFocus
-                onChange={e => setPaste(e.target.value)}
-                placeholder={"Task Number\tTitle\tType\tNumber\tDescription\tVerification\tMonth"} />
-      {parsed?.error && <p className="plan-gaps">{parsed.error}</p>}
-      {parsed && !parsed.error && parsed.rows.length > 0 && (
-        <>
-          <p className="meta">
-            {parsed.rows.length} rows read ·{" "}
-            {parsed.rows.filter(r => r.kind !== "task").length} targets ·{" "}
-            {parsed.rows.filter(r => r.kind === "gate").length} go/no-go
-          </p>
-          {/* EVERY PROBLEM IS SHOWN BEFORE IT COMMITS. Nothing is dropped — a row with no date is
-              imported and flagged, because losing it because a cell was blank produces a table that
-              does not match the one they filed. */}
-          <ul className="plan-notes">
-            {parsed.rows.filter(r => r.notes.length).slice(0, 6).map(r => (
-              <li key={r.i}><b>{r.number || `row ${r.i + 1}`}</b> — {r.notes.join("; ")}</li>
-            ))}
-          </ul>
-        </>
-      )}
-      <div className="plan-acts">
-        <button className="addbtn" disabled={!parsed || parsed.error || !parsed.rows.length}
-                onClick={() => {
-                  setProject(p2 => ({ ...p2, plan: [...(p2.plan || []), ...draftsToPlan(parsed.rows)] }));
-                  setPaste(null);
-                }}>
-          Import {parsed?.rows?.length || 0} rows
-        </button>
-        <button className="linkbtn" onClick={() => setPaste(null)}>Cancel</button>
-      </div>
-    </div>
-  );
+  // ONE ROUTE. The inline paste box and file button were replaced by a single trigger opening the same
+  // modal the budget uses for SF-424A — two routes to one action is how somebody learns the app has two
+  // importers, and then finds out it does not.
+  const ioBtn = canWrite ? (
+    <button className="iobtn" onClick={() => setIo(true)} title="Import / export the milestone table">
+      ⇅ Import / export
+    </button>
+  ) : null;
 
   if (!rows.length) {
     return (
@@ -113,11 +45,12 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
           Nothing here yet. Most projects already have this table in the proposal — add the first
           milestone, then the tasks beneath it.
         </p>
-        {importPanel}
-        {canWrite && paste == null && <div className="plan-add">
+        {canWrite && <div className="plan-add">
           <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
           <button className="linkbtn" onClick={() => add("gate")}>+ Go/no-go</button>
         </div>}
+        {ioBtn}
+        {io && <PlanIOModal project={project} setProject={setProject} onClose={() => setIo(false)} />}
       </section>
     );
   }
@@ -127,7 +60,10 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
       <div className="panel-h">
         <div><h3>Milestones and deliverables</h3>
           <p>Shown in the order it will be filed — each target followed by the tasks that reach it.</p></div>
-        <span className="chip">{targets.length} target{targets.length === 1 ? "" : "s"} · {rows.length} rows</span>
+        <div className="plan-h-r">
+          <span className="chip">{targets.length} target{targets.length === 1 ? "" : "s"} · {rows.length} rows</span>
+          {ioBtn}
+        </div>
       </div>
 
       {gaps.length > 0 && (
@@ -179,11 +115,11 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
         })}
       </div>
 
-      {canWrite && paste == null && <div className="plan-add">
+      {canWrite && <div className="plan-add">
         <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
         <button className="linkbtn" onClick={() => add("gate")}>+ Go/no-go</button>
       </div>}
-      {importPanel}
+      {io && <PlanIOModal project={project} setProject={setProject} onClose={() => setIo(false)} />}
     </section>
   );
 }
