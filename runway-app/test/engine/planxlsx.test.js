@@ -77,13 +77,15 @@ describe("export", () => {
     expect(String(g[1][0])).toMatch(/Budget Period/);
   });
 
-  it("A TASK REPEATS ITS NUMBER and a milestone leaves the cell blank", () => {
-    // The opposite of what the printed form suggests, and what the real template does.
+  it("A MILESTONE CITES ITSELF AND A TASK CITES ITS MILESTONE", () => {
+    // WRITTEN AGAINST THE TEMPLATE'S PLACEHOLDER ROWS, which leave a milestone's cell blank and repeat
+    // a task's own number. Corey specified the more useful reading — the column says WHICH TARGET each
+    // row serves — so a milestone prints its own number and a task prints its parent's.
     const wb = exportPlanWorkbook(XLSX, p());
     const g = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
     const body = g.slice(4);
-    expect(body[0][3]).toBe("");            // milestone
-    expect(body[1][3]).toBe(body[1][0]);    // task repeats its number
+    expect(body[0][3]).toBe(body[0][0]);    // milestone cites itself
+    expect(body[1][3]).toBe(body[0][0]);    // task cites its milestone, not itself
   });
 
   it("writes the quarter as a bare integer", () => {

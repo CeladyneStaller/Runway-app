@@ -89,12 +89,15 @@ describe("the filed table", () => {
   const rows = appendixERows(withPlan());
 
   it("prints a milestone in the task-number column", () => {
-    expect(rows[0]).toMatchObject({ taskNumber: "1.1", type: "Milestone", milestoneNumber: "M1" });
+    // THE MILESTONE NUMBER IS ITS OWN NUMBER now, not the internal M-label. The task number and the
+    // milestone number are the same thing on this form.
+    expect(rows[0]).toMatchObject({ taskNumber: "1.1", type: "Milestone", milestoneNumber: "1.1" });
   });
 
-  it("PRINTS AN EM DASH for a task's milestone number", () => {
-    // A reviewer should not have to wonder whether a cell was missed.
-    expect(rows[1]).toMatchObject({ taskNumber: "1.1.1", type: "Task", milestoneNumber: "\u2014" });
+  it("A TASK CITES THE MILESTONE IT SERVES", () => {
+    // It used to print an em dash, on the reasoning that a task has no milestone number of its own.
+    // Citing its PARENT is better: the column then says which target each row serves.
+    expect(rows[1]).toMatchObject({ taskNumber: "1.1.1", type: "Task", milestoneNumber: "1.1" });
   });
 
   it("names the gate type as the form does", () => {
@@ -437,5 +440,47 @@ describe("reordering thrusts", () => {
   it("ignores anything that is not a thrust", () => {
     const p = built();
     expect(reorderThrust(p, id(p, "M1"), id(p, "T1"))).toBe(p);
+  });
+});
+
+describe("the Milestone Number column", () => {
+  const built = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M1", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "gate", parentId: p.plan[0].id, title: "G late", month: 20 });
+    p = addPlanEntry(p, { kind: "thrust", title: "T2" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[4].id, title: "M2", month: 14 });
+    p = addPlanEntry(p, { kind: "gate", parentId: p.plan[4].id, title: "G early", month: 10 });
+    return p;
+  };
+  const col = () => Object.fromEntries(appendixERows(built()).map(r => [r.title, r.milestoneNumber]));
+
+  it("A MILESTONE'S IS ITS OWN NUMBER — they are the same thing", () => {
+    expect(col()["M1"]).toBe("1.1");
+    expect(col()["M2"]).toBe("2.1");
+  });
+
+  it("A TASK'S IS THE MILESTONE IT SITS UNDER, not its own", () => {
+    // The column then says WHICH TARGET each row serves, which is the useful reading.
+    expect(col()["A"]).toBe("1.1");
+  });
+
+  it("A GATE'S IS 1, 2, 3 IN CHRONOLOGICAL ORDER across the whole project", () => {
+    // Not per thrust — a funder counts decision points through the award, not within a block of work.
+    // "G early" is month 10 in the SECOND thrust and still numbers first.
+    expect(col()["G early"]).toBe("1");
+    expect(col()["G late"]).toBe("2");
+  });
+
+  it("a thrust leaves it blank", () => {
+    expect(col()["T1"]).toBe("");
+  });
+
+  it("THE WORKBOOK WRITES THE SAME VALUE — one source, not two", () => {
+    // The writer used to re-derive this cell and had drifted from the printed table.
+    const src = require("node:fs").readFileSync("src/engine/planio.js", "utf8");
+    expect(src).toMatch(/r\.milestoneNumber,/);
   });
 });

@@ -187,13 +187,40 @@ export function removePlanEntry(project, id) {
 
 /** The filed table, one object per printed row. Nothing is invented here. */
 export function appendixERows(project) {
-  return planRows(project).map(e => ({
+  const all = project?.plan || [];
+  const rows = planRows(project);
+
+  // ── the Milestone Number column ──────────────────────────────────────────────────────────────
+  //
+  //   thrust     blank — it is a heading
+  //   milestone  ITS OWN NUMBER. The task number and the milestone number are the same thing.
+  //   task       THE NUMBER OF THE MILESTONE IT SITS UNDER, not its own.
+  //   gate       1, 2, 3 in CHRONOLOGICAL order across the whole project — not per thrust, because a
+  //              funder counts decision points through the award, not within a block of work.
+  //
+  // ⚠️ NOTE FOR THE NEXT READER: the supplied SOPO template writes a TASK's own number here (1.1.1),
+  // not its milestone's. Corey specified the milestone's, which is the more useful reading — the column
+  // then says WHICH TARGET each row serves — and the template's example rows are unfilled placeholders.
+  // If a funder ever objects, this is the line to change.
+  const gateOrder = new Map(
+    all.filter(e => e?.kind === "gate")
+       .slice()
+       .sort((a, b) => (clean(a.month) - clean(b.month)) || 0)
+       .map((g, i) => [g.id, String(i + 1)]));
+
+  const milestoneNumberOf = (e) => {
+    if (e.kind === "thrust") return "";
+    if (e.kind === "gate") return gateOrder.get(e.id) || "";
+    if (e.kind === "milestone") return e.number || "";
+    return all.find(x => x.id === e.parentId)?.number || "";
+  };
+
+  return rows.map(e => ({
     // A THRUST PRINTS "TASK 1" in the number column and leaves everything after the title empty.
     taskNumber: e.kind === "thrust" ? `TASK ${e.number}` : e.number,
     title: e.title,
     type: (PLAN_KINDS.find(k => k[0] === e.kind) || [])[1] ?? "Task",
-    milestoneNumber: e.kind === "thrust" ? ""
-                     : e.kind === "task" ? "\u2014" : (e.label || ""),
+    milestoneNumber: milestoneNumberOf(e),
     description: e.kind === "thrust" ? "" : e.description,
     verification: e.kind === "thrust" ? "" : e.verification,
     month: e.kind === "thrust" ? "" : String(clean(e.month)),

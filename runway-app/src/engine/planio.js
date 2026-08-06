@@ -251,7 +251,9 @@ export function exportPlanWorkbook(XLSX, project, meta = {}) {
       // ⚠️ A MILESTONE LEAVES THIS BLANK in the real template — its identity IS its task number (1.1),
       // and there is no separate M-number. Writing our internal label here would put a value in a
       // filed cell that the template does not carry.
-      r.isThrust ? "" : r.isTask ? r.taskNumber : "",
+      // ONE SOURCE. `appendixERows` decides what this cell says for every kind; the workbook writer
+      // used to re-derive it and had drifted from the printed table.
+      r.milestoneNumber,
       r.description, r.verification,
       r.isThrust ? "" : Number(r.month),
       // A BARE INTEGER, as the template writes it.

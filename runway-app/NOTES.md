@@ -1467,6 +1467,27 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## The Milestone Number column — filled in, per kind
+
+    thrust     blank — it is a heading
+    milestone  ITS OWN NUMBER. The task number and the milestone number are the same thing.
+    task       THE NUMBER OF THE MILESTONE IT SITS UNDER, not its own.
+    gate       1, 2, 3 in CHRONOLOGICAL order across the WHOLE project
+
+**⚠️ THE TASK RULE DIFFERS FROM THE SUPPLIED TEMPLATE**, which writes a task's own number (1.1.1) in
+this cell. Corey specified the milestone's, which is the more useful reading — the column then says
+WHICH TARGET each row serves — and the template's example rows are unfilled placeholders. The comment in
+`appendixERows` names the line to change if a funder ever objects.
+
+**GATES NUMBER ACROSS THE PROJECT, not per thrust.** A funder counts decision points through the award,
+not within a block of work. Tested with an early gate in the SECOND thrust, which correctly numbers 1.
+
+**ONE SOURCE.** The workbook writer used to re-derive this cell and had drifted from the printed table;
+it now reads `r.milestoneNumber` like everything else.
+
+**Three older assertions were written against the template's placeholders** — em dash for a task, blank
+for a milestone — and were corrected with the rule.
+
 ## Thrust reordering, and the internal card's section order
 
 **⚠️ REORDERING THRUSTS IS THE ONE OPERATION THAT DELIBERATELY RENUMBERS ROWS IT DID NOT TOUCH.**
