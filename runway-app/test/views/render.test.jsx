@@ -52,7 +52,7 @@ describe("every sub-tab renders", () => {
 describe("the app shell", () => {
   it("shows the golden runway on the demo document", () => {
     const { container } = mount();
-    expect(container.textContent).toMatch(/5\.5 mo/);
+    expect(container.textContent).toMatch(/4\.3 mo/);
     // The DEMO's date, which moved with its commitments — the seed still crosses on Dec 20 and the
     // golden canary still asserts that. Two documents, two dates, both pinned.
     expect(container.textContent).toMatch(/Dec 1[0-9], 26/);

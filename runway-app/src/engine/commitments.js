@@ -14,7 +14,7 @@
 // cash at all. A manual one creates its own line. Without this, a lease recorded as both a recurring
 // cost and a commitment doubles the burn, and the overstatement is silent.
 
-import { balanceAtDate, zeroInfo, forecastFrom } from "./projection.js";
+import { balanceAtDate, zeroInfo, forecastFrom, monthsFromNow } from "./projection.js";
 import { computeGrant, isMsBilled } from "./grant.js";
 import { lastActualMonth } from "./summary.js";
 import { empCostAt } from "./payroll.js";
@@ -344,6 +344,9 @@ export function commitmentPressure(doc, rows,
     uncovered,
     coveredMonths,
     coveredAt,
+    // What to SHOW. `coveredMonths` is the index from the model's start; a person reading "1.9 mo"
+    // means from today.
+    coveredFromNow: coveredAt ? monthsFromNow(coveredAt) : null,
     alreadyPast,
     // Null means the cash outlasts every obligation inside the horizon — the opposite of a problem, and
     // it must not render as "no answer".

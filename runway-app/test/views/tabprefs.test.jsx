@@ -52,7 +52,7 @@ describe("hiding a main tab", () => {
     const shown = app({ views: [], subs: {} });
     const hidden = app({ views: ["pay", "proj", "sales"], subs: {} });
     expect(shown.querySelector(".sub").textContent).toBe(hidden.querySelector(".sub").textContent);
-    expect(hidden.textContent).toMatch(/5\.5/);
+    expect(hidden.textContent).toMatch(/4\.3/);
   });
 });
 

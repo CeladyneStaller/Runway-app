@@ -253,8 +253,17 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
              stranded, bridge: stranded ? solv.bridgeTo(t) : 0 };
   }).sort((a, b) => a.t - b.t);
 
-  const pressure = useMemo(() => { try { return commitmentPressure(doc, rows); } catch { return null; } },
-                           [doc, rows]);
+  // ⚠️ THE SAME TOGGLES THE TAB WRITES. The dashboard called `commitmentPressure(doc, rows)` with no
+  // options, so it always counted debt while the Commitments tab honoured `settings.exitCounts*` — two
+  // screens showing the same figure with different dates, which is worse than either being wrong.
+  const pressure = useMemo(() => {
+    try {
+      return commitmentPressure(doc, rows, {
+        withVentureDebt: doc?.settings?.exitCountsVentureDebt !== false,
+        withNoteDebt: doc?.settings?.exitCountsNoteDebt !== false,
+      });
+    } catch { return null; }
+  }, [doc, rows]);
 
   const netBurn = rows.slice(0, 3).reduce((a, r) => a + r.net, 0) / 3;
   const grossBurn = rows.slice(0, 3).reduce((a, r) => a + r.cost, 0) / 3;
@@ -485,7 +494,7 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
             </div>
             <div className="statuspill">
               <span>Runway</span>
-              <b className="num" style={specInRunway ? { color: "var(--caution)" } : null}>{zero ? zero.months.toFixed(1) + " mo" : `${HORIZON}+ mo`}</b>
+              <b className="num" style={specInRunway ? { color: "var(--caution)" } : null}>{zero ? (zero.fromNow ?? zero.months).toFixed(1) + " mo" : `${HORIZON}+ mo`}</b>
               <em className="num">{zero ? dateShort(zero.date) : "positive"}</em>
               {specInRunway && (
                 <span className="specflag" title={zeroConf ? `Includes speculative revenue — without it, zero on ${dateShort(zeroConf.date)}.` : "Includes speculative revenue."}>
@@ -502,7 +511,7 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
               <div className="stats">
                 <div className="stat hero">
                   <div className="lab">Runway remaining</div>
-                  <div className="big">{zero ? `${zero.months.toFixed(1)} mo` : `${HORIZON}+ mo`}</div>
+                  <div className="big">{zero ? `${(zero.fromNow ?? zero.months).toFixed(1)} mo` : `${HORIZON}+ mo`}</div>
                   {showBand && band && (band.floor.zero != null || band.ceiling.zero != null) && (
                     <div className="meta band-range">
                       {band.floor.zeroNull ? `${HORIZON}+` : band.floor.zero.toFixed(1)}
@@ -518,11 +527,11 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                     people to stop reading it. Half a month is the threshold: below that the difference
                     is rounding, above it is a decision. */}
                 {pressure && pressure.coveredMonths != null && zero &&
-                 (zero.months - pressure.coveredMonths) >= 0.5 && (
+                 ((zero.fromNow ?? zero.months) - (pressure.coveredFromNow ?? pressure.coveredMonths)) >= 0.5 && (
                   <div className="stat">
                     <div className="accent" style={{ background: "var(--commit)" }} />
                     <div className="lab">Clean exit until</div>
-                    <div className="big">{pressure.coveredMonths.toFixed(1)} mo</div>
+                    <div className="big">{(pressure.coveredFromNow ?? pressure.coveredMonths).toFixed(1)} mo</div>
                     <div className="meta">{pressure.coveredAt
                       ? "after " + dateShort(pressure.coveredAt) + " you could not pay everyone"
                       : "you can close and pay everyone"}</div>

@@ -65,14 +65,18 @@ export function zeroInfo(rows, startY, startM, from = 0) {
   // which is the most dangerous possible wrong answer. Zero months, at the window.
   const w = Math.max(0, Math.min(from, rows.length - 1));
   if (rows[w] && rows[w].start < 0) {
-    return { t: w, date: new Date(startY, startM + w, 1), months: w, alreadyOut: true };
+    const at = new Date(startY, startM + w, 1);
+    return { t: w, date: at, months: w, fromNow: monthsFromNow(at), alreadyOut: true };
   }
   for (const r of rows.slice(w)) {
     if (r.end < 0 && r.start >= 0) {
       const f = r.start / (r.start - r.end);
       const dim = daysInMonth(startY, startM + r.m);
       const day = Math.max(1, Math.round(f * dim));
-      return { t: r.m + f, date: new Date(startY, startM + r.m, day), months: r.m + f };
+      const at = new Date(startY, startM + r.m, day);
+      // `months` STAYS AS THE INDEX FROM MODEL START — the golden canary and every internal comparison
+      // depend on it. `fromNow` is what a person should be shown.
+      return { t: r.m + f, date: at, months: r.m + f, fromNow: monthsFromNow(at) };
     }
   }
   return null;
@@ -206,4 +210,22 @@ export function forecastFrom(doc, today = new Date()) {
   if (!doc || !Number.isFinite(doc.startY) || !Number.isFinite(doc.startM)) return 0;
   const m = (today.getFullYear() - doc.startY) * 12 + (today.getMonth() - doc.startM);
   return Math.max(0, m);
+}
+
+/** How many months from TODAY a dated figure is.
+ *
+ *  ⚠️ `zeroInfo().months` AND `coveredMonths` ARE BOTH MEASURED FROM THE MODEL'S START, because that is
+ *  the index the projection walks. Shown to somebody as "5.6 mo" they read "five and a half months from
+ *  now" — and for a model started in January and opened in June, that is wrong by five months in the
+ *  reassuring direction.
+ *
+ *  Derived from the DATE rather than by subtracting indices, so it is right whether the model starts in
+ *  the past or the future, and returns 0 rather than a negative for a date already gone.
+ */
+export function monthsFromNow(date, today = new Date()) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const whole = (date.getFullYear() - today.getFullYear()) * 12 + (date.getMonth() - today.getMonth());
+  const dim = daysInMonth(date.getFullYear(), date.getMonth());
+  const frac = (date.getDate() - today.getDate()) / dim;
+  return Math.max(0, whole + frac);
 }

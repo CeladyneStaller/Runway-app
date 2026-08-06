@@ -77,8 +77,11 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
             {/* SATURATION IS AN ANSWER, not a small number. Failing on the first month that is still a
                 decision means there is no window left — printing "0.2 mo" invites somebody to think
                 they have a fortnight. */}
+            {/* FROM TODAY, not from the model's start. "1.9 mo" reads as "from now", and for a model
+                started in January and opened in June the index is wrong by five months — in the
+                reassuring direction. */}
             {!p ? "—" : p.coveredEndless ? "beyond"
-              : p.alreadyPast ? "none" : `${p.coveredMonths.toFixed(1)} mo`}
+              : `${(p.coveredFromNow ?? p.coveredMonths).toFixed(1)} mo`}
           </div>
           <div className="meta">
             {!p?.coveredAt ? "you can close and pay everyone"

@@ -1429,6 +1429,28 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Two screens, one figure, two dates — and months counted from the wrong place
+
+**THE DASHBOARD IGNORED THE TOGGLES.** It called `commitmentPressure(doc, rows)` with no options, so it
+always counted debt, while the Commitments tab honoured `settings.exitCountsVentureDebt` /
+`exitCountsNoteDebt`. Corey saw 8/31/2026 on one screen and 3/31/2027 on the other. **Two screens
+showing the same figure with different dates is worse than either being wrong**, because both look
+authoritative. The dashboard now reads the same settings.
+
+**MONTHS WERE COUNTED FROM THE MODEL'S START, NOT FROM TODAY.** `zeroInfo().months` and `coveredMonths`
+are indices into the projection — which is right for every internal comparison and wrong for every human
+reading them. For a model started in January and opened in June, "5.6 mo" was wrong by five months IN
+THE REASSURING DIRECTION.
+
+`monthsFromNow(date)` derives the display figure from the DATE rather than by subtracting indices, so it
+is correct whether the model starts in the past or the future, and clamps at 0 rather than going
+negative. **`months` is untouched**, so the golden canary and every internal comparison still hold —
+`fromNow` and `coveredFromNow` are additions, not replacements.
+
+**A parity test caught it**, which is what it is for: `onemodel.test.jsx` compares the rendered runway
+against the engine's, and it started failing the moment the UI showed a different figure. It now
+compares against what the UI is SUPPOSED to show.
+
 ## Full view-suite pass — 12 failures down to 2
 
 **None of them were the window work.** All twelve predated it; I had only ever run subsets.

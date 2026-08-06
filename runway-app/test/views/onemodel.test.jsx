@@ -36,7 +36,10 @@ const engineRunway = (doc) => {
     buildProjection(buildModelFromDoc(doc), doc.settings.toggles),
     doc.cashActuals, doc.settings.anchorActuals);
   const z = zeroInfo(rows, doc.startY, doc.startM);
-  return z ? `${z.months.toFixed(1)} mo` : `${HORIZON}+ mo`;
+  // THE DISPLAYED FIGURE IS `fromNow`, not the index from the model's start. This parity test is the
+  // one that catches a UI showing a different number from the engine — so it has to compare against
+  // what the UI is supposed to show, which is months from today.
+  return z ? `${(z.fromNow ?? z.months).toFixed(1)} mo` : `${HORIZON}+ mo`;
 };
 
 // what the app renders in the hero
