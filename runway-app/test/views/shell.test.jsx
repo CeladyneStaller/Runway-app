@@ -72,8 +72,13 @@ describe("the rail foot", () => {
       <RunwayApp doc={{ ...demoDoc(), name: "a stale model name" }} setDoc={() => {}}
                  companyName="Harbor Point" />
     );
-    expect(container.querySelector(".sub").textContent).toMatch(/^Harbor Point ·/);
+    // THE NAME MOVED TO THE EYEBROW. The sub line now carries plan, cash-on-hand date and cash now —
+    // the name was taken out of it precisely because it repeated what sits directly above. The
+    // original point survives the move and is the reason this still asserts on the whole document:
+    // a guard against a hardcoded string has to look everywhere, not just where the last one was.
+    expect(container.querySelector(".eyebrow").textContent).toMatch(/^Harbor Point$/);
     expect(container.textContent).not.toMatch(/Northwind Labs/);
+    expect(container.textContent).not.toMatch(/a stale model name/);
   });
 
   it("no chrome anywhere names a company the document doesn't", () => {
@@ -83,7 +88,8 @@ describe("the rail foot", () => {
 
   it("falls back to a placeholder rather than a blank when the model is unnamed", () => {
     const { container } = render(<RunwayApp doc={{ ...demoDoc(), name: "" }} setDoc={() => {}} />);
-    expect(container.querySelector(".sub").textContent).toMatch(/^Untitled model ·/);
+    // Same move: the placeholder lives in the eyebrow with the name it stands in for.
+    expect(container.querySelector(".eyebrow").textContent).toMatch(/^Untitled model$/);
   });
   it("keeps Export and Import OUT of the rail entirely", () => {
     // REVERSED. They were in the rail footer, one click from every screen — and import replaces the

@@ -1467,9 +1467,64 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
-**NOT YET BUILT: the gate as a projection primitive.** A failed gate should stop the award, and the
-accrued cost share should survive it — which may make the clean-exit date WORSE at the same moment the
-runway shortens. That needs one real award's terms before the rule is written.
+## Plan editor layout, and Appendix E import/export
+
+**THE EDITOR WAS A VERTICAL STACK.** Title/month/number sat in their own grid, then Description and
+Verification fell below as full-width blocks — five rows deep for one entry, so a table of fifteen could
+not be read while any one was open. ONE six-column grid now: three fields across the top, the two prose
+fields side by side beneath, and `margin:0; padding:0` on the labels because one was inheriting
+indentation and stepping each field further right than the last.
+
+**IMPORT MATTERS MORE THAN EXPORT** and is built as the primary path on an empty plan. Nobody starts a
+project in this app — they start it in a proposal where the table is already written and agreed.
+
+- **Columns match on CONTENT, not position.** Recipients reorder columns, drop the quarter and rename
+  headings; a table through three proposals still lands. `WBS`/`Deliverable`/`Evidence` resolve.
+- **"Milestone Description" goes to description, not title** — it matches both patterns and pattern
+  order decides.
+- **⚠️ A QUARTER IS NOT A MONTH.** The form has both columns and recipients fill in whichever their
+  proposal used. Q6 becomes month 15 and SAYS SO — a silent guess puts a gate two months out.
+- **NOTHING IS DROPPED.** An undated row imports and is flagged. Losing it because a cell was blank
+  produces a table that does not match the one they filed, and they will not notice until an agency
+  does.
+- **A task is parented to the target ABOVE IT IN THE PASTE**, not by number prefix — these tables are
+  hand-edited across years and the numbering is often inconsistent.
+- **Export flattens tabs and newlines inside a cell.** Verification is free prose and one stray newline
+  would split the row and shift every column after it. Round-trip tested.
+
+**Two more stale header assertions found**, both in `shell.test.jsx`, both from the name moving to the
+eyebrow. One of them was itself a test about a hardcoded string surviving a narrow assertion — so its
+own point applied to it.
+
+## ⚠️ THE PLAN IS DELIBERATELY ISOLATED — do not connect it
+
+**This is a decision, not an omission.** The plan touches nothing: not the projection, not the
+document-level `milestones`, not `grant.milestones` billing, not alerts, not the advisor. Verified —
+`engine/plan.js` has exactly one importer.
+
+**The value is that a founder can build the whole grant profile in ONE PLACE — the deliverables and the
+budget — not that the deliverables move the money.**
+
+**Every connection costs an assumption the app would then be making on the user's behalf:**
+
+- **Gate → projection.** Requires deciding what a failed gate does, when the last drawdown lands, and
+  whether accrued cost share survives. Award terms differ, and a wrong guess puts a cliff in somebody's
+  runway that their award does not contain.
+- **Milestone → billing.** A DELIVERABLE milestone and a PAYMENT milestone are different things that
+  share a word. Linking them assumes an invoice follows a deliverable immediately, which is exactly the
+  reimbursement-lag assumption this product exists to stop people making.
+- **Milestone → the timeline.** Would put technical targets on a cash chart, implying they move cash.
+
+**A go/no-go modelled rigidly is worse than one not modelled at all**, because the founder can reason
+about a date on a page and cannot reason about a cliff the app inserted.
+
+**What IS worth building inside the isolation:** the Appendix E export. It completes "one place" without
+adding a single assumption — the table goes out in the shape it came in.
+
+**NOT BUILT AND NOT TO BE BUILT WITHOUT A DECISION: the gate as a projection primitive.** A failed gate
+stopping the award, with accrued cost share surviving it, would make the clean-exit date WORSE as the
+runway shortens. That needs one real award's terms — and, per the above, an explicit choice to give up
+the isolation.
 
 ## "Last updated" renamed to "Cash on hand updated"
 

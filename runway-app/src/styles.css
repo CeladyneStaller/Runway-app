@@ -1444,8 +1444,25 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .chip.gate{background:#EDE7F8;color:#6B4E9E}
 .plan-ed{border-top:1px solid var(--line-2);padding:12px 13px 14px;background:var(--card)}
 .plan-ed.gate{box-shadow:inset 3px 0 0 #6B4E9E}
-.plan-g3{display:grid;grid-template-columns:1fr 150px 110px;gap:11px;margin-bottom:10px}
-.plan-ed .fl{display:block;font-size:10.5px;color:var(--muted);margin-bottom:10px}
+
+/* ⚠️ THE EDITOR WAS A VERTICAL STACK. Title/month/number sat in a grid, then Description and
+   Verification fell below it as full-width blocks — five rows deep for one entry, so a table of
+   fifteen entries could not be read while any one of them was open.
+   ONE GRID FOR THE WHOLE EDITOR: three fields across the top, the two prose fields side by side
+   beneath. `margin:0` and `padding:0` on the labels because a label inheriting list indentation from
+   an ancestor was stepping each field further right than the last. */
+.plan-ed{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:11px 12px}
+.plan-ed .fl{display:block;font-size:10.5px;color:var(--muted);margin:0;padding:0}
+/* row 1: title (wide), month, number · row 2: the two prose fields */
+.plan-ed > .fl:nth-of-type(1){grid-column:span 3}
+.plan-ed > .fl:nth-of-type(2){grid-column:span 2}
+.plan-ed > .fl:nth-of-type(3){grid-column:span 1}
+.plan-ed > .fl:nth-of-type(4),.plan-ed > .fl:nth-of-type(5){grid-column:span 3}
+/* a task has no Number field, so its title takes the space instead */
+.plan-ed.notarget > .fl:nth-of-type(1){grid-column:span 4}
+.plan-ed.notarget > .fl:nth-of-type(3),.plan-ed.notarget > .fl:nth-of-type(4){grid-column:span 3}
+
+.plan-ed .plan-acts{grid-column:1 / -1}
 .plan-ed .ta{min-height:46px;resize:vertical;line-height:1.5;font-family:var(--fb)}
 .plan-hint{display:block;font-family:var(--fm);font-size:10px;color:var(--muted-2);margin-top:3px}
 .plan-acts{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px}
@@ -1456,10 +1473,15 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .plan-empty{max-width:64ch;margin:0 0 8px}
 .linkbtn.danger{color:var(--danger)}
 @media(max-width:720px){
+  .plan-ed{grid-template-columns:1fr}
   .plan-r{grid-template-columns:1fr auto;grid-template-areas:"a b" "c c";gap:3px 10px}
   .plan-r .pt{grid-area:a}.plan-r .pm{grid-area:b}.plan-r .pn{grid-area:c;font-size:10px}
   .plan-r .py{display:none}
   .plan-r.task{padding-left:20px}
-  .plan-g3{grid-template-columns:1fr}
   .plan-add.sub{padding-left:20px}
 }
+.plan-import{border:1px solid var(--line-2);border-radius:9px;padding:12px 13px;margin-top:8px}
+.plan-import .ta{font-family:var(--fm);font-size:11px;margin:7px 0;min-height:88px;width:100%}
+.plan-import .meta{margin:0}
+.plan-notes{margin:7px 0 0;padding-left:17px;font-size:11.5px;color:var(--caution)}
+.plan-notes li{margin-bottom:3px}

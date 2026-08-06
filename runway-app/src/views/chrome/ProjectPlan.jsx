@@ -2,6 +2,7 @@ import { useState } from "react";
 import { planRows, appendixERows, planGaps, addPlanEntry, updatePlanEntry,
          removePlanEntry, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
 import { monthLabel } from "../../engine/time";
+import { planToTSV, parsePlanPaste, draftsToPlan } from "../../engine/planio";
 
 /** The milestone table, entered in the order it will be filed.
  *
@@ -11,6 +12,8 @@ import { monthLabel } from "../../engine/time";
  */
 export function ProjectPlan({ project, setProject, startY, startM, canWrite = true }) {
   const [openId, setOpenId] = useState(null);
+  const [paste, setPaste] = useState(null);          // null = closed, string = the textarea
+  const parsed = paste == null ? null : parsePlanPaste(paste);
   const rows = planRows(project);
   const gaps = planGaps(project);
   const targets = rows.filter(e => e.kind !== "task");
@@ -21,6 +24,55 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
     return next;
   });
   const set = (id, patch) => setProject(p => updatePlanEntry(p, id, patch));
+
+  const importPanel = !canWrite ? null : paste == null ? (
+    <div className="plan-add">
+      <button className="linkbtn" onClick={() => setPaste("")}>Paste a table</button>
+      {rows.length > 0 && (
+        <button className="linkbtn" onClick={() => {
+          navigator.clipboard?.writeText?.(planToTSV(project));
+        }}>Copy as Appendix E</button>
+      )}
+    </div>
+  ) : (
+    <div className="plan-import">
+      <p className="meta">
+        Paste the milestone table from your proposal or award — columns are matched by name, so the
+        order does not matter and extra columns are ignored.
+      </p>
+      <textarea className="inp ta" rows={5} value={paste} autoFocus
+                onChange={e => setPaste(e.target.value)}
+                placeholder={"Task Number\tTitle\tType\tNumber\tDescription\tVerification\tMonth"} />
+      {parsed?.error && <p className="plan-gaps">{parsed.error}</p>}
+      {parsed && !parsed.error && parsed.rows.length > 0 && (
+        <>
+          <p className="meta">
+            {parsed.rows.length} rows read ·{" "}
+            {parsed.rows.filter(r => r.kind !== "task").length} targets ·{" "}
+            {parsed.rows.filter(r => r.kind === "gate").length} go/no-go
+          </p>
+          {/* EVERY PROBLEM IS SHOWN BEFORE IT COMMITS. Nothing is dropped — a row with no date is
+              imported and flagged, because losing it because a cell was blank produces a table that
+              does not match the one they filed. */}
+          <ul className="plan-notes">
+            {parsed.rows.filter(r => r.notes.length).slice(0, 6).map(r => (
+              <li key={r.i}><b>{r.number || `row ${r.i + 1}`}</b> — {r.notes.join("; ")}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="plan-acts">
+        <button className="addbtn" disabled={!parsed || parsed.error || !parsed.rows.length}
+                onClick={() => {
+                  setProject(p2 => ({ ...p2, plan: [...(p2.plan || []), ...draftsToPlan(parsed.rows)] }));
+                  setPaste(null);
+                }}>
+          Import {parsed?.rows?.length || 0} rows
+        </button>
+        <button className="linkbtn" onClick={() => setPaste(null)}>Cancel</button>
+      </div>
+    </div>
+  );
 
   if (!rows.length) {
     return (
@@ -34,7 +86,8 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
           Nothing here yet. Most projects already have this table in the proposal — add the first
           milestone, then the tasks beneath it.
         </p>
-        {canWrite && <div className="plan-add">
+        {importPanel}
+        {canWrite && paste == null && <div className="plan-add">
           <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
           <button className="linkbtn" onClick={() => add("gate")}>+ Go/no-go</button>
         </div>}
@@ -99,10 +152,11 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
         })}
       </div>
 
-      {canWrite && <div className="plan-add">
+      {canWrite && paste == null && <div className="plan-add">
         <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
         <button className="linkbtn" onClick={() => add("gate")}>+ Go/no-go</button>
       </div>}
+      {importPanel}
     </section>
   );
 }
@@ -110,8 +164,8 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
 function Editor({ entry: e, set, canWrite, startY, startM, onAddSibling, onDelete }) {
   const at = monthLabel(startY, startM, e.month || 0);
   return (
-    <div className={"plan-ed" + (e.kind === "gate" ? " gate" : "")}>
-      <div className="plan-g3">
+    <div className={"plan-ed" + (e.kind === "gate" ? " gate" : "") + (e.kind === "task" ? " notarget" : "")}>
+      <>
         <label className="fl">Title
           <input className="inp" value={e.title} disabled={!canWrite}
                  onChange={ev => set(e.id, { title: ev.target.value })} />
@@ -130,7 +184,7 @@ function Editor({ entry: e, set, canWrite, startY, startM, onAddSibling, onDelet
             <span className="plan-hint">printed in the Milestone Number column</span>
           </label>
         )}
-      </div>
+      </>
 
       <label className="fl">{e.kind === "gate" ? "Decision criteria — what the agency will judge" : "Description"}
         <textarea className="inp ta" value={e.description} disabled={!canWrite}
