@@ -2,7 +2,12 @@ import { useState, useMemo } from "react";
 import { planToTSV, parsePlanPaste, draftsToPlan, planCollisions, renumberIncoming } from "../../engine/planio";
 import { quarterOf } from "../../engine/plan";
 
-const KINDS = [["milestone", "Milestone"], ["gate", "Go/No-Go"], ["task", "Task"]];
+// ⚠️ THRUST WAS MISSING FROM THIS LIST. The parser reads "TASK 1" rows as thrusts, but the review's
+// type dropdown could not express one — so a row read wrongly could not be corrected TO a thrust, and a
+// thrust misread as a milestone could not be corrected either. The review is the last chance to fix
+// what gets filed; a level it cannot name is a level it cannot fix.
+const KINDS = [["thrust", "Thrust (TASK n)"], ["milestone", "Milestone"],
+               ["gate", "Go/No-Go"], ["task", "Task"]];
 
 /** Import / export for the milestone table.
  *
@@ -144,7 +149,9 @@ export function PlanIOModal({ project, setProject, onClose }) {
                       const note = (f) => (d.notes || []).find(n => n.includes(f));
                       const dateNote = note("month") || note("date") || note("quarter");
                       return (
-                        <tr key={d.i} className={d.kind === "gate" ? "gate" : d.kind === "task" ? "task" : ""}>
+                        <tr key={d.i} className={
+                          d.kind === "thrust" ? "thrust" : d.kind === "gate" ? "gate"
+                          : d.kind === "task" ? "task" : ""}>
                           <td><input className="ci num" value={d.number}
                                      onChange={e => setCell(d.i, { number: e.target.value })} /></td>
                           <td><input className={"ci" + (note("title") ? " flag" : "")} value={d.title}
@@ -153,23 +160,30 @@ export function PlanIOModal({ project, setProject, onClose }) {
                                       onChange={e => setCell(d.i, { kind: e.target.value })}>
                             {KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                           </select></td>
-                          <td><input className="ci num" value={d.label || ""}
-                                     onChange={e => setCell(d.i, { label: e.target.value })} /></td>
-                          <td><textarea className="ci" rows={2} value={d.description}
-                                        onChange={e => setCell(d.i, { description: e.target.value })} /></td>
-                          <td><textarea className="ci" rows={2} value={d.verification}
-                                        onChange={e => setCell(d.i, { verification: e.target.value })} /></td>
+                          {/* A THRUST CARRIES ONLY A NUMBER AND A TITLE. Leaving these editable would
+                              let somebody type a description into a cell the export drops, which is
+                              worse than showing nothing — they would believe it was saved. */}
+                          <td>{d.kind === "thrust" ? <span className="ci derived">—</span>
+                            : <input className="ci num" value={d.label || ""}
+                                     onChange={e => setCell(d.i, { label: e.target.value })} />}</td>
+                          <td>{d.kind === "thrust" ? <span className="ci derived">—</span>
+                            : <textarea className="ci" rows={2} value={d.description}
+                                        onChange={e => setCell(d.i, { description: e.target.value })} />}</td>
+                          <td>{d.kind === "thrust" ? <span className="ci derived">—</span>
+                            : <textarea className="ci" rows={2} value={d.verification}
+                                        onChange={e => setCell(d.i, { verification: e.target.value })} />}</td>
                           <td>
+                            {d.kind === "thrust" ? <span className="ci derived">—</span> :
                             <input className={"ci num" + (dateNote ? " flag" : "")}
                                    value={Number.isFinite(d.month) ? d.month : ""} placeholder="—"
                                    onChange={e => setCell(d.i, {
-                                     month: e.target.value === "" ? null : (+e.target.value || 0) })} />
-                            {dateNote && <span className="flagnote">{dateNote}</span>}
+                                     month: e.target.value === "" ? null : (+e.target.value || 0) })} />}
+                            {dateNote && d.kind !== "thrust" && <span className="flagnote">{dateNote}</span>}
                           </td>
                           {/* DERIVED, NOT EDITABLE. Two editable date columns is two places for a date
                               to live and disagree, and the form's quarter is a function of its month. */}
                           <td><span className="ci derived">
-                            {Number.isFinite(d.month) ? quarterOf(d.month) : "—"}</span></td>
+                            {d.kind !== "thrust" && Number.isFinite(d.month) ? quarterOf(d.month) : "—"}</span></td>
                           {nCollide > 0 && (
                             <td>{collisions[d.i] ? (
                               <select className="cs" value={choice[d.i] || "both"}

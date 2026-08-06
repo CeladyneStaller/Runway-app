@@ -1498,6 +1498,13 @@ and a thrust is the destination, so making everything draggable would let somebo
 itself. **Moving renumbers the moved target AND its tasks** (1.1 → 2.1, 1.1.1 → 2.1.1), because the
 number encodes the thrust. What it leaves behind keeps its number, per the delete rule.
 
+**THE REVIEW COULD NOT NAME A THRUST.** The parser reads "TASK 1" rows as thrusts, but the type
+dropdown offered only milestone/gate/task — so a row read wrongly could not be corrected TO a thrust,
+and a thrust misread as a milestone could not be corrected either. **The review is the last chance to
+fix what gets filed; a level it cannot name is a level it cannot fix.** A thrust'''s unused cells are
+blanked rather than left editable, because typing a description into a cell the export drops is worse
+than showing nothing — somebody would believe it was saved.
+
 **React writes `draggable={false}` as the string "false"**, not as an absent attribute — a test asserted
 `null` and failed.
 

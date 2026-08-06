@@ -1534,3 +1534,5 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .plan-add.sub.deep{padding-left:52px}
 @media(max-width:720px){ .plan-r.ms,.plan-r.gate{padding-left:16px} .plan-r.task{padding-left:30px}
   .plan-add.sub.deep{padding-left:30px} }
+.io-grid tr.thrust td{background:#DCE7EC;font-weight:600}
+.io-grid tr.thrust .ci{font-family:var(--fd);font-weight:600}

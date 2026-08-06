@@ -162,3 +162,55 @@ describe("collisions", () => {
     expect(nums).toContain("1.2");          // theirs, moved
   });
 });
+
+describe("thrusts in the review", () => {
+  const WITH_THRUST = [
+    "Task Number\tTitle\tType\tNumber\tDescription\tVerification\tMonth",
+    "TASK 1\tCatalyst development\t\t\t\t\t",
+    "1.1\tAchieve 3 A/cm2\tMilestone\t\t0.5 mg/cm2\tCell report\t6",
+    "1.1.1\tInk development\tTask\t1.1.1\tScreen ratios\tMatrix kept\t2",
+  ].join("\n");
+
+  it("THRUST IS SELECTABLE — the review is the last chance to fix what gets filed", () => {
+    // The parser reads "TASK 1" rows as thrusts, but the dropdown could not express one — so a row read
+    // wrongly could not be corrected TO a thrust, and a thrust misread could not be corrected either.
+    const v = open();
+    review(v.container, WITH_THRUST);
+    const opts = [...v.container.querySelectorAll(".io-grid select")[0].options].map(o => o.textContent);
+    expect(opts).toContain("Thrust (TASK n)");
+  });
+
+  it("reads the TASK row as a thrust and shows it as one", () => {
+    const v = open();
+    review(v.container, WITH_THRUST);
+    expect(v.container.querySelectorAll(".io-grid tr.thrust").length).toBe(1);
+    expect(v.container.querySelectorAll(".io-grid tbody tr").length).toBe(3);
+  });
+
+  it("A THRUST'S UNUSED CELLS ARE BLANKED, not editable", () => {
+    // Leaving them editable would let somebody type a description into a cell the export drops — worse
+    // than showing nothing, because they would believe it was saved.
+    const v = open();
+    review(v.container, WITH_THRUST);
+    const cells = v.container.querySelector(".io-grid tr.thrust").querySelectorAll("td");
+    expect(cells[0].querySelector("input")).toBeTruthy();      // number, editable
+    expect(cells[1].querySelector("input")).toBeTruthy();      // title, editable
+    expect(cells[4].querySelector("textarea")).toBeNull();     // description, blanked
+    expect(cells[6].querySelector("input")).toBeNull();        // month, blanked
+  });
+
+  it("a row can be RETYPED into a thrust", () => {
+    const v = open();
+    review(v.container, TSV);
+    expect(v.container.querySelectorAll(".io-grid tr.thrust").length).toBe(0);
+    fireEvent.change(v.container.querySelectorAll(".io-grid select")[0], { target: { value: "thrust" } });
+    expect(v.container.querySelectorAll(".io-grid tr.thrust").length).toBe(1);
+  });
+
+  it("imports the thrust and parents the milestone to it", () => {
+    const v = open();
+    review(v.container, WITH_THRUST);
+    fireEvent.click(btn(v.container, /Import 3 rows/));
+    expect(v.getByTestId("n").textContent).toBe("3");
+  });
+});
