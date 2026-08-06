@@ -4,7 +4,7 @@
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 const settings = () => ({
   fringePct: 0.30,
@@ -174,6 +174,13 @@ export const demoDoc = () => ({
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.
 const MIGRATIONS = {
+  // v7 -> v8: the plan gains a THRUST level (the template's "TASK 1" rows).
+  //
+  // ⚠️ NO THRUST IS INVENTED. A plan with milestones at the top level is valid and renders exactly as
+  // it did — the level is optional, and adopting existing milestones into a thrust nobody created would
+  // renumber work somebody may already have filed.
+  8: (d) => ({ ...d, schemaVersion: 8 }),
+
   // v6 -> v7: projects gain a PLAN — milestones, go/no-go gates, and the tasks that reach them.
   //
   // Purely additive. Every existing project gets an empty array, and a project with no plan behaves

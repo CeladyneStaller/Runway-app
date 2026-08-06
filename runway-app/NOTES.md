@@ -1467,6 +1467,40 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Thrusts — the third level (schema v8)
+
+The template's `TASK 1` rows are a real structural level and the import was DISCARDING them as headings.
+
+**⚠️ THE GO/NO-GO BELONGS TO THE THRUST, NOT TO A MILESTONE.** It has no number, it is the last row of
+its block, and its date is the end of the budget period. I had built gates as siblings of milestones —
+close enough to look right, and wrong in the one way that matters: **a failed gate ends the thrust**,
+and the thrust is what you would describe to an agency when it does.
+
+**THE NUMBERING HAD ALREADY TOLD US.** Milestone `1.1` and task `1.1.1` both carry the thrust's `1` in
+first position, so the level was in the data all along — encoded in a string with nothing holding it.
+
+**A GATE IS NOT NUMBERED AT ALL.** I had gates sharing the milestone sequence on the reasoning that both
+occupy a task row; the real template leaves the cell blank. Four tests asserted the old convention and
+were corrected — they were putting a number in a filed cell the form leaves empty.
+
+**THE GATE RENDERS LAST IN ITS THRUST whatever its month**, because that is what it means. Sorting by
+date would scatter it among the milestones it judges the moment somebody moved one.
+
+**A THRUST'S DATES ARE DERIVED** — the span of what sits inside it. Typing one creates a fourth place
+for a date to live and the form has no cell for it. A thrust is never reported as a gap for a missing
+date either.
+
+**NO THRUST IS INVENTED ON MIGRATION.** A plan with loose milestones is valid and renders as it did.
+Adopting existing milestones into a thrust nobody created would renumber work somebody may have filed.
+
+**DRAG MOVES A MILESTONE OR GATE BETWEEN THRUSTS**, and only those — a task moves with its milestone
+and a thrust is the destination, so making everything draggable would let somebody drop a thrust into
+itself. **Moving renumbers the moved target AND its tasks** (1.1 → 2.1, 1.1.1 → 2.1.1), because the
+number encodes the thrust. What it leaves behind keeps its number, per the delete rule.
+
+**React writes `draggable={false}` as the string "false"**, not as an absent attribute — a test asserted
+`null` and failed.
+
 ## Milestone import/export moved into an SF-424A-style modal
 
 **ONE ROUTE.** The panel's inline paste box and file button are gone, replaced by a single `iobtn`

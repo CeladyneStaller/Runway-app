@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { planRows, appendixERows, planGaps, addPlanEntry, updatePlanEntry,
-         removePlanEntry, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
+         removePlanEntry, moveToThrust, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
 import { monthLabel } from "../../engine/time";
 import { PlanIOModal } from "./PlanIOModal";
 
@@ -13,6 +13,8 @@ import { PlanIOModal } from "./PlanIOModal";
 export function ProjectPlan({ project, setProject, startY, startM, canWrite = true }) {
   const [openId, setOpenId] = useState(null);
   const [io, setIo] = useState(false);
+  const [drag, setDrag] = useState(null);        // id of the target being dragged
+  const [over, setOver] = useState(null);        // thrust id it is over
   const rows = planRows(project);
   const gaps = planGaps(project);
   const targets = rows.filter(e => e.kind !== "task");
@@ -52,8 +54,8 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
           milestone, then the tasks beneath it.
         </p>
         {canWrite && <div className="plan-add">
+          <button className="linkbtn" onClick={() => add("thrust")}>+ Thrust</button>
           <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
-          <button className="linkbtn" onClick={() => add("gate")}>+ Go/no-go</button>
         </div>}
         {io && <PlanIOModal project={project} setProject={setProject} onClose={() => setIo(false)} />}
       </section>
@@ -84,30 +86,60 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
       <div className="plan-rows">
         {rows.map(e => {
           const open = openId === e.id;
-          const cls = "plan-r" + (e.kind === "task" ? " task" : e.kind === "gate" ? " gate" : " ms")
-                    + (open ? " open" : "");
+          const cls = "plan-r"
+            + (e.kind === "task" ? " task" : e.kind === "gate" ? " gate"
+               : e.kind === "thrust" ? " thrust" : " ms")
+            + (open ? " open" : "")
+            + (over === e.id && e.kind === "thrust" ? " dropping" : "");
+          // ⚠️ ONLY A MILESTONE OR GATE IS DRAGGABLE. A task moves with its milestone and a thrust is
+          // the destination — making everything draggable would let somebody drop a thrust into itself.
+          const canDrag = canWrite && (e.kind === "milestone" || e.kind === "gate");
           return (
             <div key={e.id}>
               <div className={cls} onClick={() => setOpenId(open ? null : e.id)}
                    role="button" tabIndex={0}
+                   draggable={canDrag}
+                   onDragStart={canDrag ? (ev => { setDrag(e.id); ev.dataTransfer.effectAllowed = "move"; }) : undefined}
+                   onDragEnd={() => { setDrag(null); setOver(null); }}
+                   onDragOver={e.kind === "thrust" && drag ? (ev => { ev.preventDefault(); setOver(e.id); }) : undefined}
+                   onDragLeave={e.kind === "thrust" ? (() => setOver(null)) : undefined}
+                   onDrop={e.kind === "thrust" && drag ? (ev => {
+                     ev.preventDefault();
+                     setProject(p2 => moveToThrust(p2, drag, e.id));
+                     setDrag(null); setOver(null);
+                   }) : undefined}
                    onKeyDown={ev => ev.key === "Enter" && setOpenId(open ? null : e.id)}>
                 <span className="pn">{e.number}</span>
                 <span className="pt">{e.title || <i className="meta">untitled</i>}</span>
                 <span className="py">
-                  {e.kind === "task"
+                  {e.kind === "thrust"
+                    ? <span className="chip th">thrust</span>
+                    : e.kind === "task"
                     ? <span className="chip">task</span>
                     : <span className={"chip " + (e.kind === "gate" ? "gate" : "ms")}>
                         {e.kind === "gate" ? "go/no-go" : "milestone"} · {e.label}
                       </span>}
                 </span>
-                <span className="pm">mo {e.month}</span>
+                {/* A THRUST'S DATES ARE DERIVED — the span of what sits inside it. Letting somebody
+                    type one creates a fourth place for a date to live, and the form has no cell. */}
+                <span className="pm">{e.kind === "thrust" ? spanOf(project, e) : `mo ${e.month}`}</span>
               </div>
               {open && <Editor entry={e} set={set} canWrite={canWrite}
                                startY={startY} startM={startM}
                                onAddSibling={() => add("task", e.kind === "task" ? e.parentId : e.id)}
                                onDelete={() => { setOpenId(null); setProject(p => removePlanEntry(p, e.id)); }} />}
-              {e.kind !== "task" && canWrite && (
+              {e.kind === "thrust" && canWrite && (
                 <div className="plan-add sub">
+                  <button className="linkbtn" onClick={() => add("milestone", e.id)}>
+                    + Milestone in TASK {e.number}
+                  </button>
+                  <button className="linkbtn" onClick={() => add("gate", e.id)}>
+                    + Go/no-go for TASK {e.number}
+                  </button>
+                </div>
+              )}
+              {(e.kind === "milestone" || e.kind === "gate") && canWrite && (
+                <div className="plan-add sub deep">
                   {/* NAMES ITS PARENT. A bare "+ Task" in a list this shape adds to whichever target the
                       cursor last touched, which is how work lands under the wrong milestone. */}
                   <button className="linkbtn" onClick={() => add("task", e.id)}>
@@ -121,8 +153,8 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
       </div>
 
       {canWrite && <div className="plan-add">
+        <button className="linkbtn" onClick={() => add("thrust")}>+ Thrust</button>
         <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
-        <button className="linkbtn" onClick={() => add("gate")}>+ Go/no-go</button>
       </div>}
       {io && <PlanIOModal project={project} setProject={setProject} onClose={() => setIo(false)} />}
     </section>
@@ -193,4 +225,13 @@ function Editor({ entry: e, set, canWrite, startY, startM, onAddSibling, onDelet
 /** The filed table, for the export and the copy button. */
 export function planToTable(project) {
   return appendixERows(project);
+}
+
+/** The months a thrust spans, from what sits inside it. Derived, never entered. */
+function spanOf(project, thrust) {
+  const kids = (project?.plan || []).filter(e => e?.parentId === thrust.id);
+  const months = kids.map(k => k.month).filter(Number.isFinite);
+  if (!months.length) return "\u2014";
+  const lo = Math.min(...months), hi = Math.max(...months);
+  return lo === hi ? `mo ${lo}` : `mo ${lo}\u2013${hi}`;
 }

@@ -22,8 +22,10 @@ describe("the plan list", () => {
     // The order on screen is the order in the file. A table somebody rearranges for reading is one they
     // file in the wrong order the first time they export without looking.
     const v = draw();
+    // GATES ARE UNNUMBERED NOW, per the form. The seeded fixture's third row is a gate, so its number
+    // cell is empty rather than "1.2" — the assertion was written when gates shared the sequence.
     const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent);
-    expect(nums).toEqual(["1.1", "1.1.1", "1.2"]);
+    expect(nums).toEqual(["1.1", "1.1.1", ""]);
   });
 
   it("distinguishes a gate from a milestone in the row itself", () => {
@@ -153,5 +155,74 @@ describe("where the trigger sits", () => {
   it("appears exactly once in each state", () => {
     expect(draw({ id: "p", plan: [] }).container.querySelectorAll(".iobtn").length).toBe(1);
     expect(draw().container.querySelectorAll(".iobtn").length).toBe(1);
+  });
+});
+
+describe("thrusts in the list", () => {
+  const three = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "Catalyst development" });
+    const t1 = p.plan[0].id;
+    p = addPlanEntry(p, { kind: "milestone", parentId: t1, title: "3 A/cm2", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "Ink dev", month: 2 });
+    p = addPlanEntry(p, { kind: "gate", parentId: t1, title: "Review", month: 12 });
+    p = addPlanEntry(p, { kind: "thrust", title: "Stack integration" });
+    return p;
+  };
+
+  it("renders all three levels, gate last in its thrust", () => {
+    const v = draw(three());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    expect(rows.map(r => r.className.match(/thrust|gate|task|ms/)[0]))
+      .toEqual(["thrust", "ms", "task", "gate", "thrust"]);
+  });
+
+  it("A THRUST'S DATES ARE DERIVED, shown as a span", () => {
+    // Letting somebody type one creates a fourth place for a date to live, and the form has no cell.
+    const v = draw(three());
+    expect(v.container.querySelectorAll(".plan-r")[0].textContent).toMatch(/mo 6–12|mo 6-12/);
+  });
+
+  it("names the parent on every add button, at both levels", () => {
+    // With three levels a bare "+" is ambiguous in two directions rather than one.
+    const t = draw(three()).container.textContent;
+    expect(t).toMatch(/\+ Milestone in TASK 1/);
+    expect(t).toMatch(/\+ Go\/no-go for TASK 1/);
+    expect(t).toMatch(/\+ Task under 1\.1/);
+  });
+
+  it("ONLY MILESTONES AND GATES ARE DRAGGABLE", () => {
+    // A task moves with its milestone and a thrust is the destination — making everything draggable
+    // would let somebody drop a thrust into itself.
+    const rows = [...draw(three()).container.querySelectorAll(".plan-r")];
+    // React writes `draggable={false}` as the string "false", not as an absent attribute.
+    const drag = rows.map(r => r.getAttribute("draggable") === "true");
+    expect(drag).toEqual([false, true, false, true, false]);
+  });
+
+  it("DRAGGING A MILESTONE INTO A THRUST RENUMBERS IT AND ITS TASK", () => {
+    // The number encodes the thrust. A milestone 1.1 dropped into thrust 2 that stayed 1.1 would be a
+    // lie in a filed document.
+    const v = draw(three());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[1]);
+    fireEvent.dragOver(rows[4]);
+    fireEvent.drop(rows[4]);
+    const nums = [...v.container.querySelectorAll(".pn")].map(n => n.textContent);
+    expect(nums).toContain("2.1");
+    expect(nums).toContain("2.1.1");
+  });
+
+  it("marks the thrust being dragged over", () => {
+    const v = draw(three());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[1]);
+    fireEvent.dragOver(rows[4]);
+    expect(v.container.querySelector(".plan-r.dropping")).toBeTruthy();
+  });
+
+  it("a viewer cannot drag", () => {
+    const rows = [...draw(three(), { canWrite: false }).container.querySelectorAll(".plan-r")];
+    expect(rows.every(r => r.getAttribute("draggable") !== "true")).toBe(true);
   });
 });

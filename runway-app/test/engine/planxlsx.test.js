@@ -103,3 +103,41 @@ describe("export", () => {
     expect(back.rows[0].month).toBe(6);
   });
 });
+
+describe("thrusts survive the round trip", () => {
+  const wb = XLSX.read(readFileSync("/mnt/user-data/uploads/SOPO_-_Milestone_Summary_Table_Template.xlsx"),
+                       { type: "buffer" });
+  const parsed = parsePlanPaste(sheetToText(XLSX, wb));
+
+  it("READS 'TASK 1' AS AN ENTRY, not a heading to discard", () => {
+    // Dropping these lost the level a go/no-go actually decides, and round-tripping a real workbook
+    // produced a file with its TASK rows missing.
+    const thrusts = parsed.rows.filter(r => r.kind === "thrust");
+    expect(thrusts.length).toBeGreaterThanOrEqual(2);
+    expect(thrusts[0].number).toBe("1");
+  });
+
+  it("parents milestones to the thrust above them", () => {
+    const plan = draftsToPlan(parsed.rows);
+    const m = plan.find(e => e.kind === "milestone");
+    expect(plan.find(e => e.id === m.parentId).kind).toBe("thrust");
+  });
+
+  it("A GATE BELONGS TO ITS THRUST, not to a milestone", () => {
+    // It has no number, it is the last row of its block, and its date is the end of the budget period.
+    const plan = draftsToPlan(parsed.rows);
+    const g = plan.find(e => e.kind === "gate");
+    expect(plan.find(e => e.id === g.parentId).kind).toBe("thrust");
+    expect(g.number).toBe("");
+  });
+
+  it("writes the TASK row back out", () => {
+    const plan = draftsToPlan(parsed.rows);
+    const out = exportPlanWorkbook(XLSX, { name: "P", plan });
+    const g = XLSX.utils.sheet_to_json(out.Sheets[out.SheetNames[0]], { header: 1, defval: "" });
+    const thrustRow = g.slice(4).find(r => String(r[0]).startsWith("TASK"));
+    expect(thrustRow).toBeTruthy();
+    expect(thrustRow[2]).toBe("");        // no type
+    expect(thrustRow[6]).toBe("");        // no month
+  });
+});

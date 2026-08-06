@@ -15,6 +15,9 @@
 const clean = (n) => (Number.isFinite(+n) ? +n : 0);
 
 export const PLAN_KINDS = [
+  // ⚠️ A THRUST PRINTS AS "TASK 1" WITH EVERY OTHER CELL EMPTY. It has no type of its own in the filed
+  // table — the template writes only its number and title — so it maps to an empty Type cell.
+  ["thrust", ""],
   ["milestone", "Milestone"],
   ["gate", "Go/No-Go Decision Point"],
   ["task", "Task"],
@@ -28,6 +31,7 @@ export const GATE_OUTCOMES = [
 ];
 
 const isTarget = (e) => e && (e.kind === "milestone" || e.kind === "gate");
+const isThrust = (e) => e && e.kind === "thrust";
 
 /** The entries of a project, in the order the filed table prints them.
  *
@@ -37,15 +41,30 @@ const isTarget = (e) => e && (e.kind === "milestone" || e.kind === "gate");
  */
 export function planRows(project) {
   const all = project?.plan || [];
-  const targets = all.filter(isTarget);
   const out = [];
-  for (const t of targets) {
-    out.push(t);
-    for (const e of all) if (e?.kind === "task" && e.parentId === t.id) out.push(e);
+
+  const tasksOf = (t) => all.filter(e => e?.kind === "task" && e.parentId === t.id);
+  const targetsOf = (parentId) => all.filter(e => isTarget(e) && (e.parentId ?? null) === parentId);
+
+  const pushTarget = (t) => { out.push(t); for (const k of tasksOf(t)) out.push(k); };
+
+  for (const th of all.filter(isThrust)) {
+    out.push(th);
+    const inside = targetsOf(th.id);
+    // ⚠️ THE GATE RENDERS LAST WITHIN ITS THRUST, whatever its month. That is where the template puts
+    // it and what it means — the decision on this block of work, taken when the block is done. Sorting
+    // it by date would scatter it among the milestones it judges.
+    for (const t of inside.filter(e => e.kind !== "gate")) pushTarget(t);
+    for (const t of inside.filter(e => e.kind === "gate")) pushTarget(t);
   }
-  // Orphans last rather than dropped: a task whose parent was deleted is still work somebody entered,
-  // and losing it silently is worse than showing it needs re-homing.
-  for (const e of all) if (e?.kind === "task" && !targets.some(t => t.id === e.parentId)) out.push(e);
+
+  // LOOSE TARGETS — those with no thrust — follow. A plan written before thrusts existed is valid and
+  // renders exactly as it did; adding a thrust does not adopt them.
+  for (const t of targetsOf(null)) pushTarget(t);
+
+  // Orphans last rather than dropped: a task whose parent was deleted is still work somebody entered.
+  const placed = new Set(out.map(e => e.id));
+  for (const e of all) if (!placed.has(e.id)) out.push(e);
   return out;
 }
 
@@ -56,20 +75,56 @@ export function planRows(project) {
  */
 export function nextNumber(project, kind, parentId = null) {
   const all = project?.plan || [];
-  if (kind !== "task") {
-    const used = all.filter(isTarget).map(e => String(e.number || ""));
-    // Group by the leading integer so 1.1, 1.2 sit under task group 1.
-    const groups = used.map(n => +String(n).split(".")[0]).filter(Number.isFinite);
-    const g = groups.length ? Math.max(...groups) : 1;
-    const within = used.filter(n => +String(n).split(".")[0] === g)
-                       .map(n => +String(n).split(".")[1] || 0);
-    return `${g}.${(within.length ? Math.max(...within) : 0) + 1}`;
+
+  // A THRUST IS NUMBERED 1, 2, 3 — printed as "TASK 1".
+  if (kind === "thrust") {
+    const used = all.filter(isThrust).map(e => +String(e.number || "").replace(/\D/g, "") || 0);
+    return String((used.length ? Math.max(...used) : 0) + 1);
   }
+
+  // A GATE HAS NO NUMBER, by the form's own convention.
+  if (kind === "gate") return "";
+
+  if (kind === "milestone") {
+    const th = all.find(e => e?.id === parentId && isThrust(e));
+    const g = th ? String(th.number) : "1";
+    const sibs = all.filter(e => e?.kind === "milestone" && (e.parentId ?? null) === (th ? th.id : null))
+                    .map(e => +String(e.number || "").split(".")[1] || 0);
+    return `${g}.${(sibs.length ? Math.max(...sibs) : 0) + 1}`;
+  }
+
   const parent = all.find(e => e?.id === parentId);
-  if (!parent) return "1.1.1";
+  if (!parent || !parent.number) return "1.1.1";
   const kids = all.filter(e => e?.kind === "task" && e.parentId === parentId)
                   .map(e => +String(e.number || "").split(".")[2] || 0);
   return `${parent.number}.${(kids.length ? Math.max(...kids) : 0) + 1}`;
+}
+
+/** Move a target into a thrust, or out of one.
+ *
+ *  ⚠️ IT RENUMBERS THE MOVED TARGET AND ITS TASKS, because the number encodes the thrust — a milestone
+ *  1.2 dragged into thrust 3 that stayed 1.2 would be a lie in a filed document. The tasks follow so
+ *  1.2.1 becomes 3.1.1.
+ *
+ *  Everything it LEAVES BEHIND keeps its number. The delete rule applies here for the same reason:
+ *  those numbers may already be in a document somebody sent.
+ */
+export function moveToThrust(project, targetId, thrustId) {
+  const all = project?.plan || [];
+  const t = all.find(e => e?.id === targetId);
+  if (!t || !isTarget(t)) return project;
+  const moved = { ...t, parentId: thrustId || null };
+  const num = t.kind === "gate" ? "" : nextNumber({ plan: all.filter(e => e.id !== t.id) },
+                                                  "milestone", thrustId || null);
+  let i = 0;
+  return {
+    ...project,
+    plan: all.map(e => {
+      if (e.id === targetId) return { ...moved, number: num };
+      if (e.kind === "task" && e.parentId === targetId) { i += 1; return { ...e, number: `${num}.${i}` }; }
+      return e;
+    }),
+  };
 }
 
 /** Quarters from the start of the project, as the form asks for them.
@@ -84,10 +139,12 @@ export function addPlanEntry(project, { kind = "task", parentId = null, ...rest 
   const id = `pl_${Math.random().toString(36).slice(2, 9)}`;
   const entry = {
     id, kind,
-    parentId: kind === "task" ? parentId : null,
+    // A TASK POINTS AT ITS MILESTONE; A MILESTONE OR GATE POINTS AT ITS THRUST. Only a thrust has no
+    // parent — it is the top of the tree.
+    parentId: kind === "thrust" ? null : (parentId || null),
     number: nextNumber(project, kind, parentId),
     // The milestone number an agency cites — M1.1, G1. Tasks have none and the form prints a dash.
-    label: kind === "task" ? null : (rest.label || autoLabel(project, kind)),
+    label: (kind === "task" || kind === "thrust") ? null : (rest.label || autoLabel(project, kind)),
     title: rest.title || "",
     description: rest.description || "",
     verification: rest.verification || "",
@@ -124,16 +181,19 @@ export function removePlanEntry(project, id) {
 /** The filed table, one object per printed row. Nothing is invented here. */
 export function appendixERows(project) {
   return planRows(project).map(e => ({
-    taskNumber: e.number,
+    // A THRUST PRINTS "TASK 1" in the number column and leaves everything after the title empty.
+    taskNumber: e.kind === "thrust" ? `TASK ${e.number}` : e.number,
     title: e.title,
-    type: (PLAN_KINDS.find(k => k[0] === e.kind) || [])[1] || "Task",
-    milestoneNumber: e.kind === "task" ? "\u2014" : (e.label || ""),
-    description: e.description,
-    verification: e.verification,
-    month: String(clean(e.month)),
-    quarter: quarterOf(e.month),
+    type: (PLAN_KINDS.find(k => k[0] === e.kind) || [])[1] ?? "Task",
+    milestoneNumber: e.kind === "thrust" ? ""
+                     : e.kind === "task" ? "\u2014" : (e.label || ""),
+    description: e.kind === "thrust" ? "" : e.description,
+    verification: e.kind === "thrust" ? "" : e.verification,
+    month: e.kind === "thrust" ? "" : String(clean(e.month)),
+    quarter: e.kind === "thrust" ? "" : quarterOf(e.month),
     isTask: e.kind === "task",
     isGate: e.kind === "gate",
+    isThrust: e.kind === "thrust",
   }));
 }
 
@@ -145,6 +205,9 @@ export function appendixERows(project) {
 export function planGaps(project) {
   const gaps = [];
   for (const e of planRows(project)) {
+    // A THRUST IS A HEADING. The form gives it a number and a title and no other cell, so requiring a
+    // date or a verification process would report a gap that cannot be filled.
+    if (e.kind === "thrust") { if (!e.title) gaps.push({ id: e.id, number: e.number, missing: ["title"] }); continue; }
     const miss = [];
     if (!e.title) miss.push("title");
     if (!e.description) miss.push("description");

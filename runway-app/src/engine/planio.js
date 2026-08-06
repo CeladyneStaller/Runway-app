@@ -113,8 +113,13 @@ export function parsePlanPaste(text) {
     // A GROUPING ROW IS NOT AN ENTRY. Its title is carried onto the rows beneath it so a go/no-go with
     // no title of its own still says which task it decides.
     if (isTaskGroupRow(c, map)) {
+      // ⚠️ A THRUST IS NOW AN ENTRY, NOT A DISCARDED HEADING. Dropping these lost the level a go/no-go
+      // actually decides — and round-tripping a real workbook produced a file with its TASK rows
+      // missing.
       groupTitle = at(c, "title");
-      return null;
+      return { i, kind: "thrust", number: String(at(c, "number")).replace(/\D/g, ""),
+               title: groupTitle, label: null, description: "", verification: "",
+               month: null, notes: [], group: null };
     }
 
     let kind = TYPE_OF(at(c, "type"));
@@ -165,17 +170,22 @@ export function parsePlanPaste(text) {
 /** Turn accepted drafts into plan entries, re-parenting tasks to the target above them. */
 export function draftsToPlan(drafts) {
   const out = [];
-  let lastTarget = null;
+  let lastTarget = null, lastThrust = null;
   for (const d of drafts) {
     const id = `pl_${Math.random().toString(36).slice(2, 9)}`;
     const isTask = d.kind === "task";
     // A TASK BELONGS TO THE TARGET ABOVE IT IN THE PASTE, which is the order the form prints. Matching
     // on the number prefix instead would break the moment somebody's numbering is inconsistent — and
     // it usually is, because these tables are edited by hand across years.
-    if (!isTask) lastTarget = id;
+    if (d.kind === "thrust") { lastThrust = id; lastTarget = null; }
+    else if (!isTask) lastTarget = id;
+    // A TASK BELONGS TO THE TARGET ABOVE IT; A TARGET BELONGS TO THE THRUST ABOVE IT. Same rule, one
+    // level up — and the same reason: the order the form prints is the only reliable structure, because
+    // these tables are hand-edited across years and the numbering drifts.
     out.push({
-      id, kind: d.kind, parentId: isTask ? lastTarget : null,
-      number: d.number || "", label: d.label || null,
+      id, kind: d.kind,
+      parentId: d.kind === "thrust" ? null : isTask ? lastTarget : lastThrust,
+      number: d.kind === "gate" ? "" : (d.number || ""), label: d.label || null,
       title: d.title || "", description: d.description || "",
       verification: d.verification || "",
       month: Number.isFinite(d.month) ? d.month : 0,
@@ -241,11 +251,11 @@ export function exportPlanWorkbook(XLSX, project, meta = {}) {
       // ⚠️ A MILESTONE LEAVES THIS BLANK in the real template — its identity IS its task number (1.1),
       // and there is no separate M-number. Writing our internal label here would put a value in a
       // filed cell that the template does not carry.
-      r.isTask ? r.taskNumber : "",
+      r.isThrust ? "" : r.isTask ? r.taskNumber : "",
       r.description, r.verification,
-      Number(r.month),
+      r.isThrust ? "" : Number(r.month),
       // A BARE INTEGER, as the template writes it.
-      Number(String(r.quarter).replace(/^Q/i, "")),
+      r.isThrust ? "" : Number(String(r.quarter).replace(/^Q/i, "")),
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);

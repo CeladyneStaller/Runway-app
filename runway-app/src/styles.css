@@ -1523,3 +1523,14 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 @media(max-width:900px){ .io-gridwrap{max-height:38vh} }
 .plan-h-r{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .brow{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.plan-r.thrust{background:#DCE7EC;font-weight:600;font-family:var(--fd)}
+.plan-r.thrust .pn{color:#1C4E63;font-weight:600}
+.plan-r.ms,.plan-r.gate{padding-left:26px}
+.plan-r.task{padding-left:52px}
+.plan-r.dropping{box-shadow:inset 0 0 0 2px var(--signal)}
+.plan-r[draggable="true"]{cursor:grab}
+.plan-r[draggable="true"]:active{cursor:grabbing}
+.chip.th{background:#DCE7EC;color:#1C4E63}
+.plan-add.sub.deep{padding-left:52px}
+@media(max-width:720px){ .plan-r.ms,.plan-r.gate{padding-left:16px} .plan-r.task{padding-left:30px}
+  .plan-add.sub.deep{padding-left:30px} }

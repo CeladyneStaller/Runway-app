@@ -87,7 +87,9 @@ describe("drafts become a plan", () => {
   });
 
   it("keeps the numbers it was given", () => {
-    expect(plan.map(e => e.number)).toEqual(["1.1", "1.1.1", "2.1"]);
+// The gate's number is dropped on the way in, because the form leaves that cell blank — keeping
+    // "2.1" would put a number in a filed cell the template does not carry.
+    expect(plan.map(e => e.number)).toEqual(["1.1", "1.1.1", ""]);
   });
 
   it("leaves a gate's outcome unset, because the paste cannot know it", () => {
