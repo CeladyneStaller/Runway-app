@@ -334,8 +334,8 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
     ["proj", "Projects", I.proj],
     ["ms", "Milestones", I.flag],
     ["inv", "Investment", I.invest],
-    ["cmt", "Commitments", I.invest],
-    ["scn", "Scenarios", I.invest],
+    ["cmt", "Commitments", I.promise],
+    ["scn", "Scenarios", I.fork],
   ];
   // Hidden tabs are dropped from the NAV only. A hash that points at a hidden view still renders it:
   // this is decluttering, not permissions, and bouncing somebody off their own bookmark would be a

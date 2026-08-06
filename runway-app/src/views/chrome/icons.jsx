@@ -2,6 +2,13 @@
 import React from "react";
 
 export const I = {
+  // A SIGNED DOCUMENT WITH A TICK — what a commitment is. Commitments, Investment and Scenarios all
+  // rendered `invest` before this; three identical marks in a ten-tab rail implied a relationship
+  // between tabs that have none.
+  promise: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8.5 12.5 11 15l5-5.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 4h11l3 3v13H5z" strokeLinejoin="round"/></svg>,
+  // ONE PATH SPLITTING IN TWO. Chosen over a curved branch because the endpoint dots stay legible at
+  // the 19px the rail actually renders, where a curve muddies.
+  fork: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 21V13m0 0-6-6V4m6 9 6-6V4" strokeLinecap="round" strokeLinejoin="round"/><circle cx="6" cy="4" r="1.5"/><circle cx="18" cy="4" r="1.5"/></svg>,
   invest: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 20h18" strokeLinecap="round"/><rect x="5" y="12" width="3.6" height="6" rx="1"/><rect x="10.2" y="8" width="3.6" height="10" rx="1"/><rect x="15.4" y="4" width="3.6" height="14" rx="1"/></svg>,
   sales: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h2l2.2 10.4a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.6L21 8H7" strokeLinecap="round" strokeLinejoin="round"/><circle cx="10" cy="20" r="1.2"/><circle cx="18" cy="20" r="1.2"/></svg>,
   dash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 13.5 10 7l4 4 7-7" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 20h18" strokeLinecap="round"/></svg>,

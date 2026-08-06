@@ -1467,6 +1467,24 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Tab icons — the three-way collision resolved
+
+**Investment, Commitments and Scenarios all rendered `invest`.** I reached for the nearest glyph when
+adding the last two. **In a ten-tab rail a repeated mark is worse than none** — it implies a
+relationship between tabs that have none.
+
+Two new glyphs in `icons.jsx`, drawn to the set's own spec (24x24, 2px, round caps) so they do not read
+as imported from elsewhere:
+
+- **`promise`** — a signed document with a tick, which is what a commitment is
+- **`fork`** — one path splitting in two. Chosen over a curved `branch` because the endpoint dots stay
+  legible at the **19px the rail actually renders**, where a curve muddies
+
+Of the seven previously unused icons only `swap` was even plausible; the rest are ACTION glyphs — trash,
+upload, plus — and in a navigation rail those read as controls rather than places.
+
+`navorder.test.jsx` now asserts all ten icons are distinct, so the collision cannot return quietly.
+
 ## Tab order, and Company settings at the foot
 
 Dashboard · Spend history · Cash flow · Sales · Payroll · Projects · Milestones · Investment ·

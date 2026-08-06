@@ -44,3 +44,38 @@ describe("the left rail", () => {
     expect(rail().textContent).not.toMatch(/Company settings/);
   });
 });
+
+describe("tab icons", () => {
+  const src = require("node:fs").readFileSync("src/App.jsx", "utf8");
+  const block = /const NAV = \[([\s\S]*?)\n  \];/.exec(src)?.[1] ?? "";
+  const icons = [...block.matchAll(/I\.(\w+)\]/g)].map(m => m[1]);
+
+  it("EVERY TAB HAS ITS OWN GLYPH", () => {
+    // Investment, Commitments and Scenarios all rendered `invest` — I reached for the nearest thing
+    // when adding the last two. In a ten-tab rail a repeated mark is worse than none: it implies a
+    // relationship between tabs that have none.
+    expect(icons.length).toBe(10);
+    expect(new Set(icons).size).toBe(10);
+  });
+
+  it("the two new ones exist and are drawn to match the set", () => {
+    // Same 24x24 box, same 2px stroke, same round caps — so they do not read as imported from
+    // somewhere else.
+    const ic = require("node:fs").readFileSync("src/views/chrome/icons.jsx", "utf8");
+    for (const name of ["promise", "fork"]) {
+      const m = new RegExp(`\\n  ${name}: (<svg[\\s\\S]*?</svg>)`).exec(ic);
+      expect(m, name).toBeTruthy();
+      expect(m[1]).toMatch(/viewBox="0 0 24 24"/);
+      expect(m[1]).toMatch(/strokeWidth="2"/);
+      expect(m[1]).toMatch(/stroke="currentColor"/);
+    }
+  });
+
+  it("renders both in the rail", () => {
+    const v = render(<H demo />);
+    const svgs = [...v.container.querySelectorAll(".rail .nav svg")];
+    expect(svgs.length).toBeGreaterThanOrEqual(10);
+    // `fork` is the only glyph in the set with two circles at y=4.
+    expect(v.container.innerHTML).toMatch(/cy="4" r="1.5"/);
+  });
+});
