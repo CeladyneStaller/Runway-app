@@ -1429,6 +1429,35 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Full view-suite pass — 12 failures down to 2
+
+**None of them were the window work.** All twelve predated it; I had only ever run subsets.
+
+**FIVE FILES ASSERTED THE WRONG RUNWAY, AND MY FIRST CORRECTION MADE IT WORSE.** I measured 3.9 from raw
+projection rows and updated the tests to that; the app renders **5.5**, because it anchors to actuals
+first. **Measuring the wrong pipeline is how a fix becomes a second bug** — the assertions had to be
+corrected twice.
+
+**THE SCENARIOS TAB CRASHED, AND IT WAS MY DEMO SEED.** I wrote `patch: { employees: { defer: 3 } }`, a
+shape I invented; the real one is `patches: []` of `{ kind, collection, item }`. Six tests died with
+"Cannot read properties of undefined". **Inventing a data shape for a demo is worse than leaving the
+feature undemonstrated** — the demo is what people load first, and it crashed the tab it existed to show
+off. Removed rather than guessed at again.
+
+**A FINANCING ASSERTION WAS DESCRIBING THE OLD WORLD.** The UI used to add a second patch turning
+financing on so a round would visibly move the runway. With financing defaulting on, that patch is a
+no-op the user did not ask for, and the UI correctly stopped adding it.
+
+**THE JOURNAL TEST WAS TIME-DEPENDENT AND ROTTED.** It asserted exactly four snapshot lines; the demo
+seeds four dated to July 2026, and the app takes an automatic snapshot when one is DUE. Once the clock
+passed 29 July the mount produced a fifth and the test began failing with nothing wrong in the app. **A
+test that depends on how long ago the fixture was written fails on a date nobody chose.** Now asserts
+`SEED_JOURNAL.length` to `+1`.
+
+**REMAINING, BOTH PRE-EXISTING AND UNRELATED:** "FLUSHES pending work before switching" fails alone —
+a save failing inside `switchCompany`, about company switching rather than runway — and "declining is
+remembered", which passes alone and is order-dependent.
+
 ## The forecast window — runway and clean exit stop scanning history
 
 **`forecastFrom(doc, today)` = today's month, clamped at 0.** A cash figure is the balance at the START

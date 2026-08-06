@@ -92,12 +92,16 @@ const SEED_SAAS = [
     customers: 34, growth: 0.06, churn: 0.02, start: 0, confidence: "expected" },
 ];
 
-/** One saved scenario: the change a founder reaches for first. */
-const SEED_SCENARIOS = [
-  { id: "scn_demo", name: "Delay two hires to Q3", createdMonth: 0,
-    patch: { employees: { defer: 3 } },
-    note: "What the runway looks like if the two open roles start a quarter later." },
-];
+/** ⚠️ NO SEEDED SCENARIO. I wrote one with `patch: { employees: { defer: 3 } }` — a shape I invented.
+ *  The real one is `patches: []` of `{ kind, collection, item }`, and the Scenarios view crashed with
+ *  "Cannot read properties of undefined" on every test that opened it.
+ *
+ *  Inventing a data shape for a demo is worse than leaving the feature undemonstrated: the demo is the
+ *  thing people load first, and it crashed the tab it was meant to show off. Seeding a real scenario
+ *  means building one through the same code path a user would, which is a task rather than a literal.
+ */
+const SEED_SCENARIOS = [];
+
 
 // The seed's cash, named so the divergence above is about commitments and nothing else.
 const SEED_CASH_DEMO = 560000;

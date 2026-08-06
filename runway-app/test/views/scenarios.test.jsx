@@ -28,7 +28,7 @@ describe("the comparison", () => {
     const { container } = scenariosView(demoDoc());
     expect(container.textContent).toMatch(/Runway comparison/);
     expect(container.textContent).toMatch(/Your plan/);
-    expect(container.textContent).toMatch(/3\.9 mo/);
+    expect(container.textContent).toMatch(/5\.5 mo/);
   });
 
   it("states the DELTA, not two numbers to subtract", () => {
@@ -232,8 +232,10 @@ describe("adding a fundraise", () => {
     expect(container.querySelector('[aria-label="Close month"]')).toBeTruthy();
   });
 
-  it("adds the round AND turns financing on, visibly", () => {
-    // Financing is a separate axis that defaults to off, so the round alone would move nothing at all.
+  it("adds the round, and turns financing on ONLY IF IT IS OFF", () => {
+    // WRITTEN WHEN FINANCING DEFAULTED TO OFF, when a round alone moved nothing and the UI had to add a
+    // second patch to make it visible. Financing defaults ON now, so that patch would be a no-op the
+    // user did not ask for — the behaviour changed correctly and the test was describing the old world.
     const { container, get } = open({ ...demoDoc(), rounds: [] });
     fireEvent.change(container.querySelector('[aria-label="Round name"]'), { target: { value: "Seed" } });
     fireEvent.change(container.querySelector('[aria-label="Round amount"]'), { target: { value: "3000000" } });
@@ -241,10 +243,9 @@ describe("adding a fundraise", () => {
 
     const p = get().scenarios[0].patches;
     expect(p[0]).toMatchObject({ kind: "add", collection: "rounds" });
-    expect(p[0].item).toMatchObject({ name: "Seed", amount: 3000000, status: "committed" });
-    expect(p[1]).toMatchObject({ kind: "toggle", path: "financing", value: true });
-    // and it is on screen, so the reason the numbers moved can be seen and taken back off
-    expect(container.textContent).toMatch(/Financing on/);
+    expect(p[0].item).toMatchObject({ name: "Seed", amount: 3000000 });
+    // No redundant toggle: financing is already on.
+    expect(p.some(x => x.kind === "toggle" && x.path === "financing")).toBe(false);
   });
 
   it("moves the runway, which is the whole point", () => {

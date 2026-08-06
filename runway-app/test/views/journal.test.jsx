@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import { useState } from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
+import { SEED_JOURNAL } from "../../src/seed";
 import { demoDoc, emptyDoc } from "../../src/state/document";
 import { JournalPanel } from "../../src/views/chrome/JournalPanel";
 
@@ -28,7 +29,17 @@ describe("forecast journal panel", () => {
     const h = harness(demoDoc());
     toForecasts(h.container);
     const past = h.container.querySelectorAll('[data-jr="past"]');
-    expect(past.length).toBe(4);                                   // the demo seeds four weekly snapshots
+
+    // ⚠️ NOT A FIXED COUNT — THIS TEST WAS TIME-DEPENDENT AND ROTTED.
+    //
+    // The demo seeds four weekly snapshots, the newest dated 22 July 2026. The app takes an automatic
+    // snapshot on load when one is due, so once the clock passed 29 July the mount produced a FIFTH and
+    // the assertion of exactly four began failing — with nothing wrong in the app.
+    //
+    // A test that depends on how long ago the fixture was written is a test that fails on a date
+    // nobody chose. Assert the seeded ones are all drawn, and allow the automatic one.
+    expect(past.length).toBeGreaterThanOrEqual(SEED_JOURNAL.length);
+    expect(past.length).toBeLessThanOrEqual(SEED_JOURNAL.length + 1);
     expect(h.container.querySelector('[data-jr="current"]')).toBeTruthy();
   });
 
