@@ -27,11 +27,38 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
 
   const importPanel = !canWrite ? null : paste == null ? (
     <div className="plan-add">
+      {/* SAME TWO DOORS AS SF-424A: a file for the workbook people already have, a paste box for the
+          table they can only get at as text. Both go through ONE parser, so they cannot disagree. */}
+      <label className="linkbtn plan-file">
+        Import SOPO workbook
+        <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }}
+               onChange={async ev => {
+                 const f = ev.target.files?.[0]; if (!f) return;
+                 try {
+                   const XLSX = await import("xlsx");
+                   const { sheetToText } = await import("../../engine/planio");
+                   const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+                   const text = sheetToText(XLSX, wb);
+                   // A FILE THAT PARSES TO NOTHING OPENS THE PASTE BOX rather than failing silently —
+                   // the person can see what came out and fix it, which beats "nothing happened".
+                   setPaste(text || "");
+                 } catch { setPaste(""); }
+                 ev.target.value = "";
+               }} />
+      </label>
       <button className="linkbtn" onClick={() => setPaste("")}>Paste a table</button>
       {rows.length > 0 && (
-        <button className="linkbtn" onClick={() => {
-          navigator.clipboard?.writeText?.(planToTSV(project));
-        }}>Copy as Appendix E</button>
+        <>
+          <button className="linkbtn" onClick={async () => {
+            const XLSX = await import("xlsx");
+            const { exportPlanWorkbook } = await import("../../engine/planio");
+            const wb = exportPlanWorkbook(XLSX, project);
+            XLSX.writeFile(wb, `${(project?.name || "project").replace(/[^\w -]/g, "")} milestones.xlsx`);
+          }}>Export SOPO workbook</button>
+          <button className="linkbtn" onClick={() => {
+            navigator.clipboard?.writeText?.(planToTSV(project));
+          }}>Copy as a table</button>
+        </>
       )}
     </div>
   ) : (

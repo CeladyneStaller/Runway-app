@@ -162,8 +162,12 @@ describe("import", () => {
   });
 
   it("offers the export only once there is something to export", () => {
-    expect(draw({ id: "p", plan: [] }).container.textContent).not.toMatch(/Copy as Appendix E/);
-    expect(draw().container.textContent).toMatch(/Copy as Appendix E/);
+// The label changed when the workbook export landed beside it — "Copy as a table" is the text
+    // route, "Export SOPO workbook" the file one. Import is offered on an empty plan; export is not.
+    expect(draw({ id: "p", plan: [] }).container.textContent).not.toMatch(/Export SOPO workbook/);
+    expect(draw().container.textContent).toMatch(/Export SOPO workbook/);
+    expect(draw().container.textContent).toMatch(/Copy as a table/);
+    expect(draw({ id: "p", plan: [] }).container.textContent).toMatch(/Import SOPO workbook/);
   });
 
   it("a viewer is offered neither", () => {

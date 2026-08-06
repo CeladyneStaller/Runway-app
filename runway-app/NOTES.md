@@ -1467,6 +1467,34 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Milestone import/export, matched to a REAL SOPO workbook
+
+Corey supplied an actual DOE SOPO template. **It differs from the printed appendix in four ways, and an
+importer built from the form alone gets all four wrong:**
+
+1. **TASK GROUPING ROWS EXIST** — "TASK 1 | Demonstrate current and next-gen ..." with no type. I had
+   removed these from the mockups as invented. They are real, they carry the task title, and they are
+   headings rather than entries — dropped on import, and their title is carried onto the rows beneath
+   so an untitled go/no-go still says which task it decides.
+2. **A MILESTONE'S Milestone-Number CELL IS BLANK.** Its identity IS its task number (1.1); there is no
+   separate M-number. Only TASKS fill that column, and they repeat their own number into it.
+3. **A GO/NO-GO ROW HAS NO NUMBER AND NO TITLE** — just the type, a verification note and dates.
+4. **THE QUARTER IS A BARE INTEGER** (2), not "Q2". Reading only "Q2" meant every row from a real
+   workbook arrived undated.
+
+**⚠️ AND THE HEADER IS NOT ROW 1.** The template opens with "Project Title:" and "Budget Period:", so a
+reader that assumes row 1 imports two lines of metadata as data and then matches no columns at all.
+`sheetToText` finds the row containing "Task Number".
+
+**ONE PARSER, TWO DOORS**, the same shape as `sf424a`: the workbook is converted to text and fed to the
+SAME parser the paste box uses. A pasted table and an uploaded file cannot disagree about what a column
+means, which is how two importers end up with different bugs. Round-trip is tested through it.
+
+**A file that parses to nothing opens the paste box** rather than failing silently — the person can see
+what came out and fix it, which beats "nothing happened".
+
+Twelve tests run against the real workbook, not a fixture I wrote.
+
 ## Plan editor layout, and Appendix E import/export
 
 **THE EDITOR WAS A VERTICAL STACK.** Title/month/number sat in their own grid, then Description and

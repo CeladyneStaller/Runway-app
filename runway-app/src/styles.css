@@ -1485,3 +1485,4 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .plan-import .meta{margin:0}
 .plan-notes{margin:7px 0 0;padding-left:17px;font-size:11.5px;color:var(--caution)}
 .plan-notes li{margin-bottom:3px}
+.plan-file{cursor:pointer}

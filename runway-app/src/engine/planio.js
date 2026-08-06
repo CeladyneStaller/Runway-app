@@ -6,6 +6,19 @@
 
 import { appendixERows, quarterOf } from "./plan.js";
 
+// ── the real SOPO template, which differs from the printed form in four ways ──────────────────────
+//
+// Measured against a genuine DOE SOPO workbook, not inferred from the appendix:
+//
+//   1. TASK GROUPING ROWS exist — "TASK 1 | Demonstrate current and next-gen ..." with no type. I had
+//      removed these as invented; they are real and they carry the task title.
+//   2. A MILESTONE'S Milestone-Number cell is BLANK. Only tasks fill it, and they repeat their own
+//      number into it.
+//   3. A GO/NO-GO ROW HAS NO NUMBER AND NO TITLE — just the type, a verification note, and dates.
+//   4. THE QUARTER IS A BARE INTEGER (2), not "Q2".
+//
+// An importer that assumes the printed form rejects or mangles all four.
+
 export const APPENDIX_E_HEADERS = [
   "Task Number or Subtask Number",
   "Task Title or Subtask Title (If Applicable)",
@@ -60,6 +73,13 @@ export function matchColumns(headers) {
   return map;
 }
 
+/** A "TASK 1" grouping row: a heading, not an entry. */
+export const isTaskGroupRow = (cells, map) => {
+  const no = String(cells[map.number] ?? "").trim();
+  const type = String(cells[map.type] ?? "").trim();
+  return /^task\s+\d+$/i.test(no) && !type;
+};
+
 const TYPE_OF = (s) => {
   const v = String(s || "").toLowerCase();
   if (/go\s*\/?\s*no/.test(v)) return "gate";
@@ -86,9 +106,16 @@ export function parsePlanPaste(text) {
   }
 
   const at = (cells, f) => (map[f] === undefined ? "" : (cells[map[f]] || "").trim());
+  let groupTitle = null;
   const rows = lines.slice(1).map((l, i) => {
     const c = split(l);
     const notes = [];
+    // A GROUPING ROW IS NOT AN ENTRY. Its title is carried onto the rows beneath it so a go/no-go with
+    // no title of its own still says which task it decides.
+    if (isTaskGroupRow(c, map)) {
+      groupTitle = at(c, "title");
+      return null;
+    }
 
     let kind = TYPE_OF(at(c, "type"));
     if (!kind) {
@@ -107,9 +134,12 @@ export function parsePlanPaste(text) {
       // proposal used. Guessing silently would put a gate up to two months from where it belongs.
       month = (+/^q\s*(\d+)$/i.exec(rawMonth)[1] - 1) * 3;
       notes.push(`quarter, not month — read as month ${month}`);
-    } else if (/^q\s*(\d+)$/i.test(at(c, "quarter")) && !rawMonth) {
-      month = (+/^q\s*(\d+)$/i.exec(at(c, "quarter"))[1] - 1) * 3;
-      notes.push(`no month column — derived month ${month} from ${at(c, "quarter")}`);
+    } else if (/^q?\s*(\d+)$/i.test(at(c, "quarter")) && !rawMonth) {
+      // A BARE INTEGER IN THE QUARTER COLUMN. The real template writes 2, not Q2 — reading only "Q2"
+      // meant every row from an actual SOPO workbook arrived undated.
+      const qn = +/^q?\s*(\d+)$/i.exec(at(c, "quarter"))[1];
+      month = (qn - 1) * 3;
+      notes.push(`no month column — derived month ${month} from quarter ${qn}`);
     } else if (rawMonth) {
       notes.push(`month "${rawMonth}" not understood`);
     } else {
@@ -119,13 +149,16 @@ export function parsePlanPaste(text) {
     return {
       i, kind,
       number: at(c, "number"),
-      title: at(c, "title") || at(c, "description").slice(0, 80),
+      // A GO/NO-GO ROW IN THE REAL TEMPLATE HAS NO TITLE. Falling back to the description, then to the
+      // task group it sits under, beats importing a blank row somebody then has to identify.
+      title: at(c, "title") || at(c, "description").slice(0, 80)
+             || (groupTitle ? `Go/no-go — ${groupTitle}` : ""),
       label: kind === "task" ? null : at(c, "label"),
       description: at(c, "description"),
       verification: at(c, "verification"),
-      month, notes,
+      month, notes, group: groupTitle,
     };
-  });
+  }).filter(Boolean);
   return { headers, rows, map, error: null };
 }
 
@@ -153,3 +186,72 @@ export function draftsToPlan(drafts) {
 }
 
 export { quarterOf };
+
+// ── workbook in and out, the same shape as sf424a ─────────────────────────────────────────────────
+
+const SHEET = "SOPO Milestones";
+
+/** Rows out of a workbook, as the paste parser expects them: a header line then tab-joined rows.
+ *
+ *  ONE PARSER, TWO DOORS. Routing the workbook through the same text parser as the paste box means a
+ *  pasted table and an uploaded file cannot disagree about what a column means — which is exactly the
+ *  kind of divergence that produces two importers with different bugs.
+ */
+export function sheetToText(XLSX, wb) {
+  // The template's own sheet if it is there, otherwise the first — recipients rename tabs.
+  const name = wb.SheetNames.find(n => /sopo|milestone/i.test(n)) || wb.SheetNames[0];
+  const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, blankrows: false, defval: "" });
+
+  // ⚠️ THE HEADER IS NOT ROW 1. The real template opens with "Project Title:" and "Budget Period:"
+  // rows, so a reader that assumes row 1 is the header imports two lines of metadata as data and then
+  // matches no columns at all.
+  const head = grid.findIndex(r => (r || []).some(c => /task\s*number/i.test(String(c ?? ""))));
+  if (head < 0) return null;
+
+  const clean = (v) => String(v ?? "").replace(/[\t\r\n]+/g, " ").trim();
+  return grid.slice(head).map(r => (r || []).map(clean).join("\t")).join("\n");
+}
+
+/** The project title and budget period the template carries above the table. */
+export function sheetMeta(XLSX, wb) {
+  const name = wb.SheetNames.find(n => /sopo|milestone/i.test(n)) || wb.SheetNames[0];
+  const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, blankrows: false, defval: "" });
+  const find = (re) => {
+    for (const r of grid.slice(0, 8)) {
+      const i = (r || []).findIndex(c => re.test(String(c ?? "")));
+      if (i >= 0) return (r.slice(i + 1).find(c => String(c ?? "").trim()) || "").toString().trim();
+    }
+    return "";
+  };
+  return { title: find(/project\s*title/i), period: find(/budget\s*period/i) };
+}
+
+/** A workbook in the template's shape. */
+export function exportPlanWorkbook(XLSX, project, meta = {}) {
+  const rows = appendixERows(project);
+  const aoa = [
+    ["Project Title:", "", meta.title || project?.name || ""],
+    ["Budget Period:", "", meta.period || ""],
+    [],
+    APPENDIX_E_HEADERS,
+    // TASKS REPEAT THEIR NUMBER into the Milestone Number column and milestones leave it blank — the
+    // opposite of what the printed form suggests, and what the real template actually does.
+    ...rows.map(r => [
+      r.taskNumber, r.title, r.type,
+      // ⚠️ A MILESTONE LEAVES THIS BLANK in the real template — its identity IS its task number (1.1),
+      // and there is no separate M-number. Writing our internal label here would put a value in a
+      // filed cell that the template does not carry.
+      r.isTask ? r.taskNumber : "",
+      r.description, r.verification,
+      Number(r.month),
+      // A BARE INTEGER, as the template writes it.
+      Number(String(r.quarter).replace(/^Q/i, "")),
+    ]),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 12 }, { wch: 40 }, { wch: 18 }, { wch: 16 },
+                 { wch: 46 }, { wch: 40 }, { wch: 10 }, { wch: 10 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, SHEET);
+  return wb;
+}
