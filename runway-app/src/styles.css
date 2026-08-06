@@ -1554,3 +1554,15 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   color:var(--danger);background:#FBEAE7;border-radius:7px;padding:6px 10px}
 .plan-confirm b{font-weight:600}
 .railfoot .railset{margin:0 0 10px;width:100%}
+
+/* ---- stale scenarios ---- */
+.scn-stalebadge{display:inline-block;font-size:9.5px;padding:1px 8px;border-radius:20px;
+  background:#FBF3E4;color:var(--caution);letter-spacing:.03em;text-transform:uppercase;
+  font-weight:600;margin-left:8px;cursor:help}
+.scn-stale{background:#FBF3E4;color:var(--caution);border-radius:8px;padding:9px 12px;
+  font-size:11.5px;margin-top:9px;line-height:1.55}
+.scn-stale.hard{background:#FBEAE7;color:var(--danger);margin:0 17px 11px}
+.scn-stale ul{margin:5px 0 0;padding-left:18px}
+.scn-stale li{margin-bottom:3px}
+.scn-ack{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11.5px;cursor:pointer}
+.scn-ack input{width:15px;height:15px;accent-color:var(--danger)}

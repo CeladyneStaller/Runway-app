@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { staleness, stalenessText, withFingerprints } from "../engine/scenario";
 import { applyScenario, explainPatch, emptyScenario, duplicateScenario, scenarioImpact,
          scenarioRound, PATCH_SCHEMA, TOP_LEVEL_FIELDS, TOGGLE_FIELDS, itemLabel } from "../engine/scenario";
 import { buildProjection, zeroInfo } from "../engine/projection";
@@ -245,7 +246,7 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
 }
 
 // ---- one scenario, as a card ------------------------------------------------------------------------
-function ScenarioCard({ scn, impact, ctx, baseDoc, comparing, onCompare, onEdit, onDuplicate, onApply, onDelete }) {
+function ScenarioCard({ scn, impact, ctx, baseDoc, stale = [], comparing, onCompare, onEdit, onDuplicate, onApply, onDelete }) {
   const chips = (scn.patches || []).slice(0, 4).map((p, i) => {
     const e = explainPatch(p, baseDoc, ctx);
     return <span className="scn-ch" key={i}>{e.text}{e.was != null && e.was !== e.text && <em> , was {e.was}</em>}</span>;
@@ -256,6 +257,14 @@ function ScenarioCard({ scn, impact, ctx, baseDoc, comparing, onCompare, onEdit,
     <div className={"scn-card" + (comparing ? " on" : "")}>
       <div className="scn-card-h">
         <span className="scn-card-nm">{scn.name}</span>
+        {/* ⚠️ THE FLAG LIVES ON THE SCENARIO, and again on the chart when a stale one is drawn. A
+            warning only in the editor would leave somebody looking at a curve built on a premise that
+            no longer holds, with nothing on screen saying so. */}
+        {stale.length > 0 && (
+          <span className="scn-stalebadge" title={stale.map(stalenessText).join("\n")}>
+            {stale.length} changed
+          </span>
+        )}
         <DeltaChip impact={impact} />
       </div>
 
@@ -310,6 +319,7 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
   const [activeIds, setActiveIds] = useState(scenarios.map(s => s.id).slice(0, 2));
   const [editing, setEditing] = useState(null);
   const [applying, setApplying] = useState(null);
+  const [applyOk, setApplyOk] = useState(false);
 
   const editScn = scenarios.find(s => s.id === editing);
 
@@ -335,7 +345,12 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
     const out = [mk("Your plan", CURVE[0], baseDoc)];
     activeIds.forEach((id, i) => {
       const scn = scenarios.find(s => s.id === id);
-      if (scn) out.push(mk(scn.name, CURVE[(i + 1) % CURVE.length], applyScenario(baseDoc, scn)));
+      // ⚠️ THE CURVE CARRIES ITS OWN STALENESS. The chart is the only place a toggled-on scenario is
+      // visible, so a flag that lived only in the editor would leave somebody reading a line built on a
+      // premise that no longer holds. It NAMES the scenario, because with three curves a bare warning
+      // says something is wrong and not which line to distrust.
+      if (scn) out.push({ ...mk(scn.name, CURVE[(i + 1) % CURVE.length], applyScenario(baseDoc, scn)),
+                          stale: staleness(baseDoc, scn) });
     });
     return out;
   }, [baseDoc, activeIds, scenarios, buildModel]);
@@ -378,7 +393,7 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
           ))}
           {series.map((s, i) => (
             <path key={i} d={path(s.rows)} fill="none"
-                  style={{ stroke: s.color, strokeWidth: i === 0 ? 2.4 : 1.8, strokeDasharray: i === 0 ? "none" : "5 3" }} />
+                  style={{ stroke: s.color, strokeWidth: i === 0 ? 2.4 : 1.8, strokeDasharray: s.stale?.length ? "3 5" : i === 0 ? "none" : "5 3" }} />
           ))}
           {/* WHERE EACH LINE HITS ZERO. The chart used to make you find the crossing by eye. */}
           {series.map((s, i) => s.zero && s.zero.months != null && (
@@ -390,6 +405,19 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
             </g>
           ))}
         </svg>
+        {/* ⚠️ THE CHART SAYS WHICH LINE TO DISTRUST. With three curves a bare warning tells you
+            something is wrong and not which one — the same failure as a disclosure triangle with
+            nothing beside it. */}
+        {series.some(s => s.stale?.length) && (
+          <div className="scn-stale">
+            {series.filter(s => s.stale?.length).map((s, i) => (
+              <div key={i}>
+                <b style={{ color: s.color }}>{s.name}</b> — built against different figures:{" "}
+                {s.stale.map(stalenessText).join(" ")}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* The delta strip: difference, and what caused it. */}
         <div className="scn-deltas">
@@ -434,7 +462,8 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
               onCompare={() => toggleActive(scn.id)}
               onEdit={() => setEditing(scn.id)}
               onDuplicate={() => duplicate(scn)}
-              onApply={onApplyToPlan ? () => setApplying(scn) : null}
+              stale={staleness(baseDoc, scn)}
+              onApply={onApplyToPlan ? () => { setApplyOk(false); setApplying(scn); } : null}
               onDelete={() => remove(scn.id)} />
           ))}
         </div>
@@ -527,9 +556,26 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
                 afterwards on their own tab. The scenario stays here so you can keep comparing against it.
               </div>
             </div>
+            {staleness(baseDoc, applying).length > 0 && (
+              <div className="scn-stale hard">
+                <b>{staleness(baseDoc, applying).length} change{staleness(baseDoc, applying).length === 1 ? "" : "s"} no longer match the model.</b>
+                <ul>{staleness(baseDoc, applying).map((e, i2) => <li key={i2}>{stalenessText(e)}</li>)}</ul>
+                <label className="scn-ack">
+                  <input type="checkbox" checked={applyOk} onChange={ev => setApplyOk(ev.target.checked)} />
+                  Apply anyway — I have read what changed
+                </label>
+              </div>
+            )}
             <div className="modal-foot">
               <button className="addbtn ghost" onClick={() => setApplying(null)}>Cancel</button>
-              <button className="addbtn" disabled={applying.patches.length === 0}
+              {/* ⚠️ APPLYING IS THE ONE IRREVERSIBLE ACTION IN THE FEATURE — it writes the scenario
+                  into the real document. A stale scenario applied here writes changes whose premise has
+                  already moved, and unlike the chart you cannot undo it by toggling off. So this path
+                  CONFIRMS rather than merely flagging: it is the only place where "the person saw a
+                  warning" is not sufficient, because the cost of ignoring it is permanent. */}
+              <button className="addbtn"
+                      disabled={applying.patches.length === 0
+                                || (staleness(baseDoc, applying).length > 0 && !applyOk)}
                       onClick={() => { onApplyToPlan?.(applyScenario(baseDoc, applying)); setApplying(null); }}>
                 Apply to plan
               </button>

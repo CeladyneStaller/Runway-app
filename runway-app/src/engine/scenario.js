@@ -338,3 +338,82 @@ export const scenarioRound = ({ name, amount, closeMonth, kind = "safe", status 
   confAuto: true,
   goals: [],
 });
+
+// ── staleness ────────────────────────────────────────────────────────────────────────────────────
+//
+// A SCENARIO IS A DIFF AGAINST A DOCUMENT THAT KEEPS MOVING. When the thing a patch touches changes
+// underneath it, the patch stops meaning what it said — and today it either applies to a value nobody
+// intended or silently does nothing.
+//
+// ⚠️ THE FINGERPRINT IS STORED; THE FLAG IS DERIVED. The fingerprint records what a patch READ at build
+// time and cannot be recomputed later — the past is gone. The comparison is a pure function of
+// (fingerprint, doc) and is computed at render, because a cached staleness flag would be a SECOND
+// source of truth about the document. This session has already produced three bugs of exactly that
+// shape: a dashboard and a tab disagreeing on one figure, a workbook writer re-deriving a cell and
+// drifting, and a chart recomputing a verdict and keeping a false green.
+
+/** What a patch reads, so it can tell later whether that has moved. */
+export function fingerprintFor(doc, patch) {
+  if (!doc || !patch) return null;
+  if (patch.kind === "field") return { path: patch.path, was: doc[patch.path] };
+  if (patch.kind === "toggle") return { path: patch.path, was: doc?.settings?.toggles?.[patch.path] };
+  if (patch.kind === "item") {
+    const item = (doc[patch.collection] || []).find(x => x?.id === patch.id);
+    // AN ADD READS NOTHING — there is no existing item, so there is nothing to go stale.
+    if (patch.op === "add" || !item) return item ? null : { missing: true, collection: patch.collection };
+    // ONLY THE FIELDS THIS PATCH CARES ABOUT. Recording the whole item would flag a scenario every time
+    // somebody edited a note, and a warning that fires on everything is one people learn to ignore.
+    const keys = patch.field ? [patch.field] : Object.keys(patch.values || {});
+    const was = {};
+    for (const k of keys) was[k] = item[k];
+    // The label fields, so the flag can say WHICH thing moved rather than just that something did.
+    return { collection: patch.collection, id: patch.id, was, name: item.name || item.label || item.title };
+  }
+  return null;
+}
+
+export function withFingerprints(doc, scenario) {
+  return {
+    ...scenario,
+    patches: (scenario?.patches || []).map(p => (p.fp === undefined ? { ...p, fp: fingerprintFor(doc, p) } : p)),
+  };
+}
+
+const same = (a, b) => (a === b) || (a == null && b == null) || String(a) === String(b);
+
+/** Which patches no longer match the model, and how. Derived — never stored. */
+export function staleness(doc, scenario) {
+  const out = [];
+  for (const p of scenario?.patches || []) {
+    const fp = p.fp;
+    if (!fp) continue;                                   // nothing was read, so nothing can move
+
+    if (fp.missing) { out.push({ patch: p, kind: "gone", detail: "it no longer exists in the model" }); continue; }
+
+    if (p.kind === "field" || p.kind === "toggle") {
+      const now = p.kind === "field" ? doc?.[fp.path] : doc?.settings?.toggles?.[fp.path];
+      if (!same(now, fp.was)) out.push({ patch: p, kind: "moved", field: fp.path, was: fp.was, now });
+      continue;
+    }
+
+    const item = (doc?.[fp.collection] || []).find(x => x?.id === fp.id);
+    if (!item) { out.push({ patch: p, kind: "gone", name: fp.name, detail: "it no longer exists in the model" }); continue; }
+    for (const [k, was] of Object.entries(fp.was || {})) {
+      if (!same(item[k], was)) out.push({ patch: p, kind: "moved", name: fp.name, field: k, was, now: item[k] });
+    }
+  }
+  return out;
+}
+
+/** One line per stale patch, for the flag. */
+export function stalenessText(entry) {
+  // REUSES THE FILE'S OWN `fmt`. A second formatter is how the same value ends up printing two ways in
+  // two places — the shape of bug this session has already produced three times.
+  const show = (v) => (v === undefined || v === null || v === "" ? "empty" : fmt(v));
+  if (entry.kind === "gone") {
+    return `${entry.name ? `${entry.name} ` : ""}no longer exists in the model — this change does nothing.`;
+  }
+  const who = entry.name ? `${entry.name}: ` : "";
+  return `${who}${entry.field} was ${show(entry.was)} when this was built; it is now ${show(entry.now)}.`;
+}
+

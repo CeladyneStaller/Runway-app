@@ -1467,6 +1467,37 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Scenario staleness — flagged in all three places
+
+**⚠️ THE FINGERPRINT IS STORED; THE FLAG IS DERIVED.** A fingerprint records what a patch READ at build
+time and cannot be recomputed later — the past is gone. The comparison is a pure function of
+`(fingerprint, doc)` computed at render, because a cached staleness flag would be a SECOND source of
+truth about the document. **This session produced three bugs of exactly that shape**: a dashboard and a
+tab disagreeing on the clean-exit date, a workbook writer re-deriving the milestone number and drifting,
+and `RunwayChart` recomputing `pass` and keeping a false green.
+
+**ONLY THE FIELDS THE PATCH TOUCHES.** Fingerprinting the whole item would flag a scenario every time
+somebody edited a note, and **a warning that fires on everything is one people learn to ignore**. A test
+asserts a scenario stays quiet when a field it never read changes.
+
+**An ADD reads nothing**, so it can never go stale.
+
+**THREE PLACES, because that is everywhere the effect is visible.** Verified: `applyScenario` appears in
+exactly three call sites — the chart curves, the suggested-scenarios panel, and apply-to-plan. It never
+reaches the headline runway, so the chart really is the only display.
+
+1. **A badge on the scenario**, carrying what moved in its title so the claim is checkable.
+2. **A flag under the chart, NAMING the curve.** With three lines a bare warning says something is wrong
+   and not which one to distrust — the same failure as a disclosure triangle with nothing beside it. The
+   stale curve is also dashed.
+3. **⚠️ APPLY-TO-PLAN CONFIRMS rather than flags.** It is the one irreversible action: it writes the
+   scenario into the real document, and unlike the chart you cannot undo it by toggling off. The button
+   is disabled until an explicit acknowledgement, **which resets on every open** — left sticky, somebody
+   who ticked it once would find the next scenario pre-confirmed.
+
+**Reused the file's own `fmt`** rather than adding a second formatter, which is how one value ends up
+printing two ways in two places.
+
 ## Tab icons — the three-way collision resolved
 
 **Investment, Commitments and Scenarios all rendered `invest`.** I reached for the nearest glyph when

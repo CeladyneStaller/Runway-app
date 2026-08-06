@@ -294,3 +294,58 @@ describe("adding a fundraise", () => {
     expect(container.textContent).toMatch(/Series A added — \$8,000,000 closing/);
   });
 });
+
+describe("stale scenarios are flagged where their effect shows", () => {
+  const staleDoc = () => {
+    const d = demoDoc();
+    const r = (d.rounds || [])[0];
+    return { ...d, scenarios: [{
+      id: "s1", name: "Series A lands", saved: true,
+      patches: [{ kind: "item", collection: "rounds", id: r.id, field: "status", value: "closed",
+                  fp: { collection: "rounds", id: r.id, was: { status: "a-status-it-no-longer-has" },
+                        name: r.name } }],
+    }] };
+  };
+
+  it("BADGES THE SCENARIO ITSELF", () => {
+    const { container } = scenariosView(staleDoc());
+    expect(container.querySelector(".scn-stalebadge")).toBeTruthy();
+    expect(container.querySelector(".scn-stalebadge").textContent).toMatch(/1 changed/);
+  });
+
+  it("the badge carries what moved, so it is checkable", () => {
+    const { container } = scenariosView(staleDoc());
+    expect(container.querySelector(".scn-stalebadge").getAttribute("title"))
+      .toMatch(/was a-status-it-no-longer-has/);
+  });
+
+  it("A CLEAN SCENARIO IS NOT BADGED", () => {
+    // A warning that fires on everything is one people learn to ignore.
+    const d = demoDoc();
+    const r = (d.rounds || [])[0];
+    const clean = { ...d, scenarios: [{ id: "s2", name: "Fine", saved: true,
+      patches: [{ kind: "item", collection: "rounds", id: r.id, field: "status", value: "closed",
+                  fp: { collection: "rounds", id: r.id, was: { status: r.status }, name: r.name } }] }] };
+    expect(scenariosView(clean).container.querySelector(".scn-stalebadge")).toBeNull();
+  });
+
+  it("the flag names WHICH curve to distrust", () => {
+    // With three curves a bare warning says something is wrong and not which line.
+    const src = require("node:fs").readFileSync("src/views/Scenarios.jsx", "utf8");
+    expect(src).toMatch(/built against different figures/);
+    expect(src).toMatch(/series\.some\(s => s\.stale\?\.length\)/);
+  });
+
+  it("APPLYING IS BLOCKED until the change is acknowledged", () => {
+    // The one irreversible action in the feature. Unlike the chart, you cannot undo it by toggling off,
+    // so "the person saw a warning" is not sufficient here.
+    const src = require("node:fs").readFileSync("src/views/Scenarios.jsx", "utf8");
+    expect(src).toMatch(/staleness\(baseDoc, applying\)\.length > 0 && !applyOk/);
+  });
+
+  it("and the acknowledgement resets on every open", () => {
+    // Left sticky, somebody who ticked it once would find the next scenario pre-confirmed.
+    const src = require("node:fs").readFileSync("src/views/Scenarios.jsx", "utf8");
+    expect(src).toMatch(/setApplyOk\(false\); setApplying\(scn\)/);
+  });
+});
