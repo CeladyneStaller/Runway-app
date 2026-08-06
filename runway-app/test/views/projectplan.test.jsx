@@ -135,3 +135,23 @@ describe("the import/export trigger", () => {
     expect(v.container.querySelector(".iobtn")).toBeNull();
   });
 });
+
+describe("where the trigger sits", () => {
+  // IT BELONGS IN THE HEADER IN BOTH STATES. It sat below the empty state's copy, which put it in a
+  // different place depending on whether the table had rows — and a control that moves is one people
+  // look for twice. SF-424A's is always top-right.
+  const inHeader = (v) => !!v.container.querySelector(".panel-h .iobtn");
+
+  it("is in the header when the table is EMPTY", () => {
+    expect(inHeader(draw({ id: "p", plan: [] }))).toBe(true);
+  });
+
+  it("and in the header when it has rows", () => {
+    expect(inHeader(draw())).toBe(true);
+  });
+
+  it("appears exactly once in each state", () => {
+    expect(draw({ id: "p", plan: [] }).container.querySelectorAll(".iobtn").length).toBe(1);
+    expect(draw().container.querySelectorAll(".iobtn").length).toBe(1);
+  });
+});

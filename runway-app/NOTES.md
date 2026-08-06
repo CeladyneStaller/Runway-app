@@ -1494,6 +1494,10 @@ is showing.
 - **"Keep both" renumbers the INCOMING row.** The existing numbers may be in a filed document; the
   arriving ones have not been anywhere.
 
+**⚠️ THE TRIGGER WAS ONLY IN THE HEADER WHEN THE TABLE HAD ROWS.** On an empty plan it rendered below
+the copy, so its position depended on the state of the data — and a control that moves is one people
+look for twice. SF-424A's is always top-right; this is now too, asserted in both states.
+
 **Seven panel tests MOVED rather than being deleted** — paste box, review counts, quarter flagging,
 parenting — because the behaviour moved. What is left in `projectplan.test.jsx` is the panel's own
 contract: one route, and none for a viewer.

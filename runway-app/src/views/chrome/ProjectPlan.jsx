@@ -36,11 +36,17 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
   if (!rows.length) {
     return (
       <section className="panel">
-        <div className="panel-h"><div>
-          <h3>Milestones and deliverables</h3>
-          <p>The targets this project is judged on, and the work that reaches them. Exports as
-             Appendix E.</p>
-        </div></div>
+        {/* THE TRIGGER BELONGS IN THE HEADER, in both states — it sat below the empty state's copy,
+            which put it in a different place depending on whether the table had rows. SF-424A's is
+            always top-right, and a control that moves is one people look for twice. */}
+        <div className="panel-h">
+          <div>
+            <h3>Milestones and deliverables</h3>
+            <p>The targets this project is judged on, and the work that reaches them. Exports as
+               Appendix E.</p>
+          </div>
+          {ioBtn}
+        </div>
         <p className="acct-row-s meta plan-empty">
           Nothing here yet. Most projects already have this table in the proposal — add the first
           milestone, then the tasks beneath it.
@@ -49,7 +55,6 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
           <button className="linkbtn" onClick={() => add("milestone")}>+ Milestone</button>
           <button className="linkbtn" onClick={() => add("gate")}>+ Go/no-go</button>
         </div>}
-        {ioBtn}
         {io && <PlanIOModal project={project} setProject={setProject} onClose={() => setIo(false)} />}
       </section>
     );
