@@ -161,8 +161,11 @@ describe("the Grant cost share table", () => {
 
   it("offers no writing control, because there is nothing here to edit", () => {
     const v = draw(demoDoc(), { canWrite: true });
+    // THE PERIODS DEFAULT CLOSED NOW, so the rows have to be opened before they can be inspected —
+    // a test that looked for them without opening was passing on a layout that no longer exists.
+    v.container.querySelectorAll(".fold-h").forEach(b => fireEvent.click(b));
     const rows = [...v.container.querySelectorAll(".crow")]
-      .filter(r => /period/i.test(r.textContent));
+      .filter(r => /period|month/i.test(r.textContent));
     expect(rows.length).toBeGreaterThan(0);
     rows.forEach(r => expect(r.querySelectorAll("button").length).toBe(0));
   });
@@ -329,5 +332,47 @@ describe("the exit toggles persist", () => {
     const v = render(<Commitments doc={demoDoc()} setDoc={() => {}} rows={rowsOf(demoDoc())} />);
     expect(v.container.textContent).not.toMatch(/not now/);
     expect(v.container.textContent).toMatch(/Clean exit until/);
+  });
+});
+
+describe("cost share grouped by budget period", () => {
+  const draw2 = () => render(<Commitments doc={demoDoc()} setDoc={() => {}} rows={rowsOf(demoDoc())} />);
+
+  it("groups the periods inside the award", () => {
+    // A funder checks the match PER PERIOD, so a flat list of rows from three periods is one nobody can
+    // reconcile against anything they were sent.
+    expect(draw2().container.textContent).toMatch(/Budget period 1/);
+    expect(draw2().container.textContent).toMatch(/Budget period 2/);
+  });
+
+  it("DEFAULTS CLOSED, and says how much it is hiding", () => {
+    // A monthly-billed award has twelve rows per period; three periods is thirty-six lines nobody asked
+    // for. The total is what somebody wants — and a disclosure triangle with nothing beside it is a
+    // thing people learn not to open.
+    const v = draw2();
+    const fold = [...v.container.querySelectorAll(".fold-h")][0];
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(fold.textContent).toMatch(/entr(y|ies)/);
+    expect(v.container.querySelectorAll(".fold-b").length).toBe(0);
+  });
+
+  it("opens on click", () => {
+    const v = draw2();
+    fireEvent.click(v.container.querySelector(".fold-h"));
+    expect(v.container.querySelectorAll(".fold-b").length).toBe(1);
+  });
+
+  it("every period shows its own total", () => {
+    const totals = [...draw2().container.querySelectorAll(".fold-t")];
+    expect(totals.length).toBeGreaterThan(1);
+    totals.forEach(t => expect(t.textContent).toMatch(/\d/));
+  });
+
+  it("long labels are allowed to truncate rather than push the amount off", () => {
+    // Without `min-width: 0` a flex item will not shrink below its content, so the row grew instead of
+    // the text ellipsing — which is the defect that makes a table look broken.
+    const css = require("node:fs").readFileSync("src/styles.css", "utf8");
+    expect(css).toMatch(/\.crow-l\{min-width:0/);
+    expect(css).toMatch(/\.cgroup-h b\{min-width:0/);
   });
 });

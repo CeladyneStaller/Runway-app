@@ -453,9 +453,13 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
           </div>
           {p.costShareByGrant.map(g => (
             <Group key={g.projectId} label={g.label} total={g.total}>
-              {g.periods.map(c => (
-                <Row key={c.id} label={c.label.replace(/^.*— /, "")}
-                     tag={c.dueAt ? dateShort(c.dueAt) : `month ${c.payMonth}`} amount={c.amount} />
+              {g.periods.map(per => (
+                <Fold key={per.key} label={per.label} total={per.total} count={per.rows.length}>
+                  {per.rows.map(c => (
+                    <Row key={c.id} label={c.label.replace(/^.*— /, "")}
+                         tag={c.dueAt ? dateShort(c.dueAt) : `month ${c.payMonth}`} amount={c.amount} />
+                  ))}
+                </Fold>
               ))}
             </Group>
           ))}
@@ -573,6 +577,30 @@ function Row({ label, tag, amount, amountLabel }) {
       <span className="crow-a">
         {amountLabel && <i>{amountLabel} </i>}{money(amount)}
       </span>
+    </div>
+  );
+}
+
+/** A collapsible sub-group. Defaults CLOSED.
+ *
+ *  A monthly-billed award has twelve rows per budget period, and three periods is thirty-six lines of
+ *  detail nobody asked for. The TOTAL is what somebody wants — it is what a funder checks — and the
+ *  rows are there when they want to reconcile against something they were sent.
+ *
+ *  The count is on the summary line so a closed fold still says how much it is hiding; a disclosure
+ *  triangle with nothing beside it is a thing people learn not to open.
+ */
+function Fold({ label, total, count, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={"fold" + (open ? " on" : "")}>
+      <button className="fold-h" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <span className="fold-c" aria-hidden="true">{open ? "\u2212" : "+"}</span>
+        <span className="fold-l">{label}</span>
+        <span className="fold-n">{count} {count === 1 ? "entry" : "entries"}</span>
+        <span className="fold-t">{money(total)}</span>
+      </button>
+      {open && <div className="fold-b">{children}</div>}
     </div>
   );
 }

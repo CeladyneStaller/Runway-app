@@ -1399,3 +1399,29 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   .crow{flex-wrap:wrap}
   .crow-a{margin-left:0}
 }
+
+/* ---- collapsible budget periods ---- */
+.fold{border-top:1px solid var(--line-2)}
+.fold:first-child{border-top:none}
+.fold-h{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;
+  padding:8px 0;cursor:pointer;font-family:var(--fb);text-align:left;color:var(--ink)}
+.fold-c{font-family:var(--fm);font-size:12px;color:var(--muted);width:12px;flex:none}
+.fold-l{font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fold-n{font-family:var(--fm);font-size:10.5px;color:var(--muted-2);white-space:nowrap}
+.fold-t{margin-left:auto;font-family:var(--fm);font-size:12px;white-space:nowrap}
+.fold-b{padding:2px 0 6px 22px}
+
+/* ---- the overflow the tables had ----
+   `.crow-l` is a flex row holding a label and a tag. Without `min-width:0` a flex item will not shrink
+   below its content, so a long commitment name pushed the amount off the edge instead of truncating —
+   the row grew rather than the text ellipsing, which is the defect that makes a table look broken. */
+.crow-l{min-width:0;flex:1 1 auto}
+.crow-l > :first-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.crow{min-width:0}
+.cgroup-h b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.panel .tbl td:first-child{max-width:38vw;overflow-wrap:anywhere}
+@media(max-width:640px){
+  .fold-n{display:none}
+  .fold-b{padding-left:12px}
+  .panel .tbl td:first-child{max-width:52vw}
+}

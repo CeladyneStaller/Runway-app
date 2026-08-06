@@ -266,7 +266,15 @@ export function commitmentPressure(doc, rows,
       costShareByGrant.push(g);
     }
     g.total += clean(c.amount);
-    g.periods.push(c);
+    const key = c.period == null ? "ms" : c.period;
+    let per = g.periods.find(x => x.key === key);
+    if (!per) {
+      per = { key, label: c.period == null ? "Milestones" : `Budget period ${c.period + 1}`,
+              total: 0, rows: [] };
+      g.periods.push(per);
+    }
+    per.total += clean(c.amount);
+    per.rows.push(c);
   }
 
   // Drawn facilities, so the tab can SHOW what the exit date is counting. An obligation that moves a
@@ -440,7 +448,7 @@ export function costShareCommitments(doc) {
           const sh = clean(R.per[i]?.costShare);
           if (sh <= 0) return;
           out.push(mk(proj, g, {
-            key: `p${i}`,
+            key: `p${i}`, period: i,
             label: `${name} — cost share, period ${i + 1}`,
             signedMonth: clean(p.start), payMonth: periodEnd(p), amount: Math.round(sh),
             accrualFrom: clean(p.start),
@@ -454,7 +462,7 @@ export function costShareCommitments(doc) {
         const amt = share * (clean(m.payment) / totalPay);
         if (amt <= 0) return;
         out.push(mk(proj, g, {
-          key: `ms${k}`,
+          key: `ms${k}`, period: null,
           label: `${name} — cost share, ${m.label || `milestone ${k + 1}`}`,
           signedMonth: clean((g.periods || [])[0]?.start),
           payMonth: clean(m.month),
@@ -504,7 +512,7 @@ export function costShareCommitments(doc) {
             : Math.round(share * (weights[k] / totalW));
           placed += amount;
           out.push(mk(proj, g, {
-            key: `p${i}m${m}`,
+            key: `p${i}m${m}`, period: i,
             label: `${name} — cost share, ${monthLabel(i, m, start)}`,
             signedMonth: start, payMonth: m, amount, accrualFrom: m,
           }));
@@ -516,7 +524,7 @@ export function costShareCommitments(doc) {
       // bill, advance because that is when the funder checks what the advance was spent on. Being paid
       // up front does not move when the match is PROVEN.
       out.push(mk(proj, g, {
-        key: `p${i}`,
+        key: `p${i}`, period: i,
         label: `${name} — cost share, period ${i + 1}`,
         signedMonth: start, payMonth: end, amount: Math.round(share), accrualFrom: start,
       }));
@@ -528,7 +536,7 @@ export function costShareCommitments(doc) {
 
 const monthLabel = (periodIdx, m, start) => `BP${periodIdx + 1} month ${m - start + 1}`;
 
-function mk(proj, g, { key, label, signedMonth, payMonth, amount, accrualFrom }) {
+function mk(proj, g, { key, label, signedMonth, payMonth, amount, accrualFrom, period = null }) {
   return {
     id: `cs_${proj.id}_${key}`,
     label, signedMonth, payMonth, amount,
@@ -541,6 +549,10 @@ function mk(proj, g, { key, label, signedMonth, payMonth, amount, accrualFrom })
     paidRef: null,
     derived: true,         // change the award, not this
     timing: g.reimburseTiming || "arrears",
+    // WHICH BUDGET PERIOD THIS BELONGS TO. A monthly-billed award has twelve rows inside one period, and
+    // a funder checks the match per period — so the tab groups by it, and a flat list of thirty-six
+    // rows across three periods is one nobody can reconcile against anything they were sent.
+    period,
     // ACCRUES WITH BILLING rather than appearing whole on the due date.
     accrual: { start: accrualFrom, end: payMonth },
   };

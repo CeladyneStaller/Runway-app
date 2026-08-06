@@ -1429,6 +1429,27 @@ then find the marker within it.
 Degrades without `rows`: some render paths mount the view before the projection exists, and a table
 missing its cover column beats a tab that does not render.
 
+## Commitments tab: overflow, period grouping, and collapse
+
+**THE OVERFLOW WAS ONE MISSING `min-width: 0`.** `.crow-l` is a flex row holding a label and a tag, and
+a flex item will not shrink below its content by default — so a long commitment name pushed the amount
+off the edge instead of truncating. **The row grew rather than the text ellipsing**, which is the exact
+defect that makes a table look broken rather than merely tight. Applied to `.crow-l`, `.cgroup-h b` and
+first table cells.
+
+**COST SHARE NOW GROUPS BY BUDGET PERIOD INSIDE EACH AWARD.** `period` had to come back on the rows — I
+dropped it when they gained a billing rhythm, and a monthly-billed award has TWELVE rows inside one
+period. A funder checks the match per period, so a flat list of thirty-six rows across three periods is
+one nobody can reconcile against anything they were sent.
+
+**PERIODS DEFAULT CLOSED**, with the total and an entry count on the summary line. The total is what
+somebody wants — it is what a funder checks — and the rows are there for reconciling. **A disclosure
+triangle with nothing beside it is a thing people learn not to open**, so a closed fold says how much it
+is hiding.
+
+**One test broke and deserved to**: it looked for `.crow` rows without opening the folds, and was
+passing on a layout that no longer exists.
+
 ## Two screens, one figure, two dates — and months counted from the wrong place
 
 **THE DASHBOARD IGNORED THE TOGGLES.** It called `commitmentPressure(doc, rows)` with no options, so it
