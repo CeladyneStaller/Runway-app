@@ -197,15 +197,15 @@ describe("thrusts in the list", () => {
     expect(t).toMatch(/\+ Task under 1\.1/);
   });
 
-  it("EVERYTHING BUT A THRUST IS DRAGGABLE", () => {
-    // Tasks move between milestones now. A thrust stays fixed because it is the top of the tree —
-    // there is nothing to drop it into, and making it draggable would offer a move with no destination.
+  it("EVERY ROW IS DRAGGABLE", () => {
+    // A thrust has no parent to move INTO, but it has a POSITION — and its position is its number, so
+    // reordering thrusts is a real operation rather than a destination-less move.
     const rows = [...draw(three()).container.querySelectorAll(".plan-r")];
     // React writes `draggable={false}` as the string "false", not as an absent attribute.
     const drag = rows.map(r => r.getAttribute("draggable") === "true");
-// thrust, milestone, task, GATE, thrust — the gate is draggable too, which is right: it belongs
-    // to a thrust and can be moved between them.
-    expect(drag).toEqual([false, true, true, true, false]);
+    // ALL FIVE. A thrust is draggable because its position is its number; everything else because it
+    // has a parent it can be moved between.
+    expect(drag).toEqual([true, true, true, true, true]);
   });
 
   it("DRAGGING A MILESTONE INTO A THRUST RENUMBERS IT AND ITS TASK", () => {
@@ -410,5 +410,107 @@ describe("dragging a task", () => {
     fireEvent.dragStart(rows[2]);
     fireEvent.dragOver(rows[3]);
     expect(v.container.querySelectorAll(".plan-r.dropping").length).toBe(1);
+  });
+});
+
+describe("deleting", () => {
+  const built = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "B", month: 3 });
+    return p;
+  };
+  const openRow = (v, i) => fireEvent.click(v.container.querySelectorAll(".plan-r")[i]);
+  // TRIM: the JSX puts the label on its own line, so textContent carries the surrounding whitespace and
+  // an exact === match finds nothing.
+  const del = (v) => [...v.container.querySelectorAll(".plan-ed button")]
+    .find(b => b.textContent.trim() === "Delete");
+
+  it("ASKS BEFORE TAKING A SUBTREE, and counts what goes", () => {
+    // "Are you sure?" is a question somebody can answer wrongly; "it will also remove 1 milestone,
+    // 2 tasks" is one they can answer.
+    const v = draw(built());
+    openRow(v, 0);                                   // the thrust
+    fireEvent.click(del(v));
+    expect(v.container.textContent).toMatch(/Delete this thrust\?/);
+    expect(v.container.textContent).toMatch(/1 milestone, 2 tasks/);
+    expect(v.container.querySelectorAll(".plan-r").length).toBe(4);   // nothing deleted yet
+  });
+
+  it("DOES NOT ASK for a row that takes only itself", () => {
+    // Asking on every delete teaches people to click through the question, and then they click through
+    // it on the thrust.
+    const v = draw(built());
+    openRow(v, 2);                                   // a task
+    fireEvent.click(del(v));
+    expect(v.container.textContent).not.toMatch(/Delete this/);
+    expect(v.container.querySelectorAll(".plan-r").length).toBe(3);   // gone immediately
+  });
+
+  it("Keep leaves everything alone", () => {
+    const v = draw(built());
+    openRow(v, 1);
+    fireEvent.click(del(v));
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => b.textContent.trim() === "Keep"));
+    expect(v.container.querySelectorAll(".plan-r").length).toBe(4);
+    expect(v.container.textContent).not.toMatch(/Delete this/);
+  });
+
+  it("Delete anyway TAKES THE WHOLE SUBTREE", () => {
+    // Removing a thrust took its milestones and left their tasks as orphans nobody created.
+    const v = draw(built());
+    openRow(v, 0);
+    fireEvent.click(del(v));
+    fireEvent.click([...v.container.querySelectorAll("button")].find(b => /Delete anyway/.test(b.textContent)));
+    expect(v.container.querySelectorAll(".plan-r").length).toBe(0);
+  });
+
+  it("names the kind it is about to remove", () => {
+    const v = draw(built());
+    openRow(v, 1);
+    fireEvent.click(del(v));
+    expect(v.container.textContent).toMatch(/Delete this milestone\?/);
+    expect(v.container.textContent).toMatch(/2 tasks/);
+  });
+});
+
+describe("reordering thrusts by drag", () => {
+  const two = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M1", month: 6 });
+    p = addPlanEntry(p, { kind: "thrust", title: "T2" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[2].id, title: "M2", month: 9 });
+    return p;
+  };
+  const titles = (v) => [...v.container.querySelectorAll(".pt")].map(t => t.textContent);
+  const nums = (v) => [...v.container.querySelectorAll(".pn")]
+    .map(n => n.textContent.replace(/^[+\u2212]/, ""));
+
+  it("A THRUST IS DRAGGABLE — its position is its number", () => {
+    const rows = [...draw(two()).container.querySelectorAll(".plan-r")];
+    expect(rows[0].getAttribute("draggable")).toBe("true");
+  });
+
+  it("MOVING ONE RENUMBERS IT AND EVERYTHING BENEATH", () => {
+    // Thrust order IS the numbering, so a thrust dragged above another whose milestones kept 2.x would
+    // print a table where TASK 1 contains 2.1.
+    const v = draw(two());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[2]);          // T2
+    fireEvent.dragOver(rows[0]);           // before T1
+    fireEvent.drop(rows[0]);
+    expect(titles(v)).toEqual(["T2", "M2", "T1", "M1"]);
+    expect(nums(v)).toEqual(["TASK 1", "1.1", "TASK 2", "2.1"]);
+  });
+
+  it("a milestone still does not accept a thrust", () => {
+    const v = draw(two());
+    const rows = [...v.container.querySelectorAll(".plan-r")];
+    fireEvent.dragStart(rows[0]);          // T1
+    fireEvent.dragOver(rows[1]);           // M1
+    expect(v.container.querySelector(".plan-r.dropping")).toBeNull();
   });
 });

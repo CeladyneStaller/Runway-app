@@ -37,6 +37,11 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
   const toggle = (id) => setCollapsed(c => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const allShownCollapsed = (list) => list.length > 0 && list.every(p => collapsed.has(p.id));
   const setMany = (list, on) => setCollapsed(c => { const n = new Set(c); list.forEach(p => on ? n.add(p.id) : n.delete(p.id)); return n; });
+  const planFor = (p) => (
+    <ProjectPlan key={`plan-${p.id}`} project={p}
+                 setProject={fn => setProjects(ps => ps.map(x => (x.id === p.id ? fn(x) : x)))}
+                 startY={startY} startM={startM} />
+  );
   const setP = (id, patch) => setProjects(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p));
   const setGrant = (id, patch) => setProjects(ps => ps.map(p => p.id === id ? { ...p, grant: { ...p.grant, ...patch } } : p));
   const delP = (id) => setProjects(ps => ps.filter(p => p.id !== id));
@@ -159,14 +164,16 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
               ? <FulfillmentCard p={p} po={pos.find(x => x.id === p.poId)} setP={setP} setPById={setP} delP={delP} employees={employees} />
               : p.type === "grant"
               ? <GrantCard p={p} setP={setP} setGrant={setGrant} setType={setType} delP={delP} employees={employees} />
-              : <InternalCard p={p} setProjects={setProjects} setP={setP} setType={setType} delP={delP} />}
-            {/* THE PLAN SITS ON EVERY PROJECT TYPE, not just grants. A subcontract has deliverables
-                and an internal project has targets — the Appendix E shape is where it came from, not
-                where it is limited to. */}
-            <ProjectPlan
-              project={p}
-              setProject={fn => setProjects(ps => ps.map(x => (x.id === p.id ? fn(x) : x)))}
-              startY={startY} startM={startM} />
+              : <InternalCard p={p} setProjects={setProjects} setP={setP} setType={setType} delP={delP}
+                              plan={planFor(p)} />}
+            {/* THE PLAN SITS ON EVERY PROJECT TYPE, not just grants. A subcontract has deliverables and
+                an internal project has targets — the Appendix E shape is where it came from, not where
+                it is limited to.
+
+                ⚠️ AN INTERNAL PROJECT RENDERS IT ITSELF, between the cost block and the chart, so the
+                order reads timeline -> deliverables -> plot. Rendering it here as well would show it
+                twice. */}
+            {p.type !== "internal" && planFor(p)}
           </div>)}
       {shown.length === 0 && (
         <div className="emptytab"><b>{empty[0]}</b><span>{empty[1]}</span></div>
@@ -177,7 +184,7 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
 }
 
 /* ---- internal project (draws internal funds) ---- */
-export function InternalCard({ p, setProjects, setP: setPById, setType, delP }) {
+export function InternalCard({ p, setProjects, setP: setPById, setType, delP, plan = null }) {
   const { START_Y, START_M } = useStart();
   const setP = (patch) => setProjects(ps => ps.map(x => x.id === p.id ? { ...x, ...patch } : x));
   const prospective = p.stage === "prospective";
@@ -255,6 +262,9 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP }) 
         <button className="addbtn ghost" style={{ marginTop: 12 }} onClick={addLine}>{I.plus} Add cost line</button>
       </div>
       {!prospective && <CostShareWrap p={p} />}
+      {/* ORDER: timeline and cost, then what the project is judged on, then the plot. The chart is a
+          READING of the first two, so it belongs after them. */}
+      {plan}
       {!prospective && <ProjectChartWrap p={p} />}
       {!prospective && <ActualsOverride p={p} />}
 

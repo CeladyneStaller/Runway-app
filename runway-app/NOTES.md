@@ -1467,6 +1467,44 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Thrust reordering, and the internal card's section order
+
+**⚠️ REORDERING THRUSTS IS THE ONE OPERATION THAT DELIBERATELY RENUMBERS ROWS IT DID NOT TOUCH.**
+Everywhere else the rule is that a number, once assigned, is held — it may be in a filed document. Here
+it is broken on purpose: **thrust order IS the numbering**, so a thrust dragged above another whose
+milestones kept 2.x would print a table where TASK 1 contains 2.1.
+
+The person dragging a thrust is restructuring the document, not editing a cell — a different intent
+earning a different rule. It is the only place, and a previously filed table will not match afterwards.
+A test asserts the comment saying so is still in the file.
+
+**EVERY ROW IS DRAGGABLE NOW.** A thrust has no parent to move INTO but it has a POSITION, so
+reordering is a real operation rather than a destination-less move. What ACCEPTS a drop is still typed:
+task→milestone, milestone/gate→thrust, thrust→thrust.
+
+**THE INTERNAL CARD RENDERS THE PLAN ITSELF**, between the cost block and the chart — timeline → what
+the project is judged on → the plot, because the chart is a READING of the first two. The generic mount
+now skips internal projects, or it would render twice.
+
+## Delete confirmation — and a real bug it exposed
+
+**⚠️ DELETING A THRUST LEFT ITS GRANDCHILDREN.** `removePlanEntry` removed the entry and its DIRECT
+children, so a thrust took its milestones and LEFT THEIR TASKS — which then rendered as orphans nobody
+had created, from a delete they thought they understood. It now walks the whole subtree.
+
+**Found by asking what the confirmation should say.** Writing "this will also remove N tasks" meant
+counting them, and counting them showed they were not being removed.
+
+**CONFIRM ONLY WHEN SOMETHING ELSE GOES WITH IT.** A task takes only itself and deletes immediately;
+a thrust or milestone asks. **Asking on every delete teaches people to click through the question, and
+then they click through it on the thrust.**
+
+**COUNTED, NOT VAGUE.** "Are you sure?" is a question somebody can answer wrongly. "Delete this thrust?
+It will also remove 1 milestone, 1 go/no-go, 2 tasks" is one they can answer.
+
+**Two test-harness mistakes of mine:** `textContent === "Delete"` missed because the JSX puts the label
+on its own line and the whitespace comes with it; and I asserted 3 rows in a 4-row fixture.
+
 ## Dragging tasks
 
 **EVERYTHING BUT A THRUST IS DRAGGABLE.** A thrust is the top of the tree — there is nothing to drop it

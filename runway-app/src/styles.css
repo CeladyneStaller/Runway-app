@@ -1550,3 +1550,6 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   border-radius:7px;padding:7px 10px;margin:0}
 .plan-r.orphan{background:#FBF3E4;padding-left:26px}
 .plan-r.orphan .pn{color:var(--caution)}
+.plan-confirm{display:inline-flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11.5px;
+  color:var(--danger);background:#FBEAE7;border-radius:7px;padding:6px 10px}
+.plan-confirm b{font-weight:600}

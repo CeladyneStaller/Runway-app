@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { addPlanEntry, updatePlanEntry, removePlanEntry, planRows, nextNumber,
-         quarterOf, appendixERows, planGaps, moveToThrust, moveTask, setPlanKind } from "../../src/engine/plan.js";
+         quarterOf, appendixERows, planGaps, moveToThrust, moveTask, setPlanKind, deleteImpact, reorderThrust } from "../../src/engine/plan.js";
 
 const P = () => ({ id: "pr1", name: "Catalyst scale-up", plan: [] });
 const withPlan = () => {
@@ -350,5 +350,92 @@ describe("moving a task", () => {
   it("ignores anything that is not a task", () => {
     const p = built();
     expect(moveTask(p, id(p, "M1"), id(p, "M2"))).toBe(p);
+  });
+});
+
+describe("deleting", () => {
+  const built = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "B", month: 3 });
+    p = addPlanEntry(p, { kind: "gate", parentId: p.plan[0].id, title: "G", month: 12 });
+    return p;
+  };
+  const id = (p, t) => p.plan.find(e => e.title === t).id;
+
+  it("TAKES THE WHOLE SUBTREE, not one level", () => {
+    // Removing a thrust took its milestones and LEFT THEIR TASKS — which then rendered as orphans
+    // nobody had created, from a delete they thought they understood.
+    const p = built();
+    expect(removePlanEntry(p, id(p, "T1")).plan).toEqual([]);
+  });
+
+  it("a milestone takes its tasks and leaves the thrust", () => {
+    const p = built();
+    const after = removePlanEntry(p, id(p, "M"));
+    expect(after.plan.map(e => e.title)).toEqual(["T1", "G"]);
+  });
+
+  it("COUNTS WHAT IT WOULD TAKE, so the question can be answered", () => {
+    // "Delete this thrust?" is a question somebody can answer wrongly; "this will also remove 1
+    // milestone, 1 go/no-go and 2 tasks" is one they can answer.
+    const p = built();
+    expect(deleteImpact(p, id(p, "T1"))).toMatchObject({ milestones: 1, gates: 1, tasks: 2, total: 4 });
+    expect(deleteImpact(p, id(p, "M"))).toMatchObject({ tasks: 2, total: 2 });
+    expect(deleteImpact(p, id(p, "A"))).toMatchObject({ total: 0 });
+  });
+});
+
+describe("reordering thrusts", () => {
+  const built = () => {
+    let p = { id: "pr", plan: [] };
+    p = addPlanEntry(p, { kind: "thrust", title: "T1" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[0].id, title: "M1", month: 6 });
+    p = addPlanEntry(p, { kind: "task", parentId: p.plan[1].id, title: "A", month: 2 });
+    p = addPlanEntry(p, { kind: "thrust", title: "T2" });
+    p = addPlanEntry(p, { kind: "milestone", parentId: p.plan[3].id, title: "M2", month: 9 });
+    return p;
+  };
+  const id = (p, t) => p.plan.find(e => e.title === t).id;
+
+  it("RENUMBERS THE THRUSTS AND EVERYTHING BENEATH THEM", () => {
+    // Thrust order IS the numbering. A thrust dragged above another whose milestones kept 2.x would
+    // print a table where TASK 1 contains 2.1.
+    const p = built();
+    const after = reorderThrust(p, id(p, "T2"), id(p, "T1"));
+    const by = (t) => after.plan.find(e => e.title === t);
+    expect(by("T2").number).toBe("1");
+    expect(by("M2").number).toBe("1.1");
+    expect(by("T1").number).toBe("2");
+    expect(by("M1").number).toBe("2.1");
+    expect(by("A").number).toBe("2.1.1");
+  });
+
+  it("puts them in the new order for the filed table", () => {
+    const p = built();
+    const after = reorderThrust(p, id(p, "T2"), id(p, "T1"));
+    expect(planRows(after).map(e => e.title)).toEqual(["T2", "M2", "T1", "M1", "A"]);
+  });
+
+  it("moving to the end works", () => {
+    const p = built();
+    const after = reorderThrust(p, id(p, "T1"), null);
+    expect(after.plan.find(e => e.title === "T1").number).toBe("2");
+    expect(after.plan.find(e => e.title === "T2").number).toBe("1");
+  });
+
+  it("IS THE ONE PLACE THAT RENUMBERS ROWS IT DID NOT TOUCH", () => {
+    // Documented deliberately: everywhere else a number, once assigned, is held — because it may be in
+    // a document somebody filed. Reordering thrusts breaks that on purpose, because the person is
+    // restructuring rather than editing a cell.
+    const src = require("node:fs").readFileSync("src/engine/plan.js", "utf8");
+    expect(src).toMatch(/DELIBERATELY RENUMBERS ROWS IT DID NOT TOUCH/);
+  });
+
+  it("ignores anything that is not a thrust", () => {
+    const p = built();
+    expect(reorderThrust(p, id(p, "M1"), id(p, "T1"))).toBe(p);
   });
 });

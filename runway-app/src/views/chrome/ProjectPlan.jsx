@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { planRows, appendixERows, planGaps, addPlanEntry, updatePlanEntry,
-         removePlanEntry, moveToThrust, moveTask, setPlanKind, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
+         removePlanEntry, moveToThrust, moveTask, reorderThrust, setPlanKind, deleteImpact, quarterOf, GATE_OUTCOMES } from "../../engine/plan";
 import { monthLabel } from "../../engine/time";
 import { PlanIOModal } from "./PlanIOModal";
 
@@ -129,16 +129,19 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
           // ⚠️ AN ORPHAN IS MARKED, not hidden. A task with no milestone still prints in the filed
           // table under whatever precedes it, so it has to be findable and obviously wrong.
           const orphan = e.kind === "task" && !(project?.plan || []).some(x => x.id === e.parentId);
-          // ⚠️ EVERYTHING BUT A THRUST IS DRAGGABLE NOW. A thrust stays fixed because it is the top of
-          // the tree — there is nothing to drop it into, and making it draggable would offer a move
-          // with no destination.
-          const canDrag = canWrite && e.kind !== "thrust";
+          // EVERY ROW IS DRAGGABLE. A thrust has no parent to move into, but it has a POSITION — and
+          // its position is its number, so reordering thrusts is a real operation rather than a
+          // destination-less move.
+          const canDrag = canWrite;
 
           // WHAT ACCEPTS A DROP DEPENDS ON WHAT IS BEING DRAGGED. A task goes into a milestone; a
           // milestone or gate goes into a thrust. Letting anything land anywhere would create shapes
           // the form cannot print — a task under a thrust has no number, and a milestone inside a
           // milestone has no meaning.
           const dragged = drag ? (project?.plan || []).find(x => x.id === drag) : null;
+          // A task lands in a milestone; a milestone or gate lands in a thrust; a THRUST lands before
+          // another thrust. Same rule as before with one more case — and still nothing lands somewhere
+          // the form cannot print.
           const accepts = !!dragged && dragged.id !== e.id && (
             dragged.kind === "task" ? e.kind === "milestone" : e.kind === "thrust");
           const cls = "plan-r"
@@ -160,8 +163,9 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
                    onDragLeave={accepts ? (() => setOver(null)) : undefined}
                    onDrop={accepts ? (ev => {
                      ev.preventDefault();
-                     setProject(p2 => (dragged.kind === "task"
-                       ? moveTask(p2, drag, e.id)
+                     setProject(p2 => (
+                       dragged.kind === "thrust" ? reorderThrust(p2, drag, e.id)
+                       : dragged.kind === "task" ? moveTask(p2, drag, e.id)
                        : moveToThrust(p2, drag, e.id)));
                      setDrag(null); setOver(null);
                    }) : undefined}
@@ -200,6 +204,7 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
                 </span>
               </div>
               {open && <Editor entry={e} set={set} setKind={setKind} kindMsg={kindMsg} canWrite={canWrite}
+                               impact={deleteImpact(project, e.id)}
                                startY={startY} startM={startM}
                                onAddSibling={() => add("task", e.kind === "task" ? e.parentId : e.id)}
                                onDelete={() => { setOpenId(null); setProject(p => removePlanEntry(p, e.id)); }} />}
@@ -236,7 +241,9 @@ export function ProjectPlan({ project, setProject, startY, startM, canWrite = tr
   );
 }
 
-function Editor({ entry: e, set, setKind, kindMsg, canWrite, startY, startM, onAddSibling, onDelete }) {
+function Editor({ entry: e, set, setKind, kindMsg, canWrite, impact = { total: 0 },
+                  startY, startM, onAddSibling, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
   const at = monthLabel(startY, startM, e.month || 0);
   return (
     <div className={"plan-ed" + (e.kind === "gate" ? " gate" : "") + (e.kind === "task" ? " notarget" : "")}>
@@ -301,7 +308,27 @@ function Editor({ entry: e, set, setKind, kindMsg, canWrite, startY, startM, onA
           {/* TASKS ARRIVE IN GROUPS. Closing the editor and hunting for the right "+" between each one
               is the difference between entering eight and entering three and giving up. */}
           <button className="linkbtn" onClick={onAddSibling}>Add another task here</button>
-          <button className="linkbtn danger" onClick={onDelete}>Delete</button>
+
+          {/* ⚠️ CONFIRM ONLY WHEN SOMETHING ELSE GOES WITH IT. A thrust or milestone takes its whole
+              subtree; a task takes only itself. Asking on every delete teaches people to click through
+              the question, and then they click through it on the thrust. */}
+          {!confirming ? (
+            <button className="linkbtn danger"
+                    onClick={() => (impact.total > 0 ? setConfirming(true) : onDelete())}>
+              Delete
+            </button>
+          ) : (
+            <span className="plan-confirm">
+              {/* COUNTED, NOT VAGUE. "Are you sure?" is a question somebody can answer wrongly. */}
+              <b>Delete this {e.kind === "thrust" ? "thrust" : e.kind}?</b> It will also remove{" "}
+              {[impact.milestones && `${impact.milestones} milestone${impact.milestones === 1 ? "" : "s"}`,
+                impact.gates && `${impact.gates} go/no-go`,
+                impact.tasks && `${impact.tasks} task${impact.tasks === 1 ? "" : "s"}`]
+                .filter(Boolean).join(", ")}.
+              <button className="linkbtn danger" onClick={onDelete}>Delete anyway</button>
+              <button className="linkbtn" onClick={() => setConfirming(false)}>Keep</button>
+            </span>
+          )}
         </div>
       )}
     </div>

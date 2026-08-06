@@ -174,7 +174,14 @@ export function updatePlanEntry(project, id, patch) {
  */
 export function removePlanEntry(project, id) {
   const all = project?.plan || [];
-  const gone = new Set([id, ...all.filter(e => e?.parentId === id).map(e => e.id)]);
+  // ⚠️ THE WHOLE SUBTREE, not one level. Removing a thrust took its milestones and LEFT THEIR TASKS —
+  // which then rendered as orphans nobody had created, from a delete they thought they understood.
+  const gone = new Set([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const e of all) if (e && !gone.has(e.id) && gone.has(e.parentId)) { gone.add(e.id); grew = true; }
+  }
   return { ...project, plan: all.filter(e => !gone.has(e.id)) };
 }
 
@@ -291,5 +298,83 @@ export function moveTask(project, taskId, milestoneId) {
   return {
     ...project,
     plan: all.map(e => (e.id === taskId ? { ...e, parentId: m ? m.id : null, number } : e)),
+  };
+}
+
+/** What a delete would take with it. Used to ask before doing it.
+ *
+ *  COUNTED, NOT GUESSED. "Delete this thrust?" is a question somebody can answer wrongly; "this will
+ *  also remove 2 milestones and 5 tasks" is one they can answer.
+ */
+export function deleteImpact(project, id) {
+  const all = project?.plan || [];
+  const gone = new Set([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const e of all) if (e && !gone.has(e.id) && gone.has(e.parentId)) { gone.add(e.id); grew = true; }
+  }
+  const taken = all.filter(e => gone.has(e.id) && e.id !== id);
+  return {
+    milestones: taken.filter(e => e.kind === "milestone").length,
+    gates: taken.filter(e => e.kind === "gate").length,
+    tasks: taken.filter(e => e.kind === "task").length,
+    total: taken.length,
+  };
+}
+
+/** Move a thrust to a new position and renumber everything.
+ *
+ *  ⚠️ THIS IS THE ONE OPERATION THAT DELIBERATELY RENUMBERS ROWS IT DID NOT TOUCH. Everywhere else the
+ *  rule is that a number, once assigned, is held — because it may be in a document somebody filed.
+ *  Reordering thrusts breaks that rule ON PURPOSE: thrust order IS the numbering, so a thrust dragged
+ *  above another whose milestones kept 2.x would print a table where TASK 1 contains 2.1.
+ *
+ *  The person dragging a thrust is restructuring the document, not editing a cell. That is a different
+ *  intent and it earns a different rule — but it is the only place, and it is worth knowing that a
+ *  previously filed table will not match afterwards.
+ */
+export function reorderThrust(project, thrustId, beforeId) {
+  const all = project?.plan || [];
+  const thrusts = all.filter(isThrust);
+  const from = thrusts.findIndex(t => t.id === thrustId);
+  if (from < 0) return project;
+
+  const moved = thrusts[from];
+  const rest = thrusts.filter(t => t.id !== thrustId);
+  const at = beforeId ? rest.findIndex(t => t.id === beforeId) : rest.length;
+  rest.splice(at < 0 ? rest.length : at, 0, moved);
+
+  // Renumber every thrust from its new position, then everything beneath it.
+  const num = new Map();
+  rest.forEach((t, i) => num.set(t.id, String(i + 1)));
+
+  const plan = all.map(e => {
+    if (isThrust(e)) return { ...e, number: num.get(e.id) };
+    return e;
+  });
+  // Milestones take their thrust's number and their own position within it; tasks follow their
+  // milestone. Gates stay unnumbered, as the form leaves that cell blank.
+  const out = plan.map(e => ({ ...e }));
+  for (const t of rest) {
+    let mi = 0;
+    for (const m of out.filter(x => x.kind === "milestone" && x.parentId === t.id)) {
+      mi += 1;
+      m.number = `${num.get(t.id)}.${mi}`;
+      let ti = 0;
+      for (const k of out.filter(x => x.kind === "task" && x.parentId === m.id)) {
+        ti += 1;
+        k.number = `${m.number}.${ti}`;
+      }
+    }
+  }
+  // ORDER IN THE ARRAY FOLLOWS THE NUMBERS, so `planRows` walks thrusts in their new sequence.
+  const rank = new Map(rest.map((t, i) => [t.id, i]));
+  const thrustOf = (e) => isThrust(e) ? e.id
+    : e.kind === "task" ? (out.find(x => x.id === e.parentId)?.parentId ?? null)
+    : (e.parentId ?? null);
+  return {
+    ...project,
+    plan: out.slice().sort((a, b) => (rank.get(thrustOf(a)) ?? 99) - (rank.get(thrustOf(b)) ?? 99)),
   };
 }
