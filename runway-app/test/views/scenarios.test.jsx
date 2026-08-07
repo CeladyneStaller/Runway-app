@@ -154,15 +154,27 @@ describe("building a change from the intent, not the schema", () => {
     expect(get().scenarios[0].patches[0]).toMatchObject({ collection: "saas", field: "churnPct", value: 12 });
   });
 
-  it("keeps cash and the revenue toggles reachable through 'Something else'", () => {
-    // They had no intent tile; dropping them would be losing capability to a redesign.
+  it("REACHES CASH DIRECTLY — it has a tile now, not an escape hatch", () => {
+    // The old builder hid cash and the confidence toggles behind "Something else", where somebody had
+    // to pick a collection and a field by name. They are the two most common things anybody changes in
+    // a scenario, so they are tiles — a purity that sent people hunting would have cost more than it
+    // saved.
     const { container, get } = scenariosView(demoDoc());
     fireEvent.click(btn(container, /New scenario/));
-    fireEvent.click(tile(container, /Operating costs/));
-    fireEvent.change(sel(container, "Where"), { target: { value: "field:cash" } });
-    fireEvent.change(container.querySelector('[aria-label="Cash on hand"]'), { target: { value: "900000" } });
+    fireEvent.click(tile(container, /Cash on hand/));
+    fireEvent.change(fld(container, "Cash on hand"), { target: { value: "250000" } });
     fireEvent.click(btn(container, /Add this change/));
-    expect(get().scenarios[0].patches[0]).toMatchObject({ kind: "field", path: "cash", value: 900000 });
+    expect(get().scenarios[0].patches[0]).toMatchObject({ kind: "field", path: "cash", value: 250000 });
+  });
+
+  it("and the confidence toggles the same way", () => {
+    const { container, get } = scenariosView(demoDoc());
+    fireEvent.click(btn(container, /New scenario/));
+    fireEvent.click(tile(container, /Confidence/));
+    const box = container.querySelector('.scn-fields input[type="checkbox"]');
+    fireEvent.click(box);
+    fireEvent.click(btn(container, /Add this change/));
+    expect(get().scenarios[0].patches[0]).toMatchObject({ kind: "toggle" });
   });
 
   it("shows the runway moving as you build — the old editor was blind until you closed it", () => {

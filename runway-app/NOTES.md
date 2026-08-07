@@ -1528,7 +1528,24 @@ The old form listed **committed first**, not chronologically. Somebody adding a 
 usually asking "what if this lands" — the default the select opens on should be the one that moves the
 number, not the one that moves it least.
 
-**STILL FAILING: 2 tests in `scenarios.test.jsx`**, all in the fundraise and "something else" blocks.
+### The last three
+
+**The speculative warning was lost with the old form.** A planned or raising round counts as
+speculative, and speculative is OFF by default — so a scenario adding one shows no change and reads as
+a broken feature rather than as a correct answer about money that might not arrive. Restored as a
+warning, not a block: "what if we raise and it stays speculative" is a legitimate question.
+
+**Cash and confidence had no `fields`,** so their tiles selected and then offered nothing — a dead end
+where the two most common changes live. The form renders from `factor.fields`; a factor without them
+renders nothing.
+
+**And they have no `collection`,** so the "which one" gate had to stop applying to them.
+
+**DONE: all 35 scenario view tests pass.** Every one of the eleven failures was a real regression — a
+rule the dedicated form carried and the generic builder lost — except the last two, which were tests
+routing through an escape hatch that no longer needs to exist.
+
+**ALL 35 PASSING**, all in the fundraise and "something else" blocks.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 

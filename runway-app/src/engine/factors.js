@@ -121,10 +121,14 @@ export const FACTORS = [
   },
   // NOT BUCKETS — the opening balance and a filter. Here because they are the two most common things
   // anybody changes, and sending somebody elsewhere to change them would be a purity that costs use.
-  { id: "cash", name: "Cash on hand", blurb: "The opening balance", field: "cash", kind: "field" },
+  // ⚠️ THESE NEED `fields` TOO. The form renders from `factor.fields`, so a factor without them showed
+  // a tile that selected and then offered nothing — a dead end where the two most common changes live.
+  { id: "cash", name: "Cash on hand", blurb: "The opening balance", field: "cash", kind: "field",
+    fields: [{ k: "cash", t: "number", l: "Cash on hand" }] },
   { id: "conf", name: "Confidence", blurb: "Which tiers count", kind: "toggle",
-    toggles: [["committed", "Committed"], ["expected", "Expected"],
-              ["speculative", "Speculative"], ["financing", "Financing"]] },
+    fields: [{ k: "committed", t: "bool", l: "Committed" }, { k: "expected", t: "bool", l: "Expected" },
+             { k: "speculative", t: "bool", l: "Speculative" },
+             { k: "financing", t: "bool", l: "Financing" }] },
 ];
 
 export const factorById = (id) => FACTORS.find(f => f.id === id) || null;

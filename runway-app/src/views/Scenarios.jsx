@@ -207,7 +207,8 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
               In EDIT mode every field shows what it was — a scenario is a diff, and a form that shows
               only the new value makes you remember the old one, which is the moment people talk
               themselves into a change they did not mean. */}
-          {mode !== "del" && (factor.fields || []).length > 0 && (mode === "add" || targetId) && (
+          {mode !== "del" && (factor.fields || []).length > 0
+            && (mode === "add" || targetId || !factor.collection) && (
             <div className="scn-fields">
               {factor.fields.map(f => {
                 const was = mode === "edit"
@@ -234,6 +235,10 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
                         <option value="expected">Expected</option>
                         <option value="speculative">Speculative</option>
                       </select>
+                    ) : f.t === "bool" ? (
+                      <input type="checkbox" aria-label={f.l}
+                             checked={fv[f.k] === true}
+                             onChange={e => setFv(v => ({ ...v, [f.k]: e.target.checked }))} />
                     ) : (
                       // THE OLD FORM'S ARIA NAMES were "Round name" / "Round amount". Keeping the
                       // factor's own visible label while matching the established aria name means
@@ -250,6 +255,19 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
                 );
               })}
             </div>
+          )}
+
+          {/* ⚠️ A PLANNED OR RAISING ROUND COUNTS AS SPECULATIVE, and speculative is off by default —
+              so a scenario adding one shows NO CHANGE and reads as a broken feature rather than as a
+              correct answer about money that might not arrive. The old fundraise form said this and it
+              was lost with the form. It is a warning, not a block: "what if we raise and it stays
+              speculative" is a legitimate question. */}
+          {factor.collection === "rounds" && mode === "add"
+            && (fv.status === "planning" || fv.status === "raising") && (
+            <p className="scn-warn">
+              A round that is only planned or still being raised counts as <b>speculative</b>, and
+              speculative revenue is switched off — so this will show no change until you turn it on.
+            </p>
           )}
 
           <button className="addbtn scn-addch"
