@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { staleness, stalenessText, withFingerprints } from "../engine/scenario";
+import { FACTORS, itemsOf, dateRemovable, buildPatches } from "../engine/factors";
 import { applyScenario, explainPatch, emptyScenario, duplicateScenario, scenarioImpact,
          scenarioRound, PATCH_SCHEMA, TOP_LEVEL_FIELDS, TOGGLE_FIELDS, itemLabel } from "../engine/scenario";
 import { buildProjection, zeroInfo } from "../engine/projection";
@@ -41,7 +42,18 @@ const MONTHS = Array.from({ length: HORIZON + 1 }, (_, i) => i);
 // both calls read the same `editScn` snapshot, so the second silently overwrites the first — which is
 // exactly what a fundraise needs to do (the round, plus switching financing on).
 function ChangePicker({ baseDoc, ctx, onAdd }) {
-  const [intent, setIntent] = useState(INTENTS[0]);
+  const [factor, setFactor] = useState(null);
+  // DERIVED, NOT DUPLICATED. The form below still speaks `intent`; mapping the chosen factor onto the
+  // nearest one keeps it working while the tiles drive the choice. The map is temporary and named so.
+  const intent = useMemo(() => {
+    const byFactor = { pay: "delay", cost: "other", proj: "other", sales: "other",
+                       cap: "fund", saas: "subs", idx: "other", cash: "other", conf: "other" };
+    return INTENTS.find(i => i.id === (byFactor[factor?.id] || "other")) || INTENTS[0];
+  }, [factor]);
+  const [mode, setMode] = useState("add");        // add | edit | del
+  const [targetId, setTargetId] = useState(null);
+  const [until, setUntil] = useState(null);       // null = remove entirely
+  const [fv, setFv] = useState({});               // the factor form's values
   const [itemId, setItemId] = useState("");
   const [value, setValue] = useState("");
   // "Something else" keeps the original generic path: pick a collection and a field by hand.
@@ -60,7 +72,8 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
   const current = items.find(x => x.id === itemId);
 
   const pick = (i) => {
-    setIntent(i); setItemId(""); setValue(""); setOtherColl(""); setOtherField("");
+    //  is derived from the factor now, so  only clears the form it fed.
+    void i; setItemId(""); setValue(""); setOtherColl(""); setOtherField("");
     setRound({ name: "", amount: "", closeMonth: "0", kind: "safe", status: "committed" });
   };
   const setR = (patch) => setRound(r => ({ ...r, ...patch }));
@@ -116,127 +129,145 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
 
   return (
     <div className="scn-picker">
+      {/* ⚠️ THE TILES ARE THE EIGHT BUCKETS, not seven hardcoded intents. The old list could express
+          "delay a hire" and could not express the eighth thing anybody wanted; the factors are the
+          vocabulary somebody already has, so a scenario built from them is expressed in the same terms
+          as the number it moves. */}
       <div className="scn-intents">
-        {INTENTS.map(i => (
-          <button key={i.id} className={"scn-intent" + (i.id === intent.id ? " on" : "")} onClick={() => pick(i)}>
-            <b>{i.title}</b><span>{i.blurb}</span>
+        {FACTORS.map(f => {
+          const n = f.count ? f.count(baseDoc) : null;
+          return (
+            <button key={f.id} disabled={f.disabled}
+                    className={"scn-intent" + (f.id === factor?.id ? " on" : "") + (f.disabled ? " off" : "")}
+                    title={f.disabled ? f.why : undefined}
+                    onClick={() => { setFactor(f); setMode("add"); setTargetId(null); setFv({}); setUntil(null); }}>
+              <b>{f.name}</b><span>{f.blurb}</span>
+              <em>{f.disabled ? "derived — not editable"
+                   : n == null ? ""
+                   : n === 0 ? "none yet" : `${n} ${n === 1 ? "item" : "items"}`}</em>
+            </button>
+          );
+        })}
+      </div>
+
+      {factor && !factor.disabled && (
+        <div className="scn-mode">
+          {/* ADD / CHANGE / REMOVE. "Change existing" is the one that was missing: moving a round from
+              Planning to Commitment letter is the scenario founders run most and used to take four
+              steps. */}
+          <div className="seg3">
+            {[["add", "Add new"], ["edit", "Change existing"], ["del", "Remove existing"]].map(([k, l]) => (
+              <button key={k} className={mode === k ? "on " + k : ""}
+                      disabled={k !== "add" && !itemsOf(factor, baseDoc).length}
+                      onClick={() => { setMode(k); setTargetId(null); setFv({}); setUntil(null); }}>{l}</button>
+            ))}
+          </div>
+          {mode !== "add" && (
+            <label className="fl">Which one
+              <select className="sel" aria-label="Which one" value={targetId || ""}
+                      onChange={e => setTargetId(e.target.value || null)}>
+                <option value="">— choose —</option>
+                {itemsOf(factor, baseDoc).map(it => (
+                  <option key={it.id} value={it.id}>{it.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {mode === "del" && targetId && (() => {
+            const item = itemsOf(factor, baseDoc).find(x => x.id === targetId)?.raw;
+            const dr = dateRemovable(factor, item || {});
+            return (
+              <>
+                {/* ⚠️ REMOVAL FROM A DATE IS A FAILED GO/NO-GO EXPRESSED BY HAND. The plan holds gates
+                    with a stated consequence; a scenario that stops an award at month 14 produces the
+                    same numbers without connecting anything. The founder types the date rather than the
+                    app inferring it, which is the whole argument for the isolation. */}
+                <label className="fl">Remove
+                  <select className="sel" aria-label="Remove" value={until == null ? "all" : "date"}
+                          onChange={e => setUntil(e.target.value === "all" ? null : 12)}>
+                    <option value="all">entirely — as if it never existed</option>
+                    {dr.ok && <option value="date">from a date — it stops there</option>}
+                  </select>
+                  {!dr.ok && <span className="meta">{dr.why}</span>}
+                </label>
+                {until != null && (
+                  <label className="fl">Stops after
+                    <input className="inp" aria-label="Stops after" type="number" value={until}
+                           onChange={e => setUntil(+e.target.value || 0)} />
+                    <span className="meta">→ {monthLabel(ctx.START_Y, ctx.START_M, until)}</span>
+                  </label>
+                )}
+                {factor.warn && <p className="scn-warn">{factor.warn}</p>}
+              </>
+            );
+          })()}
+
+          {/* ⚠️ THE FACTOR'S OWN FIELDS, not a generic collection/field pair. One registry drives this
+              form and the real editor, so a scenario cannot express something the editor cannot open.
+              In EDIT mode every field shows what it was — a scenario is a diff, and a form that shows
+              only the new value makes you remember the old one, which is the moment people talk
+              themselves into a change they did not mean. */}
+          {mode !== "del" && (factor.fields || []).length > 0 && (mode === "add" || targetId) && (
+            <div className="scn-fields">
+              {factor.fields.map(f => {
+                const was = mode === "edit"
+                  ? itemsOf(factor, baseDoc).find(x => x.id === targetId)?.raw?.[f.k] : undefined;
+                return (
+                  <label key={f.k} className="fl">{f.l}
+                    {f.t === "select" ? (
+                      <select className="sel" value={fv[f.k] ?? ""}
+                              aria-label={factor.collection === "rounds" && !/^close/i.test(f.l)
+                                ? "Round " + f.l.toLowerCase() : f.l}
+                              onChange={e => setFv(v => ({ ...v, [f.k]: e.target.value }))}>
+                        {/* ⚠️ NO PLACEHOLDER IN ADD MODE. In EDIT a blank means "leave this alone" and
+                            is the correct default; in ADD it is a value nobody wants and the first real
+                            option is the sensible one. A blank first entry also made the option list
+                            differ from what it offers, which is what the test caught. */}
+                        {mode === "edit" && <option value="">— unchanged —</option>}
+                        {((mode === "edit" && f.editOpts) || f.opts).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                    ) : f.t === "tier" ? (
+                      <select className="sel" aria-label={f.l} value={fv[f.k] ?? ""}
+                              onChange={e => setFv(v => ({ ...v, [f.k]: e.target.value }))}>
+                        {mode === "edit" && <option value="">— unchanged —</option>}
+                        <option value="committed">Committed</option>
+                        <option value="expected">Expected</option>
+                        <option value="speculative">Speculative</option>
+                      </select>
+                    ) : (
+                      // THE OLD FORM'S ARIA NAMES were "Round name" / "Round amount". Keeping the
+                      // factor's own visible label while matching the established aria name means
+                      // neither a screen-reader user nor a test has to relearn the form.
+                      <input className="inp"
+                             aria-label={factor.collection === "rounds" && !/^close/i.test(f.l)
+                               ? "Round " + f.l.toLowerCase() : f.l}
+                             type={f.t === "text" ? "text" : "number"}
+                             value={fv[f.k] ?? ""} placeholder={mode === "edit" ? "unchanged" : ""}
+                             onChange={e => setFv(v => ({ ...v, [f.k]: e.target.value }))} />
+                    )}
+                    {was !== undefined && was !== "" && <span className="meta">was: {String(was)}</span>}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <button className="addbtn scn-addch"
+                  disabled={buildPatches(factor, { mode, targetId, values: fv, until }, baseDoc).length === 0}
+                  onClick={() => {
+                    onAdd(buildPatches(factor, { mode, targetId, values: fv, until }, baseDoc));
+                    setFv({}); setTargetId(null); setUntil(null);
+                  }}>
+            Add this change
           </button>
-        ))}
-      </div>
-
-      <div className="scn-form">
-        {intent.addRound && (
-          <>
-            <label className="scn-f"><span>Name</span>
-              <input className="inp" style={{ textAlign: "left", width: 140 }} value={round.name}
-                     aria-label="Round name" placeholder="Seed"
-                     onChange={e => setR({ name: e.target.value })} />
-            </label>
-            <label className="scn-f"><span>Amount</span>
-              <input className="inp num" type="number" value={round.amount} aria-label="Round amount"
-                     placeholder="1500000" onChange={e => setR({ amount: e.target.value })} />
-            </label>
-            <label className="scn-f"><span>Closes</span>
-              <select className="sel" value={round.closeMonth} aria-label="Close month"
-                      onChange={e => setR({ closeMonth: e.target.value })}>
-                {MONTHS.map(m => <option key={m} value={m}>{monthLabel(ctx.START_Y, ctx.START_M, m)}</option>)}
-              </select>
-            </label>
-            <label className="scn-f"><span>Type</span>
-              {/* Debt is absent on purpose — without a rate, term and fees it models as money that
-                  arrives and is never repaid, which overstates the runway. It lives on Investment. */}
-              <select className="sel" value={round.kind} aria-label="Round type"
-                      onChange={e => setR({ kind: e.target.value })}>
-                <option value="safe">SAFE</option>
-                <option value="equity">Priced equity</option>
-                <option value="note">Convertible note</option>
-              </select>
-            </label>
-            <label className="scn-f"><span>Assume it</span>
-              {/* "Closed" is deliberately absent: a closed round's money is already counted in
-                  `cash`, so compileInstrument emits no line for it and the scenario would do nothing. */}
-              <select className="sel" value={round.status} aria-label="Round status"
-                      onChange={e => setR({ status: e.target.value })}>
-                <option value="committed">Is committed</option>
-                <option value="raising">Is being raised</option>
-                <option value="planning">Is only planned</option>
-              </select>
-            </label>
-          </>
-        )}
-
-        {intent.other && (
-          <>
-            <label className="scn-f"><span>Where</span>
-              <select className="sel" value={otherColl} aria-label="Where"
-                      onChange={e => { setOtherColl(e.target.value); setOtherField(""); setItemId(""); }}>
-                <option value="" disabled>Choose…</option>
-                <optgroup label="Company">
-                  {Object.entries(TOP_LEVEL_FIELDS).map(([k, d]) => <option key={k} value={"field:" + k}>{d.label}</option>)}
-                  <option value="toggle">Revenue toggle</option>
-                </optgroup>
-                <optgroup label="Items">
-                  {Object.entries(PATCH_SCHEMA).map(([k, d]) => <option key={k} value={k}>{d.label}</option>)}
-                </optgroup>
-              </select>
-            </label>
-            {special === "toggle" && (
-              <label className="scn-f"><span>Which</span>
-                <select className="sel" value={otherField} onChange={e => { setOtherField(e.target.value); setValue(""); }} aria-label="Which toggle">
-                  <option value="" disabled>Choose…</option>
-                  {TOGGLE_FIELDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </label>
-            )}
-            {special === "toggle" && otherField && (
-              <label className="scn-f"><span>Set to</span>
-                <select className="sel" value={value} onChange={e => setValue(e.target.value)} aria-label="On or off">
-                  <option value="" disabled>Choose…</option><option value="on">On</option><option value="off">Off</option>
-                </select>
-              </label>
-            )}
-            {special === "field:cash" && (
-              <label className="scn-f"><span>Cash on hand</span>
-                <input className="inp num" type="number" value={value} aria-label="Cash on hand"
-                       onChange={e => setValue(e.target.value)} />
-              </label>
-            )}
-            {otherColl && !special && (
-              <label className="scn-f"><span>Change what</span>
-                <select className="sel" value={otherField} aria-label="Change what"
-                        onChange={e => { setOtherField(e.target.value); setValue(""); }}>
-                  <option value="" disabled>Choose…</option>
-                  {Object.entries(PATCH_SCHEMA[otherColl]?.fields || {}).map(([k, d]) => <option key={k} value={k}>{d.label}</option>)}
-                </select>
-              </label>
-            )}
-          </>
-        )}
-
-        {coll && (
-          <label className="scn-f"><span>Which</span>
-            <select className="sel" value={itemId} onChange={e => setItemId(e.target.value)} aria-label="Which one">
-              <option value="" disabled>Choose…</option>
-              {items.map(it => <option key={it.id} value={it.id}>{itemLabel(it)}</option>)}
-            </select>
-          </label>
-        )}
-
-        {!intent.remove && def && <label className="scn-f"><span>{def.label}</span>{valueField()}</label>}
-
-        {/* The old value, in place, so a change is a decision rather than a bare fact. */}
-        {current && field && !intent.remove && (
-          <span className="scn-was">was {explainPatch({ kind: "item", collection: coll, id: itemId, field, value: current[field] }, baseDoc, ctx).text.replace(`${itemLabel(current)} `, "")}</span>
-        )}
-
-        <button className="addbtn scn-addch" disabled={!ready} onClick={add}>Add this change</button>
-      </div>
-
-      {intent.addRound && (round.status === "planning" || round.status === "raising") && (
-        <div className="scn-none">A round that is only planned or still being raised counts as
-          <b> speculative</b>, which is switched off under the default revenue toggles — so this
-          scenario will show no change until you turn speculative revenue on.</div>
+        </div>
       )}
+
+      {/* ⚠️ THE OLD INTENT FORM IS GONE. It rendered ALONGSIDE the factor form for the same choice —
+          two forms for one intent, which is why the selectors resolved unpredictably and why three
+          rounds of adjusting test assertions got nowhere. `buildPatches` covers every case it did,
+          including the two it could not: editing an existing item field by field, and removing one
+          from a date. */}
 
       {items.length === 0 && coll && (
         <div className="scn-none">Nothing to change here yet — add {PATCH_SCHEMA[coll].label.toLowerCase()} on its own tab first.</div>

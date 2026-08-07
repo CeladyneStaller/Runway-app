@@ -1467,6 +1467,49 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Scenarios rebuilt on the eight factors — in progress
+
+**⚠️ THE TILES REPLACED SEVEN HARDCODED INTENTS.** The old builder asked somebody to name a MECHANISM
+("add an item to `rounds`") or picked from seven fixed questions that could not express the eighth thing
+anybody wanted. The factors are the buckets the runway is made of, so a scenario built from them is
+expressed in the same terms as the number it moves.
+
+**`factors.js` — one registry driving the scenario form**, so it cannot express something the real
+editor cannot open. Add / Change existing / Remove existing, with removal carrying an optional DATE.
+
+**⚠️ REMOVAL FROM A DATE IS AN EDIT, NOT A DELETION** — it sets the item's end month, so everything it
+produced up to then survives. A deletion that wiped the accrued cost share would flatter every scenario
+built this way, in the direction founders least need it. This is a failed go/no-go typed by hand, which
+is what keeps the milestone plan isolated.
+
+### Five real regressions found by deleting the old form
+
+Each was behaviour the dedicated fundraise form carried and the generic builder lost:
+
+1. **⚠️ `{ kind: "item", op: "add" }` MATCHED NOTHING.** `applyPatch` dispatches on `kind === "add"` and
+   `kind === "remove"` — every scenario built by the new tiles would have applied NOTHING and shown an
+   unchanged runway, looking like the feature simply did not work.
+2. **A round needs `scenarioRound`**, which fills `capType`, `confAuto` and `goals`. A generic object
+   compiles to no instrument at all.
+3. **The financing toggle.** Financing is a separate axis defaulting to off, so a scenario adding a
+   round showed no change whatsoever at any status.
+4. **Debt is excluded when adding.** A facility without terms is money that arrives and never leaves.
+5. **"Closed" is excluded when adding** but kept when EDITING, where it is the whole point.
+
+### Three test-harness bugs
+
+**Factor names collide with nav-tab labels** — `btn(c, /Payroll/)` finds the TAB, clicks the rail, and
+leaves the builder untouched. The old intent names could not collide.
+
+**No `afterEach(cleanup)`**, so stale renders matched selectors. Same leak as the plan-io tests.
+
+**The form had no `aria-label`s** — not merely a test affordance: a select labelled only by adjacent
+text is announced as "combo box".
+
+**STILL FAILING: 6 tests in `scenarios.test.jsx`**, all in the fundraise and "something else" blocks.
+Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
+should be treated the same way.
+
 ## Scenario staleness — flagged in all three places
 
 **⚠️ THE FINGERPRINT IS STORED; THE FLAG IS DERIVED.** A fingerprint records what a patch READ at build

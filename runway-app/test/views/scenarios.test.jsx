@@ -1,9 +1,15 @@
 // Scenarios view, rebuilt around the decision rather than the curve. The engine (applyScenario,
 // scenarioImpact, explainPatch) is tested separately; this covers the view wiring — the delta strip,
 // intent-first changes, live effect, duplication, and applying to the real plan.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import React, { useState } from "react";
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, cleanup } from "@testing-library/react";
+
+// ⚠️ NO CLEANUP BETWEEN TESTS. Each `scenariosView` renders a fresh app, but the previous one stayed in
+// the document — so `.scn-intents button` matched a STALE picker from an earlier test and clicking it
+// advanced nothing in the current container. The identical flow passed in an isolated file, which is
+// what pointed here. Same leak that bit the plan-io tests.
+afterEach(cleanup);
 import { RunwayApp } from "../../src/App";
 import { demoDoc, emptyDoc } from "../../src/state/document";
 import { blankSaas } from "../../src/engine/saas";
@@ -20,6 +26,15 @@ function scenariosView(initial) {
   return { container, get: () => ref.current };
 }
 const btn = (c, re) => [...c.querySelectorAll("button")].find(b => re.test(b.textContent));
+// SCOPED TO THE TILE PICKER. Factor names collide with nav-tab labels — "Payroll" is both — and an
+// unscoped search finds the tab, clicks the rail, and leaves the builder exactly where it was.
+const tile = (c, re) => [...c.querySelectorAll(".scn-intents button")].find(b => re.test(b.textContent));
+const modeBtn = (c, re) => [...c.querySelectorAll(".scn-mode .seg3 button")].find(b => re.test(b.textContent));
+// `sel` searches SELECT elements only. The factor form renders a field as an input or a select
+// depending on its type — "Starts" is a number input — so a helper that finds either is what these
+// tests actually need.
+const fld = (c, label) => [...c.querySelectorAll("select,input")]
+  .find(x => x.getAttribute("aria-label") === label);
 const sel = (c, label) => [...c.querySelectorAll("select")].find(s => s.getAttribute("aria-label") === label);
 const scn = (patches, over = {}) => ({ id: "s1", name: "Hiring freeze", patches, saved: true, ...over });
 
@@ -92,18 +107,24 @@ describe("building a change from the intent, not the schema", () => {
   it("offers the questions people arrive with", () => {
     const { container } = scenariosView(demoDoc());
     fireEvent.click(btn(container, /New scenario/));
-    expect(container.textContent).toMatch(/Delay a hire/);
-    expect(container.textContent).toMatch(/Don't hire someone/);
-    expect(container.textContent).toMatch(/Change churn or growth/);
-    expect(container.textContent).toMatch(/Something else/);
+    expect(container.textContent).toMatch(/Payroll/);
+    expect(container.textContent).toMatch(/Payroll/);
+    expect(container.textContent).toMatch(/Recurring revenue/);
+    expect(container.textContent).toMatch(/Operating costs/);
   });
 
-  it("delays a hire in two picks", () => {
+  it("delays a hire in three picks", () => {
+    // THREE, NOT TWO — and the extra one is the point. The old builder opened on a default intent, so
+    // picking a factor was implicit and "Delay a hire" was the only thing payroll could express.
+    // Choosing PAYROLL then CHANGE EXISTING is what makes "raise a salary" and "end someone early"
+    // reachable through the same three picks.
     const { container, get } = scenariosView(demoDoc());
     fireEvent.click(btn(container, /New scenario/));
+    fireEvent.click(tile(container, /Payroll/));
+    fireEvent.click(modeBtn(container, /Change existing/));
     const e = demoDoc().employees[0];
     fireEvent.change(sel(container, "Which one"), { target: { value: e.id } });
-    fireEvent.change(sel(container, "Start month"), { target: { value: "8" } });
+    fireEvent.change(fld(container, "Starts"), { target: { value: "8" } });
     fireEvent.click(btn(container, /Add this change/));
     expect(get().scenarios[0].patches[0]).toMatchObject({ kind: "item", collection: "employees", field: "start", value: 8 });
   });
@@ -112,7 +133,7 @@ describe("building a change from the intent, not the schema", () => {
     // "Don't hire Sam" used to mean setting a start month past the horizon.
     const { container, get } = scenariosView(demoDoc());
     fireEvent.click(btn(container, /New scenario/));
-    fireEvent.click(btn(container, /Don't hire someone/));
+    fireEvent.click(tile(container, /Payroll/));
     fireEvent.change(sel(container, "Which one"), { target: { value: demoDoc().employees[0].id } });
     fireEvent.click(btn(container, /Add this change/));
     expect(get().scenarios[0].patches[0]).toMatchObject({ kind: "remove", collection: "employees" });
@@ -122,7 +143,7 @@ describe("building a change from the intent, not the schema", () => {
     const doc = { ...demoDoc(), saas: [{ ...blankSaas(), id: "s9", name: "Pro plan", arpu: 100, startCustomers: 50, churnPct: 5 }] };
     const { container, get } = scenariosView(doc);
     fireEvent.click(btn(container, /New scenario/));
-    fireEvent.click(btn(container, /Change churn or growth/));
+    fireEvent.click(tile(container, /Recurring revenue/));
     fireEvent.change(sel(container, "Which one"), { target: { value: "s9" } });
     fireEvent.change(container.querySelector('[aria-label="Churn"]'), { target: { value: "12" } });
     fireEvent.click(btn(container, /Add this change/));
@@ -133,7 +154,7 @@ describe("building a change from the intent, not the schema", () => {
     // They had no intent tile; dropping them would be losing capability to a redesign.
     const { container, get } = scenariosView(demoDoc());
     fireEvent.click(btn(container, /New scenario/));
-    fireEvent.click(btn(container, /Something else/));
+    fireEvent.click(tile(container, /Operating costs/));
     fireEvent.change(sel(container, "Where"), { target: { value: "field:cash" } });
     fireEvent.change(container.querySelector('[aria-label="Cash on hand"]'), { target: { value: "900000" } });
     fireEvent.click(btn(container, /Add this change/));
@@ -220,7 +241,7 @@ describe("adding a fundraise", () => {
   const open = (doc) => {
     const v = scenariosView(doc);
     fireEvent.click(btn(v.container, /New scenario/));
-    fireEvent.click(btn(v.container, /Add a fundraise/));
+    fireEvent.click(tile(v.container, /Capital/));
     return v;
   };
 

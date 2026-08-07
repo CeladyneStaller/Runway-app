@@ -1566,3 +1566,22 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .scn-stale li{margin-bottom:3px}
 .scn-ack{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11.5px;cursor:pointer}
 .scn-ack input{width:15px;height:15px;accent-color:var(--danger)}
+
+/* ---- scenario factor tiles and mode ---- */
+.scn-intent em{display:block;font-style:normal;font-size:9.5px;color:var(--muted-2);
+  margin-top:5px;font-family:var(--fm)}
+.scn-intent.off{opacity:.42;cursor:not-allowed}
+.scn-mode{border-top:1px solid var(--line-2);margin-top:12px;padding-top:12px;
+  display:flex;flex-direction:column;gap:10px}
+.seg3{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;align-self:flex-start}
+.seg3 button{font-family:var(--fb);font-size:11.5px;padding:6px 13px;border:none;
+  background:var(--card);color:var(--muted);cursor:pointer}
+.seg3 button.on{background:var(--ink);color:#F2F6F5}
+.seg3 button.on.del{background:var(--danger);color:#fff}
+.seg3 button.on.edit{background:var(--caution);color:#fff}
+.seg3 button[disabled]{opacity:.4;cursor:default}
+.scn-warn{font-size:11.5px;color:var(--caution);background:#FBF3E4;border-radius:7px;padding:8px 11px;margin:0}
+@media(max-width:640px){ .seg3{flex-direction:column;align-self:stretch} }
+.scn-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px}
+.scn-fields .fl{margin:0}
+.scn-fields .meta{display:block;margin-top:3px}
