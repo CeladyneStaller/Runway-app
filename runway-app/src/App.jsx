@@ -749,7 +749,18 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
           {view === "proj" && <Projects startY={startY} startM={startM} routeTab={routeTab} setRouteTab={setTab} projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales saas={saas} setSaas={setSaas} routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment routeTab={routeTab} setRouteTab={setTab} rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
-          {view === "hist" && <History journal={doc.journal} takeSnapshot={takeSnapshot} currentCurve={modelStarts} routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
+          {view === "hist" && <History
+            doc={doc} setDoc={setDoc}
+            // ⚠️ ONLY OFFERED WHEN QUICKBOOKS IS ACTUALLY CONNECTED. A "pull cash" button that opens
+            // a connection flow is a different promise from one that reads a balance, and `onPullCash`
+            // being absent is how the panel knows not to render at all.
+            onPullCash={(() => {
+              // SAME SOURCES AS THE PAYABLES PULL. `getAccountApi()` and the active company are read
+              // at render, not held — a connection made in another tab should not need a reload.
+              const api = getAccountApi(), cid = getAuthAdapter()?.activeCompany?.();
+              return api?.qboSync && cid ? (() => api.qboSync(cid, { what: "cash" })) : null;
+            })()}
+            journal={doc.journal} takeSnapshot={takeSnapshot} currentCurve={modelStarts} routeTab={routeTab} setRouteTab={setTab} hist={hist} setHist={setHist} codeMap={codeMap} setCodeMap={setCodeMap} customerMap={customerMap} revenueVariances={revenueVariances} importProfiles={importProfiles} setImportProfiles={setImportProfiles} setCustomerMap={setCustomerMap} projects={projects} flagOverrides={flagOverrides} setFlagOverrides={setFlagOverrides} method={method} setMethod={setMethod} applyBaseline={applyBaseline} setApplyBaseline={setApplyBaseline} itemizedOpex={itemizedOpex} baselineOpex={baselineOpex} cashActuals={cashActuals} setCashActuals={setCashActuals} modelStarts={modelStarts} startY={startY} startM={startM} setStartY={setStartY} setStartM={setStartM} cash={cash} setCash={setCash} projects={projects} anchorActuals={anchorActuals} setAnchorActuals={setAnchorActuals} />}
           {view === "scn" && membership?.is_advisor
             ? <AdvisorScenarios account={getAccountApi?.()} companyId={getAuthAdapter?.()?.activeCompany?.()} doc={doc} />
             : view === "scn" && <Scenarios baseDoc={doc} buildModel={buildModelFromDoc} scenarios={scenarios} setScenarios={setScenarios}

@@ -209,3 +209,40 @@ export function payablesSource(report) {
  *  on a runway.
  */
 export const PAYABLE_COLUMNS = "tx_date,txn_type,doc_num,vend_name,due_date,memo,subt_open_bal";
+
+/** Bank accounts and their balances, from `BalanceSheet`.
+ *
+ *  ⚠️ WE DO NOT SUM THEM. QuickBooks' Bank type includes things a founder may not count as runway — a
+ *  merchant holding account, a foreign-currency account, an escrow. Summing every Bank account is the
+ *  obvious rule and quietly wrong for some companies, so this returns THE LIST and the person chooses.
+ *
+ *  Returns `{ accounts: [{ id, name, balance }], asOf }`.
+ */
+export function bankAccountsSource(report, asOf = null) {
+  const accounts = [];
+
+  const isBankSection = (path) =>
+    path.some(p => /^(bank accounts?|cash and cash equivalents?|checking\/savings)$/i.test(String(p).trim()));
+
+  const walkRows = (rows, path) => {
+    for (const r of rows?.Row ?? []) {
+      const header = r?.Header?.ColData?.[0]?.value;
+      const next = header ? [...path, header] : path;
+
+      if (r?.Rows) walkRows(r.Rows, next);
+
+      const cells = r?.ColData;
+      if (!cells || !isBankSection(next)) continue;
+      const name = cells[0]?.value;
+      // THE SECTION TOTAL IS NOT AN ACCOUNT. "Total Bank Accounts" would appear as a selectable row
+      // and, if ticked alongside its members, would double every balance.
+      if (!name || /^total\b/i.test(name)) continue;
+      const raw = cells[cells.length - 1]?.value;
+      const balance = Number(String(raw ?? "").replace(/[^0-9.-]/g, ""));
+      if (!Number.isFinite(balance)) continue;
+      accounts.push({ id: cells[0]?.id || name, name, balance });
+    }
+  };
+  walkRows(report?.Rows, []);
+  return { accounts, asOf: asOf || report?.Header?.EndPeriod || null };
+}

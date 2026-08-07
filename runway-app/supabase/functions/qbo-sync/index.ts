@@ -8,7 +8,8 @@
 // Deploy: supabase functions deploy qbo-sync   (verify_jwt = false, caller verified below)
 import { corsHeaders } from "../_shared/cors.js";
 import { refreshTokens, apiBase } from "../_shared/qbo-intuit.js";
-import { quickbooksSource, payablesSource, PAYABLE_COLUMNS, mergeGrids, dateWindows }
+import { quickbooksSource, payablesSource, PAYABLE_COLUMNS, mergeGrids, dateWindows,
+         bankAccountsSource }
   from "../_shared/qbo-report.js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -118,6 +119,20 @@ Deno.serve(async (req) => {
                             { headers: { Authorization: `Bearer ${tokens.accessToken}`, Accept: "application/json" } });
     if (!res.ok) throw new Error(`payables ${res.status}`);
     return json({ grid: payablesSource(await res.json()), kind: "payables" });
+  }
+
+  // CASH ON HAND IS THE BALANCE SHEET, not the P&L. An income statement shows revenue and expenses over
+  // a period and has no concept of a bank balance — which is why the ledger has synced since day one
+  // and the founder has been typing their cash figure in by hand every month.
+  if (what === "cash") {
+    // ⚠️ ACCRUAL WOULD BE THE WRONG NUMBER. On a cash basis the bank line is what is actually in the
+    // account; on accrual it can include amounts recognised but not received, which is not runway.
+    const asOf = until || new Date().toISOString().slice(0, 10);
+    const q = new URLSearchParams({ accounting_method: "Cash", date_macro: "", end_date: asOf });
+    const res = await fetch(`${apiBase(QBO_ENV)}/v3/company/${realmId}/reports/BalanceSheet?${q}`,
+                            { headers: { Authorization: `Bearer ${tokens.accessToken}`, Accept: "application/json" } });
+    if (!res.ok) throw new Error(`cash ${res.status}`);
+    return json({ ...bankAccountsSource(await res.json(), asOf), kind: "cash" });
   }
 
   const end = until || new Date().toISOString().slice(0, 10);

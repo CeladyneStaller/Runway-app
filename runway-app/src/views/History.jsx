@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { TabInsights } from "./chrome/TabInsights";
 import { grantPaymentsAt } from "../engine/grant";
 import { burnStats } from "../engine/history";
+import { CashImport } from "./chrome/CashImport";
 import { monthTotal, codedActuals, overheadByMonth, codesInLedger, unmappedCodes, unmappedCustomers, lineCustomer, OVERHEAD } from "../engine/coding";
 import { money, moneyFull } from "../engine/money";
 import { HORIZON, monthLabel } from "../engine/time";
@@ -16,7 +17,7 @@ import { QuickBooks } from "./chrome/QuickBooks";
 import { getAccountApi, getAuthAdapter } from "../state/sync";
 import { useTabPrefs, visibleTabs, resolveTab } from "../state/tabprefs";
 
-export function History({ journal = [], takeSnapshot = () => {}, currentCurve = [], routeTab, setRouteTab = () => {}, hist, setHist, codeMap, setCodeMap, customerMap = {}, setCustomerMap = () => {}, revenueVariances = [], importProfiles = [], setImportProfiles = () => {}, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
+export function History({ journal = [], takeSnapshot = () => {}, onPullCash, setDoc, doc, canWrite = true, openMonth = 0, currentCurve = [], routeTab, setRouteTab, hist, setHist, codeMap, setCodeMap, customerMap, setCustomerMap, revenueVariances, importProfiles, setImportProfiles, flagOverrides, setFlagOverrides, method, setMethod, applyBaseline, setApplyBaseline, itemizedOpex, baselineOpex, cashActuals, setCashActuals, modelStarts, startY, startM, setStartY, setStartM, cash, setCash, projects, anchorActuals, setAnchorActuals }) {
   // History months are the N months immediately BEFORE month 0 — structurally determined, not typed.
   // The old label was `{r.mo} ’26`: a hand-entered "Jan" and a hardcoded year, either of which could
   // disagree with the projection start.
@@ -362,6 +363,20 @@ export function History({ journal = [], takeSnapshot = () => {}, currentCurve = 
       <div className="panel">
         <div className="panel-h">
           <div><h3>Cash on hand — actual vs model</h3><p>Record your real numbers each month to validate the projection. Spend is derived from the change in cash net of income; the cash points also plot on the Dashboard chart.</p></div>
+          {/* ⚠️ THE LEDGER SYNCED AND THE BANK BALANCE DID NOT. `ProfitAndLossDetail` is an income
+              statement and carries no cash figure, so this column has been typed by hand every month
+              while the spend history beside it filled itself in. */}
+          {onPullCash && (
+            <CashImport
+              month={openMonth} monthLabel={monthLabel(startY, startM, openMonth)}
+              current={cashActuals?.[openMonth]?.cash}
+              chosen={doc?.settings?.qboCashAccounts || []}
+              onChoose={(ids) => setDoc?.(d => ({ ...d,
+                settings: { ...(d.settings || {}), qboCashAccounts: ids } }))}
+              onPull={onPullCash}
+              onAccept={(m, total) => setCashActuals(a => ({ ...a, [m]: { ...(a?.[m] || {}), cash: total } }))}
+              canWrite={canWrite} />
+          )}
           <button className="addbtn ghost" onClick={() => setActualModal({ editMonth: null })}>{I.plus} Add month</button>
         </div>
         <div className="pgrid">

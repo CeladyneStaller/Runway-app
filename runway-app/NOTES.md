@@ -1467,6 +1467,46 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Cash on hand from QuickBooks
+
+**IT WAS NEVER THERE.** `qbo-sync` pulled `ProfitAndLossDetail` and `AgedPayableDetail` — an income
+statement and an aged payables report. **Neither carries a bank balance**, which is why the ledger has
+synced since day one while the founder typed their cash figure in by hand every month. That figure
+drives where the runway and clean-exit scans BEGIN and the `anchorToActuals` offset for the whole
+forward projection.
+
+**`BalanceSheet` with `accounting_method=Cash`.** ⚠️ Accrual would be the wrong number: on accrual the
+bank line can include amounts recognised but not received, which is not runway.
+
+**⚠️ `bankAccountsSource` RETURNS THE LIST AND NEVER A SUM.** QuickBooks' Bank type includes a merchant
+holding account, a foreign-currency account, an escrow — things a founder may not count as runway.
+Summing them is the obvious rule and quietly wrong for some companies.
+
+**IT EXCLUDES THE SECTION TOTAL.** "Total Bank Accounts" would appear as a selectable row and, ticked
+alongside its members, would double every balance.
+
+**The choice is remembered BY ACCOUNT ID**, so it survives a rename in QuickBooks — and every account is
+still SHOWN, because a remembered choice that filtered would hide an account added since.
+
+**NOTHING IS OVERWRITTEN.** The import shows what it found beside what is recorded, with the difference,
+and waits. A hand-entered figure may be the better number — reconciliation lags, and somebody who looked
+at their bank this morning knows something QuickBooks does not.
+
+**WIRED.** The panel sits on the Cash on hand sub-tab beside the column it fills, and `App` supplies
+`onPullCash` from the same sources as the payables pull — read at RENDER, not held, so a connection made
+in another tab does not need a reload.
+
+**⚠️ ABSENT UNLESS QUICKBOOKS IS CONNECTED.** A "pull cash" button that opens a connection flow is a
+different promise from one that reads a balance, so `onPullCash` is null and the panel renders nothing.
+
+**The account choice lives on the document** (`settings.qboCashAccounts`), not in component state —
+component state would ask the same question every month.
+
+**⚠️ THE PARAMETER-LIST REGEX BIT A SECOND TIME.** `[^}]*` stops at the `}` of `takeSnapshot = () => {}`
+— a DEFAULT VALUE, not the end of the list — and mangled `History`'s signature twice before I stopped
+patching the patch and rebuilt the line from the recovered prop names. Adding a prop to a component
+whose signature contains an arrow default needs the LAST brace on the line, not the first.
+
 ## Scenarios rebuilt on the eight factors — in progress
 
 **⚠️ THE TILES REPLACED SEVEN HARDCODED INTENTS.** The old builder asked somebody to name a MECHANISM
