@@ -16,9 +16,9 @@ export const FACTORS = [
     label: (e) => `${e.name || "Unnamed"} — ${e.salary ? `$${Math.round(e.salary / 1000)}k` : "no salary"}`,
     fields: [
       { k: "name", t: "text", l: "Who" },
-      { k: "salary", t: "number", l: "Salary" },
+      { k: "amount", t: "number", l: "Salary" },
       { k: "start", t: "month", l: "Starts" },
-      { k: "confidence", t: "tier", l: "Confidence" },
+      { k: "end", t: "month", l: "Ends" },
     ],
     // ⚠️ AN EMPLOYEE CAN END. Removing one "from a date" is a departure, which the model already
     // expresses as an end month — so it is a field edit, not a deletion.
@@ -32,7 +32,7 @@ export const FACTORS = [
       { k: "label", t: "text", l: "What" },
       { k: "amount", t: "number", l: "Amount" },
       { k: "start", t: "month", l: "Starts" },
-      { k: "confidence", t: "tier", l: "Confidence" },
+      { k: "end", t: "month", l: "Ends" },
     ],
     endField: "end",
   },
@@ -51,6 +51,7 @@ export const FACTORS = [
     collection: "pos", count: (d) => (d.pos || []).length,
     label: (p) => `${p.customer || p.name || "Order"} — ${p.amount ? `$${Math.round(p.amount).toLocaleString()}` : "—"}`,
     fields: [{ k: "customer", t: "text", l: "Customer" }, { k: "amount", t: "number", l: "Amount" },
+             { k: "deliveryMonth", t: "month", l: "Delivers" },
              { k: "confidence", t: "tier", l: "Confidence" }],
   },
   {
@@ -74,9 +75,13 @@ export const FACTORS = [
         // NO "CLOSED" WHEN ADDING. A closed round emits no cash line — the money is assumed to be in
         // the opening balance already — so a scenario that adds one shows no change and looks broken.
         // It stays available when CHANGING an existing instrument, where it is the whole point.
-        opts: [["planning", "Planning"], ["raising", "Raising"], ["committed", "Commitment letter"]],
-        editOpts: [["planning", "Planning"], ["raising", "Raising"],
-                   ["committed", "Commitment letter"], ["closed", "Closed"]] },
+        // ⚠️ MOST LIKELY FIRST, not chronological. Somebody adding a round to a scenario is usually
+        // asking "what if this lands" — so the default the select opens on should be the one that
+        // moves the number, not the one that moves it least. The old form had this ordering and the
+        // registry lost it by listing the stages in lifecycle order.
+        opts: [["committed", "Commitment letter"], ["raising", "Raising"], ["planning", "Planning"]],
+        editOpts: [["committed", "Commitment letter"], ["raising", "Raising"],
+                   ["planning", "Planning"], ["closed", "Closed"]] },
     ],
     // ⚠️ A CLOSED INSTRUMENT CANNOT BE UN-RECEIVED. Removing one "from a date" is meaningless — the
     // money is in the bank — so the option is offered only where it means something.
@@ -87,10 +92,17 @@ export const FACTORS = [
   {
     id: "saas", name: "Recurring revenue", blurb: "Subscriptions, growth, churn",
     collection: "saas", count: (d) => (d.saas || []).length,
-    label: (s) => `${s.name || "Product"} — ${s.customers || 0} customers`,
-    fields: [{ k: "name", t: "text", l: "Product" }, { k: "price", t: "number", l: "Price" },
-             { k: "customers", t: "number", l: "Customers" },
-             { k: "growth", t: "number", l: "Growth /mo" }, { k: "churn", t: "number", l: "Churn /mo" }],
+    // ⚠️ THE REAL FIELD NAMES, read from `saas.js`. I invented `customers`, `price`, `growth` and
+    // `churn` from what the UI shows; the engine reads `startCustomers`, `arpu`, `newGrowthPct` and
+    // `churnPct`. A patch on an invented key writes a field NOTHING CONSUMES — the scenario would have
+    // saved, applied, and moved no number, which is indistinguishable from the feature being broken.
+    label: (s) => `${s.name || "Product"} — ${s.startCustomers || 0} customers`,
+    fields: [{ k: "name", t: "text", l: "Product" },
+             { k: "arpu", t: "number", l: "ARPU" },
+             { k: "startCustomers", t: "number", l: "Customers" },
+             { k: "newPerMonth", t: "number", l: "New per month" },
+             { k: "churnPct", t: "number", l: "Churn" },
+             { k: "newGrowthPct", t: "number", l: "Growth" }],
   },
   {
     // ⚠️ SHOWN AND DISABLED, NOT HIDDEN. It is one of the eight and somebody looking for it should find

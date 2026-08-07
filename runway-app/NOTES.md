@@ -1506,7 +1506,29 @@ leaves the builder untouched. The old intent names could not collide.
 **The form had no `aria-label`s** — not merely a test affordance: a select labelled only by adjacent
 text is announced as "combo box".
 
-**STILL FAILING: 6 tests in `scenarios.test.jsx`**, all in the fundraise and "something else" blocks.
+### ⚠️ THE WORST ONE: INVENTED FIELD KEYS
+
+Four factors named fields that **do not exist on the document**. I wrote them from what the UI SHOWS
+rather than from what the model HOLDS:
+
+    pay.salary      -> the field is `amount`
+    saas.customers  -> `startCustomers`;  saas.price -> `arpu`
+    saas.churn      -> `churnPct`;        saas.growth -> `newGrowthPct`
+    confidence on employees and lines — neither carries one
+
+**A patch on a key nothing consumes saves, applies, and moves no number** — indistinguishable from the
+feature being broken, and invisible in review because the form looks right.
+
+`factors.test.js` now walks every factor's fields against a real item from the demo document and fails
+on any key that is not there. It found `pay.salary` the moment it was written.
+
+### Status ordering was a real choice too
+
+The old form listed **committed first**, not chronologically. Somebody adding a round to a scenario is
+usually asking "what if this lands" — the default the select opens on should be the one that moves the
+number, not the one that moves it least.
+
+**STILL FAILING: 2 tests in `scenarios.test.jsx`**, all in the fundraise and "something else" blocks.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 

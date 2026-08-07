@@ -134,6 +134,9 @@ describe("building a change from the intent, not the schema", () => {
     const { container, get } = scenariosView(demoDoc());
     fireEvent.click(btn(container, /New scenario/));
     fireEvent.click(tile(container, /Payroll/));
+    // REMOVE, not change — "don't hire someone" is a deletion, and the mode has to say so now that
+    // picking a factor no longer implies what you want to do with it.
+    fireEvent.click(modeBtn(container, /Remove existing/));
     fireEvent.change(sel(container, "Which one"), { target: { value: demoDoc().employees[0].id } });
     fireEvent.click(btn(container, /Add this change/));
     expect(get().scenarios[0].patches[0]).toMatchObject({ kind: "remove", collection: "employees" });
@@ -144,6 +147,7 @@ describe("building a change from the intent, not the schema", () => {
     const { container, get } = scenariosView(doc);
     fireEvent.click(btn(container, /New scenario/));
     fireEvent.click(tile(container, /Recurring revenue/));
+    fireEvent.click(modeBtn(container, /Change existing/));
     fireEvent.change(sel(container, "Which one"), { target: { value: "s9" } });
     fireEvent.change(container.querySelector('[aria-label="Churn"]'), { target: { value: "12" } });
     fireEvent.click(btn(container, /Add this change/));

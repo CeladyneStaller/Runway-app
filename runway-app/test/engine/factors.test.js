@@ -39,7 +39,7 @@ describe("the factor registry", () => {
 // "closed" is deliberately absent from ADD — a closed round emits no cash line, so adding one
     // shows no change and looks broken. It is available when CHANGING an instrument, where it is the
     // whole point of the edit.
-    expect(f.opts.map(o => o[0])).toEqual(["planning", "raising", "committed"]);
+    expect(f.opts.map(o => o[0])).toEqual(["committed", "raising", "planning"]);
     expect(f.editOpts.map(o => o[0])).toContain("closed");
   });
 });
@@ -133,5 +133,24 @@ describe("required fields", () => {
     expect(buildPatches(factorById("cap"), { mode: "add", values: { name: "Seed" } }, d)).toEqual([]);
     expect(buildPatches(factorById("cap"), { mode: "add", values: { name: "Seed", amount: "1" } }, d))
       .toHaveLength(1);
+  });
+});
+
+describe("factor fields exist on the model", () => {
+  it("⚠️ EVERY FIELD KEY IS ONE THE ENGINE ACTUALLY READS", () => {
+    // I invented `customers`, `price`, `growth` and `churn` for SaaS from what the UI shows; the engine
+    // reads `startCustomers`, `arpu`, `newGrowthPct`, `churnPct`. A patch on an invented key writes a
+    // field NOTHING CONSUMES — the scenario saves, applies, and moves no number, which is
+    // indistinguishable from the feature being broken.
+    const d = demoDoc();
+    for (const f of FACTORS) {
+      if (!f.collection || !f.fields) continue;
+      const sample = (d[f.collection] || [])[0];
+      if (!sample) continue;
+      for (const fld of f.fields) {
+        expect(Object.prototype.hasOwnProperty.call(sample, fld.k),
+               `${f.id}.${fld.k} is not a field on a real ${f.collection} item`).toBe(true);
+      }
+    }
   });
 });
