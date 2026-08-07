@@ -55,7 +55,13 @@ export function buildModelParts(doc, horizon = HORIZON) {
 
   // baseline burn (anchors opex forward to the historical run-rate)
   const payrollNow = employees.reduce((a, e) => a + empCostAt(e, 0, fringePct), 0);
-  const companyOpexNow = lines.filter(l => l.kind === "cost" && l.cadence === "recurring" && (l.start || 0) <= 0 && (l.end == null || l.end >= 0))
+  // ⚠️ AN ADJUSTMENT IS NOT AN ITEMISED COST, and excluding it is the whole reason this works.
+  //
+  // The baseline is measured burn MINUS what you have itemised. A -$5,000 overhead adjustment counted
+  // as itemisation would shrink `itemizedOpex` by $5,000, grow `baselineOpex` by exactly $5,000, and
+  // CANCEL ITSELF — the runway would not move and nothing on screen would say why. It still spends in
+  // the projection; it just must not feed the subtraction it is trying to reduce.
+  const companyOpexNow = lines.filter(l => l.kind === "cost" && !l.adjustment && l.cadence === "recurring" && (l.start || 0) <= 0 && (l.end == null || l.end >= 0))
     .reduce((a, l) => a + (Number(l.amount) || 0), 0);
   const itemizedOpex = companyOpexNow + payrollNow;
   const derivedBurn = burnStats(hist, itemizedOpex, flagOverrides, method).applied;

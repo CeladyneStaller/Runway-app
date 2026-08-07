@@ -1603,3 +1603,5 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .cashio-acts{margin-left:auto;display:flex;gap:10px;align-items:center}
 .cashio-err{font-size:11.5px;color:var(--danger);background:#FBEAE7;border-radius:7px;padding:8px 11px}
 @media(max-width:640px){ .cashio-acts{margin-left:0;width:100%} }
+.mpick{display:flex;gap:6px}
+.mpick .sel{flex:1;min-width:0}

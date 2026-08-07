@@ -1467,6 +1467,70 @@ which belonged to `setRouteTab = () => {}` rather than the parameter list; and `
 takes THREE arguments — I summed the last two myself and the date rendered as NaN until a test caught
 it.
 
+## Overhead adjustment — Corey's negative-line idea, and the trap in it
+
+**The idea works: a negative recurring cost line reduces spend.** But it would have CANCELLED ITSELF.
+
+    companyOpexNow  = recurring cost lines starting <= month 0     <- a negative line was IN this
+    itemizedOpex    = companyOpexNow + payrollNow
+    baselineOpex    = max(0, derivedBurn - itemizedOpex)           <- so this GREW by the same amount
+
+**A -$5,000 line shrank `itemizedOpex` by $5,000 and grew the baseline by exactly $5,000.** Net zero,
+silently — a founder with tracked spend history types "reduce overhead by $5,000", watches nothing
+happen, and has no way to see why. **Worse than the feature not existing.**
+
+**Fix: `!l.adjustment` in the `companyOpexNow` filter.** The line still spends; it just must not feed
+the subtraction it is trying to reduce.
+
+**⚠️ THE FLOOR IS VISIBLE.** A cut larger than what is being spent would make overhead pay you.
+Clamped at the headroom, and the clamp is SHOWN — somebody who types $80,000 against $22,200 must see
+the difference was refused, or they read a runway built on a number they did not enter. **Existing
+adjustments count against the headroom**, or two cuts would both apply and take it negative between
+them. An INCREASE is never clamped: there is no ceiling on what somebody could choose to spend.
+
+**IT LIVES ON OPERATING COSTS, not the baseline tile** — Corey's call, and right: "how much could I
+save" is a question about operating costs, and the routing through the derived baseline is an
+implementation detail nobody should need to know to ask it. **The baseline tile's copy changed with it**
+— it used to say "itemise more to move it", which became untrue the moment this shipped.
+
+**`if (!targetId) return []` swallowed it.** An adjustment has no target — that is its whole point —
+and the guard was written for edit and remove.
+
+**`-0` needed normalising.** It compares unequal to `0` under Object.is and prints as "-0" in anything
+derived from it.
+
+## Scenario forms — real fields, real controls
+
+**MONTH FIELDS ARE A MONTH AND YEAR NOW.** "8" in a Starts field means eight months into the projection,
+which somebody has to compute from a start date they may not have in mind. The pair is what people think
+in; **the index is shown underneath** because it is what the model stores and what an agency form asks
+for, so the two cannot drift apart.
+
+**DOTTED KEYS REACH INTO NESTED OBJECTS.** A grant's terms live under `project.grant`, and a registry
+that could only patch top-level fields could describe a project's NAME and nothing that decides its
+cash. Projects now carry agency, cost share and type, reimbursement timing and lag.
+
+**CONDITIONAL FIELDS.** A round's terms depend on its type — showing "rate APR" on a SAFE, or "royalty %"
+on a note that converts, invites somebody to fill in a field the engine never reads. Same class of bug
+as an invented key, arrived at from the other direction.
+
+**DEBT IS OFFERED AGAIN.** It was excluded because the old form could not carry a rate or a term, and a
+facility without them is money that arrives and never leaves. The conditional fields supply them, so the
+reason for the exclusion is gone.
+
+**⚠️ `fulfilCost` WAS INVENTED AND THE GUARD CAUGHT IT.** Cost to fulfil is not a PO field — the model
+expresses it as a FULFILMENT PROJECT linked by `projectId`, where labour is your own team's time and can
+follow a real salary. A number on the order would have been a second, disagreeing place for the same
+cost.
+
+**THE GUARD NOW CHECKS THE ENGINE AS WELL AS THE DEMO.** `maturityMonths` is read by `capital.js` but no
+seeded round is a maturing note — checking only the demo would fail correct keys, and checking only the
+source would pass a typo that happens to appear in a comment.
+
+**STILL TO BUILD:** operating costs "change existing" against the DERIVED BASELINE — adjusting untracked
+overhead without a line item. That is not a patch on any collection; it needs a settings-level
+adjustment the projection reads, and `buildmodel` has no such lever yet.
+
 ## Cash on hand from QuickBooks
 
 **IT WAS NEVER THERE.** `qbo-sync` pulled `ProfitAndLossDetail` and `AgedPayableDetail` — an income

@@ -142,14 +142,37 @@ describe("factor fields exist on the model", () => {
     // reads `startCustomers`, `arpu`, `newGrowthPct`, `churnPct`. A patch on an invented key writes a
     // field NOTHING CONSUMES — the scenario saves, applies, and moves no number, which is
     // indistinguishable from the feature being broken.
+    const fs = require("node:fs");
+    const ENGINE = fs.readdirSync("src/engine")
+      .filter(n => n.endsWith(".js"))
+      .map(n => fs.readFileSync("src/engine/" + n, "utf8")).join("\n");
     const d = demoDoc();
     for (const f of FACTORS) {
       if (!f.collection || !f.fields) continue;
-      const sample = (d[f.collection] || [])[0];
-      if (!sample) continue;
+      const items = d[f.collection] || [];
+      if (!items.length) continue;
       for (const fld of f.fields) {
-        expect(Object.prototype.hasOwnProperty.call(sample, fld.k),
-               `${f.id}.${fld.k} is not a field on a real ${f.collection} item`).toBe(true);
+        // ⚠️ ACROSS EVERY ITEM, not just the first. A conditional field like `grant.funder` only exists
+        // on a grant project, and the demo's first project is internal — checking one sample would have
+        // failed a correct key and, worse, would pass an incorrect one on a collection whose first item
+        // happens to be unusual.
+        const parts = String(fld.k).split(".");
+        const has = (obj) => {
+          let cur = obj;
+          for (const part of parts) {
+            if (cur == null || !Object.prototype.hasOwnProperty.call(cur, part)) return false;
+            cur = cur[part];
+          }
+          return true;
+        };
+        // ⚠️ OR READ BY THE ENGINE. A field can be genuinely correct and absent from the demo —
+        // `maturityMonths` is read by `capital.js` but no seeded round is a maturing note. Checking
+        // only the demo would fail correct keys; checking only the source would pass a typo that
+        // happens to appear in a comment. Both, and the leaf name is what the engine names.
+        const leaf = parts[parts.length - 1];
+        const inEngine = ENGINE.includes("." + leaf) || ENGINE.includes(leaf + ":");
+        expect(items.some(has) || inEngine,
+               `${f.id}.${fld.k} is on no real ${f.collection} item and is read nowhere`).toBe(true);
       }
     }
   });

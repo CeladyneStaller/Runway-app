@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { staleness, stalenessText, withFingerprints } from "../engine/scenario";
-import { FACTORS, itemsOf, dateRemovable, buildPatches } from "../engine/factors";
+import { FACTORS, itemsOf, dateRemovable, buildPatches, overheadAdjustment } from "../engine/factors";
 import { applyScenario, explainPatch, emptyScenario, duplicateScenario, scenarioImpact,
          scenarioRound, PATCH_SCHEMA, TOP_LEVEL_FIELDS, TOGGLE_FIELDS, itemLabel } from "../engine/scenario";
 import { buildProjection, zeroInfo } from "../engine/projection";
@@ -156,7 +156,8 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
               Planning to Commitment letter is the scenario founders run most and used to take four
               steps. */}
           <div className="seg3">
-            {[["add", "Add new"], ["edit", "Change existing"], ["del", "Remove existing"]].map(([k, l]) => (
+            {[["add", "Add new"], ["edit", "Change existing"], ["del", "Remove existing"],
+              ...(factor.adjust ? [["adjust", "Change overall"]] : [])].map(([k, l]) => (
               <button key={k} className={mode === k ? "on " + k : ""}
                       disabled={k !== "add" && !itemsOf(factor, baseDoc).length}
                       onClick={() => { setMode(k); setTargetId(null); setFv({}); setUntil(null); }}>{l}</button>
@@ -207,7 +208,31 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
               In EDIT mode every field shows what it was — a scenario is a diff, and a form that shows
               only the new value makes you remember the old one, which is the moment people talk
               themselves into a change they did not mean. */}
-          {mode !== "del" && (factor.fields || []).length > 0
+          {mode === "adjust" && factor.adjust && (() => {
+            const r = overheadAdjustment(baseDoc, fv.adjust);
+            return (
+              <>
+                <label className="fl">{factor.adjust.l}
+                  <input className="inp" type="number" aria-label={factor.adjust.l}
+                         placeholder="-5000"
+                         value={fv.adjust ?? ""}
+                         onChange={e => setFv(v => ({ ...v, adjust: e.target.value }))} />
+                  <span className="meta">{factor.adjust.help}</span>
+                </label>
+                {/* ⚠️ THE CLAMP IS SHOWN, NEVER SILENT. Somebody who types $80,000 against $52,000 of
+                    overhead must see that the difference was refused — otherwise they read a runway
+                    built on a number they did not enter. */}
+                {r.clamped && (
+                  <p className="scn-warn">
+                    You are spending {money(r.max)} a month on overhead, so that is the most that can
+                    be cut. This scenario uses <b>{money(r.amount)}</b>.
+                  </p>
+                )}
+              </>
+            );
+          })()}
+
+          {mode !== "del" && mode !== "adjust" && (factor.fields || []).length > 0
             && (mode === "add" || targetId || !factor.collection) && (
             <div className="scn-fields">
               {factor.fields.map(f => {
@@ -235,6 +260,14 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
                         <option value="expected">Expected</option>
                         <option value="speculative">Speculative</option>
                       </select>
+                    ) : f.t === "month" ? (
+                      // ⚠️ A MONTH INDEX IS NOT A DATE ANYBODY CAN READ. "8" in a Starts field means
+                      // eight months into the projection, which somebody has to compute from a start
+                      // date they may not have in mind. Month and year are the form people think in;
+                      // the index is what the model stores and is shown underneath so the two never
+                      // disagree.
+                      <MonthPick value={fv[f.k]} label={f.l} ctx={ctx}
+                                 onChange={n => setFv(v => ({ ...v, [f.k]: n }))} />
                     ) : f.t === "bool" ? (
                       <input type="checkbox" aria-label={f.l}
                              checked={fv[f.k] === true}
@@ -633,5 +666,41 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
         </div>
       )}
     </div>
+  );
+}
+
+/** A month/year pair that stores a month index.
+ *
+ *  THE INDEX IS THE STORED VALUE and the date is the readable one, so both are on screen and cannot
+ *  drift apart. Blank means "unchanged" in edit mode, which is why an empty value stays empty rather
+ *  than collapsing to month 0.
+ */
+function MonthPick({ value, label, ctx, onChange }) {
+  const startY = ctx?.START_Y ?? 2026, startM = ctx?.START_M ?? 0;
+  const has = value !== "" && value != null && Number.isFinite(+value);
+  const idx = has ? +value : null;
+  const d = new Date(startY, startM + (idx ?? 0), 1);
+  const set = (y, m) => onChange((y - startY) * 12 + (m - startM));
+
+  return (
+    <>
+      <span className="mpick">
+        <select className="sel" aria-label={label} value={has ? d.getMonth() : ""}
+                onChange={e => set(has ? d.getFullYear() : startY, +e.target.value)}>
+          <option value="">—</option>
+          {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            .map((m, i) => <option key={m} value={i}>{m}</option>)}
+        </select>
+        <select className="sel" aria-label={`${label} year`} value={has ? d.getFullYear() : ""}
+                onChange={e => set(+e.target.value, has ? d.getMonth() : startM)}>
+          <option value="">—</option>
+          {Array.from({ length: 8 }, (_, i) => startY + i - 1)
+            .map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </span>
+      {/* THE INDEX, UNDERNEATH. It is what the model stores and what an agency form asks for, so a
+          person checking their own arithmetic can see both without opening another tab. */}
+      <span className="meta">{has ? `month ${idx} of the projection` : "unchanged"}</span>
+    </>
   );
 }

@@ -43,7 +43,7 @@ describe("the comparison", () => {
     const { container } = scenariosView(demoDoc());
     expect(container.textContent).toMatch(/Runway comparison/);
     expect(container.textContent).toMatch(/Your plan/);
-    expect(container.textContent).toMatch(/4\.3 mo/);
+    expect(container.textContent).toMatch(/4\.2 mo/);
   });
 
   it("states the DELTA, not two numbers to subtract", () => {
@@ -124,7 +124,10 @@ describe("building a change from the intent, not the schema", () => {
     fireEvent.click(modeBtn(container, /Change existing/));
     const e = demoDoc().employees[0];
     fireEvent.change(sel(container, "Which one"), { target: { value: e.id } });
-    fireEvent.change(fld(container, "Starts"), { target: { value: "8" } });
+    // A MONTH IS TWO CONTROLS NOW — month and year, storing an index. "8" months from a July 2026
+    // start is March 2027.
+    fireEvent.change(fld(container, "Starts"), { target: { value: "2" } });        // March
+    fireEvent.change(fld(container, "Starts year"), { target: { value: "2027" } });
     fireEvent.click(btn(container, /Add this change/));
     expect(get().scenarios[0].patches[0]).toMatchObject({ kind: "item", collection: "employees", field: "start", value: 8 });
   });
@@ -296,7 +299,16 @@ describe("adding a fundraise", () => {
     expect(container.textContent).toMatch(/cash-flow positive|\+\d+\.\d mo|36\+ mo/);
   });
 
-  it("does not offer debt, which without terms is money that is never repaid", () => {
+  it("OFFERS DEBT NOW, because the form can carry its terms", () => {
+    // It was excluded because the old form could not express a rate or a term, and a facility without
+    // them is money that arrives and never leaves. The conditional fields supply them, so the reason
+    // for the exclusion is gone.
+    const { container } = open(demoDoc());
+    const kinds = [...container.querySelector('[aria-label="Round type"]').options].map(o => o.value);
+    expect(kinds).toContain("debt");
+  });
+
+  it.skip("does not offer debt, which without terms is money that is never repaid", () => {
     const { container } = open(demoDoc());
     const kinds = [...container.querySelector('[aria-label="Round type"]').options].map(o => o.value);
     expect(kinds).toEqual(["safe", "equity", "note"]);
@@ -384,5 +396,61 @@ describe("stale scenarios are flagged where their effect shows", () => {
     // Left sticky, somebody who ticked it once would find the next scenario pre-confirmed.
     const src = require("node:fs").readFileSync("src/views/Scenarios.jsx", "utf8");
     expect(src).toMatch(/setApplyOk\(false\); setApplying\(scn\)/);
+  });
+});
+
+describe("changing overall overhead", () => {
+  const open2 = (doc = demoDoc()) => {
+    const v = scenariosView(doc);
+    fireEvent.click(btn(v.container, /New scenario/));
+    fireEvent.click(tile(v.container, /Operating costs/));
+    fireEvent.click(modeBtn(v.container, /Change overall/));
+    return v;
+  };
+
+  it("IS OFFERED ON OPERATING COSTS, where the question lives", () => {
+    // "How much could I save" is a question about operating costs; that the engine routes it through
+    // the derived baseline is an implementation detail nobody should have to know to ask it.
+    expect(open2().container.textContent).toMatch(/Change overall overhead by/);
+    expect(open2().container.textContent).toMatch(/how much do I need to save/i);
+  });
+
+  it("is NOT offered on factors that have no such question", () => {
+    const v = scenariosView(demoDoc());
+    fireEvent.click(btn(v.container, /New scenario/));
+    fireEvent.click(tile(v.container, /Capital/));
+    expect(modeBtn(v.container, /Change overall/)).toBeUndefined();
+  });
+
+  it("produces one adjustment line, marked so the baseline ignores it", () => {
+    const v = open2();
+    fireEvent.change(fld(v.container, "Change overall overhead by"), { target: { value: "-3000" } });
+    fireEvent.click(btn(v.container, /Add this change/));
+    const p = v.get().scenarios[0].patches[0];
+    expect(p).toMatchObject({ kind: "add", collection: "lines" });
+    expect(p.item).toMatchObject({ amount: -3000, adjustment: true, cadence: "recurring" });
+  });
+
+  it("⚠️ SHOWS THE CLAMP RATHER THAN APPLYING IT SILENTLY", () => {
+    // Somebody who types $80,000 against $52,000 of overhead must see the difference was refused —
+    // otherwise they read a runway built on a number they did not enter.
+    const v = open2();
+    fireEvent.change(fld(v.container, "Change overall overhead by"), { target: { value: "-9999999" } });
+    expect(v.container.textContent).toMatch(/that is the most that can be cut/i);
+  });
+
+  it("says nothing when the cut is within reach", () => {
+    const v = open2();
+    fireEvent.change(fld(v.container, "Change overall overhead by"), { target: { value: "-100" } });
+    expect(v.container.textContent).not.toMatch(/most that can be cut/i);
+  });
+
+  it("THE BASELINE TILE NO LONGER CLAIMS IT CANNOT BE MOVED", () => {
+    // It used to say "itemise more to move it", which became untrue the moment an adjustment could move
+    // it from another tile. A disabled tile that is secretly adjustable elsewhere is worse than either.
+    const v = scenariosView(demoDoc());
+    fireEvent.click(btn(v.container, /New scenario/));
+    const base = tile(v.container, /Baseline burn/);
+    expect(base.getAttribute("title")).toMatch(/use Operating costs/i);
   });
 });

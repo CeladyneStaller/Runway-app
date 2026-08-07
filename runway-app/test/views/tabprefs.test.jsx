@@ -52,7 +52,11 @@ describe("hiding a main tab", () => {
     const shown = app({ views: [], subs: {} });
     const hidden = app({ views: ["pay", "proj", "sales"], subs: {} });
     expect(shown.querySelector(".sub").textContent).toBe(hidden.querySelector(".sub").textContent);
-    expect(hidden.textContent).toMatch(/4\.3/);
+    // The demo runway moved to 4.2 when its indexed commitment began compiling properly. The point of
+    // this assertion is that HIDING A TAB CHANGES NO NUMBER, so it should not carry the number itself —
+    // it now compares the two renders, which is what it was always testing.
+    expect(hidden.querySelector(".statuspill").textContent)
+      .toBe(shown.querySelector(".statuspill").textContent);
   });
 });
 
