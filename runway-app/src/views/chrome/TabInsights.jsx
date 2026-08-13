@@ -163,7 +163,38 @@ export function TabInsights({ tab, subtab }) {
                 </button>
               )}
               <p className="ch-note">Kept on this device, like hidden tabs.</p>
+
+              {/* ⚠️ THE WAY INTO THE BUILDER, at the foot of the menu. My first attempt at this edit
+                  targeted `) : null}` — a closing this block does not have — so it matched nothing and
+                  the whole builder was unreachable while lint stayed clean. A replacement that matches
+                  nothing is the quietest failure in this codebase and it has now happened four times. */}
+              <div className="ch-build">
+                <span className="meta">Or plot something else</span>
+                <button className="addbtn" onClick={() => setBuilding(true)}>Build a chart</button>
+              </div>
             </div>
+          ) : picking && building ? (
+            <>
+              <ChartBuilder tab={tab} cfg={cfg} setCfg={setCfg} canSave={!!ctx.setDoc}
+                            onClose={() => { setBuilding(false); setPicking(false); }}
+                            onSave={() => setNaming(true)} />
+              {naming && (
+                <SaveChartBar onCancel={() => setNaming(false)}
+                              onSave={(name) => {
+                                const r = saveChart(ctx.doc, tab, cfg, { name, savedBy: ctx.userName });
+                                if (r.error) return;
+                                ctx.setDoc?.(r.doc);
+                                // SAVING ADDS IT TO THE MENU; IT DOES NOT SET THE DEFAULT. Two acts,
+                                // because they are two decisions.
+                                setNaming(false); setBuilding(false); setPicking(false);
+                                setCfg({ measures: [], by: null, across: "month" });
+                                pick(r.chart.id);
+                              }} />
+              )}
+              {/* THE CHART STAYS VISIBLE WHILE YOU BUILD IT. A builder that hides its own output makes
+                  you close it to see whether the last change helped. */}
+              <Chart spec={spec} />
+            </>
           ) : <Chart spec={spec} />}
         </section>
       )}

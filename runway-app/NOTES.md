@@ -1653,6 +1653,29 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## ⚠️ THE BUILDER WAS UNREACHABLE, AND LINT WAS CLEAN
+
+**Phase 3 shipped with no way into it.** The menu extension landed; the entry point and the builder
+render did not. My edit targeted `) : null}` — **a closing this block does not have.** It actually ends
+`) : <Chart spec={spec} />}`, so the replacement matched nothing, wrote nothing, and reported success.
+
+**A string replacement that matches nothing is the quietest failure mode in this codebase, and this is
+the fourth time this session.** The panel toggle in the plan view; the sub-tab section in a mockup; the
+scenario form; now this. Lint cannot see it — the code that would be wrong was never written — and it
+looks identical to success in every log.
+
+**The check that catches it costs one command:** grep for a distinctive string from the new code and
+confirm the count is what you expect. `ChartBuilder` was present (the import), `Build a chart` was
+absent (the render) — two greps would have shown that immediately, and now do:
+
+    for k in "ch-build" "Build a chart" "picking && building" "SaveChartBar"; do grep -c "$k" FILE; done
+
+**Fifteen wiring points are now asserted by a script** rather than by reading: imports, state, trigger,
+entry, both components, both spec paths, the saved group, the default control, and `ctx.parts?.rows`.
+
+**One thing added while fixing it:** the chart stays visible while you build. A builder that hides its
+own output makes you close it to see whether the last change helped.
+
 ## Phase 3 — the builder UI
 
 `ChartBuilder.jsx` inside `TabInsights`, plus the menu extension.
