@@ -1653,6 +1653,29 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## The year rule, third and final version
+
+**Corey noticed the runway chart carrying a year on every tick and preferred it.** That was not the
+patch working — `RunwayChart` is not adopted and still uses `monthLabel()`, which formats every tick
+`Jul 26`. But **the preference was evidence**: that chart labels every 2–6 months, which is exactly the
+case where years cost nothing, because the ONLY reason to omit them is a smear and at six labels there
+is none.
+
+**So the rule measures instead of guessing.** Year on the first label always; on EVERY label when
+either:
+
+1. **They all fit with one** — derived from the same width measurement that already picks the step, so
+   it stays one rule rather than "except on the runway chart", which is the conditional-rule trap that
+   made version one worse.
+2. **⚠️ A MONTH NAME REPEATS IN THE LABEL SET.** At a twelve-month step every label is the same month:
+   `Jul 26 · Jul · Jul · Jun` — three Julys in three different years, indistinguishable. **The fit test
+   alone produced exactly that on a 36-month phone chart**, and it only surfaced because the output was
+   printed and read rather than assumed. Checking the ambiguity DIRECTLY (`new Set(i % 12).size <
+   idx.length`) also catches a six-month step whose anchoring January falls outside the window.
+
+**None of this is a per-chart setting**, which means adopting `RunwayChart` will preserve the labels
+Corey likes rather than taking them away.
+
 ## Phase 0 — where it actually stands
 
 **Done:**

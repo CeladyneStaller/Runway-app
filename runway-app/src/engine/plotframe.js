@@ -55,18 +55,35 @@ export function monthTick(startY, startM, i, { first = false } = {}) {
  *  per width would make the same chart label differently on two devices.
  */
 export function monthTicks(n, width) {
-  if (n <= 1) return [0];
-  const per = width < 380 ? 96 : width < 620 ? 74 : 58;   // px a label needs
+  if (n <= 1) return [{ i: 0, year: true }];
+  const per = width < 380 ? 96 : width < 620 ? 74 : 58;   // px a bare month label needs
   const room = Math.max(2, Math.floor(width / per));
-  for (const step of [1, 3, 6, 12]) {
-    if (Math.ceil(n / step) <= room) {
-      const out = [];
-      for (let i = 0; i < n; i += step) out.push(i);
-      if (out[out.length - 1] !== n - 1) out.push(n - 1);
-      return out;
-    }
-  }
-  return [0, n - 1];
+  let step = 12;
+  for (const s of [1, 3, 6, 12]) if (Math.ceil(n / s) <= room) { step = s; break; }
+
+  const idx = [];
+  for (let i = 0; i < n; i += step) idx.push(i);
+  if (idx[idx.length - 1] !== n - 1) idx.push(n - 1);
+
+  // ⚠️ EVERY LABEL TAKES THE YEAR IF THEY ALL FIT WITH ONE — measured, not a per-chart exception.
+  //
+  // Corey noticed the runway chart carrying a year on every tick and preferred it. That chart labels
+  // every 2–6 months, which is exactly the case where the years cost nothing: the ONLY reason to omit
+  // them is a smear, and at six labels there is no smear to avoid. Deriving it from the same width
+  // measurement that already picked the step keeps this ONE rule rather than "except on the runway
+  // chart" — which is the conditional-rule trap that made the first version of this worse.
+  const perYear = per * 1.35;                             // "Jul 26" against "Jul"
+
+  // ⚠️ A REPEATED MONTH NAME FORCES YEARS, whatever the width.
+  //
+  // At a twelve-month step every label is the same month: "Jul 26 · Jul · Jul · Jun" — three Julys in
+  // three different years, indistinguishable. The fit test alone produced exactly that on a 36-month
+  // phone chart. This checks the AMBIGUITY DIRECTLY rather than a proxy for it, so it also catches the
+  // six-month step where the anchoring January happens to fall outside the window.
+  const repeats = new Set(idx.map(i => i % 12)).size < idx.length;
+
+  const allYears = repeats || idx.length * perYear <= width;
+  return idx.map(i => ({ i, year: allYears || i === 0 }));
 }
 
 /** Evenly spaced rule values across a domain, including both ends. */
@@ -128,9 +145,9 @@ export function plotFrame({
   const y = (v) => P.t + ph - ((Number(v) || 0) - yMin) / span * ph;
 
   const rules = ruleValues(yMin, yMax).map(v => ({ v, y: y(v), label: moneyTick(v) }));
-  const ticks = monthTicks(n, w).map(i => ({
+  const ticks = monthTicks(n, w).map(({ i, year }) => ({
     i, x: x(i),
-    label: Number.isFinite(startY) ? monthTick(startY, startM, i, { first: i === 0 }) : String(i),
+    label: Number.isFinite(startY) ? monthTick(startY, startM, i, { first: year }) : String(i),
   }));
 
   return {
