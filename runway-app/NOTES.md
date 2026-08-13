@@ -1653,6 +1653,29 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## The staleness feature was inert, and lint found it
+
+**⚠️ `withFingerprints` WAS IMPORTED AND NEVER CALLED.** No patch ever carried an `fp`; `staleness()`
+skips any patch that lacks one, so it always returned `[]`. **The badge never showed, the chart flag
+never showed, and apply-to-plan never asked for acknowledgement.** The engine and all three display
+sites were built and the single wiring call was not written.
+
+**Fifteen passing tests hid it** because every one of them builds fingerprints by hand. The thing that
+actually caught it was an `unused import` warning in a lint run — which is the argument for reading
+warnings rather than only counting errors.
+
+**It belongs at the ONE point a patch is added**, because a fingerprint records what a patch read AT THE
+MOMENT IT WAS WRITTEN. Attaching it later would record the wrong instant and report every scenario as
+fresh. Verified end to end: fresh document → 0 flags; the read field moved → "Series A: status was
+planning when this was built; it is now raising"; the item deleted → "no longer exists in the model —
+this change does nothing".
+
+**Also cleared:** the duplicate `projects` prop on `<History>` (React took the last, so nothing
+misbehaved, but it arrived when I threaded `doc`/`setDoc`/`onPullCash` in), and **the corpse of the old
+intent form** — `pick`, `setR`, `ready`, `add`, `valueField`, `current`, ten pieces of dead state and
+its empty-state fragment, which was a second answer to a question the factor tiles already answer on
+the tile. Warnings 91 → 82, errors 0.
+
 ## First real suite run after the blocked-registry stretch — 5 failures, 3 causes
 
 **1259 passed, golden green.** The five failures sorted into three kinds, and only one was a code bug.

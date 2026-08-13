@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { staleness, stalenessText, withFingerprints } from "../engine/scenario";
 import { FACTORS, itemsOf, dateRemovable, buildPatches, overheadAdjustment } from "../engine/factors";
 import { applyScenario, explainPatch, emptyScenario, duplicateScenario, scenarioImpact,
-         scenarioRound, PATCH_SCHEMA, TOP_LEVEL_FIELDS, TOGGLE_FIELDS, itemLabel } from "../engine/scenario";
+         PATCH_SCHEMA } from "../engine/scenario";
 import { buildProjection, zeroInfo } from "../engine/projection";
 import { money, moneyFull } from "../engine/money";
 import { HORIZON, monthLabel } from "../engine/time";
@@ -54,78 +54,15 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
   const [targetId, setTargetId] = useState(null);
   const [until, setUntil] = useState(null);       // null = remove entirely
   const [fv, setFv] = useState({});               // the factor form's values
-  const [itemId, setItemId] = useState("");
-  const [value, setValue] = useState("");
   // "Something else" keeps the original generic path: pick a collection and a field by hand.
-  const [otherColl, setOtherColl] = useState("");
-  const [otherField, setOtherField] = useState("");
-  const [round, setRound] = useState({ name: "", amount: "", closeMonth: "0", kind: "safe", status: "committed" });
 
   // "Something else" can also reach the two NON-collection targets the old builder had — cash and the
   // revenue toggles. Dropping them because they didn't fit the intent tiles would be losing capability
   // to a redesign, which is the worst way to lose it.
-  const special = intent.other && (otherColl === "field:cash" || otherColl === "toggle") ? otherColl : null;
-  const coll = special ? null : (intent.other ? otherColl : intent.coll);
-  const field = special ? null : (intent.other ? otherField : intent.field);
-  const items = coll ? (baseDoc[coll] || []) : [];
-  const def = coll && field ? PATCH_SCHEMA[coll]?.fields?.[field] : null;
-  const current = items.find(x => x.id === itemId);
 
-  const pick = (i) => {
-    //  is derived from the factor now, so  only clears the form it fed.
-    void i; setItemId(""); setValue(""); setOtherColl(""); setOtherField("");
-    setRound({ name: "", amount: "", closeMonth: "0", kind: "safe", status: "committed" });
-  };
-  const setR = (patch) => setRound(r => ({ ...r, ...patch }));
 
-  const ready = intent.addRound ? (Number(round.amount) > 0)
-    : special ? (special === "toggle" ? !!(otherField && value !== "") : value !== "")
-    : intent.remove ? !!itemId
-    : !!(itemId && field && value !== "");
 
-  const add = () => {
-    if (intent.addRound) {
-      const out = [{ kind: "add", collection: "rounds", item: scenarioRound(round) }];
-      // FINANCING IS A SEPARATE AXIS from the revenue tiers, and it defaults to OFF — so a scenario
-      // that adds a round and nothing else shows no change whatsoever, at any status. Somebody asking
-      // "what if we raise" plainly means the money to arrive, so the toggle is switched on for them.
-      // Emitted as its OWN visible change rather than folded into the round, so the reason the numbers
-      // moved is on screen and can be taken back off.
-      if (baseDoc?.settings?.toggles?.financing === false) out.push({ kind: "toggle", path: "financing", value: true });
-      onAdd(out);
-      setRound({ name: "", amount: "", closeMonth: "0", kind: "safe", status: "committed" });
-      return;
-    }
-    if (special === "field:cash") { onAdd([{ kind: "field", path: "cash", value: Number(value) }]); setValue(""); return; }
-    if (special === "toggle") { onAdd([{ kind: "toggle", path: otherField, value: value === "on" }]); setValue(""); return; }
-    if (intent.remove) onAdd([{ kind: "remove", collection: coll, id: itemId }]);
-    else {
-      const v = def?.type === "select"
-        ? (def.options.find(o => String(o[0]) === String(value)) || [value])[0]
-        : def?.type === "money" || def?.type === "months" || def?.type === "number" || def?.type === "percent"
-          ? Number(value) : value;
-      onAdd([{ kind: "item", collection: coll, id: itemId, field, value: v }]);
-    }
-    setItemId(""); setValue("");
-  };
 
-  const valueField = () => {
-    if (!def) return null;
-    if (def.type === "months") {
-      return <select className="sel" value={value} onChange={e => setValue(e.target.value)} aria-label={def.label}>
-        <option value="" disabled>Choose…</option>
-        {MONTHS.map(m => <option key={m} value={m}>{monthLabel(ctx.START_Y, ctx.START_M, m)}</option>)}
-      </select>;
-    }
-    if (def.type === "select") {
-      return <select className="sel" value={value} onChange={e => setValue(e.target.value)} aria-label={def.label}>
-        <option value="" disabled>Choose…</option>
-        {def.options.map(([v, l]) => <option key={String(v)} value={String(v)}>{l}</option>)}
-      </select>;
-    }
-    return <input className="inp num" type="number" value={value} aria-label={def.label}
-                  placeholder={def.type === "percent" ? "%" : ""} onChange={e => setValue(e.target.value)} />;
-  };
 
   return (
     <div className="scn-picker">
@@ -320,9 +257,6 @@ function ChangePicker({ baseDoc, ctx, onAdd }) {
           including the two it could not: editing an existing item field by field, and removing one
           from a date. */}
 
-      {items.length === 0 && coll && (
-        <div className="scn-none">Nothing to change here yet — add {PATCH_SCHEMA[coll].label.toLowerCase()} on its own tab first.</div>
-      )}
     </div>
   );
 }
@@ -566,7 +500,19 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
 
             <div className="modal-body">
               <ChangePicker baseDoc={baseDoc} ctx={ctx}
-                            onAdd={(patches) => upsert({ ...editScn, patches: [...editScn.patches, ...patches] })} />
+                            onAdd={(patches) => upsert(withFingerprints(baseDoc, {
+                              // ⚠️ THE ONE CALL THAT MAKES STALENESS WORK. Without it no patch ever
+                              // carries an `fp`, `staleness()` skips every patch that lacks one, and the
+                              // whole feature is INERT — the badge never shows, the chart flag never
+                              // shows, and apply-to-plan never asks for acknowledgement. The engine and
+                              // all three display sites were built; this line was not written, and
+                              // fifteen passing tests hid it because they build fingerprints by hand.
+                              //
+                              // It belongs HERE because a fingerprint records what a patch read AT THE
+                              // MOMENT IT WAS WRITTEN. Attaching it later would record the wrong instant
+                              // and quietly report every scenario as fresh.
+                              ...editScn, patches: [...editScn.patches, ...patches],
+                            }))} />
 
               {/* LIVE EFFECT. The old editor let you add changes blind, close the modal, and only then
                   see what they did — so building a scenario was a guess followed by a reveal. */}
