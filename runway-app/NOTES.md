@@ -1653,6 +1653,33 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## ⚠️ Two corrections: an invented rule, and an axis that lost its labels
+
+**I CHANGED AN APPROVED RULE ON THE STRENGTH OF A PASSING REMARK.** Corey approved *year on the first
+month and every January*. He later said he liked seeing years on the runway chart — **an observation
+about one chart, which I turned into a density rule for the whole panel, then built a repeated-month
+check on top of.** Both are removed. The rule is first + January.
+
+`yearEvery` remains as an explicit opt-in for the ONE caller that wants it. **An opt-in from the chart
+is honest; a rule that guesses its way to the same outcome is what went wrong.**
+
+**⚠️ AND THE AXIS BUG: `startY={spec.startY}` AGAINST A FIELD NO CHART RETURNS.** Zero of the 25
+`build()` functions put `startY` on their spec, so **every month-indexed chart silently took the
+fallback**, which read `axisTicks().label` — `null` on any non-quarter month. The new label positions
+count from the START OF THE CHART, not from calendar quarters, so on any chart not beginning in
+Jan/Apr/Jul/Oct they landed on nulls and the axis lost most of its text.
+
+`TimeAxis` now takes the start from `useStart()`, which cannot be undefined the way a spec field can.
+
+**⚠️ 105 CHART TESTS PASSED THROUGHOUT.** They assert what `build()` RETURNS and never what the axis
+DRAWS. `test/views/timeaxis.test.jsx` is the first test in the codebase that looks at a rendered axis:
+every month-indexed chart must draw more than one label, no label may be empty or `null`, and a year
+may appear only on the first label or a January.
+
+**The quarter sub-label (`Q3` under each month) is gone deliberately** — the approved house style does
+not have it. Worth knowing it left at the same moment the labels broke, which is why the whole axis read
+as damaged rather than restyled.
+
 ## The SF-424A round trip closed, and the test said what to do about it
 
 Splitting `exportBudget` from its `writeFile` did not just fix a write error — **it revealed that the

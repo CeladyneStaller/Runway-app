@@ -54,9 +54,9 @@ export function monthTick(startY, startM, i, { first = false } = {}) {
  *  Every month, then every third, then every sixth, then first and last. Choosing an arbitrary spacing
  *  per width would make the same chart label differently on two devices.
  */
-export function monthTicks(n, width) {
+export function monthTicks(n, width, { yearEvery = false } = {}) {
   if (n <= 1) return [{ i: 0, year: true }];
-  const per = width < 380 ? 96 : width < 620 ? 74 : 58;   // px a bare month label needs
+  const per = width < 380 ? 96 : width < 620 ? 74 : 58;   // px a label needs
   const room = Math.max(2, Math.floor(width / per));
   let step = 12;
   for (const s of [1, 3, 6, 12]) if (Math.ceil(n / s) <= room) { step = s; break; }
@@ -65,25 +65,17 @@ export function monthTicks(n, width) {
   for (let i = 0; i < n; i += step) idx.push(i);
   if (idx[idx.length - 1] !== n - 1) idx.push(n - 1);
 
-  // ⚠️ EVERY LABEL TAKES THE YEAR IF THEY ALL FIT WITH ONE — measured, not a per-chart exception.
+  // ⚠️ THE RULE IS: FIRST LABEL, AND EVERY JANUARY. Nothing else.
   //
-  // Corey noticed the runway chart carrying a year on every tick and preferred it. That chart labels
-  // every 2–6 months, which is exactly the case where the years cost nothing: the ONLY reason to omit
-  // them is a smear, and at six labels there is no smear to avoid. Deriving it from the same width
-  // measurement that already picked the step keeps this ONE rule rather than "except on the runway
-  // chart" — which is the conditional-rule trap that made the first version of this worse.
-  const perYear = per * 1.35;                             // "Jul 26" against "Jul"
-
-  // ⚠️ A REPEATED MONTH NAME FORCES YEARS, whatever the width.
+  // I had built a density rule on top of this — years on every label when they fit, plus a
+  // repeated-month check — after reading a preference for the runway chart's labels as a request to
+  // change the rule. IT WAS NOT ONE. The approved rule is this one, and it is simpler; the density
+  // version was me generalising from a single remark.
   //
-  // At a twelve-month step every label is the same month: "Jul 26 · Jul · Jul · Jun" — three Julys in
-  // three different years, indistinguishable. The fit test alone produced exactly that on a 36-month
-  // phone chart. This checks the AMBIGUITY DIRECTLY rather than a proxy for it, so it also catches the
-  // six-month step where the anchoring January happens to fall outside the window.
-  const repeats = new Set(idx.map(i => i % 12)).size < idx.length;
-
-  const allYears = repeats || idx.length * perYear <= width;
-  return idx.map(i => ({ i, year: allYears || i === 0 }));
+  // `yearEvery` exists for ONE caller: RunwayChart labels every 2-6 months and carries a year on each,
+  // which Corey wants kept. An explicit opt-in from that chart is honest — a rule that guesses its way
+  // to the same outcome is the thing that went wrong here.
+  return idx.map(i => ({ i, year: yearEvery || i === 0 }));
 }
 
 /** Evenly spaced rule values across a domain, including both ends. */
@@ -131,7 +123,7 @@ export const legendMode = (count) => (count === 0 ? "none" : count <= 2 ? "endpo
 /** The frame. Scales, geometry, and everything a renderer needs to place its own series. */
 export function plotFrame({
   w = 720, h = 252, yMin = 0, yMax = 1, n = 1, startY, startM,
-  shape = "line", pad,
+  shape = "line", pad, yearEvery = false,
 } = {}) {
   const P = pad || { l: 52, r: 16, t: 14, b: 38 };
   const pw = w - P.l - P.r;
@@ -148,7 +140,7 @@ export function plotFrame({
   const y = (v) => P.t + ph - ((Number(v) || 0) - yMin) / span * ph;
 
   const rules = ruleValues(yMin, yMax).map(v => ({ v, y: y(v), label: moneyTick(v) }));
-  const ticks = monthTicks(n, w).map(({ i, year }) => ({
+  const ticks = monthTicks(n, w, { yearEvery }).map(({ i, year }) => ({
     i, x: x(i),
     label: Number.isFinite(startY) ? monthTick(startY, startM, i, { first: year }) : String(i),
   }));

@@ -9,6 +9,7 @@
 // AN EMPTY CHART SAYS WHY. `spec.empty` is a sentence — "no spend history imported yet" — because a
 // blank box looks like a bug and a sentence looks like an answer.
 import React, { useMemo } from "react";
+import { useStart } from "../../state/StartCtx";
 import { plotFrame } from "../../engine/plotframe";
 import { money } from "../../engine/money";
 import { TimelineRows } from "./TimelineRows";
@@ -63,11 +64,24 @@ const clean = (n) => (Number.isFinite(n) ? n : 0);
  *  first label and every January. Keeping the component's signature means the three call sites below
  *  are untouched — the labels change, the layout does not.
  */
-const TimeAxis = ({ ticks, n, y, startY, startM, width = W }) => {
+/** The time axis.
+ *
+ *  ⚠️ IT TAKES THE MODEL START FROM `useStart()`, NOT FROM THE SPEC. I wrote `startY={spec.startY}` at
+ *  two call sites and NO CHART'S `build()` RETURNS THAT FIELD — so every chart silently took the
+ *  fallback path, which read `axisTicks()`'s `label`. That field is `null` on any non-quarter month,
+ *  and the new label positions are counted from the START OF THE CHART rather than from calendar
+ *  quarters. On any chart not beginning in Jan/Apr/Jul/Oct the positions landed on months whose label
+ *  was null, and the axis lost most of its text.
+ *
+ *  `useStart()` is where every other view in this file's neighbourhood gets it, and it cannot be
+ *  undefined the way a spec field can.
+ */
+const TimeAxis = ({ ticks, n, y, width = W, yearEvery = false }) => {
+  const { START_Y, START_M } = useStart();
   const count = n || (ticks || []).length || 1;
-  const f = plotFrame({ w: width, h: H, n: count, pad: PAD, startY, startM });
-  // A TICK PER MONTH STILL, because the marks are cheap and they let somebody count. Only the LABELS
-  // thin — which was always the real problem with a three-year model.
+  const f = plotFrame({ w: width, h: H, n: count, pad: PAD,
+                        startY: START_Y, startM: START_M, yearEvery });
+  // A TICK PER MONTH still — the marks are cheap and let somebody count. Only the LABELS thin.
   const labelled = new Map(f.ticks.map(t => [t.i, t.label]));
   return (
     <g>
@@ -78,19 +92,14 @@ const TimeAxis = ({ ticks, n, y, startY, startM, width = W }) => {
           <g key={i}>
             <line x1={x} y1={y} x2={x} y2={y + (label ? 6 : 3)}
                   stroke={label ? "var(--muted-2)" : "var(--line-2)"} />
-            {label && (
-              <text x={x} y={y + 16} className="ch-t" textAnchor="middle">
-                {/* FALLS BACK TO THE OLD TICK LABEL when no model start was passed, so a caller that
-                    has not been updated still renders something true rather than a month index. */}
-                {startY == null ? ((ticks || [])[i]?.label ?? label) : label}
-              </text>
-            )}
+            {label && <text x={x} y={y + 16} className="ch-t" textAnchor="middle">{label}</text>}
           </g>
         );
       })}
     </g>
   );
 };
+
 
 
 const Axes = ({ s, xs, ticks, format }) => (
@@ -454,7 +463,7 @@ function Goals({ spec }) {
       {band(post, postTop, "post")}
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
-      <TimeAxis ticks={spec.ticks} n={n} y={base} startY={spec.startY} startM={spec.startM} />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} />
     </svg>
   );
 }
@@ -572,7 +581,7 @@ function Milestones({ spec }) {
       {band(fromRound, roundTop)}
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
-      <TimeAxis ticks={spec.ticks} n={n} y={base} startY={spec.startY} startM={spec.startM} />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} />
     </svg>
   );
 }

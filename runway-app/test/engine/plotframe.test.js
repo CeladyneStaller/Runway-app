@@ -22,9 +22,10 @@ describe("money on the axis", () => {
 });
 
 describe("the year rule", () => {
-  it("PUTS THE YEAR ON THE FIRST LABEL AND EVERY JANUARY", () => {
-    // Corey's rule. Mine was "January only" plus a fallback for windows with no January plus another
-    // for phone widths that drop it — two exceptions to a rule that fires "usually".
+  it("PUTS THE YEAR ON THE FIRST LABEL AND EVERY JANUARY — and nothing else", () => {
+    // ⚠️ THE APPROVED RULE, restored. I had built a density rule on top of it — years on every label
+    // when they fit, plus a repeated-month check — after reading a preference for the runway chart's
+    // labels as a request to change the rule. IT WAS NOT ONE.
     expect(monthTick(2026, 6, 0, { first: true })).toBe("Jul 26");
     expect(monthTick(2026, 6, 1)).toBe("Aug");
     expect(monthTick(2026, 6, 6)).toBe("Jan 27");
@@ -64,6 +65,19 @@ describe("label thinning", () => {
 
   it("survives a one-month chart", () => {
     expect(monthTicks(1, 720).map(t => t.i)).toEqual([0]);
+  });
+});
+
+describe("yearEvery — the one opt-in", () => {
+  it("IS OFF BY DEFAULT, and belongs to the caller that wants it", () => {
+    // RunwayChart labels every 2-6 months and carries a year on each. An explicit opt-in from that
+    // chart is honest; a rule that guesses its way to the same outcome is what went wrong before.
+    const plain = plotFrame({ w: 320, n: 36, startY: 2026, startM: 6, yMin: 0, yMax: 10 });
+    expect(plain.ticks.filter(t => /\d\d$/.test(t.label)).length).toBe(1);
+
+    const every = plotFrame({ w: 320, n: 36, startY: 2026, startM: 6, yMin: 0, yMax: 10,
+                              yearEvery: true });
+    expect(every.ticks.every(t => /\d\d$/.test(t.label))).toBe(true);
   });
 });
 

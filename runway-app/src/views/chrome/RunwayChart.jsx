@@ -46,8 +46,8 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
   const PH = H - T - B;
 
   const _f = plotFrame({ w: W, h: H, n: tMax + 1,
-                       startY: START_Y, startM: START_M,
-                       pad: { l: L, r: R, t: T, b: B } });
+                      startY: START_Y, startM: START_M,
+                      pad: { l: L, r: R, t: T, b: B } });
   const x = (t) => _f.xt(t, tMax);
   const y = (b) => {
     if (!BRK) return T + (1 - (b - balMin) / (balMax - balMin)) * PH;
