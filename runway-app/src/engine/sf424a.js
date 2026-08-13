@@ -72,7 +72,7 @@ export function exportBudget(p, g, R) {
     ["Federal share", ...bp3(i => R.per[i].federal), R.grand.federal],
     ["Non-federal cost-share", ...bp3(i => R.per[i].costShare), R.grand.costShare]]);
 
-  XLSX.writeFile(wb, `${p.name} - SF-424A.xlsx`);
+  return { wb, filename: `${p.name} - SF-424A.xlsx` };
 }
 
 export function exportSchedule(p, g) {
@@ -81,7 +81,7 @@ export function exportSchedule(p, g) {
     ...(g.milestones || []).map(m => [m.label, m.month, m.payment])];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Milestone Schedule");
-  XLSX.writeFile(wb, `${p.name} - Milestone Schedule.xlsx`);
+  return { wb, filename: `${p.name} - Milestone Schedule.xlsx` };
 }
 
 export const _norm = (v) => String(v ?? "").trim().toLowerCase();

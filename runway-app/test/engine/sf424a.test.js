@@ -36,23 +36,34 @@ describe("the Harbor Point workbook — a real DOE EERE SF-424A budget justifica
     expect(grand.personnel).toBeGreaterThan(0);
   });
 
-  // KNOWN GAP, asserted as a passing test so it reads green while still guarding the boundary:
-  // exportBudget writes a submission-ready SF-424A for a program officer; importWorkbook reads the DOE
-  // template. Different documents, so "export, edit in Excel, re-import" does NOT round-trip. This test
-  // pins that it doesn't — and will fail (correctly demanding attention) the day someone makes them
-  // inverses, at which point the fix is to assert the round-trip succeeds instead.
-  it("does not round-trip its own export — export writes a submission, import reads a template", () => {
+  // ⚠️ THE GAP CLOSED, AND THE TEST SAID WHAT TO DO WHEN IT DID.
+  //
+  // This used to assert that export -> re-import does NOT round-trip: `exportBudget` wrote a
+  // submission-ready SF-424A for a program officer, `importWorkbook` read the blank template, and they
+  // were different documents. The old test pinned that gap so nobody assumed a round trip that did not
+  // work — and its comment said that if the two ever converged, the fix was to assert the round trip
+  // SUCCEEDS instead.
+  //
+  // They have converged: the exported workbook re-imports to the same grand total, to the cent. So the
+  // assertion is inverted rather than deleted, and the property it now protects is the more useful one:
+  // **you can export, edit in Excel, and re-import without losing money.**
+  //
+  // ⚠️ IT ONLY BECAME VISIBLE WHEN `exportBudget` STOPPED WRITING TO DISK. Before that it threw at
+  // `XLSX.writeFile` under the test environment, so this assertion had not run in a long time — the
+  // convergence could have happened at any point and nothing would have said so. **A test that cannot
+  // reach its assertion is not a passing test or a failing one; it is an absent one.**
+  it("round-trips its own export — export and import now agree on the same workbook", () => {
     const g1 = importWorkbook(read());
     const t1 = computeGrant(g1).grand.total;
-    const wb2 = exportBudget({ name: "Round trip" }, g1, computeGrant(g1));
-    let recovered = null;
-    try {
-      const g2 = importWorkbook(XLSX.read(XLSX.write(wb2, { type: "buffer", bookType: "xlsx" }), { type: "buffer" }));
-      recovered = g2 ? computeGrant(g2).grand.total : null;
-    } catch { recovered = null; }
-    // the gap: re-import either fails or lands on a different number. If this ever equals t1, the two
-    // formats have converged and this test should flip to expect(recovered).toBeCloseTo(t1).
-    expect(recovered).not.toBeCloseTo(t1, 2);
+    const { wb: wb2, filename } = exportBudget({ name: "Round trip" }, g1, computeGrant(g1));
+
+    // It builds a workbook and names it; saving is the caller's job, which is what makes this testable.
+    expect(filename).toMatch(/Round trip.*\.xlsx$/);
+
+    const g2 = importWorkbook(XLSX.read(XLSX.write(wb2, { type: "buffer", bookType: "xlsx" }),
+                                        { type: "buffer" }));
+    expect(g2).toBeTruthy();
+    expect(computeGrant(g2).grand.total).toBeCloseTo(t1, 2);
   });
 
   it("the imported grant carries only what the workbook actually says", () => {

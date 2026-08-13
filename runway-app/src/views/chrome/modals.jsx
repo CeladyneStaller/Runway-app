@@ -209,11 +209,11 @@ export function GrantIOModal({ p, g, R, setGrant, onClose }) {
           <div className="modal-sec">Export</div>
           <div className="ioRow">
             <div><b>SF-424A budget justification</b><span>One tab per object-class category (Personnel, Fringe, Travel, Equipment, Supplies, Contractual, Construction, Other, Indirect) plus the Section B summary — line detail and justification text included.</span></div>
-            <button className="addbtn ghost" onClick={async () => (await import("../../engine/sf424a")).exportBudget(p, g, R)}>{I.download} Budget .xlsx</button>
+            <button className="addbtn ghost" onClick={async () => (async () => { const X = await import("xlsx"); const r = (await import("../../engine/sf424a")).exportBudget(p, g, R); X.writeFile(r.wb, r.filename); })()}>{I.download} Budget .xlsx</button>
           </div>
           <div className="ioRow">
             <div><b>Milestone / award schedule</b><span>A separate file — payment on each milestone.</span></div>
-            <button className="addbtn ghost" onClick={async () => (await import("../../engine/sf424a")).exportSchedule(p, g)}>{I.download} Schedule .xlsx</button>
+            <button className="addbtn ghost" onClick={async () => (async () => { const X = await import("xlsx"); const r = (await import("../../engine/sf424a")).exportSchedule(p, g); X.writeFile(r.wb, r.filename); })()}>{I.download} Schedule .xlsx</button>
           </div>
 
           <div className="modal-sec">Import</div>

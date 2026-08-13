@@ -1653,6 +1653,38 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## The SF-424A round trip closed, and the test said what to do about it
+
+Splitting `exportBudget` from its `writeFile` did not just fix a write error — **it revealed that the
+export and the import had converged.** The re-imported workbook now reconciles to the same grand total
+to the cent.
+
+The old test asserted the OPPOSITE, deliberately: export wrote a submission-ready form, import read the
+blank template, they were different documents, and the test pinned that gap so nobody assumed a round
+trip that did not work. **Its comment said that if they ever converged, the fix was to assert the round
+trip succeeds.** Inverted rather than deleted, and the property it protects now is the more useful one:
+**you can export, edit in Excel, and re-import without losing money.**
+
+**⚠️ IT ONLY BECAME VISIBLE WHEN THE FUNCTION STOPPED WRITING TO DISK.** Before that it threw at
+`XLSX.writeFile` under the test environment, so the assertion had not been reached in a long time —
+the formats could have converged at any point and nothing would have said so.
+
+**A test that cannot reach its assertion is not a passing test or a failing one; it is an absent one.**
+This one had been red for long enough to read as furniture.
+
+## `exportBudget` — building and saving were one job, and should not have been
+
+**The last failing test, and it was pre-existing.** `exportBudget` called `XLSX.writeFile` itself, so
+the only way to test what it BUILDS was to let it write a file — and under the test environment xlsx
+takes its **browser download path** and refuses with "cannot save file".
+
+**Both exporters now return `{ wb, filename }`** and the one caller with a user and a download does the
+saving. That makes the workbook shape testable without touching a filesystem, and **the test was
+already written as though this were true** — which is why it read so naturally and failed so oddly.
+
+**Zero `XLSX.writeFile` calls remain in `src/engine/`.** An engine module that writes to disk is one
+that cannot be tested for what it produces, only for whether it crashed.
+
 ## The staleness feature was inert, and lint found it
 
 **⚠️ `withFingerprints` WAS IMPORTED AND NEVER CALLED.** No patch ever carried an `fp`; `staleness()`
