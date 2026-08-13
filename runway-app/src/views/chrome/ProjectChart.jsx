@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { plotFrame } from "../../engine/plotframe";
 import { projectSeries } from "../../engine/projectchart";
 import { money } from "../../engine/money";
 import { useStart } from "../../state/StartCtx";
@@ -31,8 +32,13 @@ export function ProjectChart({ project, hist, maps }) {
   const vMax = Math.max(...all), vMin = Math.min(...all);
   const span = (vMax - vMin) || 1;
 
-  const x = (t) => PADL + (t / tMax) * (W - PADL - PADR);
-  const y = (v) => PADT + (1 - (v - vMin) / span) * (H - PADT - PADB);
+  // ⚠️ DELEGATES TO `plotframe.js`. This file, `Chart.jsx` and `RunwayChart.jsx` each defined their own
+  // `x` and `y` — three independent answers to "where is zero on this canvas". The continuous `xt` mode
+  // exists precisely so this renderer did not have to be re-expressed in month indices to share them.
+  const _f = plotFrame({ w: W, h: H, yMin: vMin, yMax: vMin + span,
+                         pad: { l: PADL, r: PADR, t: PADT, b: PADB } });
+  const x = (t) => _f.xt(t, tMax);
+  const y = (v) => _f.y(v);
 
   const line = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
 

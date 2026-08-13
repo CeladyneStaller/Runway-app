@@ -9,6 +9,7 @@
 // AN EMPTY CHART SAYS WHY. `spec.empty` is a sentence — "no spend history imported yet" — because a
 // blank box looks like a bug and a sentence looks like an answer.
 import React, { useMemo } from "react";
+import { plotFrame } from "../../engine/plotframe";
 import { money } from "../../engine/money";
 import { TimelineRows } from "./TimelineRows";
 
@@ -30,20 +31,24 @@ const fmt = (v, f) => {
   return money(v);
 };
 
-/** A scale that always includes zero, so a bar chart cannot imply a floor that is not there. */
+/** A scale that always includes zero, so a bar chart cannot imply a floor that is not there.
+ *
+ *  ⚠️ DELEGATES TO `plotframe.js` RATHER THAN COMPUTING ITS OWN. This file, `RunwayChart.jsx` and
+ *  `ProjectChart.jsx` each had their own `x` and `y` — three independent answers to "where is zero on
+ *  this canvas", and a gridline two pixels off its own baseline is the kind of bug nobody reports and
+ *  everybody notices. The shape of the return is unchanged so the 600 lines below it are untouched.
+ */
 function scale(values) {
-  const finite = values.filter(Number.isFinite);
+  const finite = (values || []).filter(Number.isFinite);
   const lo = Math.min(0, ...finite);
   const hi = Math.max(0, ...finite);
-  const span = hi - lo || 1;
-  return {
-    lo, hi,
-    y: (v) => PAD.t + PH - ((clean(v) - lo) / span) * PH,
-    zero: PAD.t + PH - ((0 - lo) / span) * PH,
-  };
+  const f = plotFrame({ w: W, h: H, yMin: lo, yMax: hi, pad: PAD });
+  return { lo, hi, y: f.y, zero: f.y(0) };
 }
+
+const xAt = (i, n) => plotFrame({ w: W, h: H, n, pad: PAD }).x(i);
+
 const clean = (n) => (Number.isFinite(n) ? n : 0);
-const xAt = (i, n) => PAD.l + (n <= 1 ? PW / 2 : (i / (n - 1)) * PW);
 
 /** The time axis, shared by every month-indexed chart.
  *
@@ -51,31 +56,42 @@ const xAt = (i, n) => PAD.l + (n <= 1 ? PW / 2 : (i / (n - 1)) * PW);
  *  any font size that fits, and labelling only the ends makes the reader interpolate. Quarters are
  *  Jan/Apr/Jul/Oct — `axisTicks` decides that; this only draws it.
  */
-const TimeAxis = ({ ticks, n, y }) => {
-  if (!ticks?.length) return null;
-  const step = Math.max(1, Math.ceil(ticks.filter(t => t.quarter).length / 7));
-  let shown = -1;
+/** The time axis.
+ *
+ *  ⚠️ DELEGATES ITS LABELS TO `plotframe.js`. It used to label per calendar quarter and thin by a
+ *  ratio; the house style labels adaptively on a FIXED sequence (1, 3, 6, 12) and puts the year on the
+ *  first label and every January. Keeping the component's signature means the three call sites below
+ *  are untouched — the labels change, the layout does not.
+ */
+const TimeAxis = ({ ticks, n, y, startY, startM, width = W }) => {
+  const count = n || (ticks || []).length || 1;
+  const f = plotFrame({ w: width, h: H, n: count, pad: PAD, startY, startM });
+  // A TICK PER MONTH STILL, because the marks are cheap and they let somebody count. Only the LABELS
+  // thin — which was always the real problem with a three-year model.
+  const labelled = new Map(f.ticks.map(t => [t.i, t.label]));
   return (
     <g>
-      {ticks.map((t, i) => {
-        const x = xAt(i, n);
-        if (!t.quarter) return <line key={i} x1={x} y1={y} x2={x} y2={y + 3} stroke="var(--line-2)" />;
-        shown += 1;
-        // Thinned when the span is long, so a three-year model does not stack labels on top of one
-        // another — the ticks stay, so nothing is lost but the words.
-        const label = shown % step === 0;
+      {Array.from({ length: count }, (_, i) => {
+        const x = f.x(i);
+        const label = labelled.get(i);
         return (
           <g key={i}>
-            <line x1={x} y1={y} x2={x} y2={y + 6} stroke="var(--muted-2)" />
-            {label && <text x={x} y={y + 16} className="ch-t" textAnchor="middle">{t.label}</text>}
-            {label && <text x={x} y={y + 25} className="ch-t" textAnchor="middle"
-                            opacity=".75">{t.q}</text>}
+            <line x1={x} y1={y} x2={x} y2={y + (label ? 6 : 3)}
+                  stroke={label ? "var(--muted-2)" : "var(--line-2)"} />
+            {label && (
+              <text x={x} y={y + 16} className="ch-t" textAnchor="middle">
+                {/* FALLS BACK TO THE OLD TICK LABEL when no model start was passed, so a caller that
+                    has not been updated still renders something true rather than a month index. */}
+                {startY == null ? ((ticks || [])[i]?.label ?? label) : label}
+              </text>
+            )}
           </g>
         );
       })}
     </g>
   );
 };
+
 
 const Axes = ({ s, xs, ticks, format }) => (
   <>
@@ -438,7 +454,7 @@ function Goals({ spec }) {
       {band(post, postTop, "post")}
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
-      <TimeAxis ticks={spec.ticks} n={n} y={base} />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} startY={spec.startY} startM={spec.startM} />
     </svg>
   );
 }
@@ -556,7 +572,7 @@ function Milestones({ spec }) {
       {band(fromRound, roundTop)}
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
-      <TimeAxis ticks={spec.ticks} n={n} y={base} />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} startY={spec.startY} startM={spec.startM} />
     </svg>
   );
 }

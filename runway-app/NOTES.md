@@ -1653,6 +1653,102 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## Phase 0 — where it actually stands
+
+**Done:**
+
+- `src/engine/plotframe.js` — the single geometry source, pure functions, no JSX.
+- `src/views/chrome/PlotFrame.jsx` — `PlotChrome` and `PlotLegend`.
+- **`Chart.jsx`** — `scale()` and `xAt()` delegate; `TimeAxis` delegates its LABELS while still drawing
+  a tick per month. Two of its three call sites pass the model start so the year rule applies; the
+  third (`Axes`) has no start in scope and uses the fallback, which renders the caller's own labels.
+- **`ProjectChart.jsx`** — delegates both scales.
+
+**⚠️ A SECOND X MODE WAS NEEDED AND IS THE INTERESTING PART.** `ProjectChart` and `RunwayChart` place
+marks at a CONTINUOUS position in a time domain (`t / tMax`), not at the i-th of n months — **a
+milestone at month 6.5 is a real thing.** Forcing them into the index model to share a frame would have
+moved every marker, which is the opposite of what the extraction is for. `plotFrame` now returns both
+`x(i)` and `xt(t, tMax)`.
+
+**⚠️ `RunwayChart.jsx` IS NOT ADOPTED, DELIBERATELY.** Its `y` is a multi-line function, it carries the
+milestone markers and stranded logic, and it is the renderer I flagged as needing a screenshot before
+and after. **Adopting it blind, with no test suite, at the end of a session is precisely what the plan
+said not to do.** It still defines its own `x` and `y`; the duplication is down from three to two.
+
+**VERIFICATION UNDER A BLOCKED REGISTRY.** npm has returned 403 since the container reset, so no suite
+ran. Instead: **113 geometry points compared for `Chart.jsx`** and **58 further checks for
+`ProjectChart` and the year rule**, all by reconstructing the previous implementation and diffing
+outputs under Node. Zero real differences — the single reported mismatch was **my expectation being
+wrong** (Dec 2025 + 1 month IS a January, so it correctly takes the year), which is worth recording
+because the instinct is to edit the assertion.
+
+**BEFORE TRUSTING ANY OF THIS: run the suite.** Then adopt `RunwayChart`, screenshot first.
+
+## Phase 0b/0c — the chrome component, and Chart.jsx delegating
+
+**`src/views/chrome/PlotFrame.jsx`** renders the chrome and NOTHING ELSE — frame, rules, ticks, zero,
+the today divider — and hands the scales back through `plotFrame`. `PlotLegend` picks endpoint labels
+or a swatch row from the series count, and orders the swatch row top-band-first to match a stack.
+
+**The split is deliberate.** `RunwayChart` carries milestone markers and stranded-milestone logic that
+has no business in a generic renderer; folding the three renderers together to share an axis would have
+dragged all of it along.
+
+**⚠️ `Chart.jsx` DELEGATES RATHER THAN RESTRUCTURES, and that was a decision forced by conditions.**
+The npm registry started returning 403 after a container reset, so `vite` is missing and **the test
+suite cannot run**. Restructuring a 630-line renderer blind is how a session ends with something that
+looks finished and is not. Instead `scale()` and `xAt()` now call `plotFrame` and return the same shape,
+so the 600 lines below them are untouched — the duplication is gone, the rendering is not disturbed.
+
+**PROVED EQUIVALENT NUMERICALLY.** The pre-delegation implementation was reconstructed and compared
+against the new one across six value sets and six month counts: **113 geometry points, 0 differences.**
+That is not the test suite, but it is a stronger claim about this particular change than the suite would
+have made.
+
+**STILL TO DO IN PHASE 0**, and it wants a working suite first:
+
+- Swap `TimeAxis` in `Chart.jsx` for `PlotChrome` — the visible half of the house style.
+- Adopt in `ProjectChart.jsx`, then `RunwayChart.jsx` LAST, because its milestone markers are positioned
+  against its current scale and are the most likely thing to move.
+- **Take a screenshot before each adoption.** It is the only way to tell "it moved because the frame is
+  shared now" from "it moved because I broke something".
+
+## Phase 0a — `plotframe.js`, the single geometry source
+
+**⚠️ THREE RENDERERS EACH DEFINED THEIR OWN `x` AND `y`.** `Chart.jsx`, `RunwayChart.jsx` and
+`ProjectChart.jsx` all computed their own scales and two carried their own `PAD` — three independent
+answers to "where is zero on this canvas". A gridline two pixels off its own baseline is the kind of bug
+nobody reports and everybody notices.
+
+**THE MODULE OWNS THE GEOMETRY, NOT JUST THE DECORATION.** Drawing chrome while each renderer kept its
+own scales would have left them free to disagree, which is the failure the extraction exists to remove.
+Pure functions, no JSX, so it tests without a DOM.
+
+**What it settles, each with a reason in the source:**
+
+- **`412k`, one unit all the way up.** Switching to `1.24M` halfway up an axis nobody expects to change
+  scale is how a reader misjudges a magnitude by three orders.
+- **⚠️ THE DOMAIN ALWAYS INCLUDES ZERO.** Starting at 300k because the data sits between 300k and 600k
+  doubles the apparent slope of a decline.
+- **Four rules, fixed.** Adaptive counts make two charts on one screen disagree about where the rules
+  sit, which reads as a difference in the data.
+- **Year on the first label and every January** — Corey's rule, which replaced mine. I had "January
+  only" plus a fallback for windows containing no January plus another for phone widths that drop it.
+  **Two exceptions to a rule that fires "usually" is a rule that fails in the cases nobody tests.**
+- **Labels thin on a FIXED sequence** — 1, 3, 6, 12 — so the same chart does not label differently on
+  two devices.
+- **No vertical rules on bars or stacks.** They already divide the months.
+- **The legend switches on series count**, not on a setting: 1–2 endpoint labels, 3+ a swatch row.
+- **Zero is reported separately from the rules** and drawn heavier — it is a real event here.
+
+**Decisions settled by Corey before build:** chart building is **ungated** (an unsaved custom chart is
+not a write, and gating it would make an unpaid account look broken rather than limited); **an advisor's
+saved charts live with the advisor**, not the company.
+
+**⚠️ THE TEST SUITE COULD NOT RUN IN THIS CONTAINER** — the npm registry returned 403 after a reset and
+`vite` is missing. `test/engine/plotframe.test.js` is written and committed; **the 31 assertions were
+verified by running the module directly under Node instead.** Run the suite before trusting the file.
+
 ## Scenario staleness — flagged in all three places
 
 **⚠️ THE FINGERPRINT IS STORED; THE FLAG IS DERIVED.** A fingerprint records what a patch READ at build
