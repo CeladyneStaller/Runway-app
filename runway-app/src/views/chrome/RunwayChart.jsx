@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React from "react";
+import { plotFrame } from "../../engine/plotframe";
 import { money } from "../../engine/money";
 import { dateShort, monthLabel } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
@@ -44,7 +45,9 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
   const F = 0.74;              // share of the plot given to the operating band
   const PH = H - T - B;
 
-  const x = (t) => L + (t / tMax) * (W - L - R);
+  const _f = plotFrame({ w: W, h: H, n: tMax + 1, startY, startM,
+                       pad: { l: L, r: R, t: T, b: B } });
+  const x = (t) => _f.xt(t, tMax);
   const y = (b) => {
     if (!BRK) return T + (1 - (b - balMin) / (balMax - balMin)) * PH;
     if (b <= breakAt) return T + PH * (1 - ((b - balMin) / (breakAt - balMin)) * F);
