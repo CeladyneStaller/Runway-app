@@ -1653,6 +1653,34 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## ⚠️ I INVENTED TWO CHART TYPES THAT DO NOT EXIST
+
+**"Money out gives no line chart but gives a bar chart."** The renderer's table is:
+
+    const SHAPES = { lines, stack, bars, hbars, diverging, pace, goals, milestones }
+
+**I wrote `"line"` — singular, against a shape called `lines` — and `"area"`, which has no renderer at
+all.** `SHAPES[spec.kind]` returned `undefined` and the chart drew NOTHING: no error, no crash, an empty
+frame. Bars worked because `bars` happens to be spelled the way I guessed.
+
+**No chart in the codebase emits `"line"`.** Five emit `"lines"`. One grep would have told me, and I
+wrote the registry from the mockups' vocabulary instead of the renderer's.
+
+**This is the same failure as the invented FIELD keys**, arriving through the type control rather than
+the data: a name that does not resolve produces silence, not an error. The measure guard catches
+invented fields; nothing was watching the shape names.
+
+**`measures.test.js` now reads `SHAPES` out of `Chart.jsx`** and asserts every `allows` entry is a real
+key — plus every value `allowedTypes()` can return.
+
+**⚠️ AND THE GUARD ITSELF FAILED VACUOUSLY FIRST.** My regex expected one key per line; `SHAPES` is
+declared across two lines, so it matched nothing, `known` was empty, and the test passed while checking
+nothing. **A guard that silently matches nothing is the exact thing it was written to prevent** — it now
+asserts the table was found before using it.
+
+**Area is gone from the builder rather than faked.** Offering a type that draws nothing is worse than
+offering three that work.
+
 ## ⚠️ THE BUILDER WAS UNREACHABLE, AND LINT WAS CLEAN
 
 **Phase 3 shipped with no way into it.** The menu extension landed; the entry point and the builder

@@ -129,3 +129,41 @@ describe("dimensions", () => {
     expect(out[0].values).toEqual([0, 0, 500, 0, 0]);
   });
 });
+
+describe("⚠️ every type name is one the renderer actually has", () => {
+  const src = require("node:fs").readFileSync("src/views/chrome/Chart.jsx", "utf8");
+  // The renderer dispatches `SHAPES[spec.kind]`. A name that is not a key returns undefined and the
+  // chart draws NOTHING — no error, no crash, an empty frame.
+  // `SHAPES` is declared across two lines, not as an indented block — a regex expecting one key per
+  // line matched nothing and the guard passed vacuously. **A guard that silently matches nothing is
+  // the thing it was written to prevent**, so it now asserts the table was found before using it.
+  const table = /const SHAPES = \{([\s\S]*?)\};/.exec(src)?.[1] ?? "";
+  const known = [...table.matchAll(/(\w+)\s*:/g)].map(m => m[1]);
+
+  it("FINDS THE TABLE AT ALL — a vacuous guard is worse than none", () => {
+    expect(known.length).toBeGreaterThan(4);
+  });
+
+  it("KNOWS WHAT THE RENDERER KNOWS", () => {
+    expect(known).toContain("lines");
+    expect(known).toContain("bars");
+    expect(known).toContain("stack");
+  });
+
+  it("⚠️ NAMES NO SHAPE THE RENDERER LACKS", () => {
+    // I wrote "line" (singular — the renderer's is "lines") and "area", which does not exist at all.
+    // Money out offered a Line button that produced an empty chart, and lint could not see it because
+    // a missing key is not a syntax error.
+    for (const m of MEASURES) {
+      for (const t of m.allows) {
+        expect(known, `${m.id} allows '${t}', which the renderer cannot draw`).toContain(t);
+      }
+    }
+  });
+
+  it("and allowedTypes never returns one either", () => {
+    for (const ids of [["cost"], ["cost", "payroll"], ["end"], ["rev", "headcount"]]) {
+      for (const t of allowedTypes(ids)) expect(known).toContain(t);
+    }
+  });
+});

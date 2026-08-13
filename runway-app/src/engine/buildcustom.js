@@ -61,7 +61,7 @@ export function buildCustom(cfg, doc, parts, rows) {
   // ⚠️ A THIRD UNIT IS REFUSED RATHER THAN GIVEN A THIRD AXIS NOBODY CAN READ. Two is already a
   // compromise; three is a picture with no scale.
   if (units.length > 2) {
-    return { kind: "line", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
+    return { kind: "lines", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
              note: "Too many different units on one chart — plot at most two." };
   }
 
@@ -69,7 +69,7 @@ export function buildCustom(cfg, doc, parts, rows) {
   if (dim && ids.length === 1) {
     const split = splitBy(dim, linesFor(ids[0], parts, doc), n, doc);
     if (tooManySeries(1, split.length)) {
-      return { kind: "line", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
+      return { kind: "lines", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
                note: `${split.length} series is more than a chart can show — remove the breakdown.` };
     }
     return finish(cfg, doc, split.map((s, i) => ({
@@ -84,7 +84,7 @@ export function buildCustom(cfg, doc, parts, rows) {
   // codes is twenty-four series produced by two entirely reasonable choices — the builder greys the
   // breakdown out, and this is the engine saying the same thing.
   if (dim && ids.length > 1) {
-    return { kind: "line", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
+    return { kind: "lines", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
              note: "Pick one measure to break down, or drop the breakdown to plot several." };
   }
 
@@ -108,8 +108,8 @@ function finish(cfg, doc, series, ids) {
   // ⚠️ THE TYPE FALLS BACK RATHER THAN DRAWING SOMETHING FALSE. If a saved chart asks for a stack that
   // its measures no longer allow — because one now contains another — it draws as lines and says so,
   // instead of asserting that the parts sum to the whole.
-  const asked = cfg?.measures?.[0]?.type || "line";
-  const kind = ok.includes(asked) ? asked : (ok[0] || "line");
+  const asked = cfg?.measures?.[0]?.type || "lines";
+  const kind = ok.includes(asked) ? asked : (ok[0] || "lines");
   const over = overlaps(ids);
   return {
     kind: kind === "bars" ? "bars" : kind,

@@ -2,7 +2,9 @@ import { useState } from "react";
 import { measuresFor, measureById, overlaps, unitsOf, allowedTypes } from "../../engine/measures";
 import { dimensionsFor } from "../../engine/dimensions";
 
-const TYPES = [["line", "Line"], ["bars", "Bar"], ["stack", "Stacked"], ["area", "Area"]];
+// ⚠️ THE RENDERER'S NAMES. `lines` is plural, and there is no `area` renderer at all — offering one
+// would be offering a chart type that draws nothing.
+const TYPES = [["lines", "Line"], ["bars", "Bar"], ["stack", "Stacked"]];
 
 /** The four choices: Plot, Broken down by, Across, and a type per measure.
  *
@@ -106,10 +108,10 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
                   <td>
                     {TYPES.map(([t, lab]) => {
                       const allowed = ok.includes(t) && (def?.allows || []).includes(t)
-                        && !(cfg.across === "category" && (t === "line" || t === "area"));
+                        && !(cfg.across === "category" && t === "lines");
                       const why = !(def?.allows || []).includes(t)
                         ? `A ${def?.label.toLowerCase()} cannot be drawn as ${lab.toLowerCase()}.`
-                        : cfg.across === "category" && (t === "line" || t === "area")
+                        : cfg.across === "category" && t === "lines"
                         ? "A category chart has no time axis to draw along."
                         : "These measures overlap, so a stack would not add up.";
                       return (

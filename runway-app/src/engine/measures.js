@@ -15,7 +15,7 @@ export const MEASURES = [
   // ── flows, on every tab that shows money moving ──
   { id: "rev", tab: ["flow", "dash"], label: "Money in", unit: "money",
     get: (rows) => rows.map(r => r.rev),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "cost", tab: ["flow", "dash", "hist"], label: "Money out", unit: "money",
     get: (rows) => rows.map(r => r.cost),
@@ -30,59 +30,59 @@ export const MEASURES = [
     // PROJECT, not per month, so there is no honest `get` to write. **Re-add it here the same day it
     // becomes a measure** — the containment is true, the measure is simply missing.
     contains: ["payroll", "opex", "baseline", "projectSpend"],
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "net", tab: ["flow", "dash"], label: "Net", unit: "money",
     get: (rows) => rows.map(r => r.net),
     // ⚠️ NET IS rev MINUS cost. All three on one chart double-counts every dollar.
     contains: ["rev", "cost"],
-    allows: ["line", "bars", "area"] },
+    allows: ["lines", "bars"] },
 
   { id: "end", tab: ["flow", "dash"], label: "Cash balance", unit: "money",
     get: (rows) => rows.map(r => r.end),
     // A BALANCE IS A POSITION, NOT A FLOW. Balances do not sum, so stacking one is meaningless and
     // area under one implies an accumulation that has already accumulated.
-    allows: ["line", "bars"] },
+    allows: ["lines", "bars"] },
 
   { id: "inNonGrant", tab: ["flow"], label: "Non-grant inflow", unit: "money",
     get: (rows) => rows.map(r => r.inNonGrant ?? 0),
     // ⚠️ A SUBSET OF `rev`. It exists to answer what cost share can be matched with.
     contains: ["rev"],
-    allows: ["line", "bars", "area"] },
+    allows: ["lines", "bars"] },
 
   // ── costs, from the compiled line items ──
   { id: "payroll", tab: ["pay", "flow", "hist"], label: "Payroll", unit: "money",
     get: (rows, parts) => sumLines(parts?.employeeLines, rows.length),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "opex", tab: ["flow", "hist"], label: "Operating costs", unit: "money",
     get: (rows, parts, doc) => sumLines((doc?.lines || []).filter(l => l.kind === "cost"), rows.length),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "baseline", tab: ["hist", "flow"], label: "Baseline burn", unit: "money",
     get: (rows, parts) => sumLines(parts?.baselineLines, rows.length),
     // MEASURED SPEND MINUS WHAT IS ITEMISED — so it moves when itemisation does, not on its own.
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "projectSpend", tab: ["proj", "flow"], label: "Project spend", unit: "money",
     get: (rows, parts) => sumLines(parts?.projectLines?.filter(l => l.kind === "cost"), rows.length),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "drawdowns", tab: ["proj"], label: "Grant drawdowns", unit: "money",
     get: (rows, parts) => sumLines(parts?.projectLines?.filter(l => l.kind === "revenue"), rows.length),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "salesRev", tab: ["sales"], label: "Order revenue", unit: "money",
     get: (rows, parts) => sumLines(parts?.salesLines, rows.length),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "capital", tab: ["inv"], label: "Capital in", unit: "money",
     get: (rows, parts) => sumLines(parts?.roundLines, rows.length),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   { id: "saasRev", tab: ["flow"], label: "Recurring revenue", unit: "money",
     get: (rows, parts) => sumLines(parts?.saasLines, rows.length),
-    allows: ["line", "bars", "stack", "area"] },
+    allows: ["lines", "bars", "stack"] },
 
   // ⚠️ A DIFFERENT UNIT, AND THAT IS THE POINT. Dollars and people on one scale is not a chart, it is
   // a coincidence of magnitudes — $412,000 and 6 people drawn together makes headcount a flat line on
@@ -90,7 +90,7 @@ export const MEASURES = [
   { id: "headcount", tab: ["pay"], label: "Headcount", unit: "people",
     get: (rows, parts, doc) => rows.map((_, m) =>
       (doc?.employees || []).filter(e => (e.start || 0) <= m && (e.end == null || e.end >= m)).length),
-    allows: ["line", "bars"] },
+    allows: ["lines", "bars"] },
 ];
 
 /** Monthly totals from a set of compiled lines. Lines carry `{ amount, cadence, start, end, kind }`. */
@@ -133,7 +133,7 @@ export const unitsOf = (ids = []) =>
 /** Types every selected measure allows, minus stacking when anything overlaps. */
 export function allowedTypes(ids = []) {
   const sets = ids.map(i => measureById(i)?.allows || []);
-  let ok = ["line", "bars", "stack", "area"].filter(t => sets.every(s => s.includes(t)));
+  let ok = ["lines", "bars", "stack"].filter(t => sets.every(s => s.includes(t)));
   if (overlaps(ids).length) ok = ok.filter(t => t !== "stack");
   return ok;
 }
