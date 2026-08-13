@@ -13,6 +13,10 @@
 // one component would be six prop chains maintained forever, and `tabprefs.js` already established the
 // pattern for exactly this.
 import React, { createContext, useContext, useMemo, useState } from "react";
+import { buildCustom } from "../../engine/buildcustom";
+import { MEASURES } from "../../engine/measures";
+import { savedFor, saveChart, setDefaultChart, defaultChartId, resolveSaved } from "../../engine/savedcharts";
+import { ChartBuilder, SaveChartBar } from "./ChartBuilder";
 import { buildChart, chartsForTab, defaultChartFor, chartById } from "../../engine/charts";
 import { alertsFor } from "../../engine/alerts";
 import { lensFor, chartIdFor, applyLens } from "../../engine/lenses";
@@ -21,8 +25,13 @@ import { Chart } from "./Chart";
 const InsightCtx = createContext(null);
 
 /** Provided once, by the app shell. */
-export function InsightProvider({ doc, parts, onGo, children }) {
-  const value = useMemo(() => ({ doc, parts, onGo }), [doc, parts, onGo]);
+export function InsightProvider({ doc, parts, onGo, setDoc, isOwner = false, userName = null, children }) {
+  // ⚠️ `setDoc`, `isOwner` AND `userName` ARE NEW, and all three are optional. Without `setDoc` the
+  // builder still works and simply cannot save; without `isOwner` nobody sees "Set as default". A
+  // missing prop degrades to a narrower feature rather than a crash — which is what the four `ctx.x`
+  // reads in the menu below depend on.
+  const value = useMemo(() => ({ doc, parts, onGo, setDoc, isOwner, userName }),
+                        [doc, parts, onGo, setDoc, isOwner, userName]);
   return <InsightCtx.Provider value={value}>{children}</InsightCtx.Provider>;
 }
 
@@ -38,6 +47,11 @@ export function TabInsights({ tab, subtab }) {
   const ctx = useContext(InsightCtx);
   const [chosen, setChosen] = useState(() => read(tab));
   const [picking, setPicking] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [naming, setNaming] = useState(false);
+  // ⚠️ THE UNSAVED CONFIG IS COMPONENT STATE AND IS NEVER WRITTEN. Changing the chart replaces the
+  // default in THIS view and nowhere else — experimenting has to be free or nobody experiments.
+  const [cfg, setCfg] = useState({ measures: [], by: null, across: "month" });
 
   const options = useMemo(() => chartsForTab(tab), [tab]);
   const alerts = useMemo(
@@ -47,10 +61,23 @@ export function TabInsights({ tab, subtab }) {
   const id = chartIdFor(tab, subtab, options.some(o => o.id === chosen) ? chosen : null,
                         defaultChartFor(tab));
 
+  // A SAVED CHART IS SELECTED BY THE SAME `chosen` FIELD as a curated one — one field holding either
+  // kind of id, so the two cannot disagree the first time somebody deletes a saved chart.
+  const saved = ctx ? savedFor(ctx.doc, tab) : [];
+  const pickedSaved = saved.find(c => c.id === chosen) || null;
+
   const spec = useMemo(() => {
-    if (!ctx || !id) return null;
-    return applyLens(buildChart(id, ctx.doc, ctx.parts), lens, ctx.doc);
-  }, [ctx, id, lens]);
+    if (!ctx) return null;
+    // ⚠️ THREE SOURCES, ONE SPEC SHAPE. An unsaved build, a saved chart, or a curated one — all three
+    // produce `{ kind, x, ticks, series, format }`, which is why the lens and renderer below need to
+    // know nothing about which it is.
+    const live = cfg.measures.length
+      ? buildCustom(cfg, ctx.doc, ctx.parts, ctx.parts?.rows || [])
+      : pickedSaved
+      ? buildCustom(resolveSaved(pickedSaved, MEASURES.map(m => m.id)), ctx.doc, ctx.parts, ctx.parts?.rows || [])
+      : id ? buildChart(id, ctx.doc, ctx.parts) : null;
+    return live ? applyLens(live, lens, ctx.doc) : null;
+  }, [ctx, id, lens, cfg, pickedSaved]);
 
   if (!ctx) return null;
 
@@ -79,15 +106,47 @@ export function TabInsights({ tab, subtab }) {
               <h3>{current.name}{lens?.label ? ` · ${lens.label}` : ""}</h3>
               <p>{current.why}</p>
             </div>
-            {options.length > 1 && (
-              <button className="linkbtn" onClick={() => setPicking(p => !p)}>
-                {picking ? "Close" : "Change chart"}
-              </button>
-            )}
+            {/* ALWAYS OFFERED NOW — even with one curated chart, there is a builder behind it. */}
+            <button className="linkbtn" onClick={() => { setPicking(p => !p); setBuilding(false); }}>
+              {picking ? "Close" : "Change chart"}
+            </button>
           </div>
 
-          {picking ? (
+          {picking && !building ? (
             <div className="ch-pick">
+              {/* ⚠️ SAVED CHARTS SIT ABOVE THE STANDARD ONES. They are the company's own and were made
+                  deliberately; a list that buries them under the built-ins teaches everybody to scroll
+                  past their own work. */}
+              {saved.length > 0 && <div className="ch-grp">Saved by your company</div>}
+              {saved.map(c => (
+                <label key={c.id} className={"ch-opt" + (c.id === chosen ? " on" : "")}>
+                  <input type="radio" name={`chart-${tab}`} checked={c.id === chosen}
+                         onChange={() => pick(c.id)} aria-label={c.name} />
+                  <span>
+                    <span className="ch-opt-n">
+                      {c.name}
+                      {defaultChartId(ctx.doc, tab) === c.id && <span className="chip on">default</span>}
+                    </span>
+                    {/* A SAVED CHART CANNOT HAVE A `why` — a builder cannot write one. So it shows what
+                        it plots and who saved it, which is the honest substitute. */}
+                    <span className="ch-opt-w">
+                      {c.measures.map(m => m.id).join(", ")}
+                      {c.by ? ` by ${c.by}` : ""}{c.savedBy ? ` · saved by ${c.savedBy}` : ""}
+                    </span>
+                  </span>
+                  {/* ⚠️ OWNER ONLY. It is the one control here that changes what another person sees —
+                      and it applies on THEIR next tab load, never mid-read. */}
+                  {ctx.isOwner && defaultChartId(ctx.doc, tab) !== c.id && (
+                    <button className="linkbtn" onClick={(e) => {
+                      e.preventDefault();
+                      const r = setDefaultChart(ctx.doc, tab, c.id, { isOwner: true });
+                      if (!r.error) ctx.setDoc?.(r.doc);
+                    }}>Set as default</button>
+                  )}
+                </label>
+              ))}
+
+              {saved.length > 0 && <div className="ch-grp">Standard charts</div>}
               {options.map(o => (
                 <label key={o.id} className={"ch-opt" + (o.id === id ? " on" : "")}>
                   <input type="radio" name={`chart-${tab}`} checked={o.id === id}

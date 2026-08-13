@@ -1653,6 +1653,45 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## Phase 3 — the builder UI
+
+`ChartBuilder.jsx` inside `TabInsights`, plus the menu extension.
+
+**⚠️ UNSAVED AND PRIVATE.** The config is component state and is never written. Changing the chart
+replaces the default IN THIS VIEW and nowhere else — no save, no confirmation, no effect on anybody.
+**Experimenting has to be free or nobody experiments.**
+
+**THREE SOURCES, ONE SPEC SHAPE.** An unsaved build, a saved chart, or a curated one all produce
+`{ kind, x, ticks, series, format }` — which is why the lens and the renderer need to know nothing about
+which is which. A saved chart is selected by the SAME `chosen` field as a curated one.
+
+**Type is per measure, not per chart** — two flows as bars with a balance as a line over them is the
+most useful chart in the product, and a global switch cannot express it.
+
+**Picking a second measure drops the breakdown**, rather than producing twenty-four series from two
+reasonable choices. The select disables itself and says why.
+
+**Every refusal is `buildCustom`'s decision surfaced with a reason** — the overlap notice, the unit
+notice, the disabled types each carrying their own `title`. **The engine computes; the UI explains.**
+
+**Saved charts sit ABOVE the standard ones** and show what they plot and who saved them, because a
+builder cannot write a `why`. **"Set as default" is owner-only** and is the one control that changes
+another person's screen.
+
+### Two things found by wiring rather than by reading
+
+**⚠️ `ctx.rows` DOES NOT EXIST — rows live inside `parts`.** `App.jsx` passes
+`parts={{ ...parts, rows, msWithBal }}`, so `ctx.rows` would have been `undefined` and every custom
+chart would have built from an empty projection: **no error, no crash, an empty chart.** Corrected to
+`ctx.parts?.rows`.
+
+**The provider had no `setDoc`, `isOwner` or `userName`.** All three are optional and degrade rather
+than crash: without `setDoc` the builder works and cannot save; without `isOwner` nobody sees "Set as
+default".
+
+**Phases 1-5 are now built. Nothing here has run** — npm is still 403 in this container, so lint is the
+only check. The view suite in particular has no coverage of any of it yet.
+
 ## Two real bugs on the first run of the new engine, both caught by their own guards
 
 **⚠️ `cost` CONTAINED `costshare`, WHICH IS NOT A MEASURE.** The self-consistency check found it
