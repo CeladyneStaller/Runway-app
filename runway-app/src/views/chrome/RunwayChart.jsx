@@ -3,6 +3,7 @@ import React from "react";
 import { money } from "../../engine/money";
 import { dateShort, monthLabel } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
+import { plotFrame } from "../../engine/plotframe";
 
 export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
   const { START_Y, START_M } = useStart();
