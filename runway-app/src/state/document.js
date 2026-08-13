@@ -4,7 +4,7 @@
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 const settings = () => ({
   fringePct: 0.30,
@@ -174,6 +174,16 @@ export const demoDoc = () => ({
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.
 const MIGRATIONS = {
+  // v8 -> v9: saved charts and per-tab defaults.
+  //
+  // Purely additive and absent by default — a document with neither behaves exactly as before, because
+  // `savedFor()` returns an empty list and `defaultChartId()` returns null, which is what the existing
+  // `defaultChartFor(tab)` already handles.
+  //
+  // ⚠️ ONE-DIRECTIONAL. An old client opening a v9 document drops `savedCharts` silently on its next
+  // write. Deploy the client before anybody saves a chart.
+  9: (d) => ({ ...d, schemaVersion: 9 }),
+
   // v7 -> v8: the plan gains a THRUST level (the template's "TASK 1" rows).
   //
   // ⚠️ NO THRUST IS INVENTED. A plan with milestones at the top level is valid and renders exactly as

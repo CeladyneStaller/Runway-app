@@ -67,7 +67,18 @@ export function chartIdFor(tab, subtab, chosen, fallback) {
 /** Narrow a built spec to what the sub-tab is about. */
 export function applyLens(spec, lens, doc) {
   if (!lens || !spec || spec.empty) return spec;
-  if (!lens.keep && !lens.rows) return spec;
+  if (!lens.keep && !lens.rows && !spec.dimOthers) return spec;
+
+  // ⚠️ DIM RATHER THAN FILTER — the "all sub-tabs" mode. The series the sub-tab names is drawn at full
+  // strength and the rest stay, marked. THEY MUST STAY ON THE AXIS SCALE: if a dimmed series dropped
+  // out of the domain, the emphasised one would jump every time somebody changed sub-tab, and the chart
+  // would lie about magnitude while appearing to be helpful.
+  //
+  // Dimming is opacity, never a colour change. A dimmed series that turned grey has changed identity;
+  // one at low opacity is the same series, quieter.
+  if (spec.dimOthers && lens.keep) {
+    return { ...spec, series: (spec.series || []).map(s => ({ ...s, dim: !lens.keep.includes(s.id) })) };
+  }
 
   const series = lens.keep ? (spec.series || []).filter(s => lens.keep.includes(s.id)) : spec.series;
   const rows = lens.rows ? (spec.rows || []).filter(r => lens.rows(r, doc)) : spec.rows;

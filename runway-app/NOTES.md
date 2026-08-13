@@ -1653,6 +1653,106 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## Two real bugs on the first run of the new engine, both caught by their own guards
+
+**⚠️ `cost` CONTAINED `costshare`, WHICH IS NOT A MEASURE.** The self-consistency check found it
+immediately — which is exactly why it exists: a containment naming something that does not exist
+**silently stops warning about a real overlap, and reads as coverage**, which is worse than having
+neither. Cost share IS inside money out; it is not plottable yet because `costshare.js` reconciles PER
+PROJECT rather than per month, so there is no honest `get` to write. **Re-add the containment the day it
+becomes a measure** — the relationship is true, the measure is missing.
+
+**⚠️ THE CHART WINDOW IS 18 MONTHS AND THE PROJECTION IS 37 ROWS.** Measures read the full projection —
+correctly, that is where the numbers are — but every curated chart draws `months(doc)`, which is
+`MONTHS_SHOWN = 18`. `buildCustom` was handing the renderer **37 values against an 18-point axis**: the
+tail would have been drawn past the frame or silently dropped depending on the shape, and nothing would
+have said which.
+
+**The keystone test caught it by comparing LENGTHS against a curated chart**, before ever comparing a
+value. That is the whole argument for testing a new builder against something the registry already
+draws rather than against hand-written expectations.
+
+**`splitBy` still builds at the full projection length and is clipped afterwards** — a line ending at
+month 30 has to be counted before the window is applied, or a breakdown would disagree with its own
+total.
+
+## Phases 2, 4 and 5 — the engine half of the chart builder
+
+**Phase 2 · `buildcustom.js`.** It returns THE SAME SPEC every curated chart returns —
+`{ kind, x, ticks, series, format }` — which is the whole reason this is days rather than weeks: the
+picker, the renderer, the lens and the shared frame all work unchanged, because from their side a
+custom chart is just another chart. `months()` had to be exported from `charts.js` so there is one
+answer to where a month sits rather than two.
+
+**⚠️ THE KEYSTONE TEST: it must reproduce `flow.inout`'s own series values.** If it can rebuild a chart
+the registry already draws, it is correct for the whole family — stronger evidence than any number of
+hand-written cases about a chart nobody has seen.
+
+**What it refuses, and says rather than silently doing:**
+
+- **A third unit.** Two is already a compromise; three is a picture with no scale.
+- **Several measures WITH a breakdown.** Three measures by eight codes is twenty-four series from two
+  reasonable choices.
+- **A stack whose measures overlap** — it falls back to lines and says "these measures overlap, so
+  stacking them would not add up", rather than asserting the parts sum to the whole.
+
+**Phase 5 · `applyLens` gained `dim`.** Marks instead of filtering, and **the dimmed series stay on the
+axis scale** — if one dropped out of the domain, the emphasised series would jump every time somebody
+changed sub-tab, and the chart would lie about magnitude while appearing helpful. Filtering behaviour is
+untouched when `dimOthers` is off.
+
+**Phase 4 · `savedcharts.js`, schema v9.**
+
+- **Saving ADDS; it never overwrites.** One slot per tab would have made every save a silent replacement
+  of a colleague's work.
+- **Saving and setting the default are DIFFERENT ACTS.** Saving makes a chart available; setting the
+  default makes it the one people land on. Anyone may save; **only an owner may set the default.**
+- **One field holds either kind of id.** A separate "is it custom" flag would be a second thing to keep
+  in step, and they would disagree the first time somebody deleted a saved chart.
+- **Deleting the default falls back to the curated chart, and `deleteImpact` says so BEFORE the delete**
+  — the same rule as deleting a thrust with milestones under it.
+- **An unknown measure is dropped and REPORTED.** A saved chart outlives the measures it names.
+
+**⚠️ PHASE 3 — THE BUILDER UI — IS NOT BUILT.** Everything above is engine, and npm is still 403 here, so
+lint is the only check that has run on any of it.
+
+## Phase 1 — the measure and dimension registries
+
+`src/engine/measures.js` and `src/engine/dimensions.js`. Pure data and pure functions, no UI.
+
+**⚠️ THE INVENTED-KEY GUARD IS BUILT IN FROM THE START THIS TIME.** The scenario factor registry taught
+it: `pay.salary`, `saas.customers`, `saas.churn` and two more were written from what the UI SHOWS rather
+than what the model HOLDS. **Here the failure is quieter** — a measure whose `get` reads nothing returns
+a flat zero line, which looks like a true answer about a company with no spend. `measures.test.js`
+asserts every measure returns a finite number per month AND is not flat zero where the demo has data.
+
+**`contains` is the double-count guard**, and it is checked for self-consistency: a containment naming a
+measure that does not exist would silently stop warning about a real overlap.
+
+    cost  contains  payroll, opex, baseline, costshare, projectSpend
+    net   contains  rev, cost          <- all three double-counts every dollar
+    rev   contains  inNonGrant         <- a subset, not a peer
+
+**⚠️ OVERLAP REFUSES STACKING AND ONLY STACKING.** "Money out, and how much of it is payroll" is a
+legitimate chart of exactly that shape. A STACK is different: it asserts the parts sum to the whole,
+which is false when one contains another.
+
+**A balance allows neither stack nor area.** It is a position, not a flow — balances do not sum, and
+area under one implies an accumulation that has already accumulated.
+
+**`unit` is what stops dollars and headcount sharing an axis.** $412,000 and 6 people on one scale is
+not a chart, it is a coincidence of magnitudes.
+
+**Dimensions always emit "Unassigned" and never hide it** — spend belonging to no project is usually the
+most interesting series, and dropping it would make the others sum to less than the total. It sorts
+last; everything else sorts biggest first, to match how a stack reads.
+
+**The series limit is on the RESULT, not the dropdowns.** Three measures by eight codes is twenty-four
+series produced by two reasonable choices; two measures against a small dimension is fine.
+
+**Not yet run:** npm is still 403 in this container, so lint is the only check that executed. Run the
+suite before trusting the two new test files.
+
 ## Phase 0 complete — RunwayChart adopted, x side only
 
 **`x` DELEGATES; `y` DOES NOT, AND MUST NOT.** `y` here is a BROKEN AXIS — above a 1.8x break it gives

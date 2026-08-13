@@ -75,7 +75,9 @@ const shortDate = (d) =>
 const DAY = 86400000;
 
 /** Month labels from the document's start, for the horizon a chart shows. */
-const months = (doc, n = MONTHS_SHOWN) =>
+// EXPORTED for `buildcustom.js`, which must return the same x array every curated chart returns —
+// a second implementation would be a second answer to where a month sits.
+export const months = (doc, n = MONTHS_SHOWN) =>
   Array.from({ length: n }, (_, i) => monthLabel(doc.startY ?? new Date().getFullYear(),
                                                 doc.startM ?? 0, i));
 
