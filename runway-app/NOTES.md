@@ -1653,6 +1653,34 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## Phase 0 complete — RunwayChart adopted, x side only
+
+**`x` DELEGATES; `y` DOES NOT, AND MUST NOT.** `y` here is a BROKEN AXIS — above a 1.8x break it gives
+74% of the plot to the operating band and compresses a raise into the rest. `plotFrame.y` is linear, so
+delegating it would flatten the operating band into invisibility on exactly the charts the break exists
+for. **That is the right end state, not an unfinished one:** a broken axis encodes something about this
+chart's meaning that a generic frame should not know.
+
+**`xt`, the continuous mode, not `x`.** This chart places marks at a fractional position in a time
+domain — a milestone at month 6.5 is a real thing — and forcing it into month indices would have moved
+every marker.
+
+**⚠️ ONLY THE X-SIDE CHROME IS SAFE TO TAKE.** `f.rules` and `f.zeroY` assume a linear y and would draw
+in the wrong places here. The horizontal rules and the break marker stay local.
+
+**`yearEvery: true`, opted in by this chart.** It labels every 2-6 months, so there is no smear to
+avoid. **The opt-in belongs to the chart; the panel does not infer it** — inferring it was the mistake
+that produced the density rule.
+
+**Its own `tickEvery` and `xTicks` are gone**, along with the `monthLabel` import. A second tick
+computation beside the shared one would diverge the first time the panel's thinning changed.
+
+**Verified: 20 x positions across four window widths, 0 differences** from the pre-adoption scale — so
+every milestone marker sits exactly where it did. Labels come out
+`Jul 26 · Oct 26 · Jan 27 · Apr 27 · …`.
+
+**Three renderers now share one geometry source.** The duplication this phase existed to remove is gone.
+
 ## ⚠️ Two corrections: an invented rule, and an axis that lost its labels
 
 **I CHANGED AN APPROVED RULE ON THE STRENGTH OF A PASSING REMARK.** Corey approved *year on the first

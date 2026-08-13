@@ -2,7 +2,7 @@
 import React from "react";
 import { plotFrame } from "../../engine/plotframe";
 import { money } from "../../engine/money";
-import { dateShort, monthLabel } from "../../engine/time";
+import { dateShort } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
 
 export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
@@ -45,9 +45,24 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
   const F = 0.74;              // share of the plot given to the operating band
   const PH = H - T - B;
 
-  const _f = plotFrame({ w: W, h: H, n: tMax + 1,
-                      startY: START_Y, startM: START_M,
-                      pad: { l: L, r: R, t: T, b: B } });
+  // ⚠️ THE X SCALE DELEGATES; THE Y SCALE DOES NOT, AND MUST NOT.
+  //
+  // `y` below is a BROKEN AXIS — above a 1.8x break it gives 74% of the plot to the operating band and
+  // compresses a raise into the rest. `plotFrame.y` is linear, so delegating it would flatten the
+  // operating band into invisibility on exactly the charts the break exists for.
+  //
+  // `xt` is the CONTINUOUS mode, not the index mode: this chart places marks at a fractional position
+  // in a time domain, and a milestone at month 6.5 is a real thing. Forcing it into month indices to
+  // share a frame would have moved every marker.
+  //
+  // ⚠️ AND ONLY THE X-SIDE CHROME IS SAFE TO TAKE FROM THE FRAME. `f.rules` and `f.zeroY` assume a
+  // linear y and would be drawn in the wrong places here.
+  const _f = plotFrame({ w: W, h: H, n: tMax + 1, startY: START_Y, startM: START_M,
+                         pad: { l: L, r: R, t: T, b: B },
+                         // THIS CHART CARRIES A YEAR ON EVERY LABEL — it labels every 2-6 months, so
+                         // there is no smear to avoid, and Corey wants it kept. An explicit opt-in from
+                         // the one chart that wants it, rather than a rule that infers it panel-wide.
+                         yearEvery: true });
   const x = (t) => _f.xt(t, tMax);
   const y = (b) => {
     if (!BRK) return T + (1 - (b - balMin) / (balMax - balMin)) * PH;
@@ -99,9 +114,6 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
   for (let v = Math.ceil(balMin / step) * step; v <= breakAt + 1; v += step) yTicks.push(v);
   if (!yTicks.some(v => Math.abs(v) < 1)) yTicks.push(0);
   if (BRK) yTicks.push(balMax);
-  const xTicks = [];
-  const tickEvery = tMax > 24 ? 6 : tMax > 14 ? 3 : 2;   // keep labels readable as the window widens toward 36mo
-  for (let t = 0; t <= tMax; t += tickEvery) xTicks.push(t);
 
   return (
     <svg className="svgc" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img"
@@ -147,9 +159,12 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
           </text>
         </g>
       ))}
-      {xTicks.map(t => (
-        <text key={"x" + t} x={x(t)} y={H - B + 22} textAnchor="middle" fontSize="11.5" fontFamily="var(--fm)"
-              fill="var(--on-dark-mute)" opacity="0.75">{monthLabel(START_Y, START_M, t)}</text>
+      {/* LABELS FROM THE SHARED FRAME. Same text this chart already produced — `yearEvery` keeps the
+          year on every one — but the SPACING is now the panel's adaptive sequence rather than this
+          file's own `tickEvery`, so a 36-month window thins the same way here as everywhere else. */}
+      {_f.ticks.map(t => (
+        <text key={"x" + t.i} x={x(t.i)} y={H - B + 22} textAnchor="middle" fontSize="11.5"
+              fontFamily="var(--fm)" fill="var(--on-dark-mute)" opacity="0.75">{t.label}</text>
       ))}
 
       {/* waterline */}
