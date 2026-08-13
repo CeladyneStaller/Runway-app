@@ -1653,6 +1653,37 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## First real suite run after the blocked-registry stretch — 5 failures, 3 causes
+
+**1259 passed, golden green.** The five failures sorted into three kinds, and only one was a code bug.
+
+**⚠️ A DEAD TERNARY BRANCH, and the test found it the first time it ran.**
+
+    legendMode = (count) => (count <= 2 ? "endpoint" : count === 0 ? "none" : "swatch")
+
+`0 <= 2` is true, so **"none" was unreachable** and an empty chart drew an endpoint legend. **Lint does
+not flag a dead ternary arm** — this needed the assertion. The zero check comes first now.
+
+**Three stale assertions in `plotframe.test.js`**, all the same cause: `monthTicks` started returning
+`{i, year}` objects when the density rule landed, and the test still compared bare indices. **The test
+file was written in a container where the suite could not run**, which is exactly how a shape change
+gets away without its assertions following it.
+
+**⚠️ `planxlsx.test.js` POINTED AT THE SANDBOX UPLOAD PATH** — `/mnt/user-data/uploads/...` — which
+exists on no other machine, so it failed with ENOENT everywhere but where it was written. **`test/
+fixtures/` already existed** (it holds `harborpoint.xlsx`); the convention was there and I did not use
+it. Both SOPO workbooks are committed there now, and the suites `skipIf` the fixture is absent rather
+than passing silently — a suite that quietly stops checking a real agency workbook is worse than a
+visible skip.
+
+**`sf424a.test.js` — pre-existing and not from this work.** `exportBudget` calls `XLSX.writeFile`,
+and xlsx takes its BROWSER download path under the test environment rather than writing to disk.
+Fixing it means either stubbing the write or having `exportBudget` return the workbook and letting the
+caller save it — the second is better and is a small refactor.
+
+**Windows note:** `TZ='America/Denver' npx vitest` is bash syntax. In PowerShell, `$env:TZ='America/
+Denver'` once per session.
+
 ## The year rule, third and final version
 
 **Corey noticed the runway chart carrying a year on every tick and preferred it.** That was not the

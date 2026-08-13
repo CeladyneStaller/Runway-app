@@ -1,12 +1,19 @@
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { sheetToText, sheetMeta, exportPlanWorkbook, parsePlanPaste, draftsToPlan } from "../../src/engine/planio.js";
 import { addPlanEntry } from "../../src/engine/plan.js";
 
-const REAL = "/mnt/user-data/uploads/SOPO_-_Milestone_Summary_Table.xlsx";
+// ⚠️ THE FIXTURE MUST LIVE IN THE REPO. This pointed at the sandbox upload path where the workbook was
+// first read, which exists on no other machine — so the suite failed with ENOENT everywhere but there.
+// Copy the two SOPO workbooks into `test/fixtures/` and commit them; a test that verifies behaviour
+// against a REAL agency workbook is worth the 20 kB.
+const REAL = new URL("../fixtures/SOPO_-_Milestone_Summary_Table.xlsx", import.meta.url);
+const HAVE = existsSync(REAL);
 
-describe("a real DOE SOPO workbook", () => {
+// SKIPPED, NOT DELETED, when the fixture is absent — a silently passing suite that no longer checks
+// the real workbook is worse than a visible skip.
+describe.skipIf(!HAVE)("a real DOE SOPO workbook", () => {
   const wb = XLSX.read(readFileSync(REAL), { type: "buffer" });
   const text = sheetToText(XLSX, wb);
   const parsed = parsePlanPaste(text);
@@ -106,8 +113,8 @@ describe("export", () => {
   });
 });
 
-describe("thrusts survive the round trip", () => {
-  const wb = XLSX.read(readFileSync("/mnt/user-data/uploads/SOPO_-_Milestone_Summary_Table_Template.xlsx"),
+describe.skipIf(!HAVE)("thrusts survive the round trip", () => {
+  const wb = XLSX.read(readFileSync(new URL("../fixtures/SOPO_-_Milestone_Summary_Table_Template.xlsx", import.meta.url)),
                        { type: "buffer" });
   const parsed = parsePlanPaste(sheetToText(XLSX, wb));
 

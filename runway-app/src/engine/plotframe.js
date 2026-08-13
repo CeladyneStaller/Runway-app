@@ -123,7 +123,10 @@ export const wantsVerticals = (shape) => shape === "line" || shape === "band" ||
  *  a swatch row, because end labels collide. Offering this as an option would be a setting nobody finds
  *  and a second way for two charts to disagree.
  */
-export const legendMode = (count) => (count <= 2 ? "endpoint" : count === 0 ? "none" : "swatch");
+export const legendMode = (count) => (count === 0 ? "none" : count <= 2 ? "endpoint" : "swatch");
+// ⚠️ THE ZERO CHECK MUST COME FIRST. Written as `count <= 2 ? "endpoint" : count === 0 ? "none" : ...`
+// the none branch was UNREACHABLE — `0 <= 2` is true — so an empty chart drew an endpoint legend. Lint
+// does not flag a dead ternary branch; the test caught it the first time the suite ran.
 
 /** The frame. Scales, geometry, and everything a renderer needs to place its own series. */
 export function plotFrame({

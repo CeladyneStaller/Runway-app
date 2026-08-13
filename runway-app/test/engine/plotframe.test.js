@@ -45,25 +45,25 @@ describe("the year rule", () => {
 describe("label thinning", () => {
   it("THINS ON A FIXED SEQUENCE, not an arbitrary spacing per width", () => {
     // Choosing a spacing per width makes the same chart label differently on two devices.
-    const wide = monthTicks(18, 720);
-    const narrow = monthTicks(18, 320);
+    // Returns {i, year} since the density rule landed — the step is between the INDICES.
+    const wide = monthTicks(18, 720).map(t => t.i);
+    const narrow = monthTicks(18, 320).map(t => t.i);
     expect(wide.length).toBeGreaterThan(narrow.length);
     for (const set of [wide, narrow]) {
-      const step = set[1] - set[0];
-      expect([1, 3, 6, 12]).toContain(step);
+      expect([1, 3, 6, 12]).toContain(set[1] - set[0]);
     }
   });
 
   it("always labels the first and last month", () => {
     for (const w of [320, 480, 720]) {
-      const t = monthTicks(18, w);
+      const t = monthTicks(18, w).map(x => x.i);
       expect(t[0]).toBe(0);
       expect(t[t.length - 1]).toBe(17);
     }
   });
 
   it("survives a one-month chart", () => {
-    expect(monthTicks(1, 720)).toEqual([0]);
+    expect(monthTicks(1, 720).map(t => t.i)).toEqual([0]);
   });
 });
 
@@ -120,6 +120,8 @@ describe("verticals and legends", () => {
     expect(legendMode(1)).toBe("endpoint");
     expect(legendMode(2)).toBe("endpoint");
     expect(legendMode(3)).toBe("swatch");
+    // ⚠️ THIS ONE FOUND A DEAD BRANCH. `count <= 2` matched zero first, so "none" was unreachable and
+    // an empty chart drew an endpoint legend. Lint cannot see a dead ternary arm.
     expect(legendMode(0)).toBe("none");
   });
 });
