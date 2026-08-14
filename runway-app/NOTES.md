@@ -1742,6 +1742,24 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ "HORIZONTAL BARS SHOW ONE MEASURE" WAS MY LIMITATION, NOT THE RENDERER'S
+
+A row carries `segments` — **a list**. I read that field, used one element, and wrote a note explaining
+to the user why more was impossible. **It was stated confidently enough to look researched**, and Corey
+found it by trying the thing the note said not to.
+
+One segment per measure now, with a colour each, accumulating from zero.
+
+**⚠️ AND A SINGLE ACCUMULATOR PUT THEM ON THE WRONG SIDE.** With one `x`, a negative segment moved the
+cursor LEFT and the next POSITIVE segment started from there — so a row with one of each drew both bars
+left of zero, overlapping. **Two accumulators, one per direction** — the same fix the vertical stack
+needed, for the same reason, which I had already made once and did not carry across.
+
+**My verification script had the bug too**, and printing the coordinates is what exposed it: `72000:
+x=132` was visibly wrong for a positive value. **A check that reimplements the logic inherits its
+mistakes** — the reason it worked here is that the OUTPUT was inspectable, not that the check was
+independent.
+
 ### ⚠️ THE LENS WAS DELETING THE CHART BEFORE IT REACHED ITS RENDERER
 
 `applyLens` filters `spec.series`. **An `hbars` spec has no series at all** — it carries `rows` — so

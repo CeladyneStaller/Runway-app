@@ -406,7 +406,8 @@ function HBars({ spec }) {
         const span = (hi - lo) || 1;
         const plotW = W - labelW - PAD.r;
         const zeroX = labelW + (spec.magnitude ? (-lo / span) * plotW : 0);
-        let x = spec.magnitude ? zeroX : labelW;
+        let x = labelW;
+        let xPos = zeroX, xNeg = zeroX;
         const total = r.segments.reduce((a, sg) => a + Math.abs(clean(sg.value)), 0) || 1;
         return (
           <g key={i}>
@@ -420,12 +421,19 @@ function HBars({ spec }) {
               // a negative grows LEFT from zero rather than right.
               const w = spec.magnitude ? (Math.abs(v) / span) * plotW
                                        : (Math.abs(v) / total) * plotW;
-              const rx = spec.magnitude && v < 0 ? x - w : x;
+              // ⚠️ TWO ACCUMULATORS, ONE PER DIRECTION. With a single `x`, a negative segment moved the
+              // cursor LEFT and the next POSITIVE segment then started from there — so a row with one
+              // of each drew both bars on the left of zero, overlapping. Positives grow right from
+              // zero and stack rightward; negatives grow left and stack leftward. Same rule as the
+              // vertical stack, which needed the same fix for the same reason.
+              const rx = !spec.magnitude ? x : (v < 0 ? xNeg - w : xPos);
               const rect = <rect key={j} x={rx} y={i * rowH + 3} width={Math.max(0, w)}
                                  height={rowH - 8}
-                                 fill={sg.signColor ? signColor(v) : tone(sg.tone)}
+                                 fill={sg.signColor ? signColor(v) : (sg.color || tone(sg.tone))}
                                  opacity={sg.tone === "line" ? 1 : 0.65} />;
-              x = spec.magnitude ? (v < 0 ? x - w : x + w) : x + w;
+              if (!spec.magnitude) x += w;
+              else if (v < 0) xNeg -= w;
+              else xPos += w;
               return rect;
             })}
           </g>

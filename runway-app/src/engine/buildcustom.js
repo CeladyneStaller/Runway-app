@@ -109,27 +109,29 @@ export function buildCustom(cfg, doc, parts, rows) {
     // ⚠️ HORIZONTAL BARS TAKE `rows`, NOT `series` — a different contract entirely, which is why the Y
     // toggle drew a blank chart: it asked for `hbars` and handed it a monthly series list.
     if (orient === "y") {
-      const first = perMeasure[0];
+      // ⚠️ SEVERAL MEASURES WERE ALWAYS POSSIBLE — a row carries `segments`, a LIST. I read that field,
+      // used one element, and wrote a note explaining why more was impossible. **The limitation was
+      // mine, not the renderer's**, and it was stated confidently enough to look researched.
+      //
+      // One segment per measure, accumulating from zero: positives grow right, negatives grow left, so
+      // a row reads as that category's composition either side of the line.
+      const colors = colorsFor(perMeasure.map(({ spec }) => ({ id: spec.id })), null);
       return {
-        kind: "hbars", format: "money",
-        // ⚠️ `HBars` ROWS CARRY `segments`, NOT `value` — I invented the shape and it threw on
-        // `r.segments.reduce`. Read the renderer's own contract: each row is a label plus a list of
-        // segments, which is what lets one bar show several parts.
-        // ⚠️ MAGNITUDE MODE. Without it `HBars` normalises EACH ROW to its own total, so every bar
-        // fills the width and the values are invisible — a share chart, which is right for "what is
-        // this made of" and wrong for "how big is each of these".
-        magnitude: true,
+        kind: "hbars", format: "money", magnitude: true,
         rows: keys.map(k => ({
           label: cats.get(k),
-          // ⚠️ THE SIGN IS CARRIED, not clamped away. The category path is where negatives are MOST
-          // likely — a negated measure totalled over a window is negative by construction.
-          segments: [{ id: first?.spec.id, label: first?.m.label,
-                       value: first?.totals.get(k) ?? 0,
-                       tone: (first?.totals.get(k) ?? 0) < 0 ? "danger" : "signal",
-                       signColor: !!first?.spec.signColor }],
-        })).sort((a, b) => Math.abs(b.segments[0].value) - Math.abs(a.segments[0].value)),
-        note: perMeasure.length > 1
-          ? `Showing ${first.m.label} only — horizontal bars draw one measure per chart.` : null,
+          segments: perMeasure.map(({ spec, m, totals }, idx) => ({
+            id: spec.id, label: m.label, value: totals.get(k) ?? 0,
+            // A COLOUR PER MEASURE, so the segments of one row are distinguishable — unless sign
+            // colouring is on, which takes the channel by the same rule as everywhere else.
+            color: spec.signColor && !spec.by ? null : colors[idx],
+            tone: (totals.get(k) ?? 0) < 0 ? "danger" : "signal",
+            signColor: !!spec.signColor && !spec.by,
+          })),
+        })).sort((a, b) => {
+          const mag = (r) => r.segments.reduce((x, sg) => x + Math.abs(sg.value), 0);
+          return mag(b) - mag(a);
+        }),
       };
     }
 
