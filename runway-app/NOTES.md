@@ -1742,6 +1742,32 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## ⚠️ SAVING DISCARDED EVERY PER-DATASET SETTING — the same fault, a third time
+
+    measures: (cfg?.measures || []).map(m => ({ id: m.id, type: m.type || null })),
+
+**Two fields, and `type` is the one deleted when shape and stacking replaced it.** So a saved chart lost
+its mixed shapes, its negation and its sign colouring at the moment of saving — **the chart drew
+correctly right up until it was made permanent.**
+
+**THIS IS THE THIRD TIME TODAY WITH THE SAME SHAPE.** The renderer ignored `color`; the legend copied
+`tone` and dropped `color`; saving kept a hand-written pick that predated four of the fields it was
+meant to carry. **A field is produced, and some consumer along the way copies a subset written before
+that field existed.** Each one fails silently, and none is visible from where the field is produced.
+
+Both `saveChart` and `updateChart` had the same pick — the second copied from the first.
+
+**Written as an explicit pick rather than a spread**, deliberately: a saved chart is a stored SHAPE, and
+a spread would persist whatever transient state the builder happened to be holding.
+
+**The guard is a ROUND TRIP, not a field list.** Save a config, rebuild from what came back, and assert
+the two specs match on shape and stacking — because the real requirement is that what was drawn before
+saving is drawn after, and a field checklist would need its own updating.
+
+**Two stragglers found while fixing it**, both reading the chart-level `by` that moved onto datasets:
+the menu's summary line, and a dead `const dim` in `buildCustom` that nothing read but that would have
+misled the next reader.
+
 ## Plot downward, and colour by sign
 
 ### Negation

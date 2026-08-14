@@ -236,3 +236,55 @@ describe("editing a saved chart", () => {
     expect(updateChart(demoDoc(), "nope", cfg).error).toMatch(/no longer exists/i);
   });
 });
+
+describe("⚠️ saving must not quietly drop what the builder set", () => {
+  // This has now happened three times in one session with the same shape: a field is produced, and
+  // some consumer along the way copies a hand-written subset that predates it. The renderer ignored
+  // `color`; the legend dropped `color`; **saving kept only `{ id, type }` — and `type` was already
+  // deleted.** The chart drew correctly right up until it was made permanent.
+  const full = {
+    across: "month", orient: "x",
+    measures: [
+      { id: "projectSpend", by: "project", shape: "bars", stacked: true, axis: "left",
+        negate: false, signColor: false },
+      { id: "net", by: null, shape: "lines", stacked: false, axis: "right",
+        negate: true, signColor: true },
+    ],
+  };
+
+  it("KEEPS EVERY PER-DATASET FIELD through a save", () => {
+    const r = saveChart(demoDoc(), "flow", full, { name: "Everything" });
+    const back = savedFor(r.doc, "flow")[0];
+    for (const [i, m] of full.measures.entries()) {
+      for (const k of ["id", "by", "shape", "stacked", "axis", "negate", "signColor"]) {
+        expect(back.measures[i][k], `${m.id}.${k} was lost on save`).toEqual(m[k]);
+      }
+    }
+    expect(back.across).toBe("month");
+    expect(back.orient).toBe("x");
+  });
+
+  it("KEEPS THEM THROUGH AN EDIT TOO", () => {
+    // `updateChart` had the same hand-written pick, copied from `saveChart`.
+    let d = saveChart(demoDoc(), "flow", full, { name: "Everything" }).doc;
+    const id = savedFor(d, "flow")[0].id;
+    d = updateChart(d, id, full).doc;
+    const back = savedFor(d, "flow")[0];
+    expect(back.measures[1].negate).toBe(true);
+    expect(back.measures[1].signColor).toBe(true);
+    expect(back.measures[0].stacked).toBe(true);
+  });
+
+  it("⚠️ A SAVED CHART REBUILDS INTO THE SAME SPEC IT WAS SAVED FROM", () => {
+    // The round trip is the real assertion: what was drawn before saving must be drawn after.
+    const d = demoDoc();
+    const parts = buildModelParts(d);
+    const rows = buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
+    const before = buildCustom(full, d, parts, rows);
+    const saved = savedFor(saveChart(d, "flow", full, { name: "Round trip" }).doc, "flow")[0];
+    const after = buildCustom(saved, d, parts, rows);
+    expect(after.kind).toBe(before.kind);
+    expect(after.series.map(s => [s.shape, s.stacked])).toEqual(
+      before.series.map(s => [s.shape, s.stacked]));
+  });
+});

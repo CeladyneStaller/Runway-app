@@ -145,7 +145,10 @@ export function TabInsights({ tab, subtab }) {
                         it plots and who saved it, which is the honest substitute. */}
                     <span className="ch-opt-w">
                       {c.measures.map(m => m.id).join(", ")}
-                      {c.by ? ` by ${c.by}` : ""}{c.savedBy ? ` · saved by ${c.savedBy}` : ""}
+                      {/* `by` MOVED ONTO EACH DATASET, so the summary reads them rather than a
+                          chart-level field that no longer exists. */}
+                      {c.measures?.some(m => m.by) ? ` by ${[...new Set(c.measures.filter(m => m.by).map(m => m.by))].join(", ")}` : ""}
+                      {c.savedBy ? ` · saved by ${c.savedBy}` : ""}
                     </span>
                   </span>
                   {/* ⚠️ OWNER ONLY. It is the one control here that changes what another person sees —
@@ -156,7 +159,10 @@ export function TabInsights({ tab, subtab }) {
                       new one; that is deliberate and the save bar says so. */}
                   <button className="linkbtn" onClick={(e) => {
                     e.preventDefault();
-                    setCfg({ measures: c.measures.map(m => ({ ...m })), by: c.by, across: c.across });
+                    // THE WHOLE DATASET SURVIVES INTO THE DRAFT — shape, stacking, axis, negation and
+                    // sign colouring, all of which live on the measure now rather than on the chart.
+                    setCfg({ measures: c.measures.map(m => ({ ...m })),
+                             across: c.across, orient: c.orient || "x" });
                     setEditing(c.id); setBuilding(true);
                   }}>Edit</button>
                   {ctx.isOwner && defaultChartId(ctx.doc, tab) !== c.id && (

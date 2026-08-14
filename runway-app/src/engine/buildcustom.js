@@ -63,7 +63,6 @@ export function buildCustom(cfg, doc, parts, rows) {
   const n = rows?.length || 0;
   const clip = (v) => (v || []).slice(0, win);
   const units = unitsOf(ids);
-  const dim = cfg?.by ? dimensionById(cfg.by) : null;
 
   // ⚠️ A THIRD UNIT IS REFUSED RATHER THAN GIVEN A THIRD AXIS NOBODY CAN READ. Two is already a
   // compromise; three is a picture with no scale.

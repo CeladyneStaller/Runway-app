@@ -20,8 +20,23 @@ export function saveChart(doc, tab, cfg, { name, savedBy } = {}) {
 
   const chart = {
     id: uid(), tab, name: trimmed,
-    measures: (cfg?.measures || []).map(m => ({ id: m.id, type: m.type || null })),
-    by: cfg?.by ?? null, across: cfg?.across || "month",
+    // ⚠️ THE WHOLE DATASET, NOT `{ id, type }`. This kept exactly two fields — and `type` is the one
+    // deleted when shape and stacking replaced it — so **every per-dataset setting was discarded at the
+    // moment of saving**: mixed shapes collapsed to one, negation was undone, sign colouring was
+    // undone. The chart drew correctly right up until it was made permanent.
+    //
+    // Written as an explicit pick rather than a spread, because a saved chart is a stored SHAPE: a
+    // spread would silently persist whatever transient state the builder happened to be holding.
+    measures: (cfg?.measures || []).map(m => ({
+      id: m.id,
+      by: m.by ?? null,
+      shape: m.shape || "lines",
+      stacked: !!m.stacked,
+      axis: m.axis || null,
+      negate: !!m.negate,
+      signColor: !!m.signColor,
+    })),
+    across: cfg?.across || "month", orient: cfg?.orient || "x",
     savedBy: savedBy || null, savedAt: new Date().toISOString(),
   };
   return {
@@ -108,8 +123,23 @@ export function updateChart(doc, id, cfg, { name } = {}) {
   if (!trimmed) return { doc, error: "Give the chart a name before saving it." };
   const next = {
     ...existing, name: trimmed,
-    measures: (cfg?.measures || []).map(m => ({ id: m.id, type: m.type || null })),
-    by: cfg?.by ?? null, across: cfg?.across || "month",
+    // ⚠️ THE WHOLE DATASET, NOT `{ id, type }`. This kept exactly two fields — and `type` is the one
+    // deleted when shape and stacking replaced it — so **every per-dataset setting was discarded at the
+    // moment of saving**: mixed shapes collapsed to one, negation was undone, sign colouring was
+    // undone. The chart drew correctly right up until it was made permanent.
+    //
+    // Written as an explicit pick rather than a spread, because a saved chart is a stored SHAPE: a
+    // spread would silently persist whatever transient state the builder happened to be holding.
+    measures: (cfg?.measures || []).map(m => ({
+      id: m.id,
+      by: m.by ?? null,
+      shape: m.shape || "lines",
+      stacked: !!m.stacked,
+      axis: m.axis || null,
+      negate: !!m.negate,
+      signColor: !!m.signColor,
+    })),
+    across: cfg?.across || "month", orient: cfg?.orient || "x",
     editedAt: new Date().toISOString(),
   };
   return {
