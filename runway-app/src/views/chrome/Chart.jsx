@@ -385,7 +385,7 @@ function HBars({ spec }) {
          aria-label={spec.aria || "chart"}>
       {rows.map((r, i) => {
         let x = labelW;
-        const total = r.segments.reduce((a, sg) => a + Math.max(0, clean(sg.value)), 0) || 1;
+        const total = r.segments.reduce((a, sg) => a + Math.abs(clean(sg.value)), 0) || 1;
         return (
           <g key={i}>
             <title>{r.label}</title>
@@ -393,7 +393,7 @@ function HBars({ spec }) {
               {String(r.label).slice(0, 20)}
             </text>
             {r.segments.map((sg, j) => {
-              const w = (Math.max(0, clean(sg.value)) / total) * (W - labelW - PAD.r);
+              const w = (Math.abs(0, clean(sg.value)) / total) * (W - labelW - PAD.r);
               const rect = <rect key={j} x={x} y={i * rowH + 3} width={Math.max(0, w)}
                                  height={rowH - 8} fill={tone(sg.tone)}
                                  opacity={sg.tone === "line" ? 1 : 0.65} />;
