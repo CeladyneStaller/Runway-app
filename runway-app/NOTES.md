@@ -1742,6 +1742,24 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ THE AUTO-SETUP HOOK LOOPED FOREVER
+
+`onSetup` is supplied as an inline arrow — `() => setSetup("model")` — so it is a **new function
+identity on every render**. The effect fired, opened the wizard, re-rendered, saw a different
+`onSetup`, and fired again: an infinite loop of company creation.
+
+**And my comment said "OPENS ONCE" while nothing in the code made that true.** A dependency array
+cannot express "once per mount"; a ref can, and it states the intent directly rather than implying it
+through identity stability the caller does not provide.
+
+**⚠️ AN INLINE ARROW IN A DEPENDENCY ARRAY IS ALWAYS A RE-FIRE.** `doc` had the same problem for the
+same reason. Neither is worth restructuring the caller to fix — the ref is the honest tool for "do this
+once".
+
+**Scanned the rest of the file** for effects depending on a prop that is supplied as an inline arrow at
+its call site: **none unguarded.** Worth keeping as a check, because lint sees an exhaustive dependency
+array here and approves of it — **the array was correct and the behaviour was wrong.**
+
 ## Account creation and the legal surfaces
 
 ### The documents are in the repo now

@@ -457,10 +457,23 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
   // team, or who simply did not know their balance yet, had no door at all.
   const [startedBlank, setStartedBlank] = useState(false);
 
-  // OPENS ONCE, and only for a document with nothing in it. `startedBlank` is set when somebody
-  // deliberately skips setup, so declining is remembered rather than asked again on every render.
+  // ⚠️ A REF, BECAUSE THE DEPENDENCIES CANNOT BE MADE STABLE.
+  //
+  // `onSetup` is supplied as an inline arrow — `() => setSetup("model")` — so it is a NEW FUNCTION
+  // IDENTITY ON EVERY RENDER. The effect fired, opened the wizard, re-rendered, saw a different
+  // `onSetup`, and fired again: **an infinite loop of company creation.**
+  //
+  // `doc` has the same problem for the same reason, and neither is worth restructuring the caller to
+  // fix. **The ref states the intent directly — once per mount — instead of relying on a dependency
+  // array to imply it.** My comment said "opens once" while nothing in the code made that true.
+  const askedSetup = React.useRef(false);
   useEffect(() => {
-    if (autoSetup && isEmptyDoc(doc) && !startedBlank && onSetup) onSetup();
+    if (askedSetup.current) return;
+    if (!autoSetup || !onSetup) return;
+    // Declining is remembered: `startedBlank` is set when somebody deliberately skips setup.
+    if (!isEmptyDoc(doc) || startedBlank) return;
+    askedSetup.current = true;
+    onSetup();
   }, [autoSetup, doc, startedBlank, onSetup]);
 
   // A LOCAL-MODE SCREEN NOW. In hosted mode the setup wizard is the single door into a new model and
