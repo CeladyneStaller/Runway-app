@@ -393,7 +393,7 @@ function HBars({ spec }) {
               {String(r.label).slice(0, 20)}
             </text>
             {r.segments.map((sg, j) => {
-              const w = (Math.abs(0, clean(sg.value)) / total) * (W - labelW - PAD.r);
+              const w = (Math.abs(clean(sg.value)) / total) * (W - labelW - PAD.r);
               const rect = <rect key={j} x={x} y={i * rowH + 3} width={Math.max(0, w)}
                                  height={rowH - 8} fill={tone(sg.tone)}
                                  opacity={sg.tone === "line" ? 1 : 0.65} />;
