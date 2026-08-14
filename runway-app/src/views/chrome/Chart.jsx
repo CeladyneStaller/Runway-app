@@ -114,6 +114,17 @@ const TimeAxis = ({ ticks, n, y, width = W, yearEvery = false }) => {
 
 
 
+/** An `<svg>` normally, a bare `<g>` under `Composite`.
+ *
+ *  ⚠️ EACH RENDERER USED TO EMIT A COMPLETE `<svg>` WITH ITS OWN AXES, so a composite of three drew
+ *  THREE STACKED CHARTS — the "split into two charts" symptom. A dispatcher was not enough: the chrome
+ *  had to be hoisted out, which is also what guarantees the groups share one scale rather than each
+ *  drawing to its own.
+ */
+const Wrap = ({ marks, aria, children }) => (marks
+  ? <g>{children}</g>
+  : <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria || "chart"}>{children}</svg>);
+
 const Axes = ({ s, xs, ticks, format }) => (
   <>
     <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH} stroke="var(--line)" />
@@ -151,7 +162,8 @@ function Lines({ spec }) {
   const path = (vals) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ");
 
   return (
-    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+
+    <Wrap marks={spec.marks} aria={spec.aria}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.band && (
         // The band is drawn first and lightly: it is context for the line, not a third series.
@@ -196,7 +208,7 @@ function Lines({ spec }) {
               strokeDasharray={sr.dashed ? "4 3" : undefined} />
       ))}
       <Markers marks={spec.markers} n={n} s={s} />
-    </svg>
+    </Wrap>
   );
 }
 
@@ -214,7 +226,8 @@ function Stack({ spec }) {
   });
 
   return (
-    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+
+    <Wrap marks={spec.marks} aria={spec.aria}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {bands.map(({ sr, lo, hi }) => (
         <path key={sr.id} fill={colorOf(sr)} opacity="0.5"
@@ -232,7 +245,7 @@ function Stack({ spec }) {
         </>
       )}
       <Markers marks={spec.markers} n={n} s={s} />
-    </svg>
+    </Wrap>
   );
 }
 
@@ -243,7 +256,8 @@ function Bars({ spec }) {
   const barW = Math.max(2, (groupW * 0.7) / spec.series.length);
 
   return (
-    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+
+    <Wrap marks={spec.marks} aria={spec.aria}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.series.map((sr, si) => sr.values.map((v, i) => {
         const x = PAD.l + i * groupW + groupW * 0.15 + si * barW;
@@ -254,7 +268,7 @@ function Bars({ spec }) {
                      height={Math.max(1, Math.abs(s.y(v) - s.zero))}
                      fill={colorOf(sr.tones?.[i] ? { tone: sr.tones[i] } : sr)} opacity="0.75" />;
       }))}
-    </svg>
+    </Wrap>
   );
 }
 
@@ -617,8 +631,7 @@ function Composite({ spec }) {
 
   // ⚠️ ONE DOMAIN, COMPUTED FROM THE COMPOSITION. A stack's height is the SUM of its members; a line's
   // is its own values. Letting each group scale itself would draw two charts on one canvas that
-  // silently disagree about height — the failure this codebase already had with three renderers and
-  // three `y` functions.
+  // silently disagree about height.
   const n = Math.max(1, ...series.map(sr => (sr.values || []).length));
   const stackTotals = Array.from({ length: n }, (_, i) =>
     groups.stack.reduce((a, sr) => a + clean(sr.values?.[i]), 0));
@@ -627,15 +640,23 @@ function Composite({ spec }) {
   const loose = groups.lines.flatMap(sr => (sr.values || []).map(clean));
   const domain = [...stackTotals, ...barTotals, ...loose, 0];
 
-  // ⚠️ FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED. A filled stack drawn over a line hides it
-  // completely; a line over a stack is always readable. There is no case where hiding a line is what
-  // somebody wanted, so this is not configurable.
+  // ⚠️ EACH RENDERER EMITS A COMPLETE `<svg>` WITH ITS OWN AXES — so rendering three of them produced
+  // THREE STACKED CHARTS rather than one. That is the "split into two charts" symptom, and it is why a
+  // dispatcher alone was not enough.
+  //
+  // `marks: true` asks a renderer for its marks in a `<g>` and nothing else: no svg, no frame, no
+  // ticks. The chrome is drawn ONCE, here, from the shared domain — which is also what guarantees the
+  // groups cannot disagree about where a value sits.
+  const sub = (list) => ({ ...spec, series: list, domain, marks: true });
   return (
-    <g>
-      {groups.stack.length > 0 && <Stack spec={{ ...spec, series: groups.stack, domain }} />}
-      {groups.bars.length > 0 && <Bars spec={{ ...spec, series: groups.bars, domain }} />}
-      {groups.lines.length > 0 && <Lines spec={{ ...spec, series: groups.lines, domain }} />}
-    </g>
+    <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+      <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format} />
+      {/* FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED. A filled stack over a line hides it
+          completely; a line over a stack is always readable. */}
+      {groups.stack.length > 0 && <Stack spec={sub(groups.stack)} />}
+      {groups.bars.length > 0 && <Bars spec={sub(groups.bars)} />}
+      {groups.lines.length > 0 && <Lines spec={sub(groups.lines)} />}
+    </svg>
   );
 }
 

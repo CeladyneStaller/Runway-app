@@ -1742,6 +1742,24 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ A DISPATCHER WAS NOT ENOUGH — each renderer emitted its own `<svg>`
+
+`Composite` grouped the series correctly and then rendered **three complete charts stacked on top of one
+another**, because `Lines`, `Stack` and `Bars` each open their own `<svg className="ch-svg">` with their
+own `<Axes>`. That is the "split into two charts" symptom.
+
+**The chrome had to be hoisted out**, not just the dispatch. A `Wrap` component makes the svg
+conditional — a bare `<g>` when `spec.marks` is set — so under `Composite` the canvas, the frame and the
+axes are drawn ONCE from the shared domain, and each renderer contributes only its shapes.
+
+**That hoist is also what makes the shared scale real.** Three renderers each drawing their own axes
+were three answers to where a value sits, however carefully the domain was passed — the same fault as
+the three `y` functions this session started by removing, reappearing one level up.
+
+**A check of mine gave a false negative here:** counting `"<svg"` matches `</svg>` too, so "exactly one
+svg" reported two. Worth remembering that a verification script can be wrong in the same quiet way the
+code can.
+
 ### The note could never fire, and three tests found it
 
 **⚠️ I UN-STACKED THE OFFENDERS AND THEN ASKED WHETHER ANYTHING WAS STACKED.** The note read
