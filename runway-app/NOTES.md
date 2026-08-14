@@ -1742,6 +1742,27 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### The note could never fire, and three tests found it
+
+**⚠️ I UN-STACKED THE OFFENDERS AND THEN ASKED WHETHER ANYTHING WAS STACKED.** The note read
+`series.some(sr => sr.stacked)` on the line AFTER the flag had been cleared, so it was always false —
+**the chart quietly drew unstacked and said nothing.** A correction nobody is told about is exactly the
+failure the note exists to prevent.
+
+Recorded before un-stacking now, and it **names what it un-stacked** rather than saying "some of
+these" — the same reasoning as the flat-zero guard naming its measures instead of counting them.
+
+**Two stale tests, both written against the chart-wide breakdown that no longer exists:**
+
+- **"refuses several measures with a breakdown"** — that refusal is GONE, and its absence is the
+  feature. Inverted to assert the opposite: a split dataset and an unsplit balance coexisting, which is
+  the chart that could not be described before.
+- **A `by` at chart level is simply not read.** Left there the measure comes back as one unsplit
+  series, which is what the third failure was.
+
+**Added while inverting the first:** a cap test, since two datasets each split eight ways is sixteen
+series from two reasonable choices.
+
 ### The Commitments charts were registered and never mounted
 
 **`Commitments.jsx` never rendered `TabInsights`.** Both charts were in the registry,

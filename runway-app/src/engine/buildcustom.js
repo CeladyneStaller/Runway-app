@@ -138,7 +138,12 @@ function finish(cfg, doc, series, ids) {
   // TRUE BY CONSTRUCTION: un-stack any series whose measure contains or is contained by another, so the
   // note above describes what was drawn rather than what was intended.
   const clash = new Set(over.flatMap(o => [o.outer, o.inner]));
-  series = series.map(sr => (sr.stacked && clash.has(sr.id) ? { ...sr, stacked: false } : sr));
+  // ⚠️ RECORD IT BEFORE UN-STACKING. The note asked `series.some(sr => sr.stacked)` AFTER this line had
+  // already cleared the flag, so it could never fire — the chart quietly drew unstacked and said
+  // nothing. **A correction nobody is told about is the failure the note exists to prevent.**
+  const unstacked = series.filter(sr => sr.stacked && clash.has(sr.groupId ?? sr.group ?? sr.id))
+                          .map(sr => sr.label);
+  series = series.map(sr => (sr.stacked && clash.has(sr.group ?? sr.id) ? { ...sr, stacked: false } : sr));
   return {
     kind,
     x: months(doc), ticks: axisTicks(doc),
@@ -146,8 +151,11 @@ function finish(cfg, doc, series, ids) {
     custom: true,
     // ⚠️ THE REFUSAL IS PER SERIES NOW, not per chart — a stacked series whose measure overlaps another
     // is un-stacked and said so, rather than the whole chart falling back to lines.
-    note: over.length && series.some(sr => sr.stacked)
-      ? "Some of these measures overlap, so they are drawn unstacked — stacking them would not add up."
+    // NAMES WHAT IT UN-STACKED, rather than saying "some of these" and leaving the reader to work out
+    // which — the same reason the flat-zero guard names its measures instead of counting them.
+    note: unstacked.length
+      ? `${[...new Set(unstacked)].join(" and ")} overlap other measures here, so they are drawn `
+        + "unstacked — stacking them would not add up."
       : null,
   };
 }

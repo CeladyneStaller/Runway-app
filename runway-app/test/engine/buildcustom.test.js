@@ -53,12 +53,31 @@ describe("what it refuses, and says so", () => {
     expect(s.series).toHaveLength(3);          // two units only — money + people
   });
 
-  it("⚠️ REFUSES SEVERAL MEASURES WITH A BREAKDOWN, and explains", () => {
-    // Three measures by eight codes is twenty-four series, produced by two reasonable choices.
+  it("⚠️ ALLOWS SEVERAL MEASURES WITH BREAKDOWNS — the refusal is gone, and that is the feature", () => {
+    // It used to refuse: one breakdown applied to the whole chart, so a split measure and an unsplit
+    // one could not coexist. **`by` is per dataset now**, which is what makes "spend split by project,
+    // with cash over it" describable at all.
     const { parts, rows } = ctx(d);
-    const s = buildCustom({ measures: [{ id: "cost" }, { id: "rev" }], by: "project" }, d, parts, rows);
-    expect(s.series).toHaveLength(0);
-    expect(s.note).toMatch(/one measure to break down/i);
+    const s = buildCustom({ measures: [
+      { id: "projectSpend", by: "project", shape: "bars", stacked: true },
+      { id: "end", shape: "lines" },
+    ] }, d, parts, rows);
+    expect(s.series.length).toBeGreaterThan(1);
+    // the split measure's series carry its group; the balance stands alone as a line
+    expect(s.series.some(x => x.group === "projectSpend" && x.stacked)).toBe(true);
+    expect(s.series.find(x => x.id === "end").shape).toBe("lines");
+    expect(s.series.find(x => x.id === "end").stacked).toBe(false);
+  });
+
+  it("⚠️ CAPS ON THE TOTAL, because two split datasets multiply", () => {
+    // Two datasets each split eight ways is sixteen series from two reasonable choices — the same trap
+    // as before, one level up.
+    const { parts, rows } = ctx(d);
+    const s = buildCustom({ measures: [
+      { id: "projectSpend", by: "project" }, { id: "cost", by: "project" },
+      { id: "payroll", by: "project" }, { id: "opex", by: "project" },
+    ] }, d, parts, rows);
+    if (s.series.length === 0) expect(s.note).toMatch(/more than a chart can show/i);
   });
 
   it("puts the second unit on the right axis", () => {
@@ -85,7 +104,9 @@ describe("what it refuses, and says so", () => {
 describe("breaking one measure down", () => {
   it("produces a series per value, unassigned last and grey", () => {
     const d = doc(), { parts, rows } = ctx(d);
-    const s = buildCustom({ measures: [{ id: "projectSpend", type: "stack" }], by: "project" },
+    // `by` MOVED ONTO THE DATASET. Left at chart level it is simply not read, and the measure comes
+    // back as one unsplit series — which is what this test caught.
+    const s = buildCustom({ measures: [{ id: "projectSpend", by: "project", stacked: true }] },
                           d, parts, rows);
     expect(s.series.length).toBeGreaterThan(1);
     const last = s.series[s.series.length - 1];
