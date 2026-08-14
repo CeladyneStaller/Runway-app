@@ -146,12 +146,22 @@ function finish(cfg, doc, series, ids) {
   // TRUE BY CONSTRUCTION: un-stack any series whose measure contains or is contained by another, so the
   // note above describes what was drawn rather than what was intended.
   const droppedSign = (cfg?.measures || []).filter(x => x.signColor && x.by).map(x => measureById(x.id)?.label);
-  const clash = new Set(over.flatMap(o => [o.outer, o.inner]));
-  // ⚠️ RECORD IT BEFORE UN-STACKING. The note asked `series.some(sr => sr.stacked)` AFTER this line had
-  // already cleared the flag, so it could never fire — the chart quietly drew unstacked and said
-  // nothing. **A correction nobody is told about is the failure the note exists to prevent.**
-  const unstacked = series.filter(sr => sr.stacked && clash.has(sr.groupId ?? sr.group ?? sr.id))
-                          .map(sr => sr.label);
+  // ⚠️ OVERLAP ONLY MATTERS WITHIN A STACK, NOT ACROSS THE CHART.
+  //
+  // The first rule un-stacked every series whose measure appeared in ANY overlap — so selecting money
+  // in, money out and net un-stacked all three, because net contains the other two. **That forbade the
+  // most useful chart on the tab**: in and out stacked against each other, with net as a line over
+  // them. A line is not part of the sum; it cannot double-count a stack it does not join.
+  //
+  // A stack is wrong only when one of ITS OWN members contains another of its own members.
+  const stackedIds = new Set(series.filter(sr => sr.stacked).map(sr => sr.group ?? sr.id));
+  const clash = new Set(
+    over.filter(o => stackedIds.has(o.outer) && stackedIds.has(o.inner))
+        .flatMap(o => [o.outer, o.inner]));
+
+  // RECORD BEFORE UN-STACKING — the note used to ask `series.some(sr => sr.stacked)` after the flag was
+  // cleared, so it could never fire.
+  const unstacked = series.filter(sr => sr.stacked && clash.has(sr.group ?? sr.id)).map(sr => sr.label);
   series = series.map(sr => (sr.stacked && clash.has(sr.group ?? sr.id) ? { ...sr, stacked: false } : sr));
   return {
     kind,

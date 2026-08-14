@@ -178,8 +178,16 @@ export const unitsOf = (ids = []) =>
 export function allowedTypes(ids = []) {
   //  is reached through ORIENTATION rather than a measure declaring it, so it is not required to
   // appear in every measure's `allows`.
+  // ⚠️ `every` WAS THE LAST BLOCKER. Shape is PER DATASET now, so requiring every selected measure to
+  // allow a type removes it from the ones that do — selecting net (which cannot stack, since it is
+  // already a difference of two others) took `stack` away from money in and money out as well.
+  //
+  // The list is what ANY of them can be drawn as; each dataset's own control still offers only what
+  // that measure allows, which is where the restriction belongs.
   const sets = ids.map(i => [...(measureById(i)?.allows || []), "hbars"]);
-  let ok = ["lines", "bars", "stack", "hbars"].filter(t => sets.every(s => s.includes(t)));
-  if (overlaps(ids).length) ok = ok.filter(t => t !== "stack");
+  let ok = ["lines", "bars", "stack", "hbars"].filter(t => sets.some(s => s.includes(t)));
+  // ⚠️ NO LONGER REMOVED HERE.  cannot know which of these will actually share a stack —
+  // net beside in and out is legitimate when net is a LINE — so the decision belongs where the stack
+  // membership is known, in `buildCustom`, which un-stacks only genuine same-stack containment.
   return ok;
 }

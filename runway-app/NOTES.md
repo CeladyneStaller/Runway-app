@@ -1742,6 +1742,30 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ THE OVERLAP GUARD FORBADE THE MOST USEFUL CHART ON THE TAB
+
+In and out stacked against each other with net as a line over them — **`Composite` could draw it all
+along; two guards refused it**, each too broad in its own way.
+
+**1 · Overlap was checked ACROSS THE CHART rather than within a stack.** `net contains rev, cost`, so
+selecting all three put all three in the clash set and un-stacked everything — including the two that
+legitimately stack with each other. **A line is not part of the sum; it cannot double-count a stack it
+does not join.** The rule is now: a stack is wrong only when one of ITS OWN members contains another of
+its own members.
+
+**2 · `allowedTypes` used `every` rather than `some`.** Shape is per dataset now, so requiring every
+selected measure to allow a type removed it from the ones that do — **net, which cannot stack because it
+is already a difference of two others, took `stack` away from money in and money out as well.** The
+chart-level list is what ANY of them can be drawn as; each dataset's own control still offers only what
+that measure allows, which is where the restriction belongs.
+
+**Both are the same mistake:** a rule written when settings were chart-wide, left in place after they
+became per dataset. **Moving a setting down does not move its guards down with it** — and a guard that
+is merely too broad fails silently, because refusing a legitimate chart looks identical to the feature
+not existing.
+
+Verified: `rev` and `cost` stay stacked, `net` draws as a line, nothing un-stacked.
+
 ### Change chart did nothing while a draft existed
 
 The spec path tries `cfg.measures.length` FIRST, and **`pick()` never cleared the draft** — so choosing
