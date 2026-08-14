@@ -1677,6 +1677,80 @@ field is nothing. **None is an error, and lint sees none of them.**
 categorical tones are real keys, and that `colorOf` prefers an explicit colour. Fifteen variables
 checked, none undefined.
 
+## Plot type as shape + modifier, orientation, axis · and the Commitments charts
+
+### `charttype.js`
+
+**⚠️ FOUR OUTCOMES FROM THREE CONTROLS.** As four mutually exclusive buttons, "stacked" could only ever
+mean stacked BARS and a **stacked filled LINE was unexpressible** — which is the composition-over-time
+chart.
+
+    lines            -> lines        bars            -> bars
+    lines + stacked  -> stack        bars + stacked  -> stack
+    orient: y        -> hbars
+
+**AND THE RENDERER COULD ALREADY DRAW IT.** `Stack` emits filled `<path>` elements, not rects — the
+shape existed and only the way to ask for it was missing. `hbars` existed too.
+
+**Shape and stacking are PER MEASURE; orientation is per chart.** That split is what lets obligations
+stack while cash rides over them as a line, in one chart — which is exactly the default Commitments
+chart.
+
+**⚠️ A BALANCE DECLARES `position: true`** rather than being refused by the absence of a type, so the
+control can say *why*: "Cash on hand is a balance, not a flow — balances do not sum." It refuses in
+BOTH shapes, because a stacked line asserts the same falsehood as a stacked bar.
+
+**⚠️ Y ORIENTATION IS ABSENT, NOT REFUSED, ON A TIME AXIS.** Months down the side is legal SVG and
+unreadable — time reads left to right and that is not a preference.
+
+**The value axis is now choosable.** Second-unit-goes-right was a good default and a poor rule: two
+money measures at very different magnitudes want the choice too.
+
+### Commitments
+
+**Two default charts, and every measure already had an engine function** — `accruedCostShare`,
+`shortfallAt`, `outstandingDebt`, `windDownCost`. **None of it was drawn anywhere.**
+
+**⚠️ THE FIRST DRAFT OF THE STACK CHART MARKED THE WRONG POINT.** Corey caught it: the dot sat where the
+cash line ran low — roughly the RUNWAY date — rather than where the line ENTERS THE STACK. Different
+question, and in the mockup's own numbers it was **four months late**. Verified by walking the two
+series rather than by agreeing.
+
+**⚠️ STACKING IS HONEST HERE AND ALMOST NOWHERE ELSE.** Wind-down, cost share and debt genuinely sum —
+none contains another. But **"Total if you stopped" DOES contain all three** and declares it, so it can
+be plotted beside them and never stacked with them.
+
+**Award and budget period are dimensions that exist nowhere else** — cost share is owed per award per
+period, which is how a funder audits it.
+
+**No confidence-tier breakdown on this tab, deliberately.** A signed obligation is owed; adding
+likelihood would import the one uncertainty this tab is free of.
+
+## Editing a saved chart, and a header that named the wrong one
+
+**⚠️ THE PANEL HEADER ONLY EVER NAMED A CURATED CHART.** `current = chartById(id)` — and a saved chart
+is selected by the SAME `chosen` field, so the panel kept the previous chart's title and `why` while the
+canvas drew something else entirely. **The header describing one chart and the canvas showing another**
+is the same class of fault as the legend disagreeing with its chart: a mismatch is worse than either
+half being wrong.
+
+It now covers all three cases: an unsaved draft says so, a saved chart shows its name and what it plots,
+a curated one keeps its `why`.
+
+**⚠️ EDIT LOADS A DRAFT; IT DOES NOT MODIFY IN PLACE WHILE YOU TYPE.** A saved chart other people are
+looking at should not change under them mid-edit. The draft is private until saved, exactly like a new
+build.
+
+**⚠️ BUT SAVING AN EDIT UPDATES RATHER THAN COPIES.** A copy would leave the ORIGINAL as the company
+default while the person who fixed it looked at their corrected version — two charts with almost the
+same name and no way to tell which one everybody else lands on. Keeping the id means **a chart that is
+the default stays the default through an edit**, which is what somebody correcting a mistake expects.
+
+**`savedBy` is not overwritten by whoever last edited it** — that would quietly reassign authorship on a
+shared document. `editedAt` records the change instead.
+
+**The save bar arrives with the name already in the box** when editing, so the common case is one click.
+
 ### The legend was a fourth consumer, and it dropped the field
 
 **The chart drew the ramp and the legend still drew green.** `legend` is built from `spec.series` with

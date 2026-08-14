@@ -15,7 +15,7 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 import { buildCustom } from "../../engine/buildcustom";
 import { MEASURES } from "../../engine/measures";
-import { savedFor, saveChart, setDefaultChart, defaultChartId, resolveSaved } from "../../engine/savedcharts";
+import { savedFor, saveChart, updateChart, setDefaultChart, defaultChartId, resolveSaved } from "../../engine/savedcharts";
 import { ChartBuilder, SaveChartBar } from "./ChartBuilder";
 import { buildChart, chartsForTab, defaultChartFor, chartById } from "../../engine/charts";
 import { alertsFor } from "../../engine/alerts";
@@ -49,6 +49,7 @@ export function TabInsights({ tab, subtab }) {
   const [picking, setPicking] = useState(false);
   const [building, setBuilding] = useState(false);
   const [naming, setNaming] = useState(false);
+  const [editing, setEditing] = useState(null);   // the saved chart a draft came from, if any
   // ⚠️ THE UNSAVED CONFIG IS COMPONENT STATE AND IS NEVER WRITTEN. Changing the chart replaces the
   // default in THIS view and nowhere else — experimenting has to be free or nobody experiments.
   const [cfg, setCfg] = useState({ measures: [], by: null, across: "month" });
@@ -81,7 +82,20 @@ export function TabInsights({ tab, subtab }) {
 
   if (!ctx) return null;
 
-  const current = chartById(id);
+  // ⚠️ THE HEADER ONLY EVER NAMED A CURATED CHART. A saved chart is selected by the same `chosen`
+  // field, so the panel kept the previous chart's title and `why` while drawing something else
+  // entirely — the header describing one chart and the canvas showing another.
+  const curated = chartById(id);
+  const current = cfg.measures.length
+    ? { name: "Unsaved chart", why: "Yours until you save it. Nobody else sees this." }
+    : pickedSaved
+    ? { name: pickedSaved.name,
+        // A SAVED CHART HAS NO `why` — a builder cannot write one — so it says what it plots and who
+        // saved it, which is the honest substitute.
+        why: `${pickedSaved.measures.map(m => m.id).join(", ")}`
+             + (pickedSaved.by ? ` by ${pickedSaved.by}` : "")
+             + (pickedSaved.savedBy ? ` · saved by ${pickedSaved.savedBy}` : "") }
+    : curated;
   const pick = (next) => { setChosen(next); write(tab, next); setPicking(false); };
 
   return (
@@ -136,6 +150,15 @@ export function TabInsights({ tab, subtab }) {
                   </span>
                   {/* ⚠️ OWNER ONLY. It is the one control here that changes what another person sees —
                       and it applies on THEIR next tab load, never mid-read. */}
+                  {/* ⚠️ EDIT LOADS IT INTO THE BUILDER AS AN UNSAVED DRAFT. It does not modify the
+                      saved chart in place — the person may be exploring, and a saved chart everybody
+                      else is looking at should not change under them mid-edit. Saving again writes a
+                      new one; that is deliberate and the save bar says so. */}
+                  <button className="linkbtn" onClick={(e) => {
+                    e.preventDefault();
+                    setCfg({ measures: c.measures.map(m => ({ ...m })), by: c.by, across: c.across });
+                    setEditing(c.id); setBuilding(true);
+                  }}>Edit</button>
                   {ctx.isOwner && defaultChartId(ctx.doc, tab) !== c.id && (
                     <button className="linkbtn" onClick={(e) => {
                       e.preventDefault();
@@ -176,17 +199,23 @@ export function TabInsights({ tab, subtab }) {
           ) : picking && building ? (
             <>
               <ChartBuilder tab={tab} cfg={cfg} setCfg={setCfg} canSave={!!ctx.setDoc}
-                            onClose={() => { setBuilding(false); setPicking(false); }}
+                            onClose={() => { setBuilding(false); setPicking(false); setEditing(null); }}
                             onSave={() => setNaming(true)} />
               {naming && (
                 <SaveChartBar onCancel={() => setNaming(false)}
+                              editingName={editing ? savedFor(ctx.doc, tab).find(c => c.id === editing)?.name : null}
                               onSave={(name) => {
-                                const r = saveChart(ctx.doc, tab, cfg, { name, savedBy: ctx.userName });
+                                // AN EDIT UPDATES IN PLACE; ANYTHING ELSE ADDS. A chart that is the
+                                // company default stays the default through an edit, which is what
+                                // somebody correcting a mistake in it expects.
+                                const r = editing
+                                  ? updateChart(ctx.doc, editing, cfg, { name })
+                                  : saveChart(ctx.doc, tab, cfg, { name, savedBy: ctx.userName });
                                 if (r.error) return;
                                 ctx.setDoc?.(r.doc);
                                 // SAVING ADDS IT TO THE MENU; IT DOES NOT SET THE DEFAULT. Two acts,
                                 // because they are two decisions.
-                                setNaming(false); setBuilding(false); setPicking(false);
+                                setNaming(false); setBuilding(false); setPicking(false); setEditing(null);
                                 setCfg({ measures: [], by: null, across: "month" });
                                 pick(r.chart.id);
                               }} />

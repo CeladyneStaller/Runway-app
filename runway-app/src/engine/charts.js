@@ -14,6 +14,7 @@
 // spend history yet" — rather than render an empty box that looks like a bug.
 
 import { buildProjection, zeroInfo, solvency } from "./projection.js";
+import { accruedCostShare, outstandingDebt, windDownCost } from "./commitments.js";
 import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, monthRevenue, isCost, lineAmount, lineCode, resolveLine, OVERHEAD } from "./coding.js";
@@ -894,6 +895,53 @@ export const CHARTS = Object.freeze([
     why: "Which categories drove the gap. Turns a number into somewhere to look.", build: histVariance },
   { id: "hist.rolling", tab: "hist", name: "Rolling three-month burn",
     why: "Smooths lumpy months so a real climb is distinguishable from one big invoice.", build: histRolling },
+  // ── Commitments ──────────────────────────────────────────────────────────────────────────────
+  {
+    id: "cmt.closure", tab: "cmt", name: "What you would owe if you stopped",
+    why: "Obligations stacked, cash over them. Where the line enters the stack is the clean-exit date — not the runway date.",
+    build: (doc, parts) => {
+      const rows = parts?.rows || [];
+      const n = Math.min(rows.length, 18);
+      const at = (f) => Array.from({ length: n }, (_, m) => f(m));
+      const wd = windDownCost(doc);
+      return {
+        kind: "stack", x: months(doc), ticks: axisTicks(doc),
+        series: [
+          // ⚠️ THESE THREE GENUINELY SUM — none contains another, which is unusual among this tab's
+          // neighbours and is what makes stacking honest here.
+          { id: "wind", label: "Wind-down payroll", values: at(() => wd), tone: "brown" },
+          { id: "cs", label: "Accrued cost share", values: at(m => accruedCostShare(doc, m)), tone: "gate" },
+          { id: "debt", label: "Debt and notes", values: at(m => outstandingDebt(doc, m)), tone: "clay" },
+          // CASH RIDES OVER AS A LINE. It is a position, not a fourth component of the same total —
+          // drawing it as a bar would imply it was.
+          { id: "cash", label: "Cash on hand", values: rows.slice(0, n).map(r => r.end),
+            tone: "signal", shape: "lines" },
+        ],
+        format: "money",
+      };
+    },
+  },
+  {
+    id: "cmt.costshare", tab: "cmt", name: "Cost share, accrued against matched",
+    why: "The gap is the shortfall — you cannot match federal money with federal money.",
+    build: (doc, parts) => {
+      const rows = parts?.rows || [];
+      const n = Math.min(rows.length, 18);
+      let run = 0;
+      const matched = rows.slice(0, n).map(r => { run += r.inNonGrant || 0; return run; });
+      return {
+        kind: "lines", x: months(doc), ticks: axisTicks(doc),
+        series: [
+          { id: "accrued", label: "Cost share accrued",
+            values: Array.from({ length: n }, (_, m) => accruedCostShare(doc, m)), tone: "gate" },
+          { id: "matched", label: "Non-grant funds available to match it",
+            values: matched, tone: "signal" },
+        ],
+        format: "money",
+      };
+    },
+  },
+
 ]);
 
 export const chartsForTab = (tab) => CHARTS.filter(c => c.tab === tab);

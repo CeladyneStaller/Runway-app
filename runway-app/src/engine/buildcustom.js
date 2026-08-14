@@ -12,6 +12,7 @@ import { axisTicks, months } from "./charts.js";
 import { measureById, overlaps, unitsOf, allowedTypes } from "./measures.js";
 import { dimensionById, splitBy, tooManySeries } from "./dimensions.js";
 import { colorsFor } from "./palette.js";
+import { renderKind, axesFor } from "./charttype.js";
 
 // ⚠️ THE PALETTE IS NO LONGER A CYCLING LIST OF TONE NAMES. Seven tones cycling by index gave four
 // grants four near-identical greens — colour carrying the TYPE and losing the IDENTITY, which is
@@ -113,11 +114,26 @@ export function buildCustom(cfg, doc, parts, rows) {
 
 function finish(cfg, doc, series, ids) {
   const ok = allowedTypes(ids);
+  // ⚠️ THE CHART KIND COMES FROM SHAPE + STACKED + ORIENTATION, not from a single type name. `Stack`
+  // already renders FILLED PATHS rather than rects, so a stacked line was drawable all along — only
+  // the way to ask for it was missing.
+  const first = cfg?.measures?.[0] || {};
+  const kindFromControls = renderKind({ shape: first.shape, stacked: first.stacked,
+                                        orient: cfg?.orient });
+  const axes = axesFor((cfg?.measures || []).map(m => ({ ...measureById(m.id), axis: m.axis })));
+  series = series.map(sr => {
+    const m = (cfg?.measures || []).find(x => x.id === sr.id);
+    return { ...sr,
+             // PER-MEASURE SHAPE SURVIVES — which is what lets obligations stack while cash rides over
+             // them as a line, in one chart.
+             shape: m?.shape || sr.shape || null,
+             axis: axes.find(a => a.id === sr.id)?.axis || "left" };
+  });
   // ⚠️ THE TYPE FALLS BACK RATHER THAN DRAWING SOMETHING FALSE. If a saved chart asks for a stack that
   // its measures no longer allow — because one now contains another — it draws as lines and says so,
   // instead of asserting that the parts sum to the whole.
-  const asked = cfg?.measures?.[0]?.type || "lines";
-  const kind = ok.includes(asked) ? asked : (ok[0] || "lines");
+  const asked = kindFromControls;
+  const kind = asked === "hbars" ? "hbars" : ok.includes(asked) ? asked : (ok[0] || "lines");
   const over = overlaps(ids);
   return {
     kind: kind === "bars" ? "bars" : kind,

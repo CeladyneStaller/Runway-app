@@ -5,7 +5,7 @@ import { applyLens } from "../../src/engine/lenses.js";
 import { demoDoc } from "../../src/state/document.js";
 import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { buildProjection } from "../../src/engine/projection.js";
-import { saveChart, savedFor, setDefaultChart, defaultChartId, deleteChart,
+import { saveChart, updateChart, savedFor, setDefaultChart, defaultChartId, deleteChart,
          deleteImpact, resolveSaved } from "../../src/engine/savedcharts.js";
 
 const doc = () => demoDoc();
@@ -158,5 +158,57 @@ describe("saving, defaults and deletion", () => {
     const r = resolveSaved({ measures: [{ id: "cost" }, { id: "gone" }] }, ["cost"]);
     expect(r.measures).toHaveLength(1);
     expect(r.lost).toEqual(["gone"]);
+  });
+});
+
+describe("editing a saved chart", () => {
+  const cfg = { measures: [{ id: "cost", type: "bars" }], by: "project", across: "month" };
+  const seed = () => {
+    const d = saveChart(demoDoc(), "flow", cfg, { name: "Spend by project", savedBy: "Corey" }).doc;
+    return { d, id: savedFor(d, "flow")[0].id };
+  };
+
+  it("⚠️ UPDATES IN PLACE — it does not save a copy", () => {
+    // An edit that saved a copy would leave the ORIGINAL as the company default while the person who
+    // fixed it looked at their corrected version — two charts with almost the same name and no way to
+    // tell which one everybody else lands on.
+    const { d, id } = seed();
+    const r = updateChart(d, id, { measures: [{ id: "rev", type: "lines" }], by: null, across: "month" });
+    expect(savedFor(r.doc, "flow")).toHaveLength(1);
+    expect(savedFor(r.doc, "flow")[0].id).toBe(id);
+    expect(savedFor(r.doc, "flow")[0].measures[0].id).toBe("rev");
+    expect(savedFor(r.doc, "flow")[0].by).toBeNull();
+  });
+
+  it("⚠️ A CHART THAT IS THE DEFAULT STAYS THE DEFAULT THROUGH AN EDIT", () => {
+    // Which is what somebody correcting a mistake in it expects.
+    let { d, id } = seed();
+    d = setDefaultChart(d, "flow", id, { isOwner: true }).doc;
+    const r = updateChart(d, id, { measures: [{ id: "rev" }], across: "month" });
+    expect(defaultChartId(r.doc, "flow")).toBe(id);
+  });
+
+  it("keeps the name unless a new one is given", () => {
+    const { d, id } = seed();
+    expect(updateChart(d, id, cfg).chart.name).toBe("Spend by project");
+    expect(updateChart(d, id, cfg, { name: "Renamed" }).chart.name).toBe("Renamed");
+  });
+
+  it("keeps who saved it, and records when it was edited", () => {
+    // The original author is not overwritten by whoever last touched it — that would quietly reassign
+    // authorship on a shared document.
+    const { d, id } = seed();
+    const c = updateChart(d, id, cfg).chart;
+    expect(c.savedBy).toBe("Corey");
+    expect(c.editedAt).toBeTruthy();
+  });
+
+  it("refuses to blank the name", () => {
+    const { d, id } = seed();
+    expect(updateChart(d, id, cfg, { name: "  " }).error).toMatch(/name/i);
+  });
+
+  it("says so when the chart has gone", () => {
+    expect(updateChart(demoDoc(), "nope", cfg).error).toMatch(/no longer exists/i);
   });
 });

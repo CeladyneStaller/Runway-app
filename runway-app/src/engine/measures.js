@@ -9,6 +9,8 @@
 // `test/engine/measures.test.js` walks every measure against a real projection and fails on any that
 // returns nothing but zeroes where the tab has data.
 
+import { accruedCostShare, shortfallAt, outstandingDebt, windDownCost } from "./commitments.js";
+
 /** The projection row is `{ m, start, rev, cost, net, end, inNonGrant }` — seven fields, and three of
  *  them contain each other. `contains` is what stops a chart double-counting. */
 export const MEASURES = [
@@ -40,8 +42,9 @@ export const MEASURES = [
 
   { id: "end", tab: ["flow", "dash"], label: "Cash balance", unit: "money",
     get: (rows) => rows.map(r => r.end),
-    // A BALANCE IS A POSITION, NOT A FLOW. Balances do not sum, so stacking one is meaningless and
-    // area under one implies an accumulation that has already accumulated.
+    // ⚠️ A POSITION, NOT A FLOW. Balances do not sum, so stacking one is meaningless in EITHER shape —
+    // declared here rather than left to the absence of a type, so the control can say why.
+    position: true,
     allows: ["lines", "bars"] },
 
   { id: "inNonGrant", tab: ["flow"], label: "Non-grant inflow", unit: "money",
@@ -83,6 +86,47 @@ export const MEASURES = [
   { id: "saasRev", tab: ["flow"], label: "Recurring revenue", unit: "money",
     get: (rows, parts) => sumLines(parts?.saasLines, rows.length),
     allows: ["lines", "bars", "stack"] },
+
+  // ── commitments ──────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠️ EVERY ONE OF THESE ALREADY HAS AN ENGINE FUNCTION and none of it is drawn anywhere. Cash and
+  // runway are numbers a founder checks daily; **cost share accrues silently, debt matures on a date
+  // nobody has in mind, and the wind-down cost only exists in a hypothetical.** These are the figures
+  // people are surprised by, which is the case for drawing them.
+  { id: "costShareAccrued", tab: ["cmt"], label: "Cost share accrued", unit: "money",
+    get: (rows, parts, doc) => rows.map((_, m) => accruedCostShare(doc, m)),
+    allows: ["lines", "bars"] },
+
+  { id: "shortfall", tab: ["cmt"], label: "Unmatchable shortfall", unit: "money",
+    get: (rows, parts, doc) => rows.map((_, m) => shortfallAt(doc, rows, m)),
+    // ⚠️ INSIDE THE COST SHARE, not beside it — the part of it that cannot be matched with non-grant
+    // funds. Plotting both is a legitimate "how much of it is a problem" chart; stacking them doubles.
+    contains: ["costShareAccrued"],
+    allows: ["lines", "bars"] },
+
+  { id: "debtOutstanding", tab: ["cmt"], label: "Debt outstanding", unit: "money",
+    get: (rows, parts, doc) => rows.map((_, m) => outstandingDebt(doc, m)),
+    allows: ["lines", "bars"] },
+
+  { id: "windDown", tab: ["cmt"], label: "Wind-down cost", unit: "money",
+    // FLAT ACROSS THE WINDOW — it is what stopping would cost, not something that accrues.
+    get: (rows, parts, doc) => { const w = windDownCost(doc); return rows.map(() => w); },
+    allows: ["lines", "bars"] },
+
+  { id: "closureTotal", tab: ["cmt"], label: "Total if you stopped", unit: "money",
+    get: (rows, parts, doc) => rows.map((_, m) =>
+      accruedCostShare(doc, m) + outstandingDebt(doc, m) + windDownCost(doc)),
+    // ⚠️ IT IS THE SUM OF THE OTHERS. Beside them it answers "how much of it is cost share"; stacked
+    // with them it would double the total.
+    contains: ["costShareAccrued", "debtOutstanding", "windDown"],
+    allows: ["lines", "bars"] },
+
+  { id: "cmtCash", tab: ["cmt"], label: "Cash on hand", unit: "money",
+    get: (rows) => rows.map(r => r.end),
+    // A POSITION. On this tab it is the line that rides OVER the stacked obligations — which is only
+    // possible because stacking is per measure.
+    position: true,
+    allows: ["lines", "bars"] },
 
   // ⚠️ A DIFFERENT UNIT, AND THAT IS THE POINT. Dollars and people on one scale is not a chart, it is
   // a coincidence of magnitudes — $412,000 and 6 people drawn together makes headcount a flat line on
@@ -132,8 +176,10 @@ export const unitsOf = (ids = []) =>
 
 /** Types every selected measure allows, minus stacking when anything overlaps. */
 export function allowedTypes(ids = []) {
-  const sets = ids.map(i => measureById(i)?.allows || []);
-  let ok = ["lines", "bars", "stack"].filter(t => sets.every(s => s.includes(t)));
+  //  is reached through ORIENTATION rather than a measure declaring it, so it is not required to
+  // appear in every measure's `allows`.
+  const sets = ids.map(i => [...(measureById(i)?.allows || []), "hbars"]);
+  let ok = ["lines", "bars", "stack", "hbars"].filter(t => sets.every(s => s.includes(t)));
   if (overlaps(ids).length) ok = ok.filter(t => t !== "stack");
   return ok;
 }

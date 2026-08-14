@@ -90,3 +90,31 @@ export function resolveSaved(chart, knownMeasureIds = []) {
   const lost = (chart?.measures || []).filter(m => !knownMeasureIds.includes(m.id)).map(m => m.id);
   return { ...chart, measures: kept, lost };
 }
+
+/** Update a saved chart in place, keeping its id, its place in the menu, and its default status.
+ *
+ *  ⚠️ THIS IS A DIFFERENT ACT FROM SAVING A NEW ONE, and the difference matters to other people. An
+ *  edit that saved a copy would leave the original as the company default while the person who fixed it
+ *  looked at their corrected version — two charts with almost the same name and no way to tell which
+ *  one everybody else lands on.
+ *
+ *  Keeping the id means a chart that IS the default stays the default, which is what somebody
+ *  correcting a mistake in it expects.
+ */
+export function updateChart(doc, id, cfg, { name } = {}) {
+  const existing = savedById(doc, id);
+  if (!existing) return { doc, error: "That chart no longer exists." };
+  const trimmed = String(name ?? existing.name).trim();
+  if (!trimmed) return { doc, error: "Give the chart a name before saving it." };
+  const next = {
+    ...existing, name: trimmed,
+    measures: (cfg?.measures || []).map(m => ({ id: m.id, type: m.type || null })),
+    by: cfg?.by ?? null, across: cfg?.across || "month",
+    editedAt: new Date().toISOString(),
+  };
+  return {
+    doc: { ...doc, settings: { ...(doc.settings || {}),
+      savedCharts: (doc.settings?.savedCharts || []).map(c => (c.id === id ? next : c)) } },
+    chart: next, error: null,
+  };
+}

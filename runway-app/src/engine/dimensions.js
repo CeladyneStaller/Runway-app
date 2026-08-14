@@ -33,6 +33,27 @@ export const DIMENSIONS = [
     labelOf: (k, doc) => (doc?.rounds || []).find(r => r.id === k)?.name || "Unassigned" },
 
   // SEMANTIC AND FIXED, not allocated from a ramp — a tier means the same thing on every chart.
+  // ⚠️ AWARD AND BUDGET PERIOD EXIST NOWHERE ELSE, and they are why this tab needs its own dimensions
+  // rather than borrowing the Projects ones. **Cost share is owed per award per period** — that is how
+  // a funder audits it, and how the tab already groups its rows.
+  { id: "award", tab: ["cmt"], label: "Award",
+    of: (c) => c?.projectId ?? c?.source ?? null,
+    labelOf: (k, doc) => (doc?.projects || []).find(p => p.id === k)?.name || "Not tied to an award",
+    typeOf: (k, doc) => (doc?.projects || []).find(p => p.id === k)?.type || "other" },
+
+  { id: "period", tab: ["cmt"], label: "Budget period",
+    of: (c) => (c?.periodIndex != null ? String(c.periodIndex) : null),
+    labelOf: (k) => (k == null ? "No period" : `Period ${Number(k) + 1}`) },
+
+  { id: "flavour", tab: ["cmt"], label: "Flavour",
+    of: (c) => c?.flavor ?? null,
+    labelOf: (k) => ({ payment: "Payment", recurring: "Recurring", indexed: "Indexed" })[k] || k },
+
+  { id: "cmtKind", tab: ["cmt"], label: "Kind",
+    of: (c) => c?.kind ?? null,
+    // ⚠️ DEBT SURVIVES CLOSURE AND PLANNED DOES NOT — the distinction the clean-exit figure turns on.
+    labelOf: (k) => ({ debt: "Survives closure", planned: "Does not survive" })[k] || k },
+
   { id: "confidence", tab: ["flow", "sales", "inv"], label: "Confidence tier",
     of: (l) => l?.confidence ?? "committed",
     labelOf: (k) => ({ committed: "Committed", expected: "Expected",
