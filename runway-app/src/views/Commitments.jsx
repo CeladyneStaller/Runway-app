@@ -4,6 +4,7 @@
 // has to explain the concept, and the "ready to promote" panel has to exist. A tab you fill by hand is
 // a tab nobody fills.
 import React, { useMemo, useState } from "react";
+import { TabInsights } from "./chrome/TabInsights";
 import { dateShort } from "../engine/time";
 import { money } from "../engine/money";
 
@@ -148,6 +149,16 @@ export function Commitments({ doc, setDoc, rows, canWrite = true, account, compa
             rather than missing money.</span>
         </div>
       )}
+
+      {/* ⚠️ THIS TAB NEVER MOUNTED THE INSIGHTS PANEL. Two commitments charts were registered,
+          `chartsForTab("cmt")` returned both, and nothing rendered — because `TabInsights` sits on
+          Projects, History and Sales and not here. **A chart in the registry and nowhere on screen is
+          indistinguishable from one that was never written.**
+
+          Registering a chart and mounting the panel are two steps, and only the first is visible in
+          `charts.js` — which is why this looked finished. */}
+      <TabInsights tab="cmt" subtab={sub} />
+
 
       {!p && ready.length === 0 && (
         <section className="panel">

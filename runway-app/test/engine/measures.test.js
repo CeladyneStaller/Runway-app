@@ -188,3 +188,25 @@ describe("⚠️ every type name is one the renderer actually has", () => {
     }
   });
 });
+
+describe("⚠️ every tab with charts actually mounts the panel", () => {
+  const fs = require("node:fs");
+
+  it("MOUNTS `TabInsights` WHEREVER THE REGISTRY HAS CHARTS", () => {
+    // Two commitments charts were registered, `chartsForTab("cmt")` returned both, and nothing rendered
+    // — `Commitments.jsx` never mounted the panel. **A chart in the registry and nowhere on screen is
+    // indistinguishable from one that was never written**, and only half of that is visible in
+    // `charts.js`, which is why it looked finished.
+    const VIEW = { dash: null, hist: "History", flow: null, sales: "Sales", pay: null,
+                   proj: "Projects", ms: null, inv: null, cmt: "Commitments", scn: null };
+    const src = fs.readFileSync("src/engine/charts.js", "utf8");
+    const tabs = [...new Set([...src.matchAll(/tab: "(\w+)"/g)].map(m => m[1]))];
+    for (const t of tabs) {
+      const file = VIEW[t];
+      if (!file) continue;                       // rendered from App or a shared shell
+      const view = fs.readFileSync(`src/views/${file}.jsx`, "utf8");
+      expect(view, `${file}.jsx has charts registered for "${t}" and never mounts TabInsights`)
+        .toMatch(new RegExp(`<TabInsights tab="${t}"`));
+    }
+  });
+});

@@ -1700,6 +1700,24 @@ catch it.** Fixing a name in the source does not fix the assertions written alon
 **Two of the four I predicted before seeing the output** (the `type` field and the flat-zero count).
 The other two were the kind only a run finds.
 
+### The Commitments charts were registered and never mounted
+
+**`Commitments.jsx` never rendered `TabInsights`.** Both charts were in the registry,
+`chartsForTab("cmt")` returned them, `defaultChartFor("cmt")` picked one — and the tab showed nothing,
+because the panel sits on Projects, History and Sales and was never added here.
+
+**⚠️ A CHART IN THE REGISTRY AND NOWHERE ON SCREEN IS INDISTINGUISHABLE FROM ONE THAT WAS NEVER
+WRITTEN.** Registering and mounting are two steps and **only the first is visible in `charts.js`**,
+which is exactly why this looked finished from where I was working.
+
+`measures.test.js` now walks every `tab:` in the registry and asserts the corresponding view mounts the
+panel for it.
+
+**Two failed insertions on the way, both from anchoring on structure I had not read.** A brace-walk to
+find the end of the stats block landed 550 lines away, and an anchor on the first `<section>` put JSX
+inside a conditional EXPRESSION. **The reliable anchor was a top-level `)}` immediately before the first
+section** — a boundary the file actually has, rather than one I assumed.
+
 ### The named guard immediately paid for itself
 
 Its first run reported `baseline, saasRev, shortfall, debtOutstanding` — and **two of the five entries I
