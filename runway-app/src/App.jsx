@@ -104,7 +104,7 @@ const isEmptyDoc = (d) => !d?.employees?.length && !d?.lines?.length && !d?.proj
   && !d?.rounds?.length && !d?.pos?.length;
 
 function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
-                    companyName = null, tabPrefs, onSetup = null, autoSetup = false,
+                    companyName = null, tabPrefs, onSetup = null,
                     membership = null, companyHidden = [],
                     startView = null, onBackToPortfolio = null }) {
   const startY = doc.startY;
@@ -457,24 +457,19 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
   // team, or who simply did not know their balance yet, had no door at all.
   const [startedBlank, setStartedBlank] = useState(false);
 
-  // ⚠️ A REF, BECAUSE THE DEPENDENCIES CANNOT BE MADE STABLE.
+  // ⚠️ THE WIZARD ALREADY AUTO-OPENS, AND I ADDED A SECOND ONE THAT FOUGHT IT.
   //
-  // `onSetup` is supplied as an inline arrow — `() => setSetup("model")` — so it is a NEW FUNCTION
-  // IDENTITY ON EVERY RENDER. The effect fired, opened the wizard, re-rendered, saw a different
-  // `onSetup`, and fired again: **an infinite loop of company creation.**
+  // `DocumentHost` opens it on load — `if (!hasSubstance(r.doc) && !setupSkipped(companyId))
+  // setSetup("model")` — once, after the document arrives, with a skip that PERSISTS PER COMPANY and
+  // survives a reload. That is strictly better than what I built, and it was there the whole time.
   //
-  // `doc` has the same problem for the same reason, and neither is worth restructuring the caller to
-  // fix. **The ref states the intent directly — once per mount — instead of relying on a dependency
-  // array to imply it.** My comment said "opens once" while nothing in the code made that true.
-  const askedSetup = React.useRef(false);
-  useEffect(() => {
-    if (askedSetup.current) return;
-    if (!autoSetup || !onSetup) return;
-    // Declining is remembered: `startedBlank` is set when somebody deliberately skips setup.
-    if (!isEmptyDoc(doc) || startedBlank) return;
-    askedSetup.current = true;
-    onSetup();
-  }, [autoSetup, doc, startedBlank, onSetup]);
+  // My version ran on every render of a different component, re-fired because `onSetup` is an inline
+  // arrow, and had no memory of being declined. **The bug was not the loop; the loop was a symptom of
+  // adding a mechanism that already existed.**
+  //
+  // ⚠️ SO THE ORIGINAL REPORT — "new accounts land on the empty shell" — WAS NOT A MISSING TRIGGER.
+  // It is `hasSubstance(r.doc)` returning true, or `setupSkipped()` returning true, for a document
+  // that is genuinely new. That is where to look, and it is a different bug from the one I fixed.
 
   // A LOCAL-MODE SCREEN NOW. In hosted mode the setup wizard is the single door into a new model and
   // this one is retired — see SetupBar for why a second full-screen front door was the wrong shape.
@@ -1580,18 +1575,6 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
                // only registers one when the config is complete, so the provider IS hosted mode. In demo
                // mode the model is never empty, and in local mode the screen above is still right.
                onSetup={!demo && getSessionProvider() ? () => setSetup("model") : null}
-               // ⚠️ A GENUINELY NEW DOCUMENT OPENS THE WIZARD RATHER THAN OFFERING A BAR.
-               //
-               // Hosted accounts got `SetupBar` — a strip above an empty app saying "set up". The
-               // wizard existed, was routed, and was never the thing a new account SAW, which is why
-               // it looked broken: **the bar is easy to read as decoration on a screen that already
-               // looks like the product.**
-               //
-               // Keyed on `isEmpty` rather than `isNew`: a document that exists but is empty is not
-               // new, so anything writing a row before this check would have made `isNew` false while
-               // `isEmpty` stayed true. **Two flags for one concept, and the wrong one was
-               // load-bearing.**
-               autoSetup={!demo && !!getSessionProvider()}
                onOpenAccount={demo ? null : () => setShowAccount({ scope: 'profile' })} />
     {demo && wasReset && (
       <div className="cf-backdrop" role="dialog" aria-modal="true" aria-label="Demo reset">

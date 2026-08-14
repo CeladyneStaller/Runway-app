@@ -1742,23 +1742,32 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
-### ⚠️ THE AUTO-SETUP HOOK LOOPED FOREVER
+### ⚠️ I BUILT A SECOND WIZARD TRIGGER ON TOP OF ONE THAT ALREADY WORKED
 
-`onSetup` is supplied as an inline arrow — `() => setSetup("model")` — so it is a **new function
-identity on every render**. The effect fired, opened the wizard, re-rendered, saw a different
-`onSetup`, and fired again: an infinite loop of company creation.
+**The loop was a symptom, not the bug.** `DocumentHost` already opens the wizard on load:
 
-**And my comment said "OPENS ONCE" while nothing in the code made that true.** A dependency array
-cannot express "once per mount"; a ref can, and it states the intent directly rather than implying it
-through identity stability the caller does not provide.
+    if (alive && !hasSubstance(r.doc) && !setupSkipped(currentCompanyId())) setSetup("model");
 
-**⚠️ AN INLINE ARROW IN A DEPENDENCY ARRAY IS ALWAYS A RE-FIRE.** `doc` had the same problem for the
-same reason. Neither is worth restructuring the caller to fix — the ref is the honest tool for "do this
-once".
+Once, after the document arrives, with a skip that **persists per company and survives a reload** —
+strictly better than what I built, and it was there the whole time.
 
-**Scanned the rest of the file** for effects depending on a prop that is supplied as an inline arrow at
-its call site: **none unguarded.** Worth keeping as a check, because lint sees an exhaustive dependency
-array here and approves of it — **the array was correct and the behaviour was wrong.**
+Mine ran on every render of a different component, re-fired because `onSetup` is an inline arrow
+(a new identity each render), and had no memory of being declined. Adding a ref stopped the loop
+WITHOUT stopping the duplication, which is why it looped again.
+
+**⚠️ AND THE ORIGINAL DIAGNOSIS WAS WRONG.** I told Corey the wizard "existed, was routed, and was never
+what a new account SAW", and that hosted accounts got a `SetupBar` instead. **The auto-open was three
+lines away from the code I read.** `emptyDoc()` sets `cash: 0` and empty collections, so `hasSubstance`
+is correctly false for a new document and the trigger fires as designed.
+
+**Which means the original report — "new accounts land on the empty shell" — is still unexplained**, and
+is a different bug from the one I invented a fix for. The candidates are `setupSkipped(companyId)`
+returning true for a company that never skipped, or the load path returning a document that already has
+substance. **Both are worth checking against a real new account rather than reasoned about.**
+
+**The lesson is the order I worked in:** I read the routing, formed a theory, built to the theory, and
+only searched for an existing trigger after the second failure. **Searching first would have cost one
+grep.**
 
 ## Account creation and the legal surfaces
 
