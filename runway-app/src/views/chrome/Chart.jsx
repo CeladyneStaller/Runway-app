@@ -36,6 +36,39 @@ const TONE = {
 const tone = (t) => TONE[t] || TONE.signal;
 const colorOf = (s) => s?.color || tone(s?.tone);
 
+/** ⚠️ SIGN COLOURING ASSIGNS COLOUR BY VALUE; THE PALETTE ASSIGNS IT BY IDENTITY. Both want the same
+ *  channel and cannot share it — four projects all sign-coloured are four red-and-green series nobody
+ *  can tell apart, which is the four-green-bars bug with a different cause. `buildCustom` refuses the
+ *  combination; this only draws it.
+ */
+const signColor = (v) => (clean(v) < 0 ? TONE.danger : TONE.signal);
+
+/** Split a series at its INTERPOLATED zero crossings, not at the nearest sample.
+ *
+ *  ⚠️ SWITCHING AT THE SAMPLE PUTS A GREEN SEGMENT BELOW THE LINE or a red one above it — visibly wrong
+ *  at the exact place people look. The crossing sits between two points, at
+ *  `i + a / (a - b)`, and that is where the colour has to change.
+ */
+function signRuns(values, xOf, yOf) {
+  const runs = [];
+  let cur = null;
+  for (let i = 0; i < values.length; i++) {
+    const v = clean(values[i]);
+    const neg = v < 0;
+    if (!cur) { cur = { neg, pts: [[xOf(i), yOf(v)]] }; continue; }
+    if (neg !== cur.neg) {
+      const a = clean(values[i - 1]), b = v;
+      const t = a === b ? 0.5 : a / (a - b);          // fraction of the gap where it crosses zero
+      const cx = xOf(i - 1) + (xOf(i) - xOf(i - 1)) * t;
+      cur.pts.push([cx, yOf(0)]);
+      runs.push(cur);
+      cur = { neg, pts: [[cx, yOf(0)], [xOf(i), yOf(v)]] };
+    } else cur.pts.push([xOf(i), yOf(v)]);
+  }
+  if (cur) runs.push(cur);
+  return runs;
+}
+
 const fmt = (v, f) => {
   if (!Number.isFinite(v)) return "";
   if (f === "percent") return `${Math.round(v * 100)}%`;
@@ -204,7 +237,13 @@ function Lines({ spec }) {
         return <path d={d} fill="none" stroke="var(--commit)" strokeWidth="1.8" strokeDasharray="5 4" />;
       })()}
       {spec.series.map(sr => (
-        <path key={sr.id} d={path(sr.values)} fill="none" stroke={colorOf(sr)} strokeWidth="2"
+        sr.signColor
+        ? signRuns(sr.values, (i) => xAt(i, n), s.y).map((r, k) => (
+            <path key={`${sr.id}-${k}`} fill="none" strokeWidth="2"
+                  stroke={r.neg ? TONE.danger : TONE.signal}
+                  d={r.pts.map(([px, py], j) => `${j ? "L" : "M"}${px} ${py}`).join(" ")} />
+          ))
+        : <path key={sr.id} d={path(sr.values)} fill="none" stroke={colorOf(sr)} strokeWidth="2"
               strokeDasharray={sr.dashed ? "4 3" : undefined} />
       ))}
       <Markers marks={spec.markers} n={n} s={s} />
@@ -214,14 +253,20 @@ function Lines({ spec }) {
 
 function Stack({ spec }) {
   const n = Math.max(...spec.series.map(sr => sr.values.length));
+  // SIGNS SUMMED SEPARATELY, so the domain reaches both extremes rather than the net of them.
   const totals = Array.from({ length: n }, (_, i) => spec.series.reduce((a, sr) => a + clean(sr.values[i]), 0));
   // A SUPPLIED DOMAIN WINS. Under `Composite` all three groups must share one scale.
   const s = scale(spec.domain || [...totals, spec.refLine?.y ?? 0]);
 
-  let base = Array(n).fill(0);
+  // ⚠️ TWO BASELINES, BECAUSE A STACK WITH MIXED SIGNS HAS TWO DIRECTIONS. With one accumulator a
+  // -40k segment is drawn INSIDE a +100k one and the total is nonsense. Positives stack up from zero,
+  // negatives stack down — each value starts from the baseline for its own sign.
+  let up = Array(n).fill(0), down = Array(n).fill(0);
   const bands = spec.series.map(sr => {
-    const lo = [...base];
-    base = base.map((b, i) => b + clean(sr.values[i]));
+    const lo = sr.values.map((v, i) => (clean(v) < 0 ? down[i] : up[i]));
+    up = up.map((b, i) => (clean(sr.values[i]) < 0 ? b : b + clean(sr.values[i])));
+    down = down.map((b, i) => (clean(sr.values[i]) < 0 ? b + clean(sr.values[i]) : b));
+    const base = sr.values.map((v, i) => (clean(v) < 0 ? down[i] : up[i]));
     return { sr, lo, hi: [...base] };
   });
 
@@ -266,7 +311,7 @@ function Bars({ spec }) {
         // without splitting it into two series that would then be drawn side by side.
         return <rect key={`${sr.id}-${i}`} x={x} y={y} width={barW}
                      height={Math.max(1, Math.abs(s.y(v) - s.zero))}
-                     fill={colorOf(sr.tones?.[i] ? { tone: sr.tones[i] } : sr)} opacity="0.75" />;
+                     fill={sr.signColor ? signColor(sr.values[i]) : colorOf(sr.tones?.[i] ? { tone: sr.tones[i] } : sr)} opacity="0.75" />;
       }))}
     </Wrap>
   );
@@ -633,10 +678,14 @@ function Composite({ spec }) {
   // is its own values. Letting each group scale itself would draw two charts on one canvas that
   // silently disagree about height.
   const n = Math.max(1, ...series.map(sr => (sr.values || []).length));
-  const stackTotals = Array.from({ length: n }, (_, i) =>
-    groups.stack.reduce((a, sr) => a + clean(sr.values?.[i]), 0));
-  const barTotals = Array.from({ length: n }, (_, i) =>
-    Math.max(0, ...groups.bars.map(sr => clean(sr.values?.[i]))));
+  // ⚠️ THE STACK'S EXTREMES, NOT ITS NET. Summing signed values gives the middle of a mixed stack, so
+  // a chart with +100k above and -40k below would size itself to 60k and clip both ends.
+  const stackUp = Array.from({ length: n }, (_, i) =>
+    groups.stack.reduce((a, sr) => a + Math.max(0, clean(sr.values?.[i])), 0));
+  const stackDown = Array.from({ length: n }, (_, i) =>
+    groups.stack.reduce((a, sr) => a + Math.min(0, clean(sr.values?.[i])), 0));
+  const stackTotals = [...stackUp, ...stackDown];
+  const barTotals = groups.bars.flatMap(sr => (sr.values || []).map(clean));
   const loose = groups.lines.flatMap(sr => (sr.values || []).map(clean));
   const domain = [...stackTotals, ...barTotals, ...loose, 0];
 

@@ -82,11 +82,20 @@ export function buildCustom(cfg, doc, parts, rows) {
     if (!m) continue;
     const dim = spec.by ? dimensionById(spec.by) : null;
 
+    // ⚠️ SIGN COLOURING AND A BREAKDOWN CANNOT COEXIST ON ONE DATASET. Colour by VALUE and colour by
+    // IDENTITY want the same channel; four projects all sign-coloured are four red-and-green series
+    // nobody can tell apart. The breakdown wins — it is the more specific request — and the note says
+    // which was dropped.
+    const signColor = !!spec.signColor && !spec.by;
+    // NEGATION IS A VIEW OF THE MEASURE, NOT A DIFFERENT MEASURE. Money out plotted downward is the
+    // same number, so `contains` and the overlap guard keep working on the un-negated identity.
+    const flip = spec.negate ? (arr) => arr.map(v => -(Number(v) || 0)) : (arr) => arr;
+
     if (dim) {
       const split = splitBy(dim, linesFor(spec.id, parts, doc), n, doc);
       const colors = colorsFor(split, dim.typeOf ? (k) => dim.typeOf(k, doc) : null);
       split.forEach((sp, k) => out.push({
-        id: `${spec.id}:${sp.id}`, label: `${sp.label}`, values: clip(sp.values),
+        id: `${spec.id}:${sp.id}`, label: `${sp.label}`, values: flip(clip(sp.values)),
         color: colors[k], tone: sp.unassigned ? "muted" : null,
         shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
         // THE GROUP IT CAME FROM, so a stack of one measure's parts does not merge with another's.
@@ -94,7 +103,7 @@ export function buildCustom(cfg, doc, parts, rows) {
       }));
     } else {
       out.push({
-        id: spec.id, label: m.label, values: clip(m.get(rows, parts, doc)),
+        id: spec.id, label: m.label, values: flip(clip(m.get(rows, parts, doc))), signColor,
         tone: TONES[colorIdx++ % TONES.length],
         shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
         group: spec.id,
@@ -137,6 +146,7 @@ function finish(cfg, doc, series, ids) {
   const over = overlaps(ids);
   // TRUE BY CONSTRUCTION: un-stack any series whose measure contains or is contained by another, so the
   // note above describes what was drawn rather than what was intended.
+  const droppedSign = (cfg?.measures || []).filter(x => x.signColor && x.by).map(x => measureById(x.id)?.label);
   const clash = new Set(over.flatMap(o => [o.outer, o.inner]));
   // ⚠️ RECORD IT BEFORE UN-STACKING. The note asked `series.some(sr => sr.stacked)` AFTER this line had
   // already cleared the flag, so it could never fire — the chart quietly drew unstacked and said
@@ -153,7 +163,10 @@ function finish(cfg, doc, series, ids) {
     // is un-stacked and said so, rather than the whole chart falling back to lines.
     // NAMES WHAT IT UN-STACKED, rather than saying "some of these" and leaving the reader to work out
     // which — the same reason the flat-zero guard names its measures instead of counting them.
-    note: unstacked.length
+    note: droppedSign.length
+      ? `${droppedSign.join(" and ")} is broken down, so its colours show which series is which rather `
+        + "than the sign — one colour channel, two jobs."
+      : unstacked.length
       ? `${[...new Set(unstacked)].join(" and ")} overlap other measures here, so they are drawn `
         + "unstacked — stacking them would not add up."
       : null,

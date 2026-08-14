@@ -1742,6 +1742,42 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Plot downward, and colour by sign
+
+### Negation
+
+A per-dataset `negate`, applied after `get()`. **It is a VIEW of the measure, not a different measure** —
+money out plotted downward is the same number — so `contains` and the overlap guard keep working on the
+un-negated identity.
+
+**⚠️ A STACK WITH MIXED SIGNS NEEDS TWO BASELINES.** `Stack` had one accumulator, so a -40k segment
+would have been drawn INSIDE a +100k one and the total was nonsense. Positives stack up from zero,
+negatives stack down, each value starting from the baseline for its own sign.
+
+**⚠️ AND THE DOMAIN MUST REACH BOTH EXTREMES, NOT THE NET OF THEM.** Summing signed values gives the
+MIDDLE of a mixed stack — a chart with +100k above and -40k below would have sized itself to 60k and
+clipped both ends.
+
+### Sign colouring
+
+`Diverging` already coloured bars by sign and `RunwayChart` already split its path at the crossing, so
+this was assembling what existed rather than inventing it.
+
+**⚠️ THE COLOUR CHANGES AT THE INTERPOLATED CROSSING, NOT THE NEAREST SAMPLE.** Switching at the sample
+puts a green segment below the line or a red one above it — **visibly wrong at the exact place people
+look.** The crossing sits at `i + a / (a - b)` between two points. Verified by hand:
+`[100, 40, -20, -60, 30]` gives three runs crossing at x = 16.7 and 36.7, between samples rather than on
+them.
+
+**⚠️ SIGN COLOURING AND A BREAKDOWN CANNOT COEXIST ON ONE DATASET.** Colour by VALUE and colour by
+IDENTITY want the same channel — four projects all sign-coloured are four red-and-green series nobody
+can tell apart, **which is the four-green-bars bug with a different cause.** The breakdown wins because
+it is the more specific request, the toggle disables with that reason, and the note says which was
+dropped.
+
+**Where it earns its place is a single series** — net cash flow, where the sign IS the information and
+identity does not matter because there is only one thing on the chart.
+
 ### ⚠️ A DISPATCHER WAS NOT ENOUGH — each renderer emitted its own `<svg>`
 
 `Composite` grouped the series correctly and then rendered **three complete charts stacked on top of one

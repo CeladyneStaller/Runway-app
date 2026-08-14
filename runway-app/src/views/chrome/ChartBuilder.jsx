@@ -144,6 +144,29 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
                 </span>
               </label>
             </div>
+            <div className="cb-ds-g" style={{ marginTop: 8 }}>
+              <label className="fl">Plot downward
+                <span className={"cb-tog" + (m.negate ? " on" : "")}
+                      title="Draws this measure below zero — money out as a negative.">
+                  <input type="checkbox" checked={!!m.negate}
+                         onChange={e => setType(m.id, { negate: e.target.checked })} />
+                  {m.negate ? "Below zero" : "Above zero"}
+                </span>
+              </label>
+              <label className="fl">Colour by sign
+                {/* ⚠️ DISABLED WHILE BROKEN DOWN. Colour by VALUE and colour by IDENTITY want the same
+                    channel — four projects all sign-coloured are four red-and-green series nobody can
+                    tell apart. The breakdown wins because it is the more specific request. */}
+                <span className={"cb-tog" + (m.signColor && !m.by ? " on" : "")}
+                      title={m.by
+                        ? "Not while this is broken down — the colours already say which series is which."
+                        : "Green above zero, red below, changing at the crossing."}>
+                  <input type="checkbox" checked={!!m.signColor && !m.by} disabled={!!m.by}
+                         onChange={e => setType(m.id, { signColor: e.target.checked })} />
+                  {m.by ? "Unavailable" : m.signColor ? "By sign" : "By series"}
+                </span>
+              </label>
+            </div>
             {refusal && <p className="meta cb-ref">{refusal}</p>}
           </div>
         );
