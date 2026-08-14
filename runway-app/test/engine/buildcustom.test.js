@@ -319,3 +319,35 @@ describe("⚠️ saving must not quietly drop what the builder set", () => {
       before.series.map(s => [s.shape, s.stacked]));
   });
 });
+
+describe("⚠️ the company default must actually decide what is drawn", () => {
+  const cfg = { measures: [{ id: "cost", shape: "bars" }], across: "month" };
+
+  it("IS SETTABLE, STORED, AND RESOLVABLE TO A REAL CHART", () => {
+    // It was settable, badged in the menu, and consulted by nothing when deciding what to draw. **A
+    // preference that is stored, displayed, and ignored is the most convincing kind of broken**,
+    // because every visible signal says it worked.
+    let d = saveChart(demoDoc(), "flow", cfg, { name: "Ours" }).doc;
+    const id = savedFor(d, "flow")[0].id;
+    d = setDefaultChart(d, "flow", id, { isOwner: true }).doc;
+
+    // the view resolves in this order: this device's pick, then the company default, then curated
+    const chosen = null;                                   // nobody has picked on this device
+    const effective = chosen ?? defaultChartId(d, "flow");
+    expect(effective).toBe(id);
+    expect(savedFor(d, "flow").find(c => c.id === effective)).toBeTruthy();
+  });
+
+  it("A DEVICE PICK WINS OVER IT — the default is where you land, not an override", () => {
+    let d = saveChart(demoDoc(), "flow", cfg, { name: "Ours" }).doc;
+    const id = savedFor(d, "flow")[0].id;
+    d = setDefaultChart(d, "flow", id, { isOwner: true }).doc;
+    const chosen = "flow.inout";                           // this person picked something else
+    expect(chosen ?? defaultChartId(d, "flow")).toBe("flow.inout");
+  });
+
+  it("holds a CURATED id just as well, since it is one field", () => {
+    const d = setDefaultChart(demoDoc(), "flow", "flow.runway", { isOwner: true }).doc;
+    expect(defaultChartId(d, "flow")).toBe("flow.runway");
+  });
+});

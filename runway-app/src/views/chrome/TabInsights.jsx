@@ -45,7 +45,25 @@ const write = (tab, id) => {
 
 export function TabInsights({ tab, subtab }) {
   const ctx = useContext(InsightCtx);
+  // ⚠️ THE COMPANY DEFAULT WAS SETTABLE AND NEVER READ. `setDefaultChart` wrote it, the badge showed
+  // it, the owner-only button hid itself for it — and nothing consulted it when deciding what to draw.
+  // **A preference that is stored, displayed, and ignored is the most convincing kind of broken**,
+  // because every visible signal says it worked.
+  //
+  // ORDER: this device's own choice, then the company default, then the curated one. A person who has
+  // picked a chart on this tab keeps their pick — the company default is where you LAND, not a
+  // instruction that overrides a decision you already made.
   const [chosen, setChosen] = useState(() => read(tab));
+
+  // ⚠️ A useState INITIALISER RUNS ONCE, AND THE DOCUMENT MAY ARRIVE AFTER MOUNT. Reading the company
+  // default there would have worked on a warm reload and silently missed it on a cold one — an
+  // intermittent failure, which is worse than a consistent one because it looks like the person
+  // misremembered.
+  //
+  // Derived at render instead: no state to fall out of step, and it recomputes if an owner changes the
+  // default while somebody is looking at the tab. **It applies on their next tab load, not mid-read**,
+  // because `chosen` wins once they have picked anything themselves.
+  const effective = chosen ?? (ctx ? defaultChartId(ctx.doc, tab) : null);
   const [picking, setPicking] = useState(false);
   const [building, setBuilding] = useState(false);
   const [naming, setNaming] = useState(false);
@@ -59,13 +77,17 @@ export function TabInsights({ tab, subtab }) {
     () => (ctx ? alertsFor(tab, ctx.doc, ctx.parts) : []), [ctx, tab]);
 
   const lens = lensFor(tab, subtab);
-  const id = chartIdFor(tab, subtab, options.some(o => o.id === chosen) ? chosen : null,
-                        defaultChartFor(tab));
+  // The curated fallback also honours a company default that names a CURATED chart — one field holding
+  // either kind of id, so this asks once rather than branching on which kind it turned out to be.
+  const companyDefault = ctx ? defaultChartId(ctx.doc, tab) : null;
+  const id = chartIdFor(tab, subtab, options.some(o => o.id === effective) ? effective : null,
+                        options.some(o => o.id === companyDefault) ? companyDefault
+                                                                   : defaultChartFor(tab));
 
   // A SAVED CHART IS SELECTED BY THE SAME `chosen` FIELD as a curated one — one field holding either
   // kind of id, so the two cannot disagree the first time somebody deletes a saved chart.
   const saved = ctx ? savedFor(ctx.doc, tab) : [];
-  const pickedSaved = saved.find(c => c.id === chosen) || null;
+  const pickedSaved = saved.find(c => c.id === effective) || null;
 
   const spec = useMemo(() => {
     if (!ctx) return null;
@@ -158,7 +180,7 @@ export function TabInsights({ tab, subtab }) {
               {saved.length > 0 && <div className="ch-grp">Saved by your company</div>}
               {saved.map(c => (
                 <label key={c.id} className={"ch-opt" + (c.id === chosen ? " on" : "")}>
-                  <input type="radio" name={`chart-${tab}`} checked={!cfg.measures.length && c.id === chosen}
+                  <input type="radio" name={`chart-${tab}`} checked={!cfg.measures.length && c.id === effective}
                          onChange={() => pick(c.id)} aria-label={c.name} />
                   <span>
                     <span className="ch-opt-n">
@@ -202,7 +224,13 @@ export function TabInsights({ tab, subtab }) {
               {saved.length > 0 && <div className="ch-grp">Standard charts</div>}
               {options.map(o => (
                 <label key={o.id} className={"ch-opt" + (o.id === id ? " on" : "")}>
-                  <input type="radio" name={`chart-${tab}`} checked={!cfg.measures.length && o.id === id}
+                  {/* ⚠️ `id` FALLS BACK TO THE CURATED DEFAULT WHENEVER A SAVED CHART IS CHOSEN, because
+                      a saved id is not in `options` — so `chartIdFor` discards it. Checking `o.id === id`
+                      alone therefore ticked a standard chart WHILE a saved one was drawn, and both radios
+                      read as selected. The picker has to answer "what is on screen", and `pickedSaved` is
+                      the only thing that knows. */}
+                  <input type="radio" name={`chart-${tab}`}
+                         checked={!cfg.measures.length && !pickedSaved && o.id === id}
                          onChange={() => pick(o.id)} aria-label={o.name} />
                   <span>
                     <span className="ch-opt-n">{o.name}</span>

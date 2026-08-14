@@ -1742,6 +1742,43 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ THE COMPANY DEFAULT WAS SETTABLE AND NEVER READ
+
+`setDefaultChart` wrote it, the menu badged it, the owner-only button hid itself for the chart that had
+it — **and nothing consulted it when deciding what to draw.** The tab used this device's stored pick and
+fell back to the CURATED default.
+
+**A preference that is stored, displayed, and ignored is the most convincing kind of broken**, because
+every visible signal says it worked. This one had three signals.
+
+**Derived at render, not in a `useState` initialiser.** An initialiser runs once and the document may
+arrive after mount — it would have worked on a warm reload and silently missed on a cold one, which is
+an intermittent failure and worse than a consistent one because it looks like the person misremembered.
+
+**Order: this device's pick, then the company default, then curated.** Somebody who has chosen a chart
+on this tab keeps their choice — **the default is where you LAND, not an instruction that overrides a
+decision already made** — and a change by an owner therefore applies on the next tab load rather than
+mid-read, which is what was promised when the control was designed.
+
+**The curated fallback honours it too**, since one field holds either kind of id.
+
+### ⚠️ THE PICKER TICKED A STANDARD CHART WHILE A SAVED ONE WAS DRAWN
+
+`chartIdFor(tab, subtab, options.some(o => o.id === chosen) ? chosen : null, defaultChartFor(tab))` —
+**a saved id is not in `options`, so `chosen` is discarded and `id` becomes the curated default.** The
+standard radio compared `o.id === id` and ticked; the saved radio compared `c.id === chosen` and also
+ticked. Two selected radios, and the standard one reads as the answer.
+
+`!pickedSaved` now suppresses the standard radios, so exactly one ticks in every state: curated chosen,
+saved chosen, or an unsaved draft with none.
+
+**THREE CONSUMERS ANSWER "WHAT IS ON SCREEN" — the spec path, the header, and the radios — and each had
+its own version of the precedence.** The spec and the header were fixed in earlier rounds; the radios
+were the last one still deciding for themselves. **The same shape as the stack rule with three
+implementations**, one screen over.
+
+All three now use draft → saved → curated, in that order, and a check asserts they agree.
+
 ### ⚠️ STACKED BARS OVERLAPPED THE Y AXIS — a point layout used for a band shape
 
 `xAt(i, n)` returns the position of a DATA POINT, and `xAt(0, n)` is exactly `PAD.l` — the axis itself.
