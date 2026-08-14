@@ -17,7 +17,10 @@ export const TRIAL_DAYS = 14;
 // MUST MATCH `terms_current()` in migration 046, and a test reads both — a client one deploy behind
 // that writes an old version string would read as accepted, which makes the whole record worthless.
 // Bump this ONLY when the published terms change, because bumping it asks every existing user again.
-export const TERMS_VERSION = "2026-08-04";
+// ⚠️ RE-EXPORTED FROM , WHICH SITS BESIDE THE TEXT IT NAMES. This constant said 2026-08-04
+// while the executed documents said 2026-08-12 — so an acceptance would have recorded a version nobody
+// was shown. **A version number kept anywhere other than next to its document will drift from it.**
+export { LEGAL_VERSION as TERMS_VERSION } from "../legal";
 
 export const PLANS = [
   {

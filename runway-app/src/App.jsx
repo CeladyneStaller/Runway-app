@@ -1,5 +1,7 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { needsReacceptance } from "./legal";
+import { Reaccept } from "./views/chrome/Reaccept";
 import { readOpts, writeOpts } from "./engine/dashopts";
 import { DashOptions } from "./views/chrome/DashOptions";
 import { planSummary } from "./state/plans";
@@ -62,8 +64,47 @@ import { RunwayChart } from "./views/chrome/RunwayChart";
 import { I } from "./views/chrome/icons";
 import mark from './assets/waterline-mark.svg';
 
+/** ⚠️ ITS OWN PREDICATE, because `isEmpty` is declared 200 lines below where the wizard hook needs it —
+ *  reading it there would be a temporal dead zone, which is the fault that blanked the whole app earlier
+ *  today. Same question, asked where it can be. */
+/** ⚠️ ASKED ONCE, AFTER SIGN-IN, BEFORE THE APP. It gates rendering rather than sitting over the top,
+ *  because a prompt somebody can work behind is a prompt they will work behind.
+ */
+function ReacceptGate({ children }) {
+  const session = getSessionProvider();
+  const [user, setUser] = useState(undefined);   // undefined = still asking
+  useEffect(() => {
+    if (!session?.getUser) { setUser(null); return; }
+    let live = true;
+    Promise.resolve(session.getUser())
+      .then(r => { if (live) setUser(r?.data?.user ?? r?.user ?? null); })
+      .catch(() => { if (live) setUser(null); });
+    return () => { live = false; };
+  }, [session]);
+
+  // ⚠️ WHILE THE ANSWER IS UNKNOWN, SHOW THE APP — not a spinner and not the prompt. A gate that
+  // guesses "stale" during a slow round trip shows a legal demand to somebody who has already
+  // accepted, which is worse than asking a beat late.
+  if (user === undefined || !user) return children;
+  if (!needsReacceptance(session.acceptedTermsVersion?.(user))) return children;
+
+  return (
+    <Reaccept email={user.email}
+              onSignOut={() => session.signOut?.()}
+              onAccept={async (v) => {
+                const r = await session.acceptTerms?.(v);
+                // ONLY DISMISSES ON A CONFIRMED WRITE. Dismissing optimistically would leave the false
+                // record in place and never ask again — the failure this screen exists to fix.
+                if (r?.ok) setUser({ ...user, user_metadata: { ...user.user_metadata, terms_version: v } });
+              }} />
+  );
+}
+
+const isEmptyDoc = (d) => !d?.employees?.length && !d?.lines?.length && !d?.projects?.length
+  && !d?.rounds?.length && !d?.pos?.length;
+
 function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
-                    companyName = null, tabPrefs, onSetup = null,
+                    companyName = null, tabPrefs, onSetup = null, autoSetup = false,
                     membership = null, companyHidden = [],
                     startView = null, onBackToPortfolio = null }) {
   const startY = doc.startY;
@@ -415,6 +456,12 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
   // nothing said that typing a number was a way through. Someone who wanted to start by listing their
   // team, or who simply did not know their balance yet, had no door at all.
   const [startedBlank, setStartedBlank] = useState(false);
+
+  // OPENS ONCE, and only for a document with nothing in it. `startedBlank` is set when somebody
+  // deliberately skips setup, so declining is remembered rather than asked again on every render.
+  useEffect(() => {
+    if (autoSetup && isEmptyDoc(doc) && !startedBlank && onSetup) onSetup();
+  }, [autoSetup, doc, startedBlank, onSetup]);
 
   // A LOCAL-MODE SCREEN NOW. In hosted mode the setup wizard is the single door into a new model and
   // this one is retired — see SetupBar for why a second full-screen front door was the wrong shape.
@@ -1520,6 +1567,18 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
                // only registers one when the config is complete, so the provider IS hosted mode. In demo
                // mode the model is never empty, and in local mode the screen above is still right.
                onSetup={!demo && getSessionProvider() ? () => setSetup("model") : null}
+               // ⚠️ A GENUINELY NEW DOCUMENT OPENS THE WIZARD RATHER THAN OFFERING A BAR.
+               //
+               // Hosted accounts got `SetupBar` — a strip above an empty app saying "set up". The
+               // wizard existed, was routed, and was never the thing a new account SAW, which is why
+               // it looked broken: **the bar is easy to read as decoration on a screen that already
+               // looks like the product.**
+               //
+               // Keyed on `isEmpty` rather than `isNew`: a document that exists but is empty is not
+               // new, so anything writing a row before this check would have made `isNew` false while
+               // `isEmpty` stayed true. **Two flags for one concept, and the wrong one was
+               // load-bearing.**
+               autoSetup={!demo && !!getSessionProvider()}
                onOpenAccount={demo ? null : () => setShowAccount({ scope: 'profile' })} />
     {demo && wasReset && (
       <div className="cf-backdrop" role="dialog" aria-modal="true" aria-label="Demo reset">
@@ -1723,7 +1782,10 @@ export default function App() {
                      ? "Your password has been changed. Sign in with the new one."
                      : null} />;
   }
-  return <DocumentHost />;
+  // ⚠️ THE GATE WRAPS THE SIGNED-IN PATH ONLY. The demo, the misconfigured screen and the recovery
+  // screen return above this — none of them has a user to ask, and putting a legal prompt in front of
+  // the demo would demand acceptance from somebody who has not created an account.
+  return <ReacceptGate><DocumentHost /></ReacceptGate>;
 }
 
 /** Who you are signed in as, and the way out. Reads the registered provider directly rather than being

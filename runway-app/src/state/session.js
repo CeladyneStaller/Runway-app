@@ -95,6 +95,50 @@ export function createSession(authClient) {
       }
     },
 
+    /** ⚠️ RESEND, BECAUSE "TRY AGAIN" MEANT RETYPING EVERYTHING. The confirm screen told people to
+     *  check spam and then start over — and starting over on an address that already exists is a
+     *  different, more confusing error. Supabase re-sends without creating a second account.
+     */
+    /** The terms version this person last accepted, or null. Read from the same user metadata
+     *  `signUpWithPassword` writes, so there is one place the answer lives. */
+    acceptedTermsVersion(user) {
+      return user?.user_metadata?.terms_version ?? null;
+    },
+
+    /** ⚠️ RECORDS THE VERSION AND THE MOMENT, and never overwrites the ORIGINAL acceptance date.
+     *  `terms_first_accepted_at` is kept because "when did they first agree to anything" and "which
+     *  version are they on now" are different questions, and a re-acceptance flow that flattens them
+     *  loses the first one permanently.
+     */
+    async acceptTerms(version) {
+      try {
+        const { data: got } = await authClient.getUser();
+        const prev = got?.user?.user_metadata || {};
+        const { error } = await authClient.updateUser({
+          data: {
+            ...prev,
+            terms_version: version,
+            terms_accepted_at: new Date().toISOString(),
+            terms_first_accepted_at: prev.terms_first_accepted_at || prev.terms_accepted_at
+              || new Date().toISOString(),
+          },
+        });
+        return { ok: !error, error: error?.message || null };
+      } catch (e) { return { ok: false, error: e?.message || "Could not record acceptance" }; }
+    },
+
+    async resendConfirmation(email, { redirectTo } = {}) {
+      try {
+        const { error } = await authClient.resend({
+          type: "signup", email,
+          options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
+        });
+        // A FAILURE HERE IS NOT WORTH BLOCKING ON. The first email may well have arrived; saying "we
+        // could not resend" beside "check your spam folder" is two problems where there was one.
+        return { ok: !error, error: error?.message || null };
+      } catch (e) { return { ok: false, error: e?.message || "Could not resend" }; }
+    },
+
     async signInWithPassword(email, password) {
       try {
         const { error } = await authClient.signInWithPassword({

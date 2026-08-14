@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { TERMS_VERSION } from "../state/plans";
+import { LegalModal } from "./chrome/LegalDoc";
 import { siteOrigin, linkDestination } from "../state/siteurl";
 import { SetPassword } from "./SetPassword";
 import { track } from "../state/funnel";
@@ -28,6 +29,7 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);   // { kind, email }
+  const [resent, setResent] = useState(null);   // null | "busy" | "sent" | "failed"
   const [choosing, setChoosing] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -37,6 +39,8 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
   const redirectTo = siteOrigin() || undefined;
   const dest = linkDestination();
   const creating = mode === CREATE;
+  const [accepted, setAccepted] = useState(false);
+  const [legal, setLegal] = useState(null);
 
   const run = async (key, fn) => {
     setError(null);
@@ -86,7 +90,27 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
             something that isn't this app, that's the host's own access protection, not your account.
             Set <code>VITE_SITE_URL</code> to the real domain to point links there instead.</>}</p>
       )}
-      <p className="signin-fine">No link after a minute? Check spam, then try again — a fresh link invalidates the old one.</p>
+      <p className="signin-fine">No link after a minute? Check your spam folder first — the
+        confirmation comes from a no-reply address and lands there more often than it should.</p>
+      {/* ⚠️ RESENDING IS NOT "TRY AGAIN". Signing up a second time on an address that already exists
+          produces a different and more confusing error, so the screen that says "no link?" has to be
+          the screen that can send another one. */}
+      <div className="signin-resend">
+        <button className="addbtn ghost" disabled={resent === "busy"}
+                onClick={async () => {
+                  setResent("busy");
+                  const r = await session.resendConfirmation(notice.email, { redirectTo });
+                  setResent(r.ok ? "sent" : "failed");
+                }}>
+          {resent === "busy" ? "Sending…" : resent === "sent" ? "Sent again" : "Resend the link"}
+        </button>
+        {resent === "sent" && (
+          <span className="meta">Check the same inbox — the newest link is the one that works.</span>
+        )}
+        {resent === "failed" && (
+          <span className="meta">We could not resend just now. The first one may still arrive.</span>
+        )}
+      </div>
       <button className="addbtn ghost" onClick={() => setNotice(null)}>Back</button>
     </div></div>
   );
@@ -196,7 +220,30 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
 
       {error && <div className="signin-error" role="alert">{error}</div>}
 
-      <button className="addbtn signin-go" disabled={busy != null} onClick={primary}>
+      {/* ⚠️ THE CONTROL THE CODE HAS BEEN ASSUMING EXISTS. `signUpWithPassword` was already recording
+          `terms_version` and `terms_accepted_at`, and a comment in this file described "the checkbox" —
+          **there was no checkbox, and no link to either document.** Every account created so far
+          carries a timestamp for terms nobody was shown, which is worse than recording nothing. */}
+      {creating && (
+        <label className="signin-terms">
+          {/* NOT PRE-TICKED. A pre-ticked box is not assent in several of the jurisdictions this
+              product sells into, and it costs nothing to get right. */}
+          <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
+          <span>
+            I have read and accept the{" "}
+            {/* LINKS OPEN THE MODAL, NOT A NEW PAGE — a link here throws away a half-typed email and
+                password, so people either do not read it or lose their work. */}
+            <button type="button" className="linkbtn" onClick={() => setLegal("terms")}>
+              Terms of Service</button>{" "}and{" "}
+            <button type="button" className="linkbtn" onClick={() => setLegal("privacy")}>
+              Privacy Policy</button>.
+            <span className="meta signin-terms-v">Version {TERMS_VERSION}</span>
+          </span>
+        </label>
+      )}
+
+      <button className="addbtn signin-go" disabled={busy != null || (creating && !accepted)}
+              onClick={primary}>
         {busy === "signin" ? "Signing in…" : creating ? "Continue" : "Sign in"}
       </button>
 
@@ -233,6 +280,7 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
             <div className="signin-fine">No account needed. Nothing you do there is saved.</div>
           </div>
         )}
+      {legal && <LegalModal doc={legal} onClose={() => setLegal(null)} />}
     </div></div>
   );
 }

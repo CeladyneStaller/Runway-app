@@ -69,3 +69,24 @@ footer has to be made in fourteen files.** Use a script, not fourteen edits:
 
 If the shell starts changing often, that is the signal to move to a real static-site generator — not
 before.
+
+## The legal pages are generated, not hand-edited
+
+`python3 build_legal.py` regenerates `/terms/` and `/privacy/` from
+`../../rw/src/legal/{terms,privacy}.md` — **the same markdown the app's modal renders.**
+
+⚠️ **Do not edit `terms/index.html` or `privacy/index.html` directly.** Two hand-maintained copies is
+how a site says one thing and an app says another, and the difference only surfaces when somebody quotes
+the wrong one back at you. Edit the markdown, bump `VERSION` in both `build_legal.py` and
+`src/legal/index.js`, and regenerate.
+
+⚠️ **The placeholders these replaced were 5KB for a 39KB document** — a page headed "Terms." with a
+paragraph under it. That is worse than no page: procurement finds it, reads it, and concludes there are
+no real terms.
+
+⚠️ **All-caps paragraphs keep their capitals and get `class="caps"`.** Several disclaimers are only
+enforceable if they are conspicuous; sentence-casing them for tidiness weakens the clause.
+
+**Superseded versions must stay reachable.** An acceptance record naming a version points at a document
+that has to still exist — when the text changes, the old build goes to `/terms/<version>/` rather than
+being overwritten.

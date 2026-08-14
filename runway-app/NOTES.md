@@ -1742,6 +1742,54 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Account creation and the legal surfaces
+
+### The documents are in the repo now
+
+Converted once from the executed `.docx` to `src/legal/terms.md` and `privacy.md` — 15 sections each,
+39k and 21k characters. **Both surfaces render the same file**: a modal fed by a separate copy drifts
+from the page, and the drift stays invisible until somebody quotes the wrong one back at you.
+
+**⚠️ THE VERSION WAS EIGHT DAYS BEHIND.** `TERMS_VERSION = "2026-08-04"` in `plans.js`; the executed
+documents say `2026-08-12`. **A version number kept anywhere other than beside its text will drift from
+it** — it now lives in `src/legal/index.js` and `plans.js` re-exports it.
+
+**All-caps paragraphs are preserved, in the conversion and in the renderer.** Several disclaimers are
+only enforceable if they are conspicuous; sentence-casing them for tidiness weakens the clause.
+
+### The checkbox the code already assumed existed
+
+`signUpWithPassword` was recording `terms_version` and `terms_accepted_at`, and a comment in
+`SignIn.jsx` referred to "the checkbox" — **there was none, and no link to either document.** Every
+account created so far carries a timestamp for terms nobody was shown, which is **worse than recording
+nothing**: it is a record asserting something false.
+
+**Not pre-ticked, and the button is disabled until it is.** A pre-ticked box is not assent in several of
+the jurisdictions this sells into.
+
+**Links open the MODAL.** A link navigates away and throws out a half-typed email and password, so
+people either do not read it or lose their work. The modal offers "open in a new tab" for anyone who
+wants to keep a copy — **a modal they cannot print is a document they cannot retain.**
+
+### The wizard, finally reached
+
+**Hosted accounts were getting `SetupBar` — a strip above an empty app saying "set up".** The wizard
+existed, was routed, and was never the thing a new account SAW. **A bar is easy to read as decoration on
+a screen that already looks like the product.**
+
+**Keyed on emptiness, not `isNew`.** A document that exists but is empty is not new, so anything writing
+a row before the check made `isNew` false while `isEmpty` stayed true — two flags for one concept, and
+the wrong one was load-bearing. It uses its own predicate because `isEmpty` is declared 200 lines below
+where the hook needs it, and reading it there would be the temporal dead zone that blanked the app
+earlier today.
+
+### Still outstanding
+
+- **A "check your email" screen.** Sign-up returns no session and there is no page for the wait.
+- **Re-acceptance for existing accounts** — one screen on next sign-in, against the real document.
+- **The public routes** `/terms` and `/privacy` need wiring on the marketing site; `LegalPage` is built
+  and unrouted.
+
 ## The dashboard chart options modal
 
 Six switches, and **every one maps to a prop `RunwayChart` already took** — only the axis-break override
