@@ -1742,6 +1742,20 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ STACKED BARS OVERLAPPED THE Y AXIS — a point layout used for a band shape
+
+`xAt(i, n)` returns the position of a DATA POINT, and `xAt(0, n)` is exactly `PAD.l` — the axis itself.
+A rect centred there hung half the first bar over it: left edge at 29.5 with the axis at 52, **22px
+outside the plot.**
+
+**A line legitimately starts ON the axis; a bar occupies a slot BESIDE it.** `Bars` already had the
+right layout — a group per month, inset 15% — and I borrowed `xAt` from the area path instead, because
+the band arithmetic I was extending was shared and the X arithmetic was not.
+
+**The tell was in the symptom Corey reported:** "this doesn't happen for any other plotting condition"
+means the difference is in the code that ONE condition does not share. Regular bars were fine, areas
+were fine — only the new branch was wrong, and it was the only one using point positions for rects.
+
 ### ⚠️ THE STACK RULE HAD THREE IMPLEMENTATIONS, AND I NARROWED TWO
 
 Stacking two measures worked before a third overlapping one was added and was **refused after** — the

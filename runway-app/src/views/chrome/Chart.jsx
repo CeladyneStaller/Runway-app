@@ -284,9 +284,14 @@ function Stack({ spec }) {
         ? <g key={sr.id}>
             {hi.map((v, i) => {
               const y0 = s.y(lo[i]), y1 = s.y(v);
-              const w = Math.max(2, (PW / Math.max(1, n)) * 0.62);
+              // ⚠️ A BAND LAYOUT, NOT A POINT ONE. `xAt(i, n)` returns the POSITION OF A DATA POINT, and
+              // `xAt(0, n)` is exactly `PAD.l` — the y-axis itself — so a rect centred there hung half
+              // of the first bar over the axis. A line legitimately starts on the axis; a bar occupies
+              // a slot BESIDE it. This is `Bars`' own layout: a group per month, inset by 15%.
+              const groupW = PW / Math.max(n, 1);
+              const w = Math.max(2, groupW * 0.7);
               return Math.abs(y1 - y0) < 0.5 ? null : (
-                <rect key={i} x={xAt(i, n) - w / 2} y={Math.min(y0, y1)}
+                <rect key={i} x={PAD.l + i * groupW + groupW * 0.15} y={Math.min(y0, y1)}
                       width={w} height={Math.abs(y1 - y0)}
                       fill={sr.signColor ? signColor(sr.values[i]) : colorOf(sr)} opacity="0.85" />
               );
