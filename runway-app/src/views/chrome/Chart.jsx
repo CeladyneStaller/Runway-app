@@ -158,13 +158,45 @@ const Wrap = ({ marks, aria, children }) => (marks
   ? <g>{children}</g>
   : <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria || "chart"}>{children}</svg>);
 
+/** Names along the axis, one per category.
+ *
+ *  ⚠️ IT DRAWS THE LABEL THE SPEC GAVE IT. Months are computed from the model start; categories are
+ *  not derivable from anything — they come from the data and must be carried.
+ */
+const CategoryAxis = ({ ticks, y }) => {
+  const n = ticks.length;
+  const groupW = PW / Math.max(n, 1);
+  return (
+    <g>
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={PAD.l + i * groupW + groupW / 2} y1={y} x2={PAD.l + i * groupW + groupW / 2} y2={y + 5}
+                stroke="var(--muted-2)" />
+          <text x={PAD.l + i * groupW + groupW / 2} y={y + 16} className="ch-t" textAnchor="middle">
+            {/* TRUNCATED TO ITS SLOT rather than overlapping its neighbour — the Y orientation exists
+                precisely because names do not fit here. */}
+            {String(t.label).length > 12 ? `${String(t.label).slice(0, 11)}…` : t.label}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+};
+
 const Axes = ({ s, xs, ticks, format }) => (
   <>
     <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH} stroke="var(--line)" />
     <line x1={PAD.l} y1={s.zero} x2={W - PAD.r} y2={s.zero} stroke="var(--line)" />
     <text x={PAD.l - 6} y={s.zero + 3} textAnchor="end" className="ch-t">{fmt(0, format)}</text>
     <text x={PAD.l - 6} y={PAD.t + 8} textAnchor="end" className="ch-t">{fmt(s.hi, format)}</text>
-    {ticks?.length
+    {/* ⚠️ A TICK THAT CARRIES ITS OWN LABEL IS NOT A MONTH. `TimeAxis` builds labels from `useStart()`
+        and IGNORES whatever the spec supplied — so a category chart's project names were replaced by
+        months, silently, because both are just "ticks" from here. */}
+    {/* AN EXPLICIT FLAG, not an inference. My first attempt tried to DETECT categorical ticks from
+        their shape and was unreadable and fragile — the spec knows which kind it built, so it says so. */}
+    {ticks?.length && ticks[0]?.categorical
+      ? <CategoryAxis ticks={ticks} y={PAD.t + PH} />
+      : ticks?.length
       ? <TimeAxis ticks={ticks} n={ticks.length} y={PAD.t + PH} />
       : xs?.length > 0 && (
           // Charts whose x-axis is not months — periods, milestone names — keep the ends only.

@@ -105,8 +105,14 @@ export function buildCustom(cfg, doc, parts, rows) {
       const first = perMeasure[0];
       return {
         kind: "hbars", format: "money",
-        rows: keys.map(k => ({ label: cats.get(k), value: first?.totals.get(k) ?? 0 }))
-                  .sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
+        // ⚠️ `HBars` ROWS CARRY `segments`, NOT `value` — I invented the shape and it threw on
+        // `r.segments.reduce`. Read the renderer's own contract: each row is a label plus a list of
+        // segments, which is what lets one bar show several parts.
+        rows: keys.map(k => ({
+          label: cats.get(k),
+          segments: [{ id: first?.spec.id, label: first?.m.label,
+                       value: first?.totals.get(k) ?? 0, tone: "signal" }],
+        })).sort((a, b) => Math.abs(b.segments[0].value) - Math.abs(a.segments[0].value)),
         note: perMeasure.length > 1
           ? `Showing ${first.m.label} only — horizontal bars draw one measure per chart.` : null,
       };
@@ -121,7 +127,9 @@ export function buildCustom(cfg, doc, parts, rows) {
       shape: spec.shape || "bars", stacked: !!spec.stacked, axis: spec.axis || "left",
       group: spec.id,
     })), ids, { x: keys.map(k => cats.get(k)),
-                ticks: keys.map((k, i) => ({ i, label: cats.get(k), quarter: true })),
+                // `categorical: true` is how the axis knows these are names rather than month offsets — the
+                // renderer cannot tell from the shape, and inferring it was fragile.
+                ticks: keys.map((k, i) => ({ i, label: cats.get(k), categorical: true })),
                 colors });
   }
 

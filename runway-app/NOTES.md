@@ -1742,6 +1742,22 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Two more from the category axis, both from not reading a contract
+
+**⚠️ `Axes` SENT EVERY TICK SET TO `TimeAxis`, which builds labels from `useStart()` and ignores the
+ones the spec supplied.** A category chart's project names were replaced by months — silently, because
+from `Axes` both are just "ticks". `CategoryAxis` draws the label it is given, truncated to its slot,
+and **the spec carries `categorical: true`** rather than the renderer inferring it: my first attempt
+tried to DETECT categorical ticks from their shape and was both unreadable and fragile.
+
+**⚠️ `HBars` ROWS CARRY `segments`, NOT `value`** — I invented `{ label, value }` and it threw on
+`r.segments.reduce`. Each row is a label plus a list of segments, which is what lets one bar show
+several parts.
+
+**Both are the same mistake as `HBars` taking `rows` last turn: I wrote what a consumer ought to accept
+instead of reading what it does accept.** Three contracts in two turns — `spec.rows`, `row.segments`,
+and the tick label — and each one was a two-line check away.
+
 ### ⚠️ `across` WAS STORED AND NEVER READ — zero references in `buildCustom`
 
 The control offered Month or any dimension, wrote the field, and **the engine built a monthly chart
