@@ -96,7 +96,24 @@ export function TabInsights({ tab, subtab }) {
              + (pickedSaved.by ? ` by ${pickedSaved.by}` : "")
              + (pickedSaved.savedBy ? ` · saved by ${pickedSaved.savedBy}` : "") }
     : curated;
-  const pick = (next) => { setChosen(next); write(tab, next); setPicking(false); };
+  /** ⚠️ PICKING A CHART MUST CLEAR THE UNSAVED DRAFT.
+   *
+   *  The spec path tries `cfg.measures.length` FIRST, so a draft outranked every selection — choosing
+   *  another chart changed `chosen` and nothing on screen, and only a refresh cleared it. **A control
+   *  that appears to do nothing is worse than one that is absent**, because the person tries it twice
+   *  and then distrusts the menu.
+   *
+   *  It ASKS FIRST when there is work to lose, and only then — the same rule as deleting a thrust: a
+   *  confirmation on every switch is friction, a confirmation on the one that discards something is
+   *  the question being answered rather than discovered.
+   */
+  const pick = (next) => {
+    if (cfg.measures.length &&
+        !confirm("Discard your unsaved chart and switch? It has not been saved for the company.")) return;
+    setCfg({ measures: [], across: "month", orient: "x" });
+    setBuilding(false); setEditing(null);
+    setChosen(next); write(tab, next); setPicking(false);
+  };
 
   return (
     <>
@@ -131,10 +148,17 @@ export function TabInsights({ tab, subtab }) {
               {/* ⚠️ SAVED CHARTS SIT ABOVE THE STANDARD ONES. They are the company's own and were made
                   deliberately; a list that buries them under the built-ins teaches everybody to scroll
                   past their own work. */}
+              {cfg.measures.length > 0 && (
+                <p className="ch-note">
+                  {/* SAYS WHY NOTHING IS TICKED, rather than leaving an empty radio group to look
+                      broken. Choosing any chart below discards the draft, and will ask first. */}
+                  You are looking at an unsaved chart. Picking one below will discard it.
+                </p>
+              )}
               {saved.length > 0 && <div className="ch-grp">Saved by your company</div>}
               {saved.map(c => (
                 <label key={c.id} className={"ch-opt" + (c.id === chosen ? " on" : "")}>
-                  <input type="radio" name={`chart-${tab}`} checked={c.id === chosen}
+                  <input type="radio" name={`chart-${tab}`} checked={!cfg.measures.length && c.id === chosen}
                          onChange={() => pick(c.id)} aria-label={c.name} />
                   <span>
                     <span className="ch-opt-n">
@@ -178,7 +202,7 @@ export function TabInsights({ tab, subtab }) {
               {saved.length > 0 && <div className="ch-grp">Standard charts</div>}
               {options.map(o => (
                 <label key={o.id} className={"ch-opt" + (o.id === id ? " on" : "")}>
-                  <input type="radio" name={`chart-${tab}`} checked={o.id === id}
+                  <input type="radio" name={`chart-${tab}`} checked={!cfg.measures.length && o.id === id}
                          onChange={() => pick(o.id)} aria-label={o.name} />
                   <span>
                     <span className="ch-opt-n">{o.name}</span>

@@ -1742,6 +1742,46 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Change chart did nothing while a draft existed
+
+The spec path tries `cfg.measures.length` FIRST, and **`pick()` never cleared the draft** — so choosing
+another chart set `chosen`, changed nothing on screen, and only a refresh recovered. **A control that
+appears to do nothing is worse than one that is absent**, because the person tries it twice and then
+stops trusting the menu.
+
+**`pick()` now clears the draft, and ASKS FIRST only when there is work to lose** — the same rule as
+deleting a thrust. A confirmation on every switch is friction; a confirmation on the one switch that
+discards something is the question being answered rather than discovered.
+
+**⚠️ AND THE RADIOS WERE TICKING A CHART THAT WAS NOT BEING DRAWN.** With a draft live, `chosen` still
+pointed at whatever was last picked, so the menu showed one chart selected while the canvas showed
+another — **the header/canvas mismatch again, one control over.** Nothing is ticked while a draft is
+live, and a line says why rather than leaving an empty radio group to look broken.
+
+### ⚠️ THERE WAS NO STACKED-BAR RENDERER AT ALL
+
+"Bar then Stacked" drew a stacked AREA. `Stack` only ever emitted filled `<path>` elements — and when I
+checked it earlier I read that as **"a stacked line already exists"** and stopped. The other half of the
+sentence is that **stacked bars did not**, and five curated charts using `kind: "stack"` had been areas
+all along.
+
+**The composite made it worse by folding every stacked series into one group**, so shape was discarded
+the moment stacking was on. Four combinations need four groups:
+
+    lines + stacked=false -> lines        bars + stacked=false -> bars
+    lines + stacked=true  -> stackArea    bars + stacked=true  -> stackBars
+
+**The band arithmetic serves both** — the two-baseline work from the negation change gives `lo` and `hi`
+per series, and only the drawing differs: a filled path between the edges, or a rect per month. So this
+was a rendering branch rather than a second stacking implementation.
+
+**Zero-height rects are skipped**, because a series contributing nothing in a month would otherwise draw
+a hairline at the baseline that reads as a real value.
+
+**The lesson is the shape of my earlier check:** I confirmed what `Stack` COULD draw and did not ask
+what it could not. "The renderer already handles it" was true of one case and false of the other, and I
+reported only the true half.
+
 ### The last stale assertions, and four configs that were testing nothing
 
 `expect(saved.by).toBeNull()` failed with `undefined` — **the chart-level `by` does not exist at all

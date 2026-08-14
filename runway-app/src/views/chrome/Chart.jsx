@@ -274,10 +274,27 @@ function Stack({ spec }) {
 
     <Wrap marks={spec.marks} aria={spec.aria}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
-      {bands.map(({ sr, lo, hi }) => (
-        <path key={sr.id} fill={colorOf(sr)} opacity="0.5"
-              d={hi.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ") + " " +
-                 lo.map((v, i) => `L${xAt(n - 1 - i, n)} ${s.y(lo[n - 1 - i])}`).join(" ") + " Z"} />
+      {/* ⚠️ THERE WAS NO STACKED-BAR RENDERER AT ALL. `Stack` only ever drew filled paths, so selecting
+          Bar and then Stacked produced a stacked AREA — the shapes are the same bands either way, and
+          only the drawing differs. The band arithmetic above (two baselines, one per sign) serves both.
+
+          `spec.bars` comes from the composite, which now keeps stacked bars and stacked lines in
+          separate groups rather than folding every stacked series into one. */}
+      {bands.map(({ sr, lo, hi }) => (spec.bars
+        ? <g key={sr.id}>
+            {hi.map((v, i) => {
+              const y0 = s.y(lo[i]), y1 = s.y(v);
+              const w = Math.max(2, (PW / Math.max(1, n)) * 0.62);
+              return Math.abs(y1 - y0) < 0.5 ? null : (
+                <rect key={i} x={xAt(i, n) - w / 2} y={Math.min(y0, y1)}
+                      width={w} height={Math.abs(y1 - y0)}
+                      fill={sr.signColor ? signColor(sr.values[i]) : colorOf(sr)} opacity="0.85" />
+              );
+            })}
+          </g>
+        : <path key={sr.id} fill={colorOf(sr)} opacity="0.5"
+                d={hi.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ") + " " +
+                   lo.map((v, i) => `L${xAt(n - 1 - i, n)} ${s.y(lo[n - 1 - i])}`).join(" ") + " Z"} />
       ))}
       {spec.refLine && (
         <>
@@ -670,8 +687,12 @@ function Milestones({ spec }) {
  */
 function Composite({ spec }) {
   const series = spec.series || [];
-  const key = (sr) => (sr.stacked ? "stack" : sr.shape === "bars" ? "bars" : "lines");
-  const groups = { stack: [], bars: [], lines: [] };
+  // ⚠️ STACKED BARS AND STACKED LINES ARE DIFFERENT GROUPS. Folding every stacked series into one sent
+  // bars to the area renderer — "Bar then Stacked" drew a stacked area. Four combinations, four groups.
+  const key = (sr) => (sr.stacked
+    ? (sr.shape === "bars" ? "stackBars" : "stackArea")
+    : sr.shape === "bars" ? "bars" : "lines");
+  const groups = { stackBars: [], stackArea: [], bars: [], lines: [] };
   for (const sr of series) groups[key(sr)].push(sr);
 
   // ⚠️ ONE DOMAIN, COMPUTED FROM THE COMPOSITION. A stack's height is the SUM of its members; a line's
@@ -680,10 +701,11 @@ function Composite({ spec }) {
   const n = Math.max(1, ...series.map(sr => (sr.values || []).length));
   // ⚠️ THE STACK'S EXTREMES, NOT ITS NET. Summing signed values gives the middle of a mixed stack, so
   // a chart with +100k above and -40k below would size itself to 60k and clip both ends.
+  const stacked = [...groups.stackBars, ...groups.stackArea];
   const stackUp = Array.from({ length: n }, (_, i) =>
-    groups.stack.reduce((a, sr) => a + Math.max(0, clean(sr.values?.[i])), 0));
+    stacked.reduce((a, sr) => a + Math.max(0, clean(sr.values?.[i])), 0));
   const stackDown = Array.from({ length: n }, (_, i) =>
-    groups.stack.reduce((a, sr) => a + Math.min(0, clean(sr.values?.[i])), 0));
+    stacked.reduce((a, sr) => a + Math.min(0, clean(sr.values?.[i])), 0));
   const stackTotals = [...stackUp, ...stackDown];
   const barTotals = groups.bars.flatMap(sr => (sr.values || []).map(clean));
   const loose = groups.lines.flatMap(sr => (sr.values || []).map(clean));
@@ -702,7 +724,8 @@ function Composite({ spec }) {
       <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {/* FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED. A filled stack over a line hides it
           completely; a line over a stack is always readable. */}
-      {groups.stack.length > 0 && <Stack spec={sub(groups.stack)} />}
+      {groups.stackBars.length > 0 && <Stack spec={{ ...sub(groups.stackBars), bars: true }} />}
+      {groups.stackArea.length > 0 && <Stack spec={sub(groups.stackArea)} />}
       {groups.bars.length > 0 && <Bars spec={sub(groups.bars)} />}
       {groups.lines.length > 0 && <Lines spec={sub(groups.lines)} />}
     </svg>
