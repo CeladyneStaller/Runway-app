@@ -72,7 +72,10 @@ describe("what it refuses, and says so", () => {
     // A saved chart asking for a stack whose measures now overlap draws as lines and SAYS SO, rather
     // than asserting that the parts sum to the whole.
     const { parts, rows } = ctx(d);
-    const s = buildCustom({ measures: [{ id: "cost", type: "stack" }, { id: "payroll" }] },
+    // ⚠️ `type` IS GONE — shape and stacked replaced it. Written the old way, nothing asked for a
+    // stack, no fallback fired, and `note` stayed null: `.toMatch()` reports null as "object", which
+    // is why this failure read as a type error rather than as a stale assertion.
+    const s = buildCustom({ measures: [{ id: "cost", shape: "bars", stacked: true }, { id: "payroll" }] },
                           d, parts, rows);
     expect(s.kind).not.toBe("stack");
     expect(s.note).toMatch(/would not add up/i);

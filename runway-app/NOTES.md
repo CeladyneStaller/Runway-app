@@ -1677,6 +1677,29 @@ field is nothing. **None is an error, and lint sees none of them.**
 categorical tones are real keys, and that `colorOf` prefers an explicit colour. Fifteen variables
 checked, none undefined.
 
+## Four failures, three of them assertions outliving the model they were written against
+
+**1 · `note` was `null` and `.toMatch()` called it an object.** The fallback test still passed
+`type: "stack"` — a field nothing reads since shape and stacked replaced it — so nothing asked for a
+stack, no fallback fired, and `note` stayed null. **`.toMatch()` reports null as "object", which is why
+a stale assertion read as a type error.**
+
+**2 · `expect(CHARTS).toHaveLength(19)`.** Two commitments charts made it 21. **Replaced with a
+uniqueness check on ids** rather than bumped: a hardcoded total has to be edited on every addition,
+which is friction that buys nothing, and what it was really guarding against was a duplicate id.
+
+**3 · The flat-zero guard counted instead of naming.** It allowed "any two" dead measures; six new ones
+made four dead and it failed with a number. **Now it names them and the allow-list carries a REASON
+each** — the demo seeds no SaaS product, no closing instrument, and no cost-share terms. **A guard that
+allows "any four" stops catching the fifth.** `windDown` is deliberately not on the list: it reads
+`noticeWeeks` and payroll, both of which the demo has, so a zero there would be a real fault.
+
+**4 · `expect(t).toContain("line")` — the invented singular, still sitting in the test that exists to
+catch it.** Fixing a name in the source does not fix the assertions written alongside it.
+
+**Two of the four I predicted before seeing the output** (the `type` field and the flat-zero count).
+The other two were the kind only a run finds.
+
 ## Plot type as shape + modifier, orientation, axis · and the Commitments charts
 
 ### `charttype.js`

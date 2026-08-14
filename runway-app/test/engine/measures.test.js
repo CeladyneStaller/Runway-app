@@ -25,8 +25,24 @@ describe("⚠️ every measure reads something real", () => {
   it("⚠️ IS NOT FLAT ZERO where the demo has data", () => {
     // The specific shape of an invented key: no error, no crash, a line along the axis.
     const d = doc(), parts = buildModelParts(d), rows = rowsOf(d);
-    const alive = MEASURES.filter(m => m.get(rows, parts, d).some(x => x !== 0));
-    expect(alive.length).toBeGreaterThanOrEqual(MEASURES.length - 2);   // saas/capital may be empty
+    // ⚠️ NAME THE DEAD ONES RATHER THAN COUNT THEM. A bare count says "four are flat" and leaves you
+    // to find which — and the count needs bumping every time a measure is added, which is how a guard
+    // becomes friction and then gets loosened.
+    const dead = MEASURES.filter(m => m.get(rows, parts, d).every(x => x === 0)).map(m => m.id);
+    // ⚠️ LEGITIMATELY EMPTY ON THIS DOCUMENT, each for a reason worth stating rather than a blanket
+    // tolerance — a guard that allows "any four" stops catching the fifth.
+    //
+    //   saasRev            the demo seeds no subscription product
+    //   capital            no instrument closes inside the window
+    //   costShareAccrued   the demo has no cost-share terms on any award
+    //   shortfall          nothing to be short of without cost share
+    //   debtOutstanding    no drawn facility or maturing note
+    //
+    // `windDown` is NOT here: it reads `noticeWeeks` and payroll, both of which the demo has, so a zero
+    // there would be a real fault.
+    const allowed = ["saasRev", "capital", "costShareAccrued", "shortfall", "debtOutstanding"];
+    expect(dead.filter(id => !allowed.includes(id)),
+           `flat zero on the demo: ${dead.join(", ")}`).toEqual([]);
   });
 
   it("declares a unit and at least one allowed type", () => {
@@ -73,7 +89,9 @@ describe("what can be drawn", () => {
     // legitimate chart; stacking those two is a false statement.
     const t = allowedTypes(["cost", "payroll"]);
     expect(t).not.toContain("stack");
-    expect(t).toContain("line");
+    // ⚠️ "line" SINGULAR — the invented name, still sitting in the test that exists to catch it.
+    // Fixing a name in the source does not fix the assertions that were written alongside it.
+    expect(t).toContain("lines");
     expect(t).toContain("bars");
   });
 

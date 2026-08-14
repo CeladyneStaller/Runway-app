@@ -24,7 +24,9 @@ describe("the registry", () => {
     // milestones question on the wrong tab. One chart is the right number until a second one has a
     // question of its own — inventing two more so the row matches the others would be padding.
     expect(chartsForTab("ms").map(c => c.id)).toEqual(["ms.runway"]);
-    expect(CHARTS).toHaveLength(19);
+    // ⚠️ NO HARDCODED TOTAL. It has to be bumped every time a chart is added — friction that buys
+    // nothing, since what it was really guarding against is a DUPLICATE ID, which this checks directly.
+    expect(new Set(CHARTS.map(c => c.id)).size).toBe(CHARTS.length);
   });
 
   it("defaults to the first, because most people never open a picker", () => {
