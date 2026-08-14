@@ -19,7 +19,7 @@ describe("⚠️ the keystone: it can reproduce a curated chart", () => {
     // cases about a chart nobody has seen.
     const d = doc(), { parts, rows } = ctx(d);
     const curated = buildChart("flow.inout", d, parts);
-    const built = buildCustom({ measures: [{ id: "rev", type: "bars" }, { id: "cost", type: "bars" }] },
+    const built = buildCustom({ measures: [{ id: "rev", shape: "bars" }, { id: "cost", shape: "bars" }] },
                               d, parts, rows);
     expect(built.series).toHaveLength(2);
 
@@ -37,7 +37,7 @@ describe("⚠️ the keystone: it can reproduce a curated chart", () => {
 
   it("returns the same spec shape every curated chart returns", () => {
     const d = doc(), { parts, rows } = ctx(d);
-    const s = buildCustom({ measures: [{ id: "end", type: "line" }] }, d, parts, rows);
+    const s = buildCustom({ measures: [{ id: "end", shape: "lines" }] }, d, parts, rows);
     for (const k of ["kind", "x", "ticks", "series", "format"]) expect(s).toHaveProperty(k);
     expect(s.x.length).toBe(s.ticks.length);
   });
@@ -133,7 +133,7 @@ describe("the sub-tab dim mode", () => {
 });
 
 describe("saving, defaults and deletion", () => {
-  const cfg = { measures: [{ id: "cost", type: "bars" }], by: "project", across: "month" };
+  const cfg = { measures: [{ id: "cost", by: "project", shape: "bars" }], across: "month" };
 
   it("⚠️ ADDS; IT NEVER OVERWRITES", () => {
     // One slot per tab would have made every save a silent replacement of a colleague's work.
@@ -186,7 +186,7 @@ describe("saving, defaults and deletion", () => {
 });
 
 describe("editing a saved chart", () => {
-  const cfg = { measures: [{ id: "cost", type: "bars" }], by: "project", across: "month" };
+  const cfg = { measures: [{ id: "cost", by: "project", shape: "bars" }], across: "month" };
   const seed = () => {
     const d = saveChart(demoDoc(), "flow", cfg, { name: "Spend by project", savedBy: "Corey" }).doc;
     return { d, id: savedFor(d, "flow")[0].id };
@@ -197,11 +197,16 @@ describe("editing a saved chart", () => {
     // fixed it looked at their corrected version — two charts with almost the same name and no way to
     // tell which one everybody else lands on.
     const { d, id } = seed();
-    const r = updateChart(d, id, { measures: [{ id: "rev", type: "lines" }], by: null, across: "month" });
-    expect(savedFor(r.doc, "flow")).toHaveLength(1);
-    expect(savedFor(r.doc, "flow")[0].id).toBe(id);
-    expect(savedFor(r.doc, "flow")[0].measures[0].id).toBe("rev");
-    expect(savedFor(r.doc, "flow")[0].by).toBeNull();
+    // ⚠️ `by` MOVED ONTO THE DATASET, so a chart-level one is now `undefined` rather than null — which
+    // is what this caught. The assertion's intent was that the breakdown CLEARS on update, and that
+    // still holds; it just lives on the measure now.
+    const r = updateChart(d, id, { measures: [{ id: "rev", shape: "lines" }], across: "month" });
+    const back = savedFor(r.doc, "flow");
+    expect(back).toHaveLength(1);
+    expect(back[0].id).toBe(id);
+    expect(back[0].measures[0].id).toBe("rev");
+    expect(back[0].measures[0].by).toBeNull();          // the seed's "project" breakdown is gone
+    expect(back[0].measures[0].shape).toBe("lines");
   });
 
   it("⚠️ A CHART THAT IS THE DEFAULT STAYS THE DEFAULT THROUGH AN EDIT", () => {

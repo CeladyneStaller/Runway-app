@@ -1742,6 +1742,19 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### The last stale assertions, and four configs that were testing nothing
+
+`expect(saved.by).toBeNull()` failed with `undefined` — **the chart-level `by` does not exist at all
+now**, so the field was absent rather than empty. The assertion's intent (a breakdown clears on update)
+still holds; it moved onto the measure.
+
+**⚠️ AND FOUR CONFIGS WERE STILL PASSING `type:`, WHICH IS DELETED.** That is not an error — it is
+silently ignored and the dataset falls back to a default shape — so **those tests read as though they
+were checking bars and lines while checking neither.** A passing test against a field nobody reads is
+worse than a failing one.
+
+Swept the whole file rather than the one that failed: zero `type:` and zero chart-level `by` remain.
+
 ## ⚠️ SAVING DISCARDED EVERY PER-DATASET SETTING — the same fault, a third time
 
     measures: (cfg?.measures || []).map(m => ({ id: m.id, type: m.type || null })),
