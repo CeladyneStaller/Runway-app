@@ -11,7 +11,13 @@
 import { axisTicks, months } from "./charts.js";
 import { measureById, overlaps, unitsOf, allowedTypes } from "./measures.js";
 import { dimensionById, splitBy, tooManySeries } from "./dimensions.js";
+import { colorsFor } from "./palette.js";
 
+// ⚠️ THE PALETTE IS NO LONGER A CYCLING LIST OF TONE NAMES. Seven tones cycling by index gave four
+// grants four near-identical greens — colour carrying the TYPE and losing the IDENTITY, which is
+// backwards for a breakdown. `colorsFor` puts hue on the type and lightness on the member.
+//
+// Several MEASURES on one chart still cycle: they have no type, and their identity is their label.
 const TONES = ["signal", "signal-2", "clay", "brown", "gate", "caution", "muted"];
 
 /** The lines a dimension should split, for a given measure. */
@@ -72,11 +78,13 @@ export function buildCustom(cfg, doc, parts, rows) {
       return { kind: "lines", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
                note: `${split.length} series is more than a chart can show — remove the breakdown.` };
     }
+    const colors = colorsFor(split, dim.typeOf ? (k) => dim.typeOf(k, doc) : null);
     return finish(cfg, doc, split.map((s, i) => ({
       id: s.id, label: s.label, values: clip(s.values),
-      // UNASSIGNED IS DRAWN GREY, not given a palette colour. It is an absence of assignment rather
-      // than another project, and colouring it like one implies it is a peer.
-      tone: s.unassigned ? "muted" : TONES[i % TONES.length],
+      // A COLOUR, not a tone name — the ramp is computed from the group, so there is no fixed token
+      // for "the second grant". Unassigned comes back grey from `colorsFor` on every dimension.
+      color: colors[i],
+      tone: s.unassigned ? "muted" : null,
     })), ids);
   }
 

@@ -5,7 +5,7 @@ import { money } from "../../engine/money";
 import { dateShort } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
 
-export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
+export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
   const { START_Y, START_M } = useStart();
   const W = 980, H = 400, L = 66, R = 26, T = 22, B = 40;
 
@@ -88,6 +88,34 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
     if (top.length < 2) return null;
     return `M${top.join(" L")} L${bot.join(" L")} Z`;
   })();
+  // ── the speculative band ─────────────────────────────────────────────────────────────────────
+  //
+  // ⚠️ IT ANSWERS A DIFFERENT QUESTION FROM THE SPECULATIVE LINE. The line says "here is the curve if
+  // this money arrives". The band says "and here is how wide the answer is EVEN THEN" — computed as if
+  // that revenue were committed, because a band around a curve that may not happen at all would
+  // compound two uncertainties into one shape nobody can read.
+  //
+  // ⚠️ AND IT IS DRAWN ONLY WHERE IT SITS OUTSIDE THE GREEN ONE. Two translucent fills produce a third
+  // colour that means nothing — a reader sees a muddy region and cannot tell whether it is agreement,
+  // disagreement, or a rendering artefact. Clamping this band's FLOOR to the committed band's CEILING
+  // means that where the two agree, the green shows through, and that is the honest reading.
+  const upBandArea = (() => {
+    if (!showUpside || !upBand) return null;
+    const ceilPts = bandPts(upBand.ceiling.rows);
+    const floorPts = bandPts(upBand.floor.rows);
+    if (ceilPts.length < 2) return null;
+    const greenCeil = band ? bandPts(band.ceiling.rows) : [];
+    const at = (arr, t) => arr.find(p => p.t === t);
+    const top = ceilPts.map(p => `${x(p.t).toFixed(1)} ${y(cb(p.b)).toFixed(1)}`);
+    const bot = floorPts.map(p => {
+      const g = at(greenCeil, p.t);
+      // the higher of the two floors, so nothing is drawn over the committed band
+      const b = g && g.b > p.b ? g.b : p.b;
+      return `${x(p.t).toFixed(1)} ${y(cb(b)).toFixed(1)}`;
+    }).reverse();
+    return `M${top.join(" L")} L${bot.join(" L")} Z`;
+  })();
+
   const actualPath = actualPts.length > 1 ? actualPts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(cb(p.b)).toFixed(1)}`).join(" ") : "";
 
   // split active trace at zero crossing for colour
@@ -124,6 +152,11 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, cash, milestones, proj
           <stop offset="1" stopColor="var(--signal-2)" stopOpacity="0.02"/>
         </linearGradient>
       </defs>
+      {/* ORANGE UNDER GREEN. It is already clamped to the committed ceiling, so it cannot cover it —
+          drawing it first is belt and braces, and keeps the committed band unambiguously on top. */}
+      {upBandArea && (
+        <path d={upBandArea} fill="var(--caution)" opacity="0.13" stroke="none"/>
+      )}
       {bandArea && (
         <>
           <path d={bandArea} fill="var(--signal-2)" opacity="0.10" stroke="none"/>

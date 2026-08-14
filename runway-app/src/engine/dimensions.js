@@ -15,7 +15,10 @@ export const DIMENSIONS = [
 
   { id: "project", tab: ["flow", "proj", "hist"], label: "Project",
     of: (l) => l?.projectId ?? null,
-    labelOf: (k, doc) => (doc?.projects || []).find(p => p.id === k)?.name || "Unassigned" },
+    labelOf: (k, doc) => (doc?.projects || []).find(p => p.id === k)?.name || "Unassigned",
+    // ⚠️ PROJECTS HAVE A TYPE WORTH PRESERVING. "This one is a grant" is information the chart should
+    // not delete — so hue carries the type and lightness separates the members.
+    typeOf: (k, doc) => (doc?.projects || []).find(p => p.id === k)?.type || "other" },
 
   { id: "employee", tab: ["pay"], label: "Employee",
     of: (l) => l?.empId ?? null,
@@ -29,6 +32,7 @@ export const DIMENSIONS = [
     of: (l) => l?.roundId ?? null,
     labelOf: (k, doc) => (doc?.rounds || []).find(r => r.id === k)?.name || "Unassigned" },
 
+  // SEMANTIC AND FIXED, not allocated from a ramp — a tier means the same thing on every chart.
   { id: "confidence", tab: ["flow", "sales", "inv"], label: "Confidence tier",
     of: (l) => l?.confidence ?? "committed",
     labelOf: (k) => ({ committed: "Committed", expected: "Expected",

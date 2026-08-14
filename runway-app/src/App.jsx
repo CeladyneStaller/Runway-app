@@ -223,6 +223,26 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
       ceiling: { ...b.ceiling, rows: anchor(b.ceiling.rows) },
     };
   }, [doc, cashActuals, anchorActuals]);
+
+  // ⚠️ A SECOND BAND, FOR THE SPECULATIVE CURVE, COMPUTED AS IF THAT REVENUE WERE COMMITTED.
+  //
+  // The speculative LINE says "here is the curve if this money arrives". This band says "and here is
+  // how wide the answer is even then". Computing it against the speculative document with speculation
+  // treated as certain is deliberate: a band around a curve that may not happen at all would compound
+  // two different uncertainties — how wrong the model is, AND whether a round lands — into one shape
+  // whose width means neither.
+  const upBand = useMemo(() => {
+    if (!showUpside) return null;
+    const specDoc = { ...doc, settings: { ...(doc.settings || {}),
+      toggles: { ...(doc.settings?.toggles || {}), speculative: true } } };
+    const b = confidenceBand(specDoc);
+    if (!b) return null;
+    const anchor = (rs) => anchorToActuals(rs, cashActuals, anchorActuals);
+    return { ...b,
+      floor: { ...b.floor, rows: anchor(b.floor.rows) },
+      expected: { ...b.expected, rows: anchor(b.expected.rows) },
+      ceiling: { ...b.ceiling, rows: anchor(b.ceiling.rows) } };
+  }, [doc, showUpside, cashActuals, anchorActuals]);
   const zeroUp = useMemo(() => zeroInfo(rowsUp, startY, startM, fcFrom), [rowsUp, startY, startM, fcFrom]);
   const zeroConf = useMemo(() => zeroInfo(rowsConf, startY, startM, fcFrom), [rowsConf, startY, startM, fcFrom]);
   const zeroBase = useMemo(() => zeroInfo(rowsBase, startY, startM), [rowsBase, startY, startM]);
@@ -670,7 +690,7 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                     <span><i style={{ borderColor: "var(--danger)", borderTopStyle: "dashed" }} />waterline</span>
                   </div>
                 </div>
-                <RunwayChart rows={rows} rowsUp={rowsUp} rowsOp={rowsNoRaise} band={showBand ? band : null} cash={model.cashOnHand} milestones={msWithBal}
+                <RunwayChart rows={rows} rowsUp={rowsUp} rowsOp={rowsNoRaise} band={showBand ? band : null} upBand={showBand ? upBand : null} cash={model.cashOnHand} milestones={msWithBal}
                              projectEnd={null} showUpside={showUpside} zero={zero} zeroUp={zeroUp} actuals={actualsCash} />
               </div>
 

@@ -1653,6 +1653,91 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## Colour: hue by type, lightness by member · and a band per curve
+
+### `palette.js`
+
+**⚠️ COLOUR WAS CARRYING TWO JOBS** — which KIND a series is, and which ONE it is. Broken down by
+project, four grants drew as four near-identical greens: the type survived, the identity did not, which
+is backwards because **identity is what a breakdown exists for.**
+
+    4 grants ->  #0c614d  #0f8166  #3d9d87  #74b9a9      one hue, four lightnesses
+    mixed    ->  green · green · clay · slate            type kept, members separated
+
+- **A dimension declares `typeOf`** — only `project` has one, because "this is a grant" is information
+  the chart should not delete. Spend code, employee and customer get one hue each; they have no type to
+  preserve.
+- **Confidence tiers are SEMANTIC AND FIXED**, never ramped — a tier means the same thing on every
+  chart in the product.
+- **Unassigned is grey on every dimension**, and does not consume a hue a real series could have used.
+- **⚠️ THE RAMP DOES NOT REACH WHITE OR BLACK.** Spanning the full range would separate ten members and
+  produce two that read as "empty" and "black" rather than as the colour they belong to. Past about four
+  of one type the steps get close — which is where the twelve-series cap already says the chart is
+  over-broken-down.
+
+**Known consequence:** a series' colour depends on how many siblings share its type, so **adding a fifth
+grant restyles the other four.** Correct — the ramp must divide the space it is given — but last month's
+screenshot will not match today's chart.
+
+### A band per curve, in `RunwayChart`
+
+**⚠️ THE ORANGE BAND ANSWERS A DIFFERENT QUESTION FROM THE ORANGE LINE.** The line says "here is the
+curve if this money arrives"; the band says "and here is how wide the answer is EVEN THEN". It is
+computed against a document with `speculative: true` — **as if that revenue were committed** — because a
+band around a curve that may not happen would compound two uncertainties (how wrong the model is, AND
+whether a round lands) into one shape whose width means neither.
+
+**⚠️ AND IT IS CLAMPED, NOT OVERLAID.** Two translucent fills make a third colour that means nothing.
+The orange band's FLOOR is clamped to the committed band's CEILING, so it draws only where it sits
+outside — and where the two agree, the green shows through, which is the honest reading. It is also
+drawn first, so the committed band is unambiguously on top.
+
+**`upBand` defaults to null**, so a caller that has not been updated renders exactly as before.
+
+**Not run:** npm is still 403 here. Lint only.
+
+## The chart-builder spec, per tab (Corey, not yet built)
+
+**⚠️ ACROSS = THE BREAKDOWN LIST + MONTH, and whatever is chosen as the breakdown is REMOVED from
+across.** Grouping by project and also plotting across project is meaningless — the same field cannot
+be both the series split and the axis.
+
+| Tab | Plot | Broken down by |
+|---|---|---|
+| **Dashboard** | **no builder** — an options modal instead: show/hide milestones, show/hide confidence band, more TBD | — |
+| **Spend history** | Money out · Model · Cash on hand · Cumulative spend · Variance with model | Spend code · Project |
+| **Cash flow** | Per tab (net, revenue, costs) · Model · Cumulative · Variance with model | Spend code · Project · Confidence tier · **P&L** (splits each point into net/revenue/cost) |
+| **Sales** | Revenue · Sales (count) · Model | Customer · Confidence tier · Type (PO, subscription) · Status |
+| **Payroll** | Payroll · Cumulative · Headcount (people) · **Allocation %** · **Unallocated %** | Employee · Project · Cost component (salary & fringe) |
+| **Projects** | Project spend · Grant drawdowns · Net · Project count · Model | Project · Type (sub-tabs) |
+| **Investment** | Capital in · Cumulative capital in · Cumulative repayments | Instrument · Confidence tier |
+
+**⚠️ PAYROLL, OPERATING COSTS AND BASELINE BURN COME OFF SPEND HISTORY** — they are spend-code buckets
+there, so offering them as measures duplicates the breakdown.
+
+**New measure kinds this needs**, none of which exist yet: **Model** (the projected figure beside the
+actual), **Cumulative**, **Variance with model**, **counts** (sales, projects), and **Allocation % /
+Unallocated %** on payroll. Cumulative and variance are TRANSFORMS of an existing measure rather than
+new readings — worth building as a modifier rather than as a dozen more registry entries.
+
+**Milestones, Commitments and Scenarios get no builder** under this spec. Three tabs currently render an
+empty Plot row, which is worse than not offering it.
+
+## The colour problem
+
+**Colour is being asked to carry two things at once — which KIND a series is, and which ONE it is.** It
+cannot do both, and identity is what a breakdown exists for. Broken down by project, four grants draw as
+four near-identical greens.
+
+**Settled direction: hue by type, lightness by member**, with the ramp chosen per dimension — project
+keeps its type hue, confidence tiers stay semantic and fixed, spend code / employee / customer get one
+hue each because they have no type to preserve, and **Unassigned is always grey on every dimension**.
+
+**⚠️ One consequence to know before building it:** a series' colour depends on how many siblings share
+its type, so **adding a fifth grant restyles the other four.** That is correct — the ramp must divide
+the space it is given — but a screenshot from last month will not match today's chart, and somebody will
+notice.
+
 ## ⚠️ I INVENTED TWO CHART TYPES THAT DO NOT EXIST
 
 **"Money out gives no line chart but gives a bar chart."** The renderer's table is:
