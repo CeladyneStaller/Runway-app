@@ -1742,6 +1742,25 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ THE LENS WAS DELETING THE CHART BEFORE IT REACHED ITS RENDERER
+
+`applyLens` filters `spec.series`. **An `hbars` spec has no series at all** — it carries `rows` — so
+`lens.keep` filtered an empty list, concluded the lens had emptied the chart, and replaced the entire
+spec with "Nothing under X yet."
+
+**THIS IS WHY THREE ROUNDS OF FIXES TO `HBars` APPEARED TO DO NOTHING.** The values were negative, the
+magnitude flag was set, the sign colours were carried — **all correct, and none of them ever drawn.** I
+traced the engine output and it was right; I read the renderer's geometry and it was right; the fault
+was in the step between them that I never checked because nothing about the symptom pointed there.
+
+**The lesson: when a fix "does nothing", verify the data ARRIVES before verifying it is correct.** I
+went from engine to renderer twice without asking what happens in between, and the answer was that the
+chart was being thrown away.
+
+A lens narrows what a chart shows; **it cannot narrow a shape it has no handle on**, so a row-shaped
+spec now passes through untouched. Series filtering is unchanged, and a lens that genuinely empties a
+series chart still says so — both verified.
+
 ### ⚠️ `HBars` IS A SHARE CHART, AND I WAS ASKING IT FOR A MAGNITUDE CHART
 
 `total` is computed PER ROW — `r.segments.reduce(...)` — so **every row's segments fill the whole

@@ -80,6 +80,15 @@ export function applyLens(spec, lens, doc) {
     return { ...spec, series: (spec.series || []).map(s => ({ ...s, dim: !lens.keep.includes(s.id) })) };
   }
 
+  // ⚠️ A SPEC WITH NO `series` IS NOT AN EMPTY CHART. `hbars` carries `rows` and no series at all, so
+  // `lens.keep` filtered an empty list, concluded the lens had emptied the chart, and replaced the whole
+  // spec with "Nothing under X yet." — **the chart never reached its renderer.**
+  //
+  // That is why every fix to `HBars` appeared to do nothing: the values, the magnitude flag and the
+  // sign colours were all correct and none of them were ever drawn. A lens narrows what a chart shows;
+  // it cannot narrow a shape it has no handle on, so it leaves it alone.
+  if (!spec.series && spec.rows) return spec;
+
   const series = lens.keep ? (spec.series || []).filter(s => lens.keep.includes(s.id)) : spec.series;
   const rows = lens.rows ? (spec.rows || []).filter(r => lens.rows(r, doc)) : spec.rows;
 
