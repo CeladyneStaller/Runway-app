@@ -22,7 +22,7 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
          demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
          markDemoReset, takeDemoReset, switchCompany,
-         LOAD_OK, LOAD_STALE, LOAD_FAILED } from "./state/storage";
+         LOAD_OK, LOAD_STALE, LOAD_FAILED, LOAD_WRONG_COMPANY } from "./state/storage";
 import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
 import { AcceptInvite } from "./views/chrome/Members";
 import { AdvisorScenarios } from "./views/chrome/AdvisorScenarios";
@@ -1308,6 +1308,10 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
       // asked, it is answered from the document in hand rather than from storage metadata, and it
       // survives a save. `hasSubstance` is the SAME predicate the adoption dialog and the name seed
       // read, so there is one definition of an empty document in this file rather than three.
+      // ⚠️ A COMPANY THIS ACCOUNT CANNOT OPEN IS NOT A FAILED LOAD. `storage.load()` has already
+      // forgotten the stale selection, so this is a NEW start rather than an error — and the wizard is
+      // exactly the right thing to show, which is what the "empty shell" report was really about.
+      if (alive && r.state === LOAD_WRONG_COMPANY) { setSetup("model"); return; }
       if (alive && !hasSubstance(r.doc) && !setupSkipped(currentCompanyId())) setSetup("model");
     }).catch(e => { if (alive) { setLoadState(LOAD_FAILED); setErr(e); setDoc(emptyDoc()); } });
     return () => { alive = false; };

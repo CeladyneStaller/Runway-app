@@ -1742,6 +1742,28 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ THE REAL CAUSE: `load_document` RETURNS 403 FOR A COMPANY YOU ARE NOT A MEMBER OF
+
+    if not is_member(p_company_id) then
+      raise exception 'forbidden' using errcode = '42501';
+
+**The active company is a PER-DEVICE PREFERENCE.** It survives losing access, being removed from a
+team, or a company being deleted on another device — so pointing at a company you cannot open is a
+ROUTINE state, not a fault.
+
+It surfaced as **"Your saved model couldn't be read just now"**, with editing disabled and a Reload
+button that reloads the same unusable company. **A recoverable state presented as a broken one, and the
+only way out was knowing to clear browser storage.**
+
+**AND THIS IS THE ORIGINAL "NEW ACCOUNTS LAND ON THE EMPTY SHELL" REPORT.** The load never succeeded, so
+`hasSubstance(r.doc)` was never reached and the wizard never opened. **The trigger was fine all along** —
+I spent two rounds building a second one, then removed it. **The failure was one layer below where I was
+looking, and the error message actively pointed away from it** by describing storage as unreadable.
+
+`load()` now forgets the selection and returns `LOAD_WRONG_COMPANY` with a fresh document; the app opens
+the wizard rather than the error screen. **Editing is NOT disabled for it** — that guard exists so an
+empty model cannot be saved over a real one, and there is no real one here.
+
 ### ⚠️ I BUILT A SECOND WIZARD TRIGGER ON TOP OF ONE THAT ALREADY WORKED
 
 **The loop was a symptom, not the bug.** `DocumentHost` already opens the wizard on load:

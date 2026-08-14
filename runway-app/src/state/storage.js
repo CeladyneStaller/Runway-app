@@ -20,7 +20,7 @@ import { createLocalBackend, adoptionDismissed, dismissAdoption,
 import { createSupabaseBackend } from "./backends/supabase.js";
 import { createDemoBackend, clearDemo, demoInProgress, demoExpired, demoRemainingMs, DEMO_WINDOW_MS,
          stashPromotion, pendingPromotion, clearPromotion, markDemoReset, takeDemoReset } from "./backends/demo.js";
-import { ERR_CONFLICT, ERR_PAYMENT_REQUIRED, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
+import { ERR_CONFLICT, ERR_FORBIDDEN, ERR_PAYMENT_REQUIRED, ERR_STALE_CLIENT, isRetryable, kindOf } from "./backends/errors.js";
 
 // WHICH BACKEND. Local is the default and stays the fallback for the whole hosted build: the app must
 // remain fully functional with sync switched off. Hosting is opt-in and requires all three of a URL, an
@@ -80,6 +80,9 @@ export function syncConfigReport(env = import.meta.env) {
 // ok     — the document loaded. Includes a legitimately new, empty document.
 // stale  — a document exists but this build is too old to read it. Do not save; tell the user to reload.
 // failed — storage was unreachable. Do not save; the document may still be there.
+// The active company is one this account cannot open — recoverable by forgetting the selection, and
+// distinct from LOAD_FAILED, which means storage itself is unreachable.
+export const LOAD_WRONG_COMPANY = "wrong-company";
 export const LOAD_OK = "ok";
 export const LOAD_STALE = "stale";
 export const LOAD_FAILED = "failed";
@@ -109,6 +112,22 @@ export async function load() {
   } catch (e) {
     // Could not reach the store. Hand back something renderable, but flag it so the caller refuses to
     // save: the real document is almost certainly still there, and a save now would overwrite it.
+    // ⚠️ A FORBIDDEN LOAD MEANS THE WRONG COMPANY, NOT BROKEN STORAGE.
+    //
+    // `load_document` raises `forbidden` when `is_member(company_id)` is false. The active company is a
+    // PER-DEVICE PREFERENCE — it survives losing access, being removed from a team, or a company being
+    // deleted on another device — so this is a routine state, not a fault.
+    //
+    // It was surfacing as "Your saved model couldn't be read just now", with editing disabled and a
+    // Reload button that reloads the same unusable company. **A recoverable state presented as a broken
+    // one, and the only way out was to know to clear storage.**
+    //
+    // Forgetting the selection is the recovery: the next load has no company id, the account's real
+    // list is fetched, and somebody who belongs to nothing lands on creation rather than on an error.
+    if (kindOf(e) === ERR_FORBIDDEN) {
+      await clearActiveCompany();
+      return { state: LOAD_WRONG_COMPANY, doc: emptyDoc(), isNew: true };
+    }
     if (kindOf(e) === ERR_STALE_CLIENT) {
       return { state: LOAD_STALE, doc: emptyDoc(), error: e };
     }
