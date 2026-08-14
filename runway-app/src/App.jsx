@@ -1,5 +1,7 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { readOpts, writeOpts } from "./engine/dashopts";
+import { DashOptions } from "./views/chrome/DashOptions";
 import { planSummary } from "./state/plans";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
 import { TermsGate } from "./views/chrome/TermsGate";
@@ -208,7 +210,11 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
     if (!worthSnapshotting({ cash, rows })) return;
     takeSnapshot(true);
   }, [doc.journal, rows, cash, takeSnapshot]);
-  const [showBand, setShowBand] = useState(true);
+  // ⚠️ `showBand` BECOMES ONE OF SIX, read from the per-device store rather than local state. Kept as
+  // a derived alias so the existing readers below do not all have to change at once.
+  const [dashOpts, setDashOpts] = useState(() => readOpts());
+  const [dashModal, setDashModal] = useState(false);
+  const showBand = dashOpts.band;
   const band = useMemo(() => {
     // ⚠️ THE GREEN BAND NOW USES THE TIERS THAT ARE ACTUALLY ON. Its ceiling used to add speculative
     // unconditionally — so somebody with speculation switched OFF was still shown a band whose top edge
@@ -698,15 +704,29 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                     <span><i style={{ borderColor: "var(--danger)", borderTopStyle: "dashed" }} />waterline</span>
                   </div>
                 </div>
-                <RunwayChart rows={rows} rowsUp={rowsUp} rowsOp={rowsNoRaise} band={showBand ? band : null} upBand={showBand ? upBand : null} cash={model.cashOnHand} milestones={msWithBal}
-                             projectEnd={null} showUpside={showUpside} zero={zero} zeroUp={zeroUp} actuals={actualsCash} />
+                <RunwayChart rows={rows} rowsUp={rowsUp} rowsOp={rowsNoRaise} band={dashOpts.band ? band : null}
+                  upBand={dashOpts.band && dashOpts.upside ? upBand : null}
+                  axisBreak={dashOpts.axisBreak}
+                  months={dashOpts.fullHorizon ? 36 : null} cash={model.cashOnHand} milestones={dashOpts.milestones ? msWithBal : []}
+                             projectEnd={null} showUpside={showUpside && dashOpts.upside} zero={zero} zeroUp={zeroUp} actuals={dashOpts.actuals ? actualsCash : null} />
+                {dashModal && (
+                  <DashOptions opts={dashOpts} onClose={() => setDashModal(false)}
+                               // PERSISTED ON EVERY CHANGE — there is no Save here, because there is
+                               // nothing to lose: the effect is visible behind the modal as you toggle.
+                               setOpts={(next) => setDashOpts(writeOpts(next))}
+                               ctx={{ hasUpside: showUpside,
+                                      wouldBreak: !!band && !!upBand }} />
+                )}
               </div>
 
               {/* TIERS */}
               <div className="panel" style={{ marginBottom: 0 }}>
                 <div className="panel-h">
                   <div><h3>Revenue confidence</h3><p>Toggle tiers to see runway with and without money you're not sure about.</p></div>
-                  <button className={"addbtn ghost" + (showBand ? " on" : "")} onClick={() => setShowBand(b => !b)}>{showBand ? "Hide" : "Show"} range band</button>
+                  {/* ⚠️ THE BAND TOGGLE BECOMES THE SETTINGS TRIGGER. It was one button for one of six
+                      things the chart can show — and adding five more buttons beside it would have
+                      crowded the header the options exist to uncrowd. */}
+                  <button className="addbtn ghost" onClick={() => setDashModal(true)}>Chart options</button>
                 </div>
                 {showBand && band && (band.floor.zero != null || band.ceiling.zero != null) && (
                   <div className="band-caption">

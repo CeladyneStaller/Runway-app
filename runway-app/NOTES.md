@@ -1742,6 +1742,39 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## The dashboard chart options modal
+
+Six switches, and **every one maps to a prop `RunwayChart` already took** — only the axis-break override
+and the window length are new. This exposes what the chart can already do rather than asking it to do
+more.
+
+**⚠️ A MODAL, NOT A BUILDER.** The runway chart is one specific argument — cash over time, with its
+range and what interrupts it. **A builder invites replacing it and there is nothing better to replace it
+with**; what people want is to turn off the parts that crowd it.
+
+**PER DEVICE, NOT PER COMPANY.** An owner turning off milestones on their laptop must not remove them
+from everybody's dashboard — the same rule as the chart picker's own choice, and nothing here is worth a
+permission model.
+
+**⚠️ THE STORED BLOB IS MERGED OVER THE DEFAULTS, never used as-is.** A blob written before an option
+existed leaves that key `undefined`, which reads as OFF — **so adding a seventh option would silently
+turn it off for everybody who had ever opened the modal.**
+
+**Options with nothing to act on are ABSENT, and the modal says why** — speculative revenue when every
+tier is already on, the axis break when no raise triggers it. A switch that does nothing teaches people
+the settings are decorative; a shorter list with no explanation looks arbitrary.
+
+**⚠️ THE WINDOW OPTION MEANT SOMETHING DIFFERENT FROM WHAT I PROPOSED.** `tMax` is already ADAPTIVE — it
+fits the crossing and the last milestone rather than a fixed 18 — so "show the full 36 months" does not
+widen a fixed window, it REMOVES the fit. The wording was corrected to say that rather than describing a
+mechanism the chart does not have.
+
+**The existing "Hide band" button became the trigger.** It was one button for one of six things, and
+five more beside it would have crowded the header these options exist to uncrowd.
+
+**No switch for the zero line or the out-of-cash marker**, asserted in the test. Everything else is
+furniture around the answer; those two are the answer.
+
 ### ⚠️ `axis` WAS THE FOURTH FIELD CARRIED AND NEVER READ
 
 Every series had `axis: "left" | "right"`, `axesFor` computed it, the builder offered the control — and

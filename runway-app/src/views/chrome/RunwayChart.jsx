@@ -5,12 +5,21 @@ import { money } from "../../engine/money";
 import { dateShort } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
 
-export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
+export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
+                              // ⚠️ BOTH DEFAULT TO TODAY'S BEHAVIOUR. `axisBreak` false forces one true
+                              // scale; `months` widens the window. A caller that has not been updated
+                              // renders exactly as before.
+                              axisBreak = true, months = null, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
   const { START_Y, START_M } = useStart();
   const W = 980, H = 400, L = 66, R = 26, T = 22, B = 40;
 
   const lastMsT = Math.max(0, ...milestones.map(m => m.t), projectEnd ? projectEnd.t : 0);
-  const tMax = Math.min(rows.length, Math.ceil(Math.max((zeroUp?.t || 0) + 2, lastMsT + 2, 12)));
+  // ⚠️ THE WINDOW IS ALREADY ADAPTIVE — it fits the crossing and the last milestone rather than a fixed
+  // 18. So "show the full horizon" does not widen a fixed window; it REMOVES the fit, which is a
+  // different thing from what the option's first draft assumed and worth saying in its wording.
+  const tMax = months
+    ? Math.min(rows.length, months)
+    : Math.min(rows.length, Math.ceil(Math.max((zeroUp?.t || 0) + 2, lastMsT + 2, 12)));
 
   // trace points (t = months elapsed; balance = start-of-month value, plus final end)
   const traceOf = (rs) => {
@@ -40,7 +49,10 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash, m
   // for the money that lands. The operating ceiling comes from the runway WITHOUT financing.
   const ptsOp = clip(traceOf(rowsOp || rows));
   const opCeil = Math.max(50000, Math.ceil(Math.max(cash, ...ptsOp.map(p => p.b), ...actualPts.map(p => p.b)) / 50000) * 50000);
-  const BRK = balMax > opCeil * 1.8;
+  // ⚠️ THE BREAK IS STILL COMPUTED, AND CAN NOW BE REFUSED. `wouldBreak` is what the modal asks to
+  // decide whether the option is worth showing at all — a switch with nothing to act on is hidden.
+  const wouldBreak = balMax > opCeil * 1.8;
+  const BRK = wouldBreak && axisBreak !== false;
   const breakAt = BRK ? opCeil : balMax;
   const F = 0.74;              // share of the plot given to the operating band
   const PH = H - T - B;
