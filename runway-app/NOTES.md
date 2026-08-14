@@ -1742,6 +1742,26 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ `axis` WAS THE FOURTH FIELD CARRIED AND NEVER READ
+
+Every series had `axis: "left" | "right"`, `axesFor` computed it, the builder offered the control — and
+**the renderers computed ONE scale from everything.** Three orders against $400k of revenue mapped to
+0.2px above the baseline. **A second axis whose range matches the first is not a second axis.**
+
+`Composite` computes two domains, one per side, each from the extent of ITS OWN series. `Lines` and
+`Bars` pick a `y` per series. `Axes` draws the right-hand ticks and **labels them with the series they
+belong to** — a second scale nobody can read is worse than a shared one, because at least a flattened
+line is visibly flat.
+
+**Fourth today, and the list is worth keeping together:** `color` ignored by the renderer, `color`
+dropped by the legend, per-dataset settings dropped by saving, `across` never read, the company default
+never read, `axis` never read. **Producing a field and consuming it are separate acts, and only the
+first is visible from where the field is written.**
+
+**Two JSX repairs on the way**, both from appending to an implicit-return arrow: a block landed after
+the fragment's close, then inside a `<g>`. Lint caught both — which it does for structure, unlike every
+unread-field bug above.
+
 ## The spec, built: modifiers, the missing measures, the missing dimensions
 
 ### `modifiers.js` — Model, Cumulative and Variance are TRANSFORMS

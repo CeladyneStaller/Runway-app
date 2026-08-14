@@ -183,7 +183,7 @@ const CategoryAxis = ({ ticks, y }) => {
   );
 };
 
-const Axes = ({ s, xs, ticks, format }) => (
+const Axes = ({ s, xs, ticks, format, sRight = null, rightLabel = null }) => (
   <>
     <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH} stroke="var(--line)" />
     <line x1={PAD.l} y1={s.zero} x2={W - PAD.r} y2={s.zero} stroke="var(--line)" />
@@ -205,6 +205,26 @@ const Axes = ({ s, xs, ticks, format }) => (
             <text x={W - PAD.r} y={H - 8} textAnchor="end" className="ch-t">{xs[xs.length - 1]}</text>
           </>
         )}
+    {/* ⚠️ THE RIGHT AXIS IS LABELLED, or it is a mystery. A second scale nobody can read is worse than
+        one shared scale: at least a flattened line is visibly flat. Its ticks sit outside the plot and
+        carry the name of the series they belong to. */}
+    {sRight && (
+      <g>
+        <line x1={W - PAD.r} y1={PAD.t} x2={W - PAD.r} y2={PAD.t + PH} stroke="var(--line)" />
+        {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
+          const v = sRight.lo + (sRight.hi - sRight.lo) * (1 - f);
+          return (
+            <text key={i} x={W - PAD.r + 5} y={PAD.t + PH * f + 3} className="ch-t" textAnchor="start">
+              {fmt(v, "count")}
+            </text>
+          );
+        })}
+        {rightLabel && (
+          <text x={W - PAD.r + 5} y={PAD.t - 4} className="ch-t" textAnchor="start"
+                fill="var(--muted-2)">{rightLabel}</text>
+        )}
+      </g>
+    )}
   </>
 );
 
@@ -223,8 +243,12 @@ function Lines({ spec }) {
   const all = [...spec.series.flatMap(sr => sr.values),
                ...(spec.band ? [...spec.band.lo, ...spec.band.hi] : [])];
   const s = scale(spec.domain || (all));
+  // ⚠️ A SERIES ON THE RIGHT AXIS USES THE RIGHT SCALE. Everything shared one, so a count against money
+  // was drawn on money's range — technically plotted and practically invisible.
+  const sR = spec.domainRight ? scale(spec.domainRight) : null;
+  const yOf = (sr) => (sR && spec.rightIds?.has(sr.id) ? sR.y : s.y);
   const n = Math.max(...spec.series.map(sr => sr.values.length), spec.band?.lo?.length || 0);
-  const path = (vals) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ");
+  const path = (vals, y = s.y) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${y(v)}`).join(" ");
 
   return (
 
@@ -270,12 +294,12 @@ function Lines({ spec }) {
       })()}
       {spec.series.map(sr => (
         sr.signColor
-        ? signRuns(sr.values, (i) => xAt(i, n), s.y).map((r, k) => (
+        ? signRuns(sr.values, (i) => xAt(i, n), yOf(sr)).map((r, k) => (
             <path key={`${sr.id}-${k}`} fill="none" strokeWidth="2"
                   stroke={r.neg ? TONE.danger : TONE.signal}
                   d={r.pts.map(([px, py], j) => `${j ? "L" : "M"}${px} ${py}`).join(" ")} />
           ))
-        : <path key={sr.id} d={path(sr.values)} fill="none" stroke={colorOf(sr)} strokeWidth="2"
+        : <path key={sr.id} d={path(sr.values, yOf(sr))} fill="none" stroke={colorOf(sr)} strokeWidth="2"
               strokeDasharray={sr.dashed ? "4 3" : undefined} />
       ))}
       <Markers marks={spec.markers} n={n} s={s} />
@@ -351,6 +375,10 @@ function Stack({ spec }) {
 function Bars({ spec }) {
   const n = Math.max(...spec.series.map(sr => sr.values.length));
   const s = scale(spec.domain || (spec.series.flatMap(sr => sr.values)));
+  // ⚠️ A SERIES ON THE RIGHT AXIS USES THE RIGHT SCALE. Everything shared one, so a count against money
+  // was drawn on money's range — technically plotted and practically invisible.
+  const sR = spec.domainRight ? scale(spec.domainRight) : null;
+  const yOf = (sr) => (sR && spec.rightIds?.has(sr.id) ? sR.y : s.y);
   const groupW = PW / Math.max(n, 1);
   const barW = Math.max(2, (groupW * 0.7) / spec.series.length);
 
@@ -360,11 +388,11 @@ function Bars({ spec }) {
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.series.map((sr, si) => sr.values.map((v, i) => {
         const x = PAD.l + i * groupW + groupW * 0.15 + si * barW;
-        const y = Math.min(s.y(v), s.zero);
+        const yy = yOf(sr); const y = Math.min(yy(v), yy(0));
         // `tones` lets one series colour bars individually — over plan in red, within it in green —
         // without splitting it into two series that would then be drawn side by side.
         return <rect key={`${sr.id}-${i}`} x={x} y={y} width={barW}
-                     height={Math.max(1, Math.abs(s.y(v) - s.zero))}
+                     height={Math.max(1, Math.abs(yOf(sr)(v) - yOf(sr)(0)))}
                      fill={sr.signColor ? signColor(sr.values[i]) : colorOf(sr.tones?.[i] ? { tone: sr.tones[i] } : sr)} opacity="0.75" />;
       }))}
     </Wrap>
@@ -778,14 +806,32 @@ function Composite({ spec }) {
   // ⚠️ THE STACK'S EXTREMES, NOT ITS NET. Summing signed values gives the middle of a mixed stack, so
   // a chart with +100k above and -40k below would size itself to 60k and clip both ends.
   const stacked = [...groups.stackBars, ...groups.stackArea];
-  const stackUp = Array.from({ length: n }, (_, i) =>
-    stacked.reduce((a, sr) => a + Math.max(0, clean(sr.values?.[i])), 0));
-  const stackDown = Array.from({ length: n }, (_, i) =>
-    stacked.reduce((a, sr) => a + Math.min(0, clean(sr.values?.[i])), 0));
-  const stackTotals = [...stackUp, ...stackDown];
-  const barTotals = groups.bars.flatMap(sr => (sr.values || []).map(clean));
   const loose = groups.lines.flatMap(sr => (sr.values || []).map(clean));
-  const domain = [...stackTotals, ...barTotals, ...loose, 0];
+
+  // ⚠️ TWO DOMAINS, ONE PER AXIS. `axis` was carried on every series and read by nothing — the
+  // renderers computed ONE scale from everything, so three orders against $400k of revenue drew as a
+  // flat line on the baseline. **A second axis whose range matches the first is not a second axis.**
+  //
+  // Each side gets the extent of ITS OWN series. A stack still contributes its summed totals, because
+  // that is what a stack occupies.
+  const onRight = (sr) => sr.axis === "right";
+  const rightIds = new Set(series.filter(onRight).map(sr => sr.id));
+  const pick = (arr) => arr.filter(sr => !rightIds.has(sr.id));
+  const pickR = (arr) => arr.filter(sr => rightIds.has(sr.id));
+  const totalsOf = (list) => Array.from({ length: n }, (_, i) => [
+    list.reduce((a, sr) => a + Math.max(0, clean(sr.values?.[i])), 0),
+    list.reduce((a, sr) => a + Math.min(0, clean(sr.values?.[i])), 0),
+  ]).flat();
+
+  const domain = [...totalsOf(pick(stacked)),
+                  ...pick(groups.bars).flatMap(sr => (sr.values || []).map(clean)),
+                  ...pick(groups.lines).flatMap(sr => (sr.values || []).map(clean)), 0];
+  const rightSeries = series.filter(onRight);
+  const domainRight = rightSeries.length
+    ? [...totalsOf(pickR(stacked)),
+       ...pickR(groups.bars).flatMap(sr => (sr.values || []).map(clean)),
+       ...pickR(groups.lines).flatMap(sr => (sr.values || []).map(clean)), 0]
+    : null;
 
   // ⚠️ EACH RENDERER EMITS A COMPLETE `<svg>` WITH ITS OWN AXES — so rendering three of them produced
   // THREE STACKED CHARTS rather than one. That is the "split into two charts" symptom, and it is why a
@@ -794,10 +840,12 @@ function Composite({ spec }) {
   // `marks: true` asks a renderer for its marks in a `<g>` and nothing else: no svg, no frame, no
   // ticks. The chrome is drawn ONCE, here, from the shared domain — which is also what guarantees the
   // groups cannot disagree about where a value sits.
-  const sub = (list) => ({ ...spec, series: list, domain, marks: true });
+  const sub = (list) => ({ ...spec, series: list, domain, domainRight, rightIds, marks: true });
   return (
     <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
-      <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format} />
+      <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format}
+            sRight={domainRight ? scale(domainRight) : null}
+            rightLabel={rightSeries[0]?.label} />
       {/* FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED. A filled stack over a line hides it
           completely; a line over a stack is always readable. */}
       {groups.stackBars.length > 0 && <Stack spec={{ ...sub(groups.stackBars), bars: true }} />}
