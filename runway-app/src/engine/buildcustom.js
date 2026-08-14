@@ -71,6 +71,60 @@ export function buildCustom(cfg, doc, parts, rows) {
              note: "Too many different units on one chart — plot at most two." };
   }
 
+  // ⚠️ `across` WAS STORED AND NEVER READ — zero references in this file. The control offered Month or
+  // any dimension, wrote the field, and the engine built a monthly chart regardless. **A control that
+  // records a choice and changes nothing is the same failure as the company default**, one screen over.
+  //
+  // A CATEGORY AXIS IS A DIFFERENT SHAPE, not a variation. There is no time: each measure contributes
+  // ONE number per category — its total across the window — so the series are indexed by category and
+  // the ticks are names rather than months.
+  const acrossDim = cfg?.across && cfg.across !== "month" ? dimensionById(cfg.across) : null;
+  if (acrossDim) {
+    const cats = new Map();          // key -> label, in first-seen order
+    const perMeasure = [];
+    for (const spec of cfg.measures || []) {
+      const m = measureById(spec.id);
+      if (!m) continue;
+      const split = splitBy(acrossDim, linesFor(spec.id, parts, doc), n, doc);
+      const totals = new Map();
+      for (const sp of split) {
+        if (!cats.has(sp.id)) cats.set(sp.id, sp.label);
+        totals.set(sp.id, sp.values.slice(0, win).reduce((a, b) => a + b, 0) * (spec.negate ? -1 : 1));
+      }
+      perMeasure.push({ spec, m, totals });
+    }
+    const keys = [...cats.keys()];
+    if (!keys.length) {
+      return { kind: "lines", x: [], ticks: [], series: [], format: "money",
+               note: `Nothing is tagged with a ${acrossDim.label.toLowerCase()} yet.` };
+    }
+
+    // ⚠️ HORIZONTAL BARS TAKE `rows`, NOT `series` — a different contract entirely, which is why the Y
+    // toggle drew a blank chart: it asked for `hbars` and handed it a monthly series list.
+    if (cfg.orient === "y") {
+      const first = perMeasure[0];
+      return {
+        kind: "hbars", format: "money",
+        rows: keys.map(k => ({ label: cats.get(k), value: first?.totals.get(k) ?? 0 }))
+                  .sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
+        note: perMeasure.length > 1
+          ? `Showing ${first.m.label} only — horizontal bars draw one measure per chart.` : null,
+      };
+    }
+
+    const colors = colorsFor(keys.map(k => ({ id: k })),
+                             acrossDim.typeOf ? (k) => acrossDim.typeOf(k, doc) : null);
+    return finish(cfg, doc, perMeasure.map(({ spec, m }, idx) => ({
+      id: spec.id, label: m.label,
+      values: keys.map(k => perMeasure[idx].totals.get(k) ?? 0),
+      tone: TONES[idx % TONES.length],
+      shape: spec.shape || "bars", stacked: !!spec.stacked, axis: spec.axis || "left",
+      group: spec.id,
+    })), ids, { x: keys.map(k => cats.get(k)),
+                ticks: keys.map((k, i) => ({ i, label: cats.get(k), quarter: true })),
+                colors });
+  }
+
   // ⚠️ BREAKDOWN IS PER DATASET NOW. Each measure splits on its own dimension, or on none — which is
   // what makes "spend split by project, with cash over it" expressible. The old builder had ONE
   // breakdown for the chart, so a split measure and an unsplit one could not coexist.
@@ -119,7 +173,8 @@ export function buildCustom(cfg, doc, parts, rows) {
   return finish(cfg, doc, out, ids);
 }
 
-function finish(cfg, doc, series, ids) {
+function finish(cfg, doc, series, ids, axis = null) {
+  // A CATEGORY CHART SUPPLIES ITS OWN x AND ticks — names rather than months.
   const ok = allowedTypes(ids);
   // ⚠️ THE CHART KIND COMES FROM SHAPE + STACKED + ORIENTATION, not from a single type name. `Stack`
   // already renders FILLED PATHS rather than rects, so a stacked line was drawable all along — only
@@ -166,7 +221,7 @@ function finish(cfg, doc, series, ids) {
   series = series.map(sr => (sr.stacked && clash.has(sr.group ?? sr.id) ? { ...sr, stacked: false } : sr));
   return {
     kind,
-    x: months(doc), ticks: axisTicks(doc),
+    x: axis?.x || months(doc), ticks: axis?.ticks || axisTicks(doc),
     series, format: "money",
     custom: true,
     // ⚠️ THE REFUSAL IS PER SERIES NOW, not per chart — a stacked series whose measure overlaps another

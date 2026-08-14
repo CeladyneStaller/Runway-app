@@ -66,7 +66,11 @@ export function TabInsights({ tab, subtab }) {
   // Derived at render instead: no state to fall out of step, and it recomputes if an owner changes the
   // default while somebody is looking at the tab. **It applies on their next tab load, not mid-read**,
   // because `chosen` wins once they have picked anything themselves.
-  const effective = chosen ?? (ctx ? defaultChartId(ctx.doc, tab) : null);
+  // ⚠️ ONE BINDING FOR THE COMPANY DEFAULT. It was read in three places by two different expressions,
+  // and every bug in this area today has been one consumer disagreeing with another about the same
+  // fact. Declared once, above everything that needs it.
+  const companyDefault = ctx ? defaultChartId(ctx.doc, tab) : null;
+  const effective = chosen ?? companyDefault;
   const [picking, setPicking] = useState(false);
   const [building, setBuilding] = useState(false);
   const [naming, setNaming] = useState(false);
@@ -82,7 +86,6 @@ export function TabInsights({ tab, subtab }) {
   const lens = lensFor(tab, subtab);
   // The curated fallback also honours a company default that names a CURATED chart — one field holding
   // either kind of id, so this asks once rather than branching on which kind it turned out to be.
-  const companyDefault = ctx ? defaultChartId(ctx.doc, tab) : null;
   const id = chartIdFor(tab, subtab, options.some(o => o.id === effective) ? effective : null,
                         options.some(o => o.id === companyDefault) ? companyDefault
                                                                    : defaultChartFor(tab));
@@ -188,7 +191,7 @@ export function TabInsights({ tab, subtab }) {
                   <span>
                     <span className="ch-opt-n">
                       {c.name}
-                      {defaultChartId(ctx.doc, tab) === c.id && <span className="chip on">default</span>}
+                      {companyDefault === c.id && <span className="chip on">default</span>}
                     </span>
                     {/* A SAVED CHART CANNOT HAVE A `why` — a builder cannot write one. So it shows what
                         it plots and who saved it, which is the honest substitute. */}
@@ -214,7 +217,7 @@ export function TabInsights({ tab, subtab }) {
                              across: c.across, orient: c.orient || "x" });
                     setEditing(c.id); setBuilding(true);
                   }}>Edit</button>
-                  {ctx.isOwner && defaultChartId(ctx.doc, tab) !== c.id && (
+                  {ctx.isOwner && companyDefault !== c.id && (
                     <button className="linkbtn" onClick={(e) => {
                       e.preventDefault();
                       const r = setDefaultChart(ctx.doc, tab, c.id, { isOwner: true });
@@ -236,9 +239,23 @@ export function TabInsights({ tab, subtab }) {
                          checked={!cfg.measures.length && !pickedSaved && o.id === id}
                          onChange={() => pick(o.id)} aria-label={o.name} />
                   <span>
-                    <span className="ch-opt-n">{o.name}</span>
+                    <span className="ch-opt-n">
+                      {o.name}
+                      {companyDefault === o.id && <span className="chip on">default</span>}
+                    </span>
                     <span className="ch-opt-w">{o.why}</span>
                   </span>
+                  {/* ⚠️ THE STANDARD CHARTS HAD NO "SET AS DEFAULT", AND THERE WAS NO REASON FOR IT.
+                      `chartDefault[tab]` holds EITHER kind of id — that was the point of one field —
+                      and `setDefaultChart` never cared which. The control simply was not offered here,
+                      so a company could land on a chart it built but not on one it was given. */}
+                  {ctx.isOwner && companyDefault !== o.id && (
+                    <button className="linkbtn" onClick={(e) => {
+                      e.preventDefault();
+                      const r = setDefaultChart(ctx.doc, tab, o.id, { isOwner: true });
+                      if (!r.error) ctx.setDoc?.(r.doc);
+                    }}>Set as default</button>
+                  )}
                 </label>
               ))}
               {chosen && (

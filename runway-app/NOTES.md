@@ -1742,6 +1742,44 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ `across` WAS STORED AND NEVER READ — zero references in `buildCustom`
+
+The control offered Month or any dimension, wrote the field, and **the engine built a monthly chart
+regardless.** Picking "across: Project" changed nothing; picking Y orientation drew a blank chart. **A
+control that records a choice and changes nothing is the same failure as the company default**, one
+screen over — and this is the third instance today.
+
+**A CATEGORY AXIS IS A DIFFERENT SHAPE, NOT A VARIATION.** There is no time, so each measure contributes
+ONE number per category — its total across the window — and the series are indexed by category with
+names for ticks. That is why it could not fall out of the monthly path by accident.
+
+**⚠️ AND `HBars` TAKES `rows`, NOT `series`.** A different contract entirely, which is exactly why the Y
+toggle was blank rather than wrong: it asked for `hbars` and handed it a monthly series list, and the
+renderer read `spec.rows || []` and drew nothing.
+
+**`Composite` now returns null on an empty spec** rather than an empty canvas — a spec with no series
+may be a shape it does not handle or a refusal carrying only a note, and drawing a blank frame hides
+both.
+
+**Horizontal bars show ONE measure and say so.** One bar per category is the shape; a second measure has
+nowhere to go.
+
+### Standard charts can be the company default too
+
+The control existed only on saved charts, and **there was no reason for that.** `chartDefault[tab]`
+holds either kind of id — that was the point of one field — and `setDefaultChart` never cared which. It
+simply was not offered, so **a company could land on a chart it built but not on one it was given.**
+
+**Consolidated to ONE binding while adding it.** `defaultChartId(ctx.doc, tab)` was being called in
+three places and `companyDefault` in two, for the same fact. **Every bug in this area today has been one
+consumer disagreeing with another about the same thing** — the picker ticking a chart that was not
+drawn, the header naming another, the stack rule with three implementations. Adding a fourth reader to
+that pattern was not worth the fifteen seconds it saved.
+
+**A Python edit aborted mid-way on a JS comment containing an em dash** — the first half of the
+consolidation applied and the rest did not, leaving a mixed state that lint reported as clean. Caught by
+the checklist, which is the argument for asserting the end state rather than the edit.
+
 ### ⚠️ "Set as default" WAS HIDDEN FROM THE ONLY PERSON WHO COULD PRESS IT
 
 `isOwner={membership?.role === "owner"}` — and **`membership` defaults to `null`**, so a solo local

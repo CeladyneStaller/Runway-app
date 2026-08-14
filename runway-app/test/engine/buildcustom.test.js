@@ -351,3 +351,56 @@ describe("⚠️ the company default must actually decide what is drawn", () => 
     expect(defaultChartId(d, "flow")).toBe("flow.runway");
   });
 });
+
+describe("⚠️ across a category — the field that was stored and never read", () => {
+  const d = demoDoc();
+  const parts = buildModelParts(d);
+  const rows = buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
+
+  it("PLOTS AGAINST THE CATEGORY, not against months", () => {
+    // `buildCustom` had ZERO references to `across`. The control offered Month or any dimension, wrote
+    // the field, and the engine built a monthly chart regardless — a control that records a choice and
+    // changes nothing.
+    const s = buildCustom({ across: "project", measures: [{ id: "projectSpend", shape: "bars" }] },
+                          d, parts, rows);
+    expect(s.series).toHaveLength(1);
+    // one value per project, not one per month
+    expect(s.series[0].values.length).toBeLessThan(rows.length);
+    expect(s.x.length).toBe(s.series[0].values.length);
+    expect(s.ticks.length).toBe(s.x.length);
+    // and the ticks are names, not months
+    expect(s.ticks.every(t => typeof t.label === "string")).toBe(true);
+  });
+
+  it("EACH VALUE IS THE TOTAL ACROSS THE WINDOW", () => {
+    const monthly = buildCustom({ measures: [{ id: "projectSpend" }] }, d, parts, rows);
+    const byCat = buildCustom({ across: "project", measures: [{ id: "projectSpend" }] }, d, parts, rows);
+    const sum = (a) => a.reduce((x, y) => x + y, 0);
+    expect(sum(byCat.series[0].values)).toBeCloseTo(sum(monthly.series[0].values), 0);
+  });
+
+  it("⚠️ Y ORIENTATION EMITS `rows`, WHICH IS WHAT HBars TAKES", () => {
+    // The Y toggle drew a blank chart: it asked for `hbars` and handed it a monthly SERIES list.
+    // `HBars` reads `spec.rows` — a different contract entirely.
+    const s = buildCustom({ across: "project", orient: "y",
+                            measures: [{ id: "projectSpend" }] }, d, parts, rows);
+    expect(s.kind).toBe("hbars");
+    expect(Array.isArray(s.rows)).toBe(true);
+    expect(s.rows.length).toBeGreaterThan(0);
+    expect(s.rows[0]).toHaveProperty("label");
+    expect(s.rows[0]).toHaveProperty("value");
+  });
+
+  it("says so when a horizontal chart can only show one measure", () => {
+    const s = buildCustom({ across: "project", orient: "y",
+                            measures: [{ id: "projectSpend" }, { id: "drawdowns" }] }, d, parts, rows);
+    expect(s.note).toMatch(/one measure per chart/i);
+  });
+
+  it("says so when nothing is tagged with that dimension", () => {
+    const bare = { ...demoDoc(), projects: [], lines: [] };
+    const s = buildCustom({ across: "project", measures: [{ id: "projectSpend" }] },
+                          bare, buildModelParts(bare), rows);
+    if (!s.series.length) expect(s.note).toMatch(/nothing is tagged/i);
+  });
+});

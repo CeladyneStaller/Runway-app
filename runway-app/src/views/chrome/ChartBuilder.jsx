@@ -96,6 +96,15 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
         )}
       </div>
 
+      {/* ⚠️ A CATEGORY AXIS HAS NO TIME, so a per-dataset breakdown BY THE SAME FIELD is meaningless —
+          the axis already is that field. `across` is excluded from each dataset's own list below. */}
+      {cfg.across && cfg.across !== "month" && (
+        <p className="cb-note">
+          Each measure contributes one total per {dims.find(d => d.id === cfg.across)?.label.toLowerCase()},
+          across the whole window — there is no time axis.
+        </p>
+      )}
+
       {cfg.measures.map(m => {
         const def = measureById(m.id);
         // ⚠️ ONLY THE DATASETS ACTUALLY STACKED COUNT. Consulting the whole selection made this

@@ -691,6 +691,9 @@ function Milestones({ spec }) {
  *  one shape; they are handed subsets and left alone.
  */
 function Composite({ spec }) {
+  // ⚠️ A SPEC WITH NO SERIES IS NOT A CHART WITH NOTHING IN IT — it may be a shape this renderer does
+  // not handle, or a refusal carrying only a note. Drawing an empty canvas would hide both.
+  if (!spec?.series?.length) return null;
   const series = spec.series || [];
   // ⚠️ STACKED BARS AND STACKED LINES ARE DIFFERENT GROUPS. Folding every stacked series into one sent
   // bars to the area renderer — "Bar then Stacked" drew a stacked area. Four combinations, four groups.
