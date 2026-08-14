@@ -108,6 +108,22 @@ describe("⚠️ the renderer can actually draw what the palette names", () => {
     }
   });
 
+  it("⚠️ THE LEGEND CARRIES THE COLOUR TOO", () => {
+    // It copied `tone` and dropped `color`, so swatches fell back to green while the chart beside them
+    // drew the real ramp — **the legend disagreeing with the chart it explains.** That is worse than
+    // both being wrong, because the reader trusts the key to say which line is which.
+    expect(chart).toMatch(/label: sr\.label, tone: sr\.tone, color: sr\.color/);
+    expect(chart).toMatch(/colorOf\(k\)/);
+  });
+
+  it("EVERY CONSUMER OF A SERIES COLOUR GOES THROUGH `colorOf`", () => {
+    // A field nobody copies is a field nobody notices is missing — this has now happened twice, in the
+    // renderer and then in the legend one consumer later.
+    const raw = [...chart.matchAll(/tone\((\w+)\.tone\)/g)].map(m => m[1]);
+    // markers, rows and groups keep tone names — they are semantic marks, not members of a breakdown
+    for (const v of raw) expect(["m", "r", "sg"], `tone(${v}.tone) should use colorOf`).toContain(v);
+  });
+
   it("AN EXPLICIT COLOUR WINS OVER A TONE NAME", () => {
     // A breakdown's colours are computed — hue from type, lightness from member — so there is no fixed
     // token for "the second grant". The renderer read `tone` only, and discarded every computed colour.

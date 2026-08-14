@@ -1677,6 +1677,22 @@ field is nothing. **None is an error, and lint sees none of them.**
 categorical tones are real keys, and that `colorOf` prefers an explicit colour. Fifteen variables
 checked, none undefined.
 
+### The legend was a fourth consumer, and it dropped the field
+
+**The chart drew the ramp and the legend still drew green.** `legend` is built from `spec.series` with
+`{ id, label, tone }` — it copied the tone and **dropped `color`** — then rendered with `tone()`.
+
+**⚠️ A LEGEND DISAGREEING WITH ITS OWN CHART IS WORSE THAN BOTH BEING WRONG**, because the reader trusts
+the key to say which line is which. Two wrong colours are a palette problem; a mismatch is a lie about
+identity.
+
+**A field nobody copies is a field nobody notices is missing** — the same fault as the renderer, one
+consumer later. `palette.test.js` now asserts the legend carries `color`, uses `colorOf`, and that the
+only remaining `tone(x.tone)` calls are on markers, rows and groups — semantic marks rather than members
+of a breakdown.
+
+`PlotFrame`'s legend already read `s.color` and needed nothing.
+
 ## ⚠️ THE SPECULATIVE BAND PRODUCED NOTHING, AND MY PREMISE WAS WRONG
 
 `confidenceBand` hardcoded three revenue sets:

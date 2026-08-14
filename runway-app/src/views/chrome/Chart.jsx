@@ -625,7 +625,15 @@ export function Chart({ spec }) {
   const Shape = useMemo(() => SHAPES[spec?.kind], [spec?.kind]);
 
   // Declared key first, falling back to the series for the shapes that have them.
-  const legend = spec?.legend || (spec?.series || []).map(sr => ({ id: sr.id, label: sr.label, tone: sr.tone }));
+  // ⚠️ THE LEGEND CARRIES THE COLOUR TOO. It copied `tone` and dropped `color`, so the swatches kept
+  // falling back to green while the chart beside them drew the real ramp — **the legend disagreeing
+  // with the chart it explains**, which is worse than both being wrong, because the reader trusts the
+  // key to tell them which line is which.
+  //
+  // Same fault as the renderer itself, one consumer later: a field nobody copies is a field nobody
+  // notices is missing.
+  const legend = spec?.legend
+    || (spec?.series || []).map(sr => ({ id: sr.id, label: sr.label, tone: sr.tone, color: sr.color }));
 
   if (!spec || spec.empty || !Shape) {
     return (
@@ -655,7 +663,7 @@ export function Chart({ spec }) {
           {legend.map((k, i) => (
             <span key={k.id || k.label || i}>
               <i className={k.ring ? "ring" : ""}
-                 style={k.ring ? { borderColor: tone(k.tone) } : { background: tone(k.tone) }} />
+                 style={k.ring ? { borderColor: colorOf(k) } : { background: colorOf(k) }} />
               {k.label}
             </span>
           ))}
