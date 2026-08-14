@@ -58,7 +58,21 @@ const zeroOf = (model, toggles) => {
 
 // The full band. Returns three curves (floor/expected/ceiling) as row arrays for shading, their three
 // zero-dates, and the burn-variance factor used, plus a flag for how wide the band is.
-export function confidenceBand(doc, horizon = HORIZON) {
+/**
+ * @param revenue  optional `{committed, expected, speculative}` — the revenue set ALL THREE curves use,
+ *                 so the band's width comes from COST variance alone.
+ *
+ * ⚠️ WITHOUT IT, THE THREE CURVES USE THREE DIFFERENT REVENUE SETS: floor is committed-only, ceiling
+ * adds speculative. That is one band expressing TWO uncertainties at once — how wrong the spend model
+ * is, AND whether speculative revenue lands — and its width means neither on its own.
+ *
+ * That is also why the first attempt at a second band produced nothing: **speculative revenue is
+ * already the green band's ceiling**, so a "speculative band" built from the same function came back
+ * byte-identical and the clamp collapsed it to zero height.
+ *
+ * The default is unchanged so every existing caller and test behaves exactly as before.
+ */
+export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   const financing = !!doc.settings?.toggles?.financing;   // orthogonal — shifts all curves, not part of the band
   const T = (committed, expected, speculative) => ({ committed, expected, speculative, financing });
 
@@ -72,13 +86,17 @@ export function confidenceBand(doc, horizon = HORIZON) {
 
   // floor: conservative revenue (committed only) AND historical overspend (costs * 1+cv)
   const floorModel = scaleCosts(baseModel, cv);
-  const floorToggles = T(true, false, false);
+  // WITH an explicit revenue set, all three curves share it and only the COSTS move.
+  const floorToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)
+                               : T(true, false, false);
   // expected: the base case — committed+expected revenue, costs as-is
   const expModel = baseModel;
-  const expToggles = T(true, true, false);
+  const expToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)
+                             : T(true, true, false);
   // ceiling: optimistic revenue (+speculative) AND on-plan-or-better spend (costs * 1-cv)
   const ceilModel = scaleCosts(baseModel, -cv);
-  const ceilToggles = T(true, true, true);
+  const ceilToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)
+                              : T(true, true, true);
 
   const floorRows = buildProjection(floorModel, floorToggles);
   const expRows = buildProjection(expModel, expToggles);

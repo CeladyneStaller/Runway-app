@@ -210,7 +210,13 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
   }, [doc.journal, rows, cash, takeSnapshot]);
   const [showBand, setShowBand] = useState(true);
   const band = useMemo(() => {
-    const b = confidenceBand(doc);
+    // ⚠️ THE GREEN BAND NOW USES THE TIERS THAT ARE ACTUALLY ON. Its ceiling used to add speculative
+    // unconditionally — so somebody with speculation switched OFF was still shown a band whose top edge
+    // assumed it landed.
+    const b = confidenceBand(doc, undefined, {
+      committed: !!toggles.committed, expected: !!toggles.expected,
+      speculative: !!toggles.speculative,
+    });
     if (!b) return b;
     // anchor every band curve to recorded cash exactly as the main line is anchored (line `rows` above),
     // so the band starts from the same real-cash baseline and its expected curve lands on the line
@@ -222,7 +228,7 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
       expected: { ...b.expected, rows: anchor(b.expected.rows) },
       ceiling: { ...b.ceiling, rows: anchor(b.ceiling.rows) },
     };
-  }, [doc, cashActuals, anchorActuals]);
+  }, [doc, cashActuals, anchorActuals, toggles.committed, toggles.expected, toggles.speculative]);
 
   const zeroUp = useMemo(() => zeroInfo(rowsUp, startY, startM, fcFrom), [rowsUp, startY, startM, fcFrom]);
   const zeroConf = useMemo(() => zeroInfo(rowsConf, startY, startM, fcFrom), [rowsConf, startY, startM, fcFrom]);
@@ -307,18 +313,19 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                              Math.abs((rowsUp[rowsUp.length - 1]?.end ?? 0) - (rows[rows.length - 1]?.end ?? 0)));
   const showUpside = !(toggles.committed && toggles.expected && toggles.speculative) && upsideGap > 1;
 
-  // ⚠️ A SECOND BAND, FOR THE SPECULATIVE CURVE, COMPUTED AS IF THAT REVENUE WERE COMMITTED.
+  // ⚠️ A BAND PER CURVE, AND THE FIRST ATTEMPT AT THIS PRODUCED NOTHING.
   //
-  // The speculative LINE says "here is the curve if this money arrives". This band says "and here is
-  // how wide the answer is even then". Computing it against the speculative document with speculation
-  // treated as certain is deliberate: a band around a curve that may not happen at all would compound
-  // two different uncertainties — how wrong the model is, AND whether a round lands — into one shape
-  // whose width means neither.
+  // `confidenceBand` hardcoded three revenue sets — floor committed-only, ceiling committed + expected
+  // + SPECULATIVE. So the speculative case was ALREADY the green band's ceiling, a "speculative band"
+  // built from the same call came back identical, and the clamp collapsed it to zero height.
+  //
+  // Now each band gets ONE revenue set and its width comes from COST variance alone:
+  //   green  — the tiers the person has actually switched on
+  //   orange — those plus speculative, treated as certain: "if this lands, how wide is it EVEN THEN"
   const upBand = useMemo(() => {
     if (!showUpside) return null;
-    const specDoc = { ...doc, settings: { ...(doc.settings || {}),
-      toggles: { ...(doc.settings?.toggles || {}), speculative: true } } };
-    const b = confidenceBand(specDoc);
+    const b = confidenceBand(doc, undefined,
+      { committed: true, expected: true, speculative: true });
     if (!b) return null;
     const anchor = (rs) => anchorToActuals(rs, cashActuals, anchorActuals);
     return { ...b,

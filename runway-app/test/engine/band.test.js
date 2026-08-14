@@ -78,3 +78,44 @@ describe("the band centers on the main line (regression: band was offset ~$114k)
     }
   });
 });
+
+describe("⚠️ a band per curve — one revenue set each", () => {
+  const tot = (rs) => (rs || []).reduce((a, r) => a + (r.end ?? r.b ?? 0), 0);
+
+  it("WITHOUT a revenue set, behaves exactly as it always did", () => {
+    // Every existing caller and test depends on this. The three curves use three different revenue
+    // sets: floor committed-only, ceiling committed + expected + speculative.
+    const d = demoDoc();
+    const a = confidenceBand(d), b = confidenceBand(d);
+    expect(tot(a.floor.rows)).toBe(tot(b.floor.rows));
+    expect(tot(a.ceiling.rows)).not.toBe(tot(a.floor.rows));
+  });
+
+  it("⚠️ WITH ONE, ALL THREE CURVES SHARE IT and only the costs move", () => {
+    // This is what makes a second band possible at all. The first attempt failed because speculative
+    // revenue is ALREADY the default ceiling — a "speculative band" from the same call came back
+    // identical, and the clamp collapsed it to nothing.
+    const d = demoDoc();
+    const committedOnly = confidenceBand(d, undefined,
+      { committed: true, expected: false, speculative: false });
+    const withSpec = confidenceBand(d, undefined,
+      { committed: true, expected: true, speculative: true });
+    expect(tot(withSpec.expected.rows)).not.toBe(tot(committedOnly.expected.rows));
+  });
+
+  it("still has width — the spread comes from cost variance, not revenue", () => {
+    const d = demoDoc();
+    const b = confidenceBand(d, undefined, { committed: true, expected: true, speculative: true });
+    expect(tot(b.ceiling.rows)).toBeGreaterThan(tot(b.floor.rows));
+  });
+
+  it("⚠️ THE DEFAULT BAND USED TO ASSUME SPECULATION LANDED", () => {
+    // Its ceiling added speculative unconditionally, so somebody with speculation switched OFF was
+    // still shown a band whose top edge assumed it arrived. Passing the real toggles fixes that.
+    const d = demoDoc();
+    const asToggled = confidenceBand(d, undefined,
+      { committed: true, expected: true, speculative: false });
+    const hardcoded = confidenceBand(d);
+    expect(tot(asToggled.ceiling.rows)).not.toBe(tot(hardcoded.ceiling.rows));
+  });
+});

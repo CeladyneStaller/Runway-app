@@ -1653,6 +1653,34 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## ⚠️ THE SPECULATIVE BAND PRODUCED NOTHING, AND MY PREMISE WAS WRONG
+
+`confidenceBand` hardcoded three revenue sets:
+
+    floor    = committed only,                     costs x (1+cv)
+    expected = committed + expected,               costs as-is
+    ceiling  = committed + expected + SPECULATIVE, costs x (1-cv)
+
+**SPECULATIVE REVENUE WAS ALREADY THE GREEN BAND'S CEILING.** So passing a document with
+`speculative: true` changed nothing — the function never read `doc.settings.toggles` for those three —
+`upBand` came back byte-identical to `band`, and the clamp collapsed it to zero height. **Nothing
+rendered, and nothing errored.**
+
+**⚠️ AND THE OLD BAND EXPRESSED TWO UNCERTAINTIES AT ONCE.** Its width was *how wrong the spend model
+is* PLUS *whether speculative revenue lands* — one shape whose width means neither on its own. Somebody
+with speculation switched OFF was still shown a band whose top edge assumed it arrived.
+
+**`confidenceBand(doc, horizon, revenue)` now takes an optional revenue set** that all three curves
+share, so the spread comes from COST variance alone. Omitting it preserves the old behaviour exactly,
+which is what every existing caller and test depends on.
+
+    green  = the tiers actually switched on
+    orange = those plus speculative, treated as certain — "if this lands, how wide is it EVEN THEN"
+
+**A real staleness bug came with it:** the green band's `useMemo` had no toggles in its deps, so
+switching a tier would have moved the LINE and left the BAND where it was — **the chart disagreeing with
+itself.** Lint's `exhaustive-deps` caught that one.
+
 ## ⚠️ TEMPORAL DEAD ZONE — THIRD TIME THIS SESSION, AND THIS ONE SHIPPED
 
 **A blank page.** `Cannot access 'Ft' before initialization` — a minified `const` read before its
