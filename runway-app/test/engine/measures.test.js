@@ -29,18 +29,21 @@ describe("⚠️ every measure reads something real", () => {
     // to find which — and the count needs bumping every time a measure is added, which is how a guard
     // becomes friction and then gets loosened.
     const dead = MEASURES.filter(m => m.get(rows, parts, d).every(x => x === 0)).map(m => m.id);
-    // ⚠️ LEGITIMATELY EMPTY ON THIS DOCUMENT, each for a reason worth stating rather than a blanket
-    // tolerance — a guard that allows "any four" stops catching the fifth.
+    // ⚠️ EXACTLY THE DEAD SET, WITH A REASON EACH — nothing more.
     //
-    //   saasRev            the demo seeds no subscription product
-    //   capital            no instrument closes inside the window
-    //   costShareAccrued   the demo has no cost-share terms on any award
-    //   shortfall          nothing to be short of without cost share
-    //   debtOutstanding    no drawn facility or maturing note
+    // The first version listed `capital` and `costShareAccrued`, and the run showed both are ALIVE on
+    // the demo. **An allow-list entry for something that works is the "stops catching the fifth"
+    // problem in miniature**: it silently forgives a future regression in the one measure it names.
     //
-    // `windDown` is NOT here: it reads `noticeWeeks` and payroll, both of which the demo has, so a zero
-    // there would be a real fault.
-    const allowed = ["saasRev", "capital", "costShareAccrued", "shortfall", "debtOutstanding"];
+    //   saasRev          the demo seeds no subscription product
+    //   baseline         measured burn does not exceed what the demo itemises, so there is no
+    //                    unexplained spend — the baseline is genuinely nothing, not missing
+    //   shortfall        the demo's non-grant inflow covers its cost share, so nothing is unmatchable
+    //   debtOutstanding  no drawn facility and no maturing note
+    //
+    // `windDown` and `costShareAccrued` are deliberately NOT here: both read data the demo has, so a
+    // zero in either would be a real fault.
+    const allowed = ["saasRev", "baseline", "shortfall", "debtOutstanding"];
     expect(dead.filter(id => !allowed.includes(id)),
            `flat zero on the demo: ${dead.join(", ")}`).toEqual([]);
   });

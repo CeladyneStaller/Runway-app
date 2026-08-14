@@ -1700,6 +1700,29 @@ catch it.** Fixing a name in the source does not fix the assertions written alon
 **Two of the four I predicted before seeing the output** (the `type` field and the flat-zero count).
 The other two were the kind only a run finds.
 
+### The named guard immediately paid for itself
+
+Its first run reported `baseline, saasRev, shortfall, debtOutstanding` — and **two of the five entries I
+had put in the allow-list were for measures that WORK.** `capital` and `costShareAccrued` are alive on
+the demo; I had listed them on a guess about what the demo contained.
+
+**An allow-list entry for something that works is the "stops catching the fifth" problem in miniature.**
+It silently forgives a future regression in the one measure it names, and it looks like diligence.
+
+The list is now **exactly the dead set**, each with a reason:
+
+    saasRev          no subscription product seeded
+    baseline         measured burn does not exceed what the demo itemises — genuinely nothing, not missing
+    shortfall        non-grant inflow covers the cost share, so nothing is unmatchable
+    debtOutstanding  no drawn facility, no maturing note
+
+**Counting would have said "four dead, tolerate four" and told me nothing.** Naming them found a wrong
+allow-list on the first run.
+
+**⚠️ A DEMO-DATA GAP WORTH DECIDING ON SEPARATELY:** four measures cannot be demonstrated on the demo
+document, including **baseline burn** — which is one of the eight buckets and the subject of the
+overhead-adjustment feature. Somebody exploring the demo cannot see it work.
+
 ## Plot type as shape + modifier, orientation, axis · and the Commitments charts
 
 ### `charttype.js`
