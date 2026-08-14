@@ -385,6 +385,8 @@ function HBars({ spec }) {
          aria-label={spec.aria || "chart"}>
       {rows.map((r, i) => {
         let x = labelW;
+        // ⚠️ MAGNITUDE, NOT CLAMPED TO ZERO. `Math.max(0, value)` made a negative a zero-width bar —
+        // invisible rather than wrong, which is why it read as "negatives are not allowed here".
         const total = r.segments.reduce((a, sg) => a + Math.abs(clean(sg.value)), 0) || 1;
         return (
           <g key={i}>

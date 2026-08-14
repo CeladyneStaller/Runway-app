@@ -1742,6 +1742,36 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Negatives on a category axis, and a setting left set after it became illegal
+
+**⚠️ `HBars` CLAMPED WITH `Math.max(0, value)`** for both the width and the total, so a negative drew a
+ZERO-WIDTH bar — invisible rather than wrong, which is why it read as "negatives are not allowed here".
+Magnitude now, with the sign in the tone. **The category path is where negatives are most likely**: a
+negated measure totalled over a window is negative by construction.
+
+**⚠️ AND THE CATEGORY BRANCH DROPPED `signColor`.** The monthly branch passes it; the parallel branch I
+wrote for categories threaded shape, stacked, axis and negate — and missed this one. **Every
+per-dataset field has to be threaded through both branches by hand, which is a design that will keep
+producing this.**
+
+### The blank chart on switching back to Month
+
+Switching Across from a category to Month **left `orient: "y"` behind** — a combination the control
+itself refuses to offer, since the orientation toggle hides on a time axis. Months down the side is not
+a shape anything draws, so the chart went blank **and the person could not see the setting that broke
+it.**
+
+**A setting that becomes illegal must be reset, not left set.** The change that invalidates it clears
+it; a per-dataset breakdown by the new axis field clears too, since the axis already is that field.
+
+**⚠️ AND THE ENGINE REFUSES THE PAIR INDEPENDENTLY.** A chart SAVED before this fix can still carry the
+illegal combination, and it would blank on load with no way to see why. **A UI guard protects the next
+action; an engine guard protects the data already written** — both are needed, and only the second helps
+somebody who saved yesterday.
+
+**Container note:** the sandbox died mid-edit last turn and both fixes were lost despite reporting
+success. Re-applied with `assert` on every anchor, so a silent no-match cannot pass again.
+
 ### Two more from the category axis, both from not reading a contract
 
 **⚠️ `Axes` SENT EVERY TICK SET TO `TimeAxis`, which builds labels from `useStart()` and ignores the

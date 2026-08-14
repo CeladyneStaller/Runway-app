@@ -79,7 +79,22 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
       <div className="cb-row">
         <span className="cb-l">Across</span>
         <select className="sel cb-sel" value={cfg.across || "month"}
-                onChange={e => setCfg(c => ({ ...c, across: e.target.value }))}>
+                onChange={e => setCfg(c => {
+                  const across = e.target.value;
+                  // ⚠️ A SETTING THAT BECOMES ILLEGAL MUST BE RESET, NOT LEFT SET. Switching back to
+                  // Month left `orient: "y"` behind — a combination the control itself refuses to
+                  // offer — and the chart went blank, because months down the side is not a shape
+                  // anything draws. **The person could not see the setting that broke it**, since the
+                  // orientation control is hidden on a time axis.
+                  //
+                  // Clearing dependent state on the change that invalidates it is the rule; leaving it
+                  // and hoping every downstream reader guards is how a blank chart happens.
+                  const orient = canOrientY(across) ? (c.orient || "x") : "x";
+                  // A per-dataset breakdown BY THE NEW AXIS is equally meaningless — the axis already
+                  // is that field — so those clear too rather than producing one series per bar.
+                  const measures = (c.measures || []).map(m => (m.by === across ? { ...m, by: null } : m));
+                  return { ...c, across, orient, measures };
+                })}>
           <option value="month">Month</option>
           {dims.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
         </select>

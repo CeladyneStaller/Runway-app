@@ -79,6 +79,13 @@ export function buildCustom(cfg, doc, parts, rows) {
   // ONE number per category — its total across the window — so the series are indexed by category and
   // the ticks are names rather than months.
   const acrossDim = cfg?.across && cfg.across !== "month" ? dimensionById(cfg.across) : null;
+  // ⚠️ THE ENGINE REFUSES THE ILLEGAL PAIR TOO, not just the control. A chart SAVED before the reset
+  // existed can still carry `orient: "y"` with a time axis, and months down the side is not a shape
+  // anything draws — so it would blank on load with no way for the person to see why.
+  //
+  // The builder clears it on change; this makes a stored one harmless. **A UI guard protects the next
+  // action; an engine guard protects the data already written.**
+  const orient = acrossDim ? (cfg?.orient || "x") : "x";
   if (acrossDim) {
     const cats = new Map();          // key -> label, in first-seen order
     const perMeasure = [];
@@ -101,7 +108,7 @@ export function buildCustom(cfg, doc, parts, rows) {
 
     // ⚠️ HORIZONTAL BARS TAKE `rows`, NOT `series` — a different contract entirely, which is why the Y
     // toggle drew a blank chart: it asked for `hbars` and handed it a monthly series list.
-    if (cfg.orient === "y") {
+    if (orient === "y") {
       const first = perMeasure[0];
       return {
         kind: "hbars", format: "money",
@@ -110,8 +117,11 @@ export function buildCustom(cfg, doc, parts, rows) {
         // segments, which is what lets one bar show several parts.
         rows: keys.map(k => ({
           label: cats.get(k),
+          // ⚠️ THE SIGN IS CARRIED, not clamped away. The category path is where negatives are MOST
+          // likely — a negated measure totalled over a window is negative by construction.
           segments: [{ id: first?.spec.id, label: first?.m.label,
-                       value: first?.totals.get(k) ?? 0, tone: "signal" }],
+                       value: first?.totals.get(k) ?? 0,
+                       tone: (first?.totals.get(k) ?? 0) < 0 ? "danger" : "signal" }],
         })).sort((a, b) => Math.abs(b.segments[0].value) - Math.abs(a.segments[0].value)),
         note: perMeasure.length > 1
           ? `Showing ${first.m.label} only — horizontal bars draw one measure per chart.` : null,
@@ -124,6 +134,10 @@ export function buildCustom(cfg, doc, parts, rows) {
       id: spec.id, label: m.label,
       values: keys.map(k => perMeasure[idx].totals.get(k) ?? 0),
       tone: TONES[idx % TONES.length],
+      // ⚠️ SIGN COLOURING WAS DROPPED ON THIS PATH. The monthly branch passes it and the category
+      // branch did not — so the toggle worked against months and silently did nothing against
+      // categories. Same exclusion: a breakdown wins, because colour cannot carry both.
+      signColor: !!spec.signColor && !spec.by,
       shape: spec.shape || "bars", stacked: !!spec.stacked, axis: spec.axis || "left",
       group: spec.id,
     })), ids, { x: keys.map(k => cats.get(k)),
@@ -190,7 +204,11 @@ function finish(cfg, doc, series, ids, axis = null) {
   // ⚠️ NO LONGER ONE KIND FOR THE CHART. Shape and stacking are carried on each series and resolved by
   // `Composite`; only ORIENTATION is chart-level, because it decides which axis the categories run
   // along and cannot differ per dataset.
-  const kindFromControls = cfg?.orient === "y" ? "hbars" : "composite";
+  // SAME RULE AS `buildCustom`, recomputed here because this is a separate function: a Y orientation
+  // is only meaningful on a category axis, and a stored one on a time axis is ignored rather than
+  // drawn as a shape that does not exist.
+  const acrossIsCategory = cfg?.across && cfg.across !== "month";
+  const kindFromControls = acrossIsCategory && cfg?.orient === "y" ? "hbars" : "composite";
   const axes = axesFor((cfg?.measures || []).map(m => ({ ...measureById(m.id), axis: m.axis })));
   series = series.map(sr => {
     const m = (cfg?.measures || []).find(x => x.id === sr.id);
