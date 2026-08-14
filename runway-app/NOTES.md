@@ -1742,6 +1742,29 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ THE STACK RULE HAD THREE IMPLEMENTATIONS, AND I NARROWED TWO
+
+Stacking two measures worked before a third overlapping one was added and was **refused after** — the
+same chart, different order. The engine and `allowedTypes` used the narrowed same-stack rule; **the
+builder's checkbox still consulted the broad one**, disabling Stacked on `rev` and `cost` merely because
+`net` was in the selection.
+
+**A rule with three implementations is a rule with three chances to disagree** — and the disagreement
+presents as "it works if you do it in this order", which is among the hardest things for anybody to
+report clearly.
+
+`stackRefusal(me, overlaps, stackedIds)` in `charttype.js` is now its one home, taking **what is
+actually stacked** rather than the whole selection. It also **names the measure it would double-count
+with**, because "these overlap" leaves the reader to work out which of four datasets is meant.
+
+Verified both orders reach the same state: stack two then add a third, or add three then stack two —
+both give `rev+cost` stacked with net free to be a line, and net refuses only if you try to stack it too.
+
+**The pattern across today:** every time a setting moved from chart-level to per-dataset, its guards had
+to move too — and I moved them one consumer at a time, leaving the last one broad. **A guard that is
+merely too broad fails silently**, so the only symptom available to the person using it is order
+dependence.
+
 ### The two failures were the narrowed rule working
 
 **⚠️ THE FALLBACK TEST WAS ASSERTING A REFUSAL THAT SHOULD NOT HAPPEN.** It stacked `cost` and left

@@ -23,14 +23,32 @@ export function renderKind({ shape = "lines", stacked = false, orient = "x" } = 
  */
 export const canOrientY = (across) => across && across !== "month";
 
-/** Whether stacking may be offered for a selection, and why not when it may not. */
-export function stackRefusal(measures = [], overlapping = []) {
-  // A BALANCE IS A POSITION. Stacking two positions — in either shape — produces a number with no
-  // referent, so this refuses regardless of the shape chosen.
-  const position = measures.find(m => m && m.position);
-  if (position) return `${position.label} is a balance, not a flow — balances do not sum.`;
-  if (overlapping.length) {
-    return "These measures overlap, so a stack would not add up.";
+/** Whether THIS dataset may be stacked, given what else is stacked beside it.
+ *
+ *  ⚠️ THE RULE IS ABOUT SAME-STACK CONTAINMENT, AND THIS IS ITS ONE HOME. It lived in three places —
+ *  `allowedTypes`, `buildCustom`, and the builder's checkbox — and narrowing two of them left the third
+ *  broad, which made the feature ORDER-DEPENDENT: stacking two measures worked before a third overlapping
+ *  one was added and was refused after, because the checkbox consulted a rule the engine no longer used.
+ *
+ *  **A rule with three implementations is a rule with three chances to disagree**, and the disagreement
+ *  presents as "it works if you do it in this order", which is the hardest kind to report.
+ *
+ *  @param me        the measure being asked about
+ *  @param overlaps  every containment in the selection, as {outer, inner}
+ *  @param stackedIds  ids of the datasets currently stacked — EXCLUDING this one
+ */
+export function stackRefusal(me, overlaps = [], stackedIds = []) {
+  // A BALANCE IS A POSITION. Stacking two positions produces a number with no referent, in any shape.
+  if (me?.position) return `${me.label} is a balance, not a flow — balances do not sum.`;
+
+  const others = new Set(stackedIds.filter(id => id !== me?.id));
+  const clash = overlaps.find(o =>
+    (o.outer === me?.id && others.has(o.inner)) || (o.inner === me?.id && others.has(o.outer)));
+  if (clash) {
+    const otherId = clash.outer === me?.id ? clash.inner : clash.outer;
+    // NAMES THE MEASURE IT WOULD DOUBLE-COUNT WITH, because "these overlap" leaves the reader to work
+    // out which of four datasets is meant.
+    return `Already counted together with ${otherId} — stacking both would not add up.`;
   }
   return null;
 }

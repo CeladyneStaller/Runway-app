@@ -98,7 +98,11 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
 
       {cfg.measures.map(m => {
         const def = measureById(m.id);
-        const refusal = stackRefusal([def], over.filter(o => o.outer === m.id || o.inner === m.id));
+        // ⚠️ ONLY THE DATASETS ACTUALLY STACKED COUNT. Consulting the whole selection made this
+        // order-dependent: stacking two worked before a third overlapping measure was added and was
+        // refused after, though the chart was identical either way.
+        const stackedIds = cfg.measures.filter(x => x.stacked).map(x => x.id);
+        const refusal = stackRefusal(def, over, stackedIds);
         const ax = axesFor(cfg.measures.map(x => ({ ...measureById(x.id), axis: x.axis })))
           .find(a => a.id === m.id);
         // A BALANCE HAS NO PARTS, so it cannot be broken down — stated in its own block, beside the

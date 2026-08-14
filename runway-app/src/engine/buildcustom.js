@@ -154,6 +154,7 @@ function finish(cfg, doc, series, ids) {
   // them. A line is not part of the sum; it cannot double-count a stack it does not join.
   //
   // A stack is wrong only when one of ITS OWN members contains another of its own members.
+  // SAME RULE AS THE CHECKBOX, from `charttype.js` — see the note there on why it has one home.
   const stackedIds = new Set(series.filter(sr => sr.stacked).map(sr => sr.group ?? sr.id));
   const clash = new Set(
     over.filter(o => stackedIds.has(o.outer) && stackedIds.has(o.inner))
