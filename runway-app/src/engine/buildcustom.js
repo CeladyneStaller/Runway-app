@@ -115,13 +115,18 @@ export function buildCustom(cfg, doc, parts, rows) {
         // ⚠️ `HBars` ROWS CARRY `segments`, NOT `value` — I invented the shape and it threw on
         // `r.segments.reduce`. Read the renderer's own contract: each row is a label plus a list of
         // segments, which is what lets one bar show several parts.
+        // ⚠️ MAGNITUDE MODE. Without it `HBars` normalises EACH ROW to its own total, so every bar
+        // fills the width and the values are invisible — a share chart, which is right for "what is
+        // this made of" and wrong for "how big is each of these".
+        magnitude: true,
         rows: keys.map(k => ({
           label: cats.get(k),
           // ⚠️ THE SIGN IS CARRIED, not clamped away. The category path is where negatives are MOST
           // likely — a negated measure totalled over a window is negative by construction.
           segments: [{ id: first?.spec.id, label: first?.m.label,
                        value: first?.totals.get(k) ?? 0,
-                       tone: (first?.totals.get(k) ?? 0) < 0 ? "danger" : "signal" }],
+                       tone: (first?.totals.get(k) ?? 0) < 0 ? "danger" : "signal",
+                       signColor: !!first?.spec.signColor }],
         })).sort((a, b) => Math.abs(b.segments[0].value) - Math.abs(a.segments[0].value)),
         note: perMeasure.length > 1
           ? `Showing ${first.m.label} only — horizontal bars draw one measure per chart.` : null,

@@ -1742,6 +1742,27 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ `HBars` IS A SHARE CHART, AND I WAS ASKING IT FOR A MAGNITUDE CHART
+
+`total` is computed PER ROW — `r.segments.reduce(...)` — so **every row's segments fill the whole
+width** and the segments divide it. That is right for "what is this made of" and wrong for "how big is
+each of these". **With one segment per row, every bar drew full width regardless of value**, which is
+why no amount of sign fixing made a negative visible: the bars were never showing magnitude at all.
+
+**Two turns of fixing the wrong thing.** I changed `Math.max(0, v)` to `Math.abs(v)` and reported the
+negatives fixed — but a full-width bar is full-width whichever sign it has. **The symptom named the sign
+because that was the setting being toggled; the cause was the normalisation.**
+
+`spec.magnitude` switches to a common scale across all rows, with zero placed inside the plot when
+anything is negative and bars growing LEFT from it. **A zero line is drawn whenever there are
+negatives** — bars growing both ways from an unmarked point cannot be read.
+
+**The three curated `hbars` charts pass nothing and are untouched**, verified: share mode still fills
+the width exactly.
+
+**`signColor` is carried on the segment too**, since the previous fix threaded it into the series and
+not into the rows — the same per-branch threading problem, one shape further along.
+
 ### Negatives on a category axis, and a setting left set after it became illegal
 
 **⚠️ `HBars` CLAMPED WITH `Math.max(0, value)`** for both the width and the total, so a negative drew a

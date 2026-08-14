@@ -383,10 +383,30 @@ function HBars({ spec }) {
   return (
     <svg className="ch-svg" viewBox={`0 0 ${W} ${Math.max(60, rows.length * rowH + 24)}`} role="img"
          aria-label={spec.aria || "chart"}>
+      {/* ⚠️ THIS RENDERER NORMALISES EACH ROW TO ITS OWN TOTAL — a SHARE chart, where every bar fills
+          the width and the segments divide it. That is right for "what is this made of" and wrong for
+          "how big is each of these": with one segment per row, EVERY BAR DREW FULL WIDTH regardless of
+          value, which is why no amount of sign fixing made a negative visible.
+
+          `spec.magnitude` switches it to a common scale across all rows, with zero in the middle when
+          anything is negative — so the bars mean something relative to each other. The curated
+          share-style charts pass nothing and are untouched. */}
+      {/* ⚠️ A ZERO LINE, WHERE THERE ARE NEGATIVES. Bars growing both ways from an unmarked point are
+          unreadable — the reader cannot tell which side is which without it. */}
+      {spec.magnitude && (() => {
+        const vals = rows.flatMap(rr => (rr.segments || []).map(sg => clean(sg.value)));
+        const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+        if (lo >= 0) return null;
+        const zx = labelW + (-lo / ((hi - lo) || 1)) * (W - labelW - PAD.r);
+        return <line x1={zx} y1={0} x2={zx} y2={rows.length * rowH} stroke="var(--ink)" strokeWidth="1.2" />;
+      })()}
       {rows.map((r, i) => {
-        let x = labelW;
-        // ⚠️ MAGNITUDE, NOT CLAMPED TO ZERO. `Math.max(0, value)` made a negative a zero-width bar —
-        // invisible rather than wrong, which is why it read as "negatives are not allowed here".
+        const vals = rows.flatMap(rr => (rr.segments || []).map(sg => clean(sg.value)));
+        const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+        const span = (hi - lo) || 1;
+        const plotW = W - labelW - PAD.r;
+        const zeroX = labelW + (spec.magnitude ? (-lo / span) * plotW : 0);
+        let x = spec.magnitude ? zeroX : labelW;
         const total = r.segments.reduce((a, sg) => a + Math.abs(clean(sg.value)), 0) || 1;
         return (
           <g key={i}>
@@ -395,11 +415,17 @@ function HBars({ spec }) {
               {String(r.label).slice(0, 20)}
             </text>
             {r.segments.map((sg, j) => {
-              const w = (Math.abs(clean(sg.value)) / total) * (W - labelW - PAD.r);
-              const rect = <rect key={j} x={x} y={i * rowH + 3} width={Math.max(0, w)}
-                                 height={rowH - 8} fill={tone(sg.tone)}
+              const v = clean(sg.value);
+              // SHARE MODE: proportion of this row. MAGNITUDE MODE: proportion of the common span, and
+              // a negative grows LEFT from zero rather than right.
+              const w = spec.magnitude ? (Math.abs(v) / span) * plotW
+                                       : (Math.abs(v) / total) * plotW;
+              const rx = spec.magnitude && v < 0 ? x - w : x;
+              const rect = <rect key={j} x={rx} y={i * rowH + 3} width={Math.max(0, w)}
+                                 height={rowH - 8}
+                                 fill={sg.signColor ? signColor(v) : tone(sg.tone)}
                                  opacity={sg.tone === "line" ? 1 : 0.65} />;
-              x += w;
+              x = spec.magnitude ? (v < 0 ? x - w : x + w) : x + w;
               return rect;
             })}
           </g>
