@@ -1653,6 +1653,30 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## ⚠️ TEMPORAL DEAD ZONE — THIRD TIME THIS SESSION, AND THIS ONE SHIPPED
+
+**A blank page.** `Cannot access 'Ft' before initialization` — a minified `const` read before its
+declaration. My `upBand` memo went in at line 234 beside the `band` memo it belongs with; it reads
+`showUpside`, **a plain `const` declared at line 327.**
+
+**Lint cannot see a TDZ and the build succeeds.** It fails at render, as a white screen — which is why
+this is the third time and the first to reach production: the previous two (`orphan` and `accepts`, both
+in `ProjectPlan`) were caught by tests going red in groups, and `App.jsx` has no render test that would
+have failed.
+
+**THE PATTERN IS ALWAYS THE SAME: I place a block where it belongs THEMATICALLY rather than where its
+dependencies allow.** `upBand` reads like it belongs beside `band`. It does not; it belongs after
+`showUpside`.
+
+**A cheap scan exists and found nothing else.** For every `const NAME` in the component, look for an
+earlier line reading NAME:
+
+    for each `  const NAME` at line D:  is NAME read on any line < D?
+
+Nineteen candidates, all false positives on inspection — `parts.model` is a property access, `token`
+appears in a comment — **and mine was the only real one.** Worth running after any insertion into a long
+component, because the failure mode is a blank page rather than a message.
+
 ## Colour: hue by type, lightness by member · and a band per curve
 
 ### `palette.js`
