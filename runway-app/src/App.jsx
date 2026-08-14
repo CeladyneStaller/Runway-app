@@ -547,7 +547,7 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
         {/* THE DOCUMENT AND ITS COMPILED PARTS, once. `TabInsights` needs both and lives inside six
             different views; threading them through six signatures would be six prop chains maintained
             forever. `tabprefs.js` established this pattern for the same reason. */}
-        <InsightProvider doc={doc} setDoc={setDoc} isOwner={membership?.role === "owner"} userName={membership?.name || null} parts={{ ...parts, rows, msWithBal }} onGo={(v) => setView(v)}>
+        <InsightProvider doc={doc} setDoc={setDoc} isOwner={!membership || membership.role === "owner"} userName={membership?.name || null} parts={{ ...parts, rows, msWithBal }} onGo={(v) => setView(v)}>
         <main className="main">
           <div className="topbar">
             <div>

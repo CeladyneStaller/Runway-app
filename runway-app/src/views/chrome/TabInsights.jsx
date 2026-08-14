@@ -25,11 +25,14 @@ import { Chart } from "./Chart";
 const InsightCtx = createContext(null);
 
 /** Provided once, by the app shell. */
-export function InsightProvider({ doc, parts, onGo, setDoc, isOwner = false, userName = null, children }) {
-  // ⚠️ `setDoc`, `isOwner` AND `userName` ARE NEW, and all three are optional. Without `setDoc` the
-  // builder still works and simply cannot save; without `isOwner` nobody sees "Set as default". A
-  // missing prop degrades to a narrower feature rather than a crash — which is what the four `ctx.x`
-  // reads in the menu below depend on.
+export function InsightProvider({ doc, parts, onGo, setDoc, isOwner = true, userName = null, children }) {
+  // ⚠️ `isOwner` DEFAULTS TO TRUE, AND THAT IS THE CORRECT DEFAULT HERE. It defaulted to false, so
+  // **a solo local document — which has no membership at all — hid "Set as default" from the only
+  // person who could ever press it.** The rest of the app already reads it this way: views default
+  // `canWrite = true` when no membership prop arrives, because no membership means no sharing, which
+  // means the person holding the document owns it.
+  //
+  // `setDoc` and `userName` stay optional: without `setDoc` the builder works and cannot save.
   const value = useMemo(() => ({ doc, parts, onGo, setDoc, isOwner, userName }),
                         [doc, parts, onGo, setDoc, isOwner, userName]);
   return <InsightCtx.Provider value={value}>{children}</InsightCtx.Provider>;

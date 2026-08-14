@@ -1742,6 +1742,23 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ "Set as default" WAS HIDDEN FROM THE ONLY PERSON WHO COULD PRESS IT
+
+`isOwner={membership?.role === "owner"}` — and **`membership` defaults to `null`**, so a solo local
+document, which has no membership at all, reported not-an-owner. The provider's own default was `false`,
+so both ends agreed on the wrong answer.
+
+**The rest of the app already reads it the other way**: views default `canWrite = true` when no
+membership prop arrives, because **no membership means no sharing, which means the person holding the
+document owns it.** I wrote a permission check without matching the convention already in the file.
+
+Both corrected: `!membership || membership.role === "owner"`, and the provider defaults `isOwner = true`.
+Solo and owner see the control; admin, editor and viewer do not.
+
+**This is the second half of the same feature failing for a second reason.** The default was settable and
+unread; the control that set it was invisible to most of the people who would use it. **Neither showed
+an error, and each on its own would have been enough to make the feature look absent.**
+
 ### ⚠️ THE COMPANY DEFAULT WAS SETTABLE AND NEVER READ
 
 `setDefaultChart` wrote it, the menu badged it, the owner-only button hid itself for the chart that had
