@@ -1653,6 +1653,30 @@ routing through an escape hatch that no longer needs to exist.
 Every fix so far has been a real regression rather than an assertion adjustment; the remaining ones
 should be treated the same way.
 
+## ⚠️ THE PALETTE WAS BEING DISCARDED — three faults in a row, none of which errored
+
+Colour was still wrong on every chart INCLUDING custom ones. Three separate causes, each invisible:
+
+**1 · `Chart.jsx` READ `tone` AND NEVER `color`.** `palette.js` computes a hex per series — hue from the
+type, lightness from the member — and the renderer threw every one away. There is no fixed token for
+"the second grant" and there cannot be one, so a computed colour was the only possible answer and
+nothing consumed it. **`colorOf(s) = s.color || tone(s.tone)`** now, at both series sites.
+
+**2 · THE TONE TABLE HAD FIVE KEYS AND FELL BACK TO GREEN.** `signal · muted · danger · caution · line`.
+`clay`, `brown`, `gate` and `signal-2` were named all over the chart registry and were not keys — and
+`TONE[t] || TONE.signal` turned every one of them into green. **That is the four-green-bars bug at its
+source**, and the fallback is what made it look deliberate.
+
+**3 · THE CSS VARIABLES DID NOT EXIST EITHER.** `--clay`, `--brown`, `--gate`, `--thrust` were used in
+chart code and defined nowhere. An undefined custom property resolves to nothing.
+
+**All three fail silently.** A missing tone key is green; a missing variable is nothing; an ignored
+field is nothing. **None is an error, and lint sees none of them.**
+
+`palette.test.js` now asserts every `var(--x)` in `Chart.jsx` is defined in `styles.css`, that the four
+categorical tones are real keys, and that `colorOf` prefers an explicit colour. Fifteen variables
+checked, none undefined.
+
 ## ⚠️ THE SPECULATIVE BAND PRODUCED NOTHING, AND MY PREMISE WAS WRONG
 
 `confidenceBand` hardcoded three revenue sets:

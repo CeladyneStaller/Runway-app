@@ -3,6 +3,10 @@
   --ink:#0C1A22; --ink-2:#16323E; --ink-3:#22454F;
   --paper:#E9EEEC; --card:#FDFEFE; --line:#D4DCD8; --line-2:#E3E9E6;
   --signal:#10876B; --signal-2:#4FB79A; --signal-ink:#0B5F4B;
+  /* ⚠️ THE CATEGORICAL HUES WERE NAMED IN CHART CODE AND NEVER DEFINED. `var(--clay)` with no
+     definition resolves to nothing, so a series asking for clay drew with no fill at all — or, via the
+     tone table's fallback, drew green. Same palette as `palette.js`, which computes these directly. */
+  --clay:#B4674A; --brown:#7A5C3E; --gate:#6B4E9E; --thrust:#1C4E63;
   --caution:#C9821B; --danger:#BC3B2A; --raise:#275281;
   --ink-txt:#0C1A22; --muted:#5E7076; --muted-2:#8698A0; --on-dark:#DCE7E7; --on-dark-mute:#7E979D;
   --fd:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;

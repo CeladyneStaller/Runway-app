@@ -84,3 +84,34 @@ describe("the ramp itself", () => {
     expect(shade("#10876B", -0.5)).toMatch(/^#[0-9a-f]{6}$/);
   });
 });
+
+describe("⚠️ the renderer can actually draw what the palette names", () => {
+  const fs = require("node:fs");
+  const chart = fs.readFileSync("src/views/chrome/Chart.jsx", "utf8");
+  const css = fs.readFileSync("src/styles.css", "utf8");
+
+  it("EVERY CSS VARIABLE THE CHART NAMES IS DEFINED", () => {
+    // `--clay`, `--brown`, `--gate` and `--thrust` were named in chart code and defined NOWHERE. An
+    // undefined custom property resolves to nothing — so a series asking for clay drew with no fill, or
+    // fell through the tone table to green. **Neither errors.**
+    const used = [...new Set([...chart.matchAll(/var\(--([\w-]+)\)/g)].map(m => m[1]))];
+    const defined = new Set([...css.matchAll(/--([\w-]+)\s*:/g)].map(m => m[1]));
+    for (const v of used) expect(defined.has(v), `--${v} is used but never defined`).toBe(true);
+  });
+
+  it("⚠️ THE TONE TABLE'S FALLBACK IS WHY THIS WAS INVISIBLE", () => {
+    // `TONE[t] || TONE.signal` turns a missing key into green, which looks deliberate. Four series
+    // naming four different absent tones all drew the same colour and nothing said so.
+    expect(chart).toMatch(/TONE\[t\] \|\| TONE\.signal/);
+    for (const t of ["clay", "brown", "gate", "signal-2"]) {
+      expect(chart, `${t} is not a tone key`).toMatch(new RegExp(`["']?${t}["']?\\s*:`));
+    }
+  });
+
+  it("AN EXPLICIT COLOUR WINS OVER A TONE NAME", () => {
+    // A breakdown's colours are computed — hue from type, lightness from member — so there is no fixed
+    // token for "the second grant". The renderer read `tone` only, and discarded every computed colour.
+    expect(chart).toMatch(/const colorOf = \(s\) => s\?\.color \|\| tone\(s\?\.tone\)/);
+    expect(chart).toMatch(/colorOf\(sr\)/);
+  });
+});

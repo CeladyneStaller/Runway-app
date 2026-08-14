@@ -18,11 +18,23 @@ const W = 720, H = 252;
 const PAD = { l: 52, r: 16, t: 14, b: 38 };
 const PW = W - PAD.l - PAD.r, PH = H - PAD.t - PAD.b;
 
+// ⚠️ FIVE TONES, AND EVERYTHING ELSE FELL BACK TO `signal`. That is the four-green-bars bug at its
+// source: `clay`, `brown`, `gate` and `signal-2` were never keys here, so any chart naming them drew
+// green — and the fallback made it look deliberate rather than missing.
 const TONE = {
-  signal: "var(--signal)", muted: "var(--muted-2)", danger: "var(--danger)",
-  caution: "var(--caution)", line: "var(--line-2)",
+  signal: "var(--signal)", "signal-2": "var(--signal-2)", muted: "var(--muted-2)",
+  danger: "var(--danger)", caution: "var(--caution)", line: "var(--line-2)",
+  clay: "var(--clay)", brown: "var(--brown)", gate: "var(--gate)", thrust: "var(--thrust)",
 };
+
+/** ⚠️ AN EXPLICIT `color` WINS OVER A TONE NAME.
+ *
+ *  A breakdown's colours are COMPUTED — hue from the type, lightness from the member — so there is no
+ *  fixed token for "the second grant" and there cannot be one. `palette.js` produced those colours and
+ *  this renderer discarded every one of them, because it read `tone` and nothing else.
+ */
 const tone = (t) => TONE[t] || TONE.signal;
+const colorOf = (s) => s?.color || tone(s?.tone);
 
 const fmt = (v, f) => {
   if (!Number.isFinite(v)) return "";
@@ -180,7 +192,7 @@ function Lines({ spec }) {
         return <path d={d} fill="none" stroke="var(--commit)" strokeWidth="1.8" strokeDasharray="5 4" />;
       })()}
       {spec.series.map(sr => (
-        <path key={sr.id} d={path(sr.values)} fill="none" stroke={tone(sr.tone)} strokeWidth="2"
+        <path key={sr.id} d={path(sr.values)} fill="none" stroke={colorOf(sr)} strokeWidth="2"
               strokeDasharray={sr.dashed ? "4 3" : undefined} />
       ))}
       <Markers marks={spec.markers} n={n} s={s} />
@@ -204,7 +216,7 @@ function Stack({ spec }) {
     <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {bands.map(({ sr, lo, hi }) => (
-        <path key={sr.id} fill={tone(sr.tone)} opacity="0.5"
+        <path key={sr.id} fill={colorOf(sr)} opacity="0.5"
               d={hi.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ") + " " +
                  lo.map((v, i) => `L${xAt(n - 1 - i, n)} ${s.y(lo[n - 1 - i])}`).join(" ") + " Z"} />
       ))}
@@ -239,7 +251,7 @@ function Bars({ spec }) {
         // without splitting it into two series that would then be drawn side by side.
         return <rect key={`${sr.id}-${i}`} x={x} y={y} width={barW}
                      height={Math.max(1, Math.abs(s.y(v) - s.zero))}
-                     fill={tone(sr.tones?.[i] || sr.tone)} opacity="0.75" />;
+                     fill={colorOf(sr.tones?.[i] ? { tone: sr.tones[i] } : sr)} opacity="0.75" />;
       }))}
     </svg>
   );
