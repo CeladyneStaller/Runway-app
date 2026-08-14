@@ -146,7 +146,7 @@ const Markers = ({ marks, n, s }) => (marks || []).map((m, i) => {
 function Lines({ spec }) {
   const all = [...spec.series.flatMap(sr => sr.values),
                ...(spec.band ? [...spec.band.lo, ...spec.band.hi] : [])];
-  const s = scale(all);
+  const s = scale(spec.domain || (all));
   const n = Math.max(...spec.series.map(sr => sr.values.length), spec.band?.lo?.length || 0);
   const path = (vals) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ");
 
@@ -203,7 +203,8 @@ function Lines({ spec }) {
 function Stack({ spec }) {
   const n = Math.max(...spec.series.map(sr => sr.values.length));
   const totals = Array.from({ length: n }, (_, i) => spec.series.reduce((a, sr) => a + clean(sr.values[i]), 0));
-  const s = scale([...totals, spec.refLine?.y ?? 0]);
+  // A SUPPLIED DOMAIN WINS. Under `Composite` all three groups must share one scale.
+  const s = scale(spec.domain || [...totals, spec.refLine?.y ?? 0]);
 
   let base = Array(n).fill(0);
   const bands = spec.series.map(sr => {
@@ -237,7 +238,7 @@ function Stack({ spec }) {
 
 function Bars({ spec }) {
   const n = Math.max(...spec.series.map(sr => sr.values.length));
-  const s = scale(spec.series.flatMap(sr => sr.values));
+  const s = scale(spec.domain || (spec.series.flatMap(sr => sr.values)));
   const groupW = PW / Math.max(n, 1);
   const barW = Math.max(2, (groupW * 0.7) / spec.series.length);
 
@@ -598,7 +599,47 @@ function Milestones({ spec }) {
   );
 }
 
-const SHAPES = { lines: Lines, stack: Stack, bars: Bars, hbars: HBars, diverging: Diverging,
+/** Several shapes on one canvas, sharing one scale.
+ *
+ *  ⚠️ THE FAULT THIS FIXES: `SHAPES[spec.kind]` picked ONE renderer and handed it every series, so a
+ *  per-series `shape` was never read by anything. The first measure's settings became the chart's
+ *  settings — and the commitments chart drew cash as a stacked band because its spec said `stack` while
+ *  cash carried a `shape: "lines"` nothing looked at. **The spec was right and nothing could draw it.**
+ *
+ *  This is a DISPATCHER, not a rewrite. `Lines`, `Stack`, `Bars` each already draw a SET of series in
+ *  one shape; they are handed subsets and left alone.
+ */
+function Composite({ spec }) {
+  const series = spec.series || [];
+  const key = (sr) => (sr.stacked ? "stack" : sr.shape === "bars" ? "bars" : "lines");
+  const groups = { stack: [], bars: [], lines: [] };
+  for (const sr of series) groups[key(sr)].push(sr);
+
+  // ⚠️ ONE DOMAIN, COMPUTED FROM THE COMPOSITION. A stack's height is the SUM of its members; a line's
+  // is its own values. Letting each group scale itself would draw two charts on one canvas that
+  // silently disagree about height — the failure this codebase already had with three renderers and
+  // three `y` functions.
+  const n = Math.max(1, ...series.map(sr => (sr.values || []).length));
+  const stackTotals = Array.from({ length: n }, (_, i) =>
+    groups.stack.reduce((a, sr) => a + clean(sr.values?.[i]), 0));
+  const barTotals = Array.from({ length: n }, (_, i) =>
+    Math.max(0, ...groups.bars.map(sr => clean(sr.values?.[i]))));
+  const loose = groups.lines.flatMap(sr => (sr.values || []).map(clean));
+  const domain = [...stackTotals, ...barTotals, ...loose, 0];
+
+  // ⚠️ FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED. A filled stack drawn over a line hides it
+  // completely; a line over a stack is always readable. There is no case where hiding a line is what
+  // somebody wanted, so this is not configurable.
+  return (
+    <g>
+      {groups.stack.length > 0 && <Stack spec={{ ...spec, series: groups.stack, domain }} />}
+      {groups.bars.length > 0 && <Bars spec={{ ...spec, series: groups.bars, domain }} />}
+      {groups.lines.length > 0 && <Lines spec={{ ...spec, series: groups.lines, domain }} />}
+    </g>
+  );
+}
+
+const SHAPES = { composite: Composite, lines: Lines, stack: Stack, bars: Bars, hbars: HBars, diverging: Diverging,
                  pace: Pace, goals: Goals, milestones: Milestones };
 
 /** Is the viewport too narrow to draw an axis on?

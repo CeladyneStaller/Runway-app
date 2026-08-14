@@ -1700,6 +1700,48 @@ catch it.** Fixing a name in the source does not fix the assertions written alon
 **Two of the four I predicted before seeing the output** (the `type` field and the flat-zero count).
 The other two were the kind only a run finds.
 
+## Per-dataset charts — the fault under the symptom
+
+**⚠️ A CHART HAD ONE `kind`, SO A PER-SERIES SHAPE WAS NEVER READABLE.**
+
+    const Shape = SHAPES[spec.kind];   // ONE renderer, chosen once
+    <Shape spec={spec} />              // draws EVERY series in that shape
+
+Every renderer takes the whole spec and draws all of its series, so `series[].shape` was emitted by me
+and consumed by nothing. **The first measure's settings became the chart's settings** — which is exactly
+what Corey saw. And it is why `cmt.closure` drew cash as a stacked band: its spec said `kind: "stack"`
+and gave cash `shape: "lines"`, and nothing looked. **The spec was right and the renderer could not
+honour it.**
+
+### `Composite`
+
+A DISPATCHER, not a rewrite. `Lines`, `Stack` and `Bars` each already draw a SET of series in one shape;
+they are handed subsets and left unchanged.
+
+**⚠️ ONE DOMAIN, COMPUTED FROM THE COMPOSITION.** A stack's height is the SUM of its members, a line's
+is its own values. Letting each group scale itself would draw two charts on one canvas that silently
+disagree about height — the failure this codebase already had with three renderers and three `y`
+functions. All three now prefer `spec.domain`.
+
+**⚠️ FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED.** A filled stack over a line hides it completely; a
+line over a stack is always readable. There is no case where hiding a line is what somebody wanted.
+
+### Breakdown moved per dataset
+
+**The change with the most reach.** One breakdown per chart meant a split measure and an unsplit one
+could not coexist — so "spend by project, with cash over it" was not describable. Each dataset now
+carries its own `by`, and "no breakdown" is simply `by: null`, which **collapsed two code paths into
+one** and let the old multi-measure branch be deleted.
+
+**The twelve-series cap moved to the TOTAL**, because two datasets each split eight ways is sixteen
+series from two reasonable choices — the same trap as before, one level up.
+
+**Overlapping measures are now UN-STACKED individually** rather than the whole chart falling back to
+lines, and the note describes what was drawn rather than what was intended.
+
+**Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
+beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
+
 ### The Commitments charts were registered and never mounted
 
 **`Commitments.jsx` never rendered `TabInsights`.** Both charts were in the registry,

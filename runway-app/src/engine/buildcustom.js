@@ -72,44 +72,43 @@ export function buildCustom(cfg, doc, parts, rows) {
              note: "Too many different units on one chart — plot at most two." };
   }
 
-  // ── one measure, broken down ──
-  if (dim && ids.length === 1) {
-    const split = splitBy(dim, linesFor(ids[0], parts, doc), n, doc);
-    if (tooManySeries(1, split.length)) {
-      return { kind: "lines", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
-               note: `${split.length} series is more than a chart can show — remove the breakdown.` };
+  // ⚠️ BREAKDOWN IS PER DATASET NOW. Each measure splits on its own dimension, or on none — which is
+  // what makes "spend split by project, with cash over it" expressible. The old builder had ONE
+  // breakdown for the chart, so a split measure and an unsplit one could not coexist.
+  const out = [];
+  let colorIdx = 0;
+  for (const spec of cfg.measures || []) {
+    const m = measureById(spec.id);
+    if (!m) continue;
+    const dim = spec.by ? dimensionById(spec.by) : null;
+
+    if (dim) {
+      const split = splitBy(dim, linesFor(spec.id, parts, doc), n, doc);
+      const colors = colorsFor(split, dim.typeOf ? (k) => dim.typeOf(k, doc) : null);
+      split.forEach((sp, k) => out.push({
+        id: `${spec.id}:${sp.id}`, label: `${sp.label}`, values: clip(sp.values),
+        color: colors[k], tone: sp.unassigned ? "muted" : null,
+        shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
+        // THE GROUP IT CAME FROM, so a stack of one measure's parts does not merge with another's.
+        group: spec.id,
+      }));
+    } else {
+      out.push({
+        id: spec.id, label: m.label, values: clip(m.get(rows, parts, doc)),
+        tone: TONES[colorIdx++ % TONES.length],
+        shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
+        group: spec.id,
+      });
     }
-    const colors = colorsFor(split, dim.typeOf ? (k) => dim.typeOf(k, doc) : null);
-    return finish(cfg, doc, split.map((s, i) => ({
-      id: s.id, label: s.label, values: clip(s.values),
-      // A COLOUR, not a tone name — the ramp is computed from the group, so there is no fixed token
-      // for "the second grant". Unassigned comes back grey from `colorsFor` on every dimension.
-      color: colors[i],
-      tone: s.unassigned ? "muted" : null,
-    })), ids);
   }
 
-  // ⚠️ SEVERAL MEASURES AND A BREAKDOWN IS REFUSED, not silently truncated. Three measures by eight
-  // codes is twenty-four series produced by two entirely reasonable choices — the builder greys the
-  // breakdown out, and this is the engine saying the same thing.
-  if (dim && ids.length > 1) {
-    return { kind: "lines", x: months(doc), ticks: axisTicks(doc), series: [], format: "money",
-             note: "Pick one measure to break down, or drop the breakdown to plot several." };
+  // ⚠️ THE CAP IS ON THE TOTAL, because two datasets each split eight ways is sixteen series produced
+  // by two reasonable choices — the same trap as before, one level up.
+  if (tooManySeries(1, out.length)) {
+    return { kind: "lines", x, ticks: axisTicks(doc), series: [], format: "money",
+             note: `${out.length} series is more than a chart can show — remove a breakdown.` };
   }
-
-  // ── several measures, each its own series ──
-  const series = ids.map((id, i) => {
-    const m = measureById(id);
-    return {
-      id, label: m.label, values: clip(m.get(rows, parts, doc)),
-      tone: TONES[i % TONES.length],
-      // THE SECOND UNIT GETS THE RIGHT-HAND AXIS. Dollars and people on one scale is a coincidence of
-      // magnitudes, not a chart.
-      axis: units.length > 1 && m.unit === units[1] ? "right" : "left",
-      shape: (cfg.measures.find(x => x.id === id) || {}).type || null,
-    };
-  });
-  return finish(cfg, doc, series, ids);
+  return finish(cfg, doc, out, ids);
 }
 
 function finish(cfg, doc, series, ids) {
@@ -117,31 +116,38 @@ function finish(cfg, doc, series, ids) {
   // ⚠️ THE CHART KIND COMES FROM SHAPE + STACKED + ORIENTATION, not from a single type name. `Stack`
   // already renders FILLED PATHS rather than rects, so a stacked line was drawable all along — only
   // the way to ask for it was missing.
-  const first = cfg?.measures?.[0] || {};
-  const kindFromControls = renderKind({ shape: first.shape, stacked: first.stacked,
-                                        orient: cfg?.orient });
+  // ⚠️ NO LONGER ONE KIND FOR THE CHART. Shape and stacking are carried on each series and resolved by
+  // `Composite`; only ORIENTATION is chart-level, because it decides which axis the categories run
+  // along and cannot differ per dataset.
+  const kindFromControls = cfg?.orient === "y" ? "hbars" : "composite";
   const axes = axesFor((cfg?.measures || []).map(m => ({ ...measureById(m.id), axis: m.axis })));
   series = series.map(sr => {
     const m = (cfg?.measures || []).find(x => x.id === sr.id);
     return { ...sr,
-             // PER-MEASURE SHAPE SURVIVES — which is what lets obligations stack while cash rides over
-             // them as a line, in one chart.
-             shape: m?.shape || sr.shape || null,
+             // PER-SERIES SHAPE AND STACKING, read by `Composite` — this is what lets obligations stack
+             // while cash rides over them as a line, in one chart.
+             shape: m?.shape || sr.shape || "lines",
+             stacked: m?.stacked ?? sr.stacked ?? false,
              axis: axes.find(a => a.id === sr.id)?.axis || "left" };
   });
   // ⚠️ THE TYPE FALLS BACK RATHER THAN DRAWING SOMETHING FALSE. If a saved chart asks for a stack that
   // its measures no longer allow — because one now contains another — it draws as lines and says so,
   // instead of asserting that the parts sum to the whole.
-  const asked = kindFromControls;
-  const kind = asked === "hbars" ? "hbars" : ok.includes(asked) ? asked : (ok[0] || "lines");
+  const kind = kindFromControls;
   const over = overlaps(ids);
+  // TRUE BY CONSTRUCTION: un-stack any series whose measure contains or is contained by another, so the
+  // note above describes what was drawn rather than what was intended.
+  const clash = new Set(over.flatMap(o => [o.outer, o.inner]));
+  series = series.map(sr => (sr.stacked && clash.has(sr.id) ? { ...sr, stacked: false } : sr));
   return {
-    kind: kind === "bars" ? "bars" : kind,
+    kind,
     x: months(doc), ticks: axisTicks(doc),
     series, format: "money",
     custom: true,
-    note: kind !== asked && over.length
-      ? `Drawn as ${kind}: these measures overlap, so stacking them would not add up.`
+    // ⚠️ THE REFUSAL IS PER SERIES NOW, not per chart — a stacked series whose measure overlaps another
+    // is un-stacked and said so, rather than the whole chart falling back to lines.
+    note: over.length && series.some(sr => sr.stacked)
+      ? "Some of these measures overlap, so they are drawn unstacked — stacking them would not add up."
       : null,
   };
 }

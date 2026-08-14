@@ -1658,3 +1658,10 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .cb-tog.on{background:#DCEEE8;border-color:var(--signal);color:var(--signal-ink);font-weight:600}
 .cb-tog input{width:13px;height:13px;accent-color:var(--signal)}
 .cb-tog input:disabled{cursor:not-allowed}
+.cb-ds{border:1px solid var(--line-2);border-radius:9px;padding:10px 12px;margin-bottom:8px}
+.cb-ds-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.cb-ds-n{font-family:var(--fd);font-size:12px;font-weight:600}
+.cb-ds-g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.cb-ds-g .fl{font-size:9px;letter-spacing:.05em;text-transform:uppercase;font-weight:600}
+.cb-ref{color:var(--caution);margin:6px 0 0}
+@media(max-width:760px){.cb-ds-g{grid-template-columns:repeat(2,1fr)}}

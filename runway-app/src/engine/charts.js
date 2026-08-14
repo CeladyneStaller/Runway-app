@@ -904,16 +904,22 @@ export const CHARTS = Object.freeze([
       const n = Math.min(rows.length, 18);
       const at = (f) => Array.from({ length: n }, (_, m) => f(m));
       const wd = windDownCost(doc);
+      // ⚠️ COMPOSITE — THE ONE CURATED CHART THAT DESCRIBED SOMETHING UNDRAWABLE. It said `kind:
+      // "stack"` and gave cash `shape: "lines"`, and nothing read that: every renderer drew the whole
+      // spec in one shape, so cash came out as a fourth stacked band. **The spec was right and the
+      // renderer could not honour it** until `Composite` existed.
       return {
-        kind: "stack", x: months(doc), ticks: axisTicks(doc),
+        kind: "composite", x: months(doc), ticks: axisTicks(doc),
         series: [
-          // ⚠️ THESE THREE GENUINELY SUM — none contains another, which is unusual among this tab's
+          // THESE THREE GENUINELY SUM — none contains another, which is unusual among this tab's
           // neighbours and is what makes stacking honest here.
-          { id: "wind", label: "Wind-down payroll", values: at(() => wd), tone: "brown" },
-          { id: "cs", label: "Accrued cost share", values: at(m => accruedCostShare(doc, m)), tone: "gate" },
-          { id: "debt", label: "Debt and notes", values: at(m => outstandingDebt(doc, m)), tone: "clay" },
-          // CASH RIDES OVER AS A LINE. It is a position, not a fourth component of the same total —
-          // drawing it as a bar would imply it was.
+          { id: "wind", label: "Wind-down payroll", values: at(() => wd), tone: "brown", stacked: true },
+          { id: "cs", label: "Accrued cost share", values: at(m => accruedCostShare(doc, m)),
+            tone: "gate", stacked: true },
+          { id: "debt", label: "Debt and notes", values: at(m => outstandingDebt(doc, m)),
+            tone: "clay", stacked: true },
+          // CASH RIDES OVER AS A LINE. A position, not a fourth component of the same total — and the
+          // crossing where the line enters the stack is the clean-exit date, which is the whole point.
           { id: "cash", label: "Cash on hand", values: rows.slice(0, n).map(r => r.end),
             tone: "signal", shape: "lines" },
         ],

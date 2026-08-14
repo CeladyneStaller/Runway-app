@@ -73,97 +73,81 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
           measured in {units[1]}, so it uses the right-hand axis.</p>
       )}
 
-      <div className="cb-row">
-        <span className="cb-l">Broken down by</span>
-        <select className="sel cb-sel" value={cfg.by || ""} disabled={ids.length > 1}
-                onChange={e => setCfg(c => ({ ...c, by: e.target.value || null }))}>
-          <option value="">Nothing — one series each</option>
-          {dims.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-        {ids.length > 1 && (
-          <span className="meta">unavailable with {ids.length} measures — pick one to break down</span>
-        )}
-      </div>
-
+      {/* ⚠️ CHART-LEVEL FIRST, THEN A BLOCK PER DATASET. Breakdown moved DOWN here, which is the
+          change with the most reach: it makes "spend split by project, with cash over it" expressible —
+          the chart the old builder could not describe, because one breakdown applied to everything. */}
       <div className="cb-row">
         <span className="cb-l">Across</span>
         <select className="sel cb-sel" value={cfg.across || "month"}
                 onChange={e => setCfg(c => ({ ...c, across: e.target.value }))}>
           <option value="month">Month</option>
-          <option value="category">Category — no time axis</option>
+          {dims.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
         </select>
+        {canOrientY(cfg.across) && (
+          <>
+            <span className="cb-l" style={{ minWidth: 0 }}>on</span>
+            <div className="seg3">
+              {[["x", "X axis"], ["y", "Y axis"]].map(([k, l]) => (
+                <button key={k} className={(cfg.orient || "x") === k ? "on" : ""}
+                        onClick={() => setCfg(c => ({ ...c, orient: k }))}>{l}</button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ⚠️ TYPE IS PER MEASURE, NOT PER CHART. Two flows as bars with a balance as a line over them is
-          the most useful chart in the product, and a single global switch cannot express it. */}
-      {/* ⚠️ ORIENTATION IS CHART-LEVEL; SHAPE AND STACKING ARE PER MEASURE. That split is what lets
-          obligations stack while cash rides over them as a line — one chart, two shapes. */}
-      {ids.length > 0 && canOrientY(cfg.across) && (
-        <div className="cb-row">
-          <span className="cb-l">Categories on</span>
-          <div className="seg3">
-            {[["x", "X axis"], ["y", "Y axis"]].map(([k, l]) => (
-              <button key={k} className={(cfg.orient || "x") === k ? "on" : ""}
-                      onClick={() => setCfg(c => ({ ...c, orient: k }))}>{l}</button>
-            ))}
+      {cfg.measures.map(m => {
+        const def = measureById(m.id);
+        const refusal = stackRefusal([def], over.filter(o => o.outer === m.id || o.inner === m.id));
+        const ax = axesFor(cfg.measures.map(x => ({ ...measureById(x.id), axis: x.axis })))
+          .find(a => a.id === m.id);
+        // A BALANCE HAS NO PARTS, so it cannot be broken down — stated in its own block, beside the
+        // control, rather than as a chart-wide warning naming a measure the reader has to go find.
+        const splittable = !def?.position;
+        return (
+          <div className="cb-ds" key={m.id}>
+            <div className="cb-ds-h">
+              <span className="cb-ds-n">{def?.label}</span>
+              <span className="chip">{def?.unit}</span>
+            </div>
+            <div className="cb-ds-g">
+              <label className="fl">Broken down by
+                <select className="sel" value={m.by || ""} disabled={!splittable}
+                        onChange={e => setType(m.id, { by: e.target.value || null })}>
+                  <option value="">Nothing — one series</option>
+                  {dims.filter(d => d.id !== cfg.across)
+                       .map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+                {!splittable && <span className="meta">a balance has no parts</span>}
+              </label>
+              <label className="fl">Plot type
+                <span className="seg3 mini">
+                  {SHAPES.map(([k, l]) => (
+                    <button key={k} className={(m.shape || "lines") === k ? "on" : ""}
+                            onClick={() => setType(m.id, { shape: k })}>{l}</button>
+                  ))}
+                </span>
+              </label>
+              <label className="fl">Stacked
+                <span className={"cb-tog" + (m.stacked ? " on" : "")} title={refusal || undefined}>
+                  <input type="checkbox" checked={!!m.stacked} disabled={!!refusal}
+                         onChange={e => setType(m.id, { stacked: e.target.checked })} />
+                  {refusal ? "No" : m.stacked ? "Yes" : "No"}
+                </span>
+              </label>
+              <label className="fl">Value axis
+                <span className="seg3 mini">
+                  {[["left", "Left"], ["right", "Right"]].map(([k, l]) => (
+                    <button key={k} className={ax?.axis === k ? "on" : ""}
+                            onClick={() => setType(m.id, { axis: k })}>{l}</button>
+                  ))}
+                </span>
+              </label>
+            </div>
+            {refusal && <p className="meta cb-ref">{refusal}</p>}
           </div>
-          <span className="meta">vertical bars, or horizontal — better for long names</span>
-        </div>
-      )}
-      {ids.length > 0 && !canOrientY(cfg.across) && (
-        <p className="cb-note">
-          {/* TIME READS LEFT TO RIGHT AND THAT IS NOT A PREFERENCE. Months down the Y axis is legal
-              SVG and unreadable to anybody, so the control is absent rather than present and refused. */}
-          Categories run along the X axis while the chart is across months.
-        </p>
-      )}
-
-      {ids.length > 0 && (
-        <table className="cb-types">
-          <tbody>
-            {cfg.measures.map(m => {
-              const def = measureById(m.id);
-              const refusal = stackRefusal([def], over.filter(o => o.outer === m.id || o.inner === m.id));
-              const ax = axesFor(cfg.measures.map(x => ({ ...measureById(x.id), axis: x.axis })))
-                .find(a => a.id === m.id);
-              return (
-                <tr key={m.id}>
-                  <td>{def?.label}</td>
-                  <td>
-                    <span className="seg3 mini">
-                      {SHAPES.map(([k, l]) => (
-                        <button key={k} className={(m.shape || "lines") === k ? "on" : ""}
-                                onClick={() => setType(m.id, { shape: k })}>{l}</button>
-                      ))}
-                    </span>
-                  </td>
-                  <td>
-                    {/* ⚠️ STACKING REFUSES IN BOTH SHAPES WHERE THE PARTS DO NOT SUM. A stacked LINE
-                        asserts the same falsehood as a stacked bar. */}
-                    <label className={"cb-tog" + (m.stacked ? " on" : "")} title={refusal || undefined}>
-                      <input type="checkbox" checked={!!m.stacked} disabled={!!refusal}
-                             onChange={e => setType(m.id, { stacked: e.target.checked })} />
-                      Stacked
-                    </label>
-                  </td>
-                  <td>
-                    {/* THE SECOND UNIT GOES RIGHT BY DEFAULT — a good default and a poor rule, since
-                        two money measures at very different magnitudes want the choice too. */}
-                    <span className="seg3 mini">
-                      {[["left", "L"], ["right", "R"]].map(([k, l]) => (
-                        <button key={k} className={ax?.axis === k ? "on" : ""}
-                                title={`${k} value axis`}
-                                onClick={() => setType(m.id, { axis: k })}>{l}</button>
-                      ))}
-                    </span>
-                    <span className="meta"> {def?.unit}</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+        );
+      })}
 
       <div className="cb-acts">
         <button className="linkbtn" onClick={onClose}>Done</button>
