@@ -87,15 +87,22 @@ describe("overlaps", () => {
 });
 
 describe("what can be drawn", () => {
-  it("⚠️ REFUSES STACKING WHEN MEASURES OVERLAP — and only stacking", () => {
-    // A stack ASSERTS that the parts sum to the whole. "Money out, and how much of it is payroll" is a
-    // legitimate chart; stacking those two is a false statement.
+  it("⚠️ NO LONGER STRIPS `stack` ON OVERLAP — the decision moved to where stack membership is known", () => {
+    // `allowedTypes` cannot know which of these will actually SHARE a stack. Net beside money in and
+    // out is legitimate when net is a line, and stripping `stack` here removed it from the two measures
+    // that could honestly use it. **`buildCustom` un-stacks only genuine same-stack containment**, which
+    // is asserted in `buildcustom.test.js`.
     const t = allowedTypes(["cost", "payroll"]);
-    expect(t).not.toContain("stack");
-    // ⚠️ "line" SINGULAR — the invented name, still sitting in the test that exists to catch it.
-    // Fixing a name in the source does not fix the assertions that were written alongside it.
+    expect(t).toContain("stack");
     expect(t).toContain("lines");
     expect(t).toContain("bars");
+  });
+
+  it("IS A UNION, NOT AN INTERSECTION, because shape is per dataset", () => {
+    // `every` meant one non-stackable measure removed stacking from the whole selection — net, which
+    // cannot stack because it is already a difference of two others, took it from in and out as well.
+    expect(allowedTypes(["rev", "cost", "net"])).toContain("stack");
+    expect(measureById("net").allows).not.toContain("stack");
   });
 
   it("allows stacking when nothing overlaps", () => {

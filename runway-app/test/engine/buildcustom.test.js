@@ -91,13 +91,39 @@ describe("what it refuses, and says so", () => {
     // A saved chart asking for a stack whose measures now overlap draws as lines and SAYS SO, rather
     // than asserting that the parts sum to the whole.
     const { parts, rows } = ctx(d);
-    // ⚠️ `type` IS GONE — shape and stacked replaced it. Written the old way, nothing asked for a
-    // stack, no fallback fired, and `note` stayed null: `.toMatch()` reports null as "object", which
-    // is why this failure read as a type error rather than as a stale assertion.
-    const s = buildCustom({ measures: [{ id: "cost", shape: "bars", stacked: true }, { id: "payroll" }] },
-                          d, parts, rows);
-    expect(s.kind).not.toBe("stack");
+    // ⚠️ BOTH MUST BE STACKED FOR THIS TO BE WRONG. Written with only `cost` stacked and payroll as a
+    // line, nothing fires — and that is CORRECT under the narrowed rule: a line is not part of the sum,
+    // so it cannot double-count a stack it does not join. The refusal is about same-stack containment.
+    const s = buildCustom({ measures: [
+      { id: "cost", shape: "bars", stacked: true },
+      { id: "payroll", shape: "bars", stacked: true },
+    ] }, d, parts, rows);
+    expect(s.series.every(x => !x.stacked)).toBe(true);
     expect(s.note).toMatch(/would not add up/i);
+  });
+});
+
+describe("⚠️ a stack and a line together", () => {
+  it("KEEPS THE STACK when the overlapping measure is a LINE", () => {
+    // In and out stacked against each other with net as a line over them — the most useful chart on
+    // the tab, and the old rule refused it because `net contains rev, cost` put all three in the clash
+    // set. **A line cannot double-count a stack it does not join.**
+    const d = doc(), { parts, rows } = ctx(d);
+    const s = buildCustom({ measures: [
+      { id: "rev", shape: "bars", stacked: true },
+      { id: "cost", shape: "bars", stacked: true, negate: true },
+      { id: "net", shape: "lines", signColor: true },
+    ] }, d, parts, rows);
+    expect(s.series.find(x => x.id === "rev").stacked).toBe(true);
+    expect(s.series.find(x => x.id === "cost").stacked).toBe(true);
+    expect(s.series.find(x => x.id === "net").stacked).toBe(false);
+    expect(s.note).toBeNull();
+  });
+
+  it("and the negated member really is negative", () => {
+    const d = doc(), { parts, rows } = ctx(d);
+    const s = buildCustom({ measures: [{ id: "cost", negate: true }] }, d, parts, rows);
+    expect(s.series[0].values.some(v => v < 0)).toBe(true);
   });
 });
 

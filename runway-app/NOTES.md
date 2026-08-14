@@ -1742,6 +1742,27 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### The two failures were the narrowed rule working
+
+**⚠️ THE FALLBACK TEST WAS ASSERTING A REFUSAL THAT SHOULD NOT HAPPEN.** It stacked `cost` and left
+`payroll` as a line, then expected a complaint — but under the narrowed rule that chart is FINE, because
+a line cannot double-count a stack it does not join. Rewritten to stack both, which is the real
+double-count.
+
+**And `allowedTypes` no longer strips `stack` on overlap**, so its test moved to assert the opposite,
+with the guarantee now asserted where stack membership is actually known.
+
+**Added the case the old rule forbade**: in and out stacked with net as a sign-coloured line over them
+— the chart Corey asked for — plus a check that a negated member really does go below zero.
+
+Verified across all three combinations: both stacked REFUSED, one stacked plus a line allowed, neither
+stacked allowed.
+
+**Worth noting what these two failures were.** Not regressions and not stale assertions in the usual
+sense — **tests that correctly encoded a rule I then deliberately narrowed.** The right response was to
+move each assertion to where the rule now lives rather than to loosen it, and the giveaway that this was
+the right reading is that the narrowed rule still refuses the case the original test was protecting.
+
 ### ⚠️ THE OVERLAP GUARD FORBADE THE MOST USEFUL CHART ON THE TAB
 
 In and out stacked against each other with net as a line over them — **`Composite` could draw it all
