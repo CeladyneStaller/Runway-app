@@ -1742,6 +1742,44 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## The spec, built: modifiers, the missing measures, the missing dimensions
+
+### `modifiers.js` — Model, Cumulative and Variance are TRANSFORMS
+
+**"Model" appears on five tabs and "Cumulative" on four.** As registry entries that is ~15 hand-written
+duplicates that could never combine — and somebody would want "cumulative model" the day after launch.
+As modifiers it is 7 measures x 3 toggles from 10 declarations, and the combinations come free.
+Verified: plain, cumulative, model, model+cumulative, and variance all produce the right series.
+
+**⚠️ VARIANCE REPLACES THE PAIR RATHER THAN ADDING A THIRD SERIES.** Model, actual and their difference
+on one chart states the same fact twice and invites reading the gap in two places.
+
+**`hasActual` declares where a recorded counterpart exists** — only `cost` and `end`. Capital in,
+headcount and drawdowns are PLANS, so the toggle greys out with that reason rather than drawing a
+duplicate line. **The pair is labelled "actual" and "model" so it works from EITHER side** — the person
+should not have to know which one their tab reads.
+
+**`canCumulate` excludes positions and headcount.** A running total of a balance is nothing; of
+headcount it is person-months, which is a real unit and never what anybody meant.
+
+### Measures added
+
+`salesCount`, `projCount` (a POSITION — how many run this month, not how many started), `projNet`,
+`repayments`, `allocPct` and `unallocPct`. **Percentage is a third unit**, and stacking Allocated with
+Unallocated gives a flat 100% band, which is a good chart that comes free.
+
+**Payroll, operating costs and baseline burn came OFF Spend history** — Corey's call, and it is right:
+they are spend-code buckets there, so "money out, broken down by spend code" says the same thing without
+three extra entries.
+
+### Dimensions added
+
+`pnl` (synthetic — splits a point into components rather than grouping lines), `poType`, `component`,
+`projType`, and `project` extended to Payroll.
+
+**The modifiers are persisted in BOTH `saveChart` and `updateChart`** — the fault from earlier today,
+where a hand-written pick silently dropped four fields, avoided by checking both call sites this time.
+
 ### ⚠️ "HORIZONTAL BARS SHOW ONE MEASURE" WAS MY LIMITATION, NOT THE RENDERER'S
 
 A row carries `segments` — **a list**. I read that field, used one element, and wrote a note explaining

@@ -12,6 +12,7 @@ import { axisTicks, months } from "./charts.js";
 import { measureById, overlaps, unitsOf, allowedTypes } from "./measures.js";
 import { dimensionById, splitBy, tooManySeries } from "./dimensions.js";
 import { colorsFor } from "./palette.js";
+import { applyModifiers } from "./modifiers.js";
 import { renderKind, axesFor } from "./charttype.js";
 
 // ⚠️ THE PALETTE IS NO LONGER A CYCLING LIST OF TONE NAMES. Seven tones cycling by index gave four
@@ -184,12 +185,22 @@ export function buildCustom(cfg, doc, parts, rows) {
         group: spec.id,
       }));
     } else {
-      out.push({
-        id: spec.id, label: m.label, values: flip(clip(m.get(rows, parts, doc))), signColor,
-        tone: TONES[colorIdx++ % TONES.length],
-        shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
-        group: spec.id,
-      });
+      // ⚠️ MODIFIERS EXPAND ONE DATASET INTO ONE OR TWO SERIES. Model draws the pair, Cumulative
+      // reshapes both, Variance replaces them with the gap — which is why they are transforms rather
+      // than fifteen more registry entries that could never combine.
+      const base = clip(m.get(rows, parts, doc));
+      const act = m.actual ? clip(m.actual(rows, parts, doc)) : null;
+      for (const part of applyModifiers(spec, m, base, act)) {
+        out.push({
+          id: part.suffix ? `${spec.id}:${part.suffix}` : spec.id,
+          label: part.label, values: flip(part.values), signColor,
+          dashed: !!part.dashed,
+          tone: TONES[colorIdx % TONES.length],
+          shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
+          group: spec.id,
+        });
+      }
+      colorIdx++;
     }
   }
 

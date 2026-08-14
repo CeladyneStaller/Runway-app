@@ -13,7 +13,7 @@ export const DIMENSIONS = [
     of: (l) => l?.code ?? null,
     labelOf: (k, doc) => (doc?.codeMap?.[k]?.label) || k || "Uncoded" },
 
-  { id: "project", tab: ["flow", "proj", "hist"], label: "Project",
+  { id: "project", tab: ["flow", "proj", "hist", "pay"], label: "Project",
     of: (l) => l?.projectId ?? null,
     labelOf: (k, doc) => (doc?.projects || []).find(p => p.id === k)?.name || "Unassigned",
     // ⚠️ PROJECTS HAVE A TYPE WORTH PRESERVING. "This one is a grant" is information the chart should
@@ -31,6 +31,24 @@ export const DIMENSIONS = [
   { id: "instrument", tab: ["inv"], label: "Instrument",
     of: (l) => l?.roundId ?? null,
     labelOf: (k, doc) => (doc?.rounds || []).find(r => r.id === k)?.name || "Unassigned" },
+
+  { id: "pnl", tab: ["flow"], label: "P&L (net, revenue, cost)",
+    // ⚠️ A SYNTHETIC DIMENSION — it splits one point into its own components rather than grouping
+    // lines by a field. `buildCustom` handles it specially; there is no `of` to write.
+    synthetic: true, of: () => null, labelOf: (k) => k },
+
+  { id: "poType", tab: ["sales"], label: "Type",
+    of: (l) => l?.saas ? "subscription" : "po",
+    labelOf: (k) => ({ po: "Purchase order", subscription: "Subscription" })[k] || k },
+
+  { id: "component", tab: ["pay"], label: "Cost component",
+    of: (l) => l?.component ?? (l?.fringe ? "fringe" : "salary"),
+    labelOf: (k) => ({ salary: "Salary", fringe: "Fringe" })[k] || k },
+
+  { id: "projType", tab: ["proj"], label: "Type",
+    of: (l, doc) => null,
+    typeOf: (k) => k,
+    labelOf: (k) => ({ grant: "Grant", fulfillment: "Fulfilment", internal: "Internal" })[k] || k },
 
   // SEMANTIC AND FIXED, not allocated from a ramp — a tier means the same thing on every chart.
   // ⚠️ AWARD AND BUDGET PERIOD EXIST NOWHERE ELSE, and they are why this tab needs its own dimensions

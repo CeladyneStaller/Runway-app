@@ -10,6 +10,7 @@
 // returns nothing but zeroes where the tab has data.
 
 import { accruedCostShare, shortfallAt, outstandingDebt, windDownCost } from "./commitments.js";
+import { monthTotal } from "./coding.js";
 
 /** The projection row is `{ m, start, rev, cost, net, end, inNonGrant }` — seven fields, and three of
  *  them contain each other. `contains` is what stops a chart double-counting. */
@@ -21,6 +22,9 @@ export const MEASURES = [
 
   { id: "cost", tab: ["flow", "dash", "hist"], label: "Money out", unit: "money",
     get: (rows) => rows.map(r => r.cost),
+    // RECORDED SPEND, month by month, from the ledger — the other side of the Model toggle.
+    hasActual: true,
+    actual: (rows, parts, doc) => rows.map((_, m) => monthTotal((doc?.history || [])[m])),
     // ⚠️ EVERYTHING ELSE THAT SPENDS IS INSIDE THIS. Plotting cost beside payroll or cost share is a
     // legitimate "how much of it is X" chart; STACKING them is a false statement, because a stack
     // asserts the parts sum to the whole.
@@ -40,8 +44,10 @@ export const MEASURES = [
     contains: ["rev", "cost"],
     allows: ["lines", "bars"] },
 
-  { id: "end", tab: ["flow", "dash"], label: "Cash balance", unit: "money",
+  { id: "end", tab: ["flow", "dash", "hist"], label: "Cash on hand", unit: "money",
     get: (rows) => rows.map(r => r.end),
+    hasActual: true,
+    actual: (rows, parts, doc) => rows.map((_, m) => Number((doc?.cashActuals || {})[m]) || 0),
     // ⚠️ A POSITION, NOT A FLOW. Balances do not sum, so stacking one is meaningless in EITHER shape —
     // declared here rather than left to the absence of a type, so the control can say why.
     position: true,
@@ -54,15 +60,18 @@ export const MEASURES = [
     allows: ["lines", "bars"] },
 
   // ── costs, from the compiled line items ──
-  { id: "payroll", tab: ["pay", "flow", "hist"], label: "Payroll", unit: "money",
+  { id: "payroll", tab: ["pay", "flow"], label: "Payroll", unit: "money",
     get: (rows, parts) => sumLines(parts?.employeeLines, rows.length),
     allows: ["lines", "bars", "stack"] },
 
-  { id: "opex", tab: ["flow", "hist"], label: "Operating costs", unit: "money",
+  { id: "opex", tab: ["flow"], label: "Operating costs", unit: "money",
     get: (rows, parts, doc) => sumLines((doc?.lines || []).filter(l => l.kind === "cost"), rows.length),
     allows: ["lines", "bars", "stack"] },
 
-  { id: "baseline", tab: ["hist", "flow"], label: "Baseline burn", unit: "money",
+  // ⚠️ PAYROLL, OPERATING COSTS AND BASELINE BURN CAME OFF SPEND HISTORY. They are spend-code buckets
+  // there, so offering them as measures duplicated the breakdown — Corey's call, and it is right:
+  // "money out, broken down by spend code" says the same thing without three extra registry entries.
+  { id: "baseline", tab: ["flow"], label: "Baseline burn", unit: "money",
     get: (rows, parts) => sumLines(parts?.baselineLines, rows.length),
     // MEASURED SPEND MINUS WHAT IS ITEMISED — so it moves when itemisation does, not on its own.
     allows: ["lines", "bars", "stack"] },
@@ -85,6 +94,53 @@ export const MEASURES = [
 
   { id: "saasRev", tab: ["flow"], label: "Recurring revenue", unit: "money",
     get: (rows, parts) => sumLines(parts?.saasLines, rows.length),
+    allows: ["lines", "bars", "stack"] },
+
+  // ── counts, which are a different unit and behave differently ────────────────────────────────
+  { id: "salesCount", tab: ["sales"], label: "Orders", unit: "count",
+    get: (rows, parts, doc) => rows.map((_, m) =>
+      (doc?.pos || []).filter(p => (p.bookedMonth ?? 0) === m).length),
+    // A COUNT IS A FLOW OF EVENTS, so it cumulates — unlike headcount, which is a stock.
+    allows: ["lines", "bars"] },
+
+  { id: "projCount", tab: ["proj"], label: "Projects running", unit: "count",
+    get: (rows, parts, doc) => rows.map((_, m) => (doc?.projects || []).filter(p =>
+      (p.startMonth ?? 0) <= m && (p.endMonth == null || p.endMonth >= m)).length),
+    // ⚠️ A STOCK, NOT A FLOW — how many are running THIS month, not how many started. Summing it gives
+    // project-months, which is a real unit and never what anybody meant.
+    position: true,
+    allows: ["lines", "bars"] },
+
+  { id: "projNet", tab: ["proj"], label: "Net", unit: "money",
+    get: (rows, parts) => {
+      const c = sumLines((parts?.projectLines || []).filter(l => l.kind === "cost"), rows.length);
+      const r = sumLines((parts?.projectLines || []).filter(l => l.kind === "revenue"), rows.length);
+      return r.map((v, i) => v - c[i]);
+    },
+    contains: ["projectSpend", "drawdowns"],
+    allows: ["lines", "bars"] },
+
+  { id: "repayments", tab: ["inv"], label: "Repayments", unit: "money",
+    get: (rows, parts) => sumLines((parts?.roundLines || []).filter(l => l.kind === "cost"), rows.length),
+    allows: ["lines", "bars"] },
+
+  // ── payroll allocation ───────────────────────────────────────────────────────────────────────
+  { id: "allocPct", tab: ["pay"], label: "Allocated", unit: "percent",
+    get: (rows, parts, doc) => {
+      const total = sumLines(parts?.employeeLines, rows.length);
+      const alloc = sumLines((parts?.employeeLines || []).filter(l => l.projectId), rows.length);
+      return total.map((t, i) => (t > 0 ? (alloc[i] / t) * 100 : 0));
+    },
+    // ⚠️ A PERCENTAGE IS A THIRD UNIT with a natural 0-100 domain. Stacking Allocated with Unallocated
+    // gives a flat 100% band, which is a genuinely good chart and comes free.
+    allows: ["lines", "bars", "stack"] },
+
+  { id: "unallocPct", tab: ["pay"], label: "Unallocated", unit: "percent",
+    get: (rows, parts) => {
+      const total = sumLines(parts?.employeeLines, rows.length);
+      const alloc = sumLines((parts?.employeeLines || []).filter(l => l.projectId), rows.length);
+      return total.map((t, i) => (t > 0 ? ((t - alloc[i]) / t) * 100 : 0));
+    },
     allows: ["lines", "bars", "stack"] },
 
   // ── commitments ──────────────────────────────────────────────────────────────────────────────

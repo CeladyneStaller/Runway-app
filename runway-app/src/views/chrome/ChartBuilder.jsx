@@ -2,6 +2,7 @@ import { useState } from "react";
 import { measuresFor, measureById, overlaps, unitsOf, allowedTypes } from "../../engine/measures";
 import { dimensionsFor } from "../../engine/dimensions";
 import { SHAPES, canOrientY, stackRefusal, axesFor } from "../../engine/charttype";
+import { canCumulate, canModel } from "../../engine/modifiers";
 
 // ⚠️ THE RENDERER'S NAMES. `lines` is plural, and there is no `area` renderer at all — offering one
 // would be offering a chart type that draws nothing.
@@ -192,6 +193,41 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
                   <input type="checkbox" checked={!!m.signColor && !m.by} disabled={!!m.by}
                          onChange={e => setType(m.id, { signColor: e.target.checked })} />
                   {m.by ? "Unavailable" : m.signColor ? "By sign" : "By series"}
+                </span>
+              </label>
+            </div>
+            <div className="cb-ds-g" style={{ marginTop: 8 }}>
+              <label className="fl">Cumulative
+                <span className={"cb-tog" + (m.cumulative ? " on" : "")}
+                      title={canCumulate(def) ? "A running total across the window."
+                        : `${def?.label} is a position, not a flow — a running total of it means nothing.`}>
+                  <input type="checkbox" checked={!!m.cumulative} disabled={!canCumulate(def)}
+                         onChange={e => setType(m.id, { cumulative: e.target.checked })} />
+                  {canCumulate(def) ? (m.cumulative ? "Running total" : "Per period") : "Unavailable"}
+                </span>
+              </label>
+              <label className="fl">Against the model
+                {/* ⚠️ ONLY WHERE A RECORDED COUNTERPART EXISTS. Capital in, headcount and drawdowns are
+                    PLANS — there is nothing to compare them against, so this greys out with the reason
+                    rather than drawing a duplicate line. */}
+                <span className={"cb-tog" + (m.model ? " on" : "")}
+                      title={canModel(def) ? "Draws the projection beside what was recorded."
+                        : `${def?.label} is a plan — there is nothing recorded to compare it with.`}>
+                  <input type="checkbox" checked={!!m.model} disabled={!canModel(def)}
+                         onChange={e => setType(m.id, { model: e.target.checked, variance: false })} />
+                  {canModel(def) ? (m.model ? "Both" : "One line") : "Unavailable"}
+                </span>
+              </label>
+              <label className="fl">Variance
+                {/* VARIANCE IS THE GAP THE MODEL TOGGLE DRAWS, so it REPLACES the pair rather than
+                    adding a third series — model, actual and their difference on one chart states the
+                    same fact twice. */}
+                <span className={"cb-tog" + (m.variance ? " on" : "")}
+                      title={canModel(def) ? "The difference, instead of the two lines."
+                        : `${def?.label} has no recorded counterpart to differ from.`}>
+                  <input type="checkbox" checked={!!m.variance} disabled={!canModel(def)}
+                         onChange={e => setType(m.id, { variance: e.target.checked, model: false })} />
+                  {canModel(def) ? (m.variance ? "The gap" : "Off") : "Unavailable"}
                 </span>
               </label>
             </div>
