@@ -1742,6 +1742,27 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### `RunwayChart` takes the same rules
+
+`L 66, R 26, T 22, B 40` lived in its own file while `Chart.jsx` had its own four. **Two sets of
+constants do not drift on the day they are written; they drift on the day an element is added to one of
+them** — and this session added axis titles, a right axis and a hover tooltip to one of them.
+
+**`padFor` takes a BASE now.** The rules are shared — what earns extra room — while the starting gutters
+stay per canvas, because a 980x400 chart with a taller frame genuinely needs different ones. **Sharing
+the rules while keeping its own base is the difference between one implementation and two that agree
+today.**
+
+    no milestones     l66 r26 t22 b40   ← identical to the hardcoded values
+    with milestones   l80 r26 t32 b40
+
+**Milestones and the speculative readout both draw ABOVE the frame**, so this chart is "titled" by the
+same logic that gives a two-axis chart its top gutter — which is why it was the most cramped of the two
+even though its base was already the more generous.
+
+**Checked for a temporal dead zone**, since `L` is now derived rather than literal: nothing reads the
+geometry before the declaration. That fault blanked the whole app earlier today.
+
 ## Chart margins — padded by what is present
 
 `PAD = { l: 52, r: 16, t: 14, b: 38 }` was set before axis titles, a right axis or a hover tooltip

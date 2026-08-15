@@ -1,6 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React from "react";
-import { plotFrame } from "../../engine/plotframe";
+import { plotFrame, padFor, RUNWAY_PAD } from "../../engine/plotframe";
 import { money } from "../../engine/money";
 import { dateShort, monthLabel } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
@@ -11,7 +11,15 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
                               // renders exactly as before.
                               axisBreak = true, months = null, milestones, projectEnd, showUpside, zero, zeroUp, actuals }) {
   const { START_Y, START_M } = useStart();
-  const W = 980, H = 400, L = 66, R = 26, T = 22, B = 40;
+  // ⚠️ THE SAME RULES AS EVERY OTHER CHART, ON ITS OWN BASE. These four numbers lived here and in
+  // `Chart.jsx` as separate constants — agreeing today and free to drift the moment an element is added
+  // to one of them. `padFor` owns the rules; `RUNWAY_PAD` is this canvas's starting point.
+  //
+  // `milestones` and the speculative readout both draw ABOVE the frame, so this chart is titled by the
+  // same logic that gives a two-axis chart its top gutter.
+  const W = 980, H = 400;
+  const _pad = padFor({ base: RUNWAY_PAD, titled: milestones.length > 0 });
+  const L = _pad.l, R = _pad.r, T = _pad.t, B = _pad.b;
 
   const lastMsT = Math.max(0, ...milestones.map(m => m.t), projectEnd ? projectEnd.t : 0);
   // ⚠️ THE WINDOW IS ALREADY ADAPTIVE — it fits the crossing and the last milestone rather than a fixed

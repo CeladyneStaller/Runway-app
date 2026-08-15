@@ -177,15 +177,29 @@ export function plotFrame({
  */
 export const BASE_PAD = Object.freeze({ l: 52, r: 16, t: 14, b: 38 });
 
-export function padFor({ rightAxis = false, titled = false, categorical = false } = {}) {
+export function padFor({ rightAxis = false, titled = false, categorical = false,
+                         // ⚠️ THE BASE IS A PARAMETER, because `RunwayChart` is a 980x400 canvas with a
+                         // taller frame and needs different starting gutters — but the SAME RULES about
+                         // what earns extra room. Sharing the rules while keeping its own base is the
+                         // difference between one implementation and two that agree today.
+                         base = BASE_PAD } = {}) {
   return {
     // A rotated title needs room OUTSIDE the tick labels, which already set this width.
-    l: BASE_PAD.l + (titled ? 14 : 0),
+    l: base.l + (titled ? 14 : 0),
     // FIVE TICK LABELS PLUS A TITLE. This is the clipping bug.
-    r: BASE_PAD.r + (rightAxis ? 44 : 0),
+    r: base.r + (rightAxis ? 44 : 0),
     // So a title clears the frame rather than sitting on it.
-    t: BASE_PAD.t + (titled ? 10 : 0),
+    t: base.t + (titled ? 10 : 0),
     // Category names wrap where `Jul 26` does not.
-    b: BASE_PAD.b + (categorical ? 12 : 0),
+    b: base.b + (categorical ? 12 : 0),
   };
 }
+
+/** ⚠️ `RunwayChart`'S OWN BASE, on the shared rules.
+ *
+ *  It kept `L 66, R 26, T 22, B 40` in its own file — the fourth thing this session that lived in two
+ *  places and disagreed, and only NOT disagreeing because nobody had changed one of them recently.
+ *  **Two sets of constants do not drift on the day they are written; they drift on the day an element
+ *  is added to one of them.**
+ */
+export const RUNWAY_PAD = Object.freeze({ l: 66, r: 26, t: 22, b: 40 });

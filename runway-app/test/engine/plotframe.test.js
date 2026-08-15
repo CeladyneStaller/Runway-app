@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { plotFrame, moneyTick, monthTick, monthTicks, ruleValues, domainFor,
+import { plotFrame, padFor, BASE_PAD, RUNWAY_PAD, moneyTick, monthTick, monthTicks, ruleValues, domainFor,
          wantsVerticals, legendMode, RULE_COUNT } from "../../src/engine/plotframe.js";
 
 describe("money on the axis", () => {
@@ -202,5 +202,39 @@ describe("the frame itself", () => {
     const labels = f().ticks.map(t => t.label);
     expect(labels[0]).toMatch(/^Jul \d\d$/);
     expect(labels.some(l => /^Jan \d\d$/.test(l))).toBe(true);
+  });
+});
+
+describe("⚠️ one set of padding rules, two bases", () => {
+  it("LEAVES A SINGLE-UNIT CHART EXACTLY AS IT WAS", () => {
+    // Most of the 37 curated charts are single-unit, and none of them should shift because the builder
+    // gained a feature.
+    expect(padFor({})).toEqual(BASE_PAD);
+  });
+
+  it("⚠️ RESERVES THE RIGHT GUTTER ONLY WHEN THERE IS A RIGHT AXIS", () => {
+    // The gutter was 16px and a right axis needs about 44 — five tick labels plus a title — so on any
+    // two-unit chart those labels were drawn past the edge of the viewBox. **"Cramped" was the visible
+    // half of a clipping bug.**
+    expect(padFor({ rightAxis: true }).r).toBe(BASE_PAD.r + 44);
+    expect(padFor({}).r).toBe(BASE_PAD.r);
+  });
+
+  it("gives a category axis room for names that wrap", () => {
+    expect(padFor({ categorical: true }).b).toBeGreaterThan(BASE_PAD.b);
+  });
+
+  it("⚠️ `RunwayChart` SHARES THE RULES AND KEEPS ITS OWN BASE", () => {
+    // Four constants lived in its file and four in `Chart.jsx` — agreeing on the day they were written
+    // and free to drift the moment an element was added to one of them. **Two sets of constants do not
+    // drift when written; they drift when changed.**
+    expect(padFor({ base: RUNWAY_PAD })).toEqual(RUNWAY_PAD);
+    expect(padFor({ base: RUNWAY_PAD, titled: true }).l).toBe(RUNWAY_PAD.l + 14);
+    expect(RUNWAY_PAD).not.toEqual(BASE_PAD);          // different canvas, different starting point
+  });
+
+  it("does not let one base leak into the other", () => {
+    padFor({ base: RUNWAY_PAD, rightAxis: true });
+    expect(padFor({})).toEqual(BASE_PAD);
   });
 });
