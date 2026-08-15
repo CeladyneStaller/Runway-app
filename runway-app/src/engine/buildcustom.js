@@ -266,6 +266,8 @@ function finish(cfg, doc, series, ids, axis = null) {
   return {
     kind,
     x: axis?.x || months(doc), ticks: axis?.ticks || axisTicks(doc),
+    // SAME STAMP AS `buildChart`, because a custom chart does not pass through it.
+    todayIndex: (doc?.history || []).length > 0 ? (doc.history.length - 1) : undefined,
     series, format: "money",
     custom: true,
     // ⚠️ THE REFUSAL IS PER SERIES NOW, not per chart — a stacked series whose measure overlaps another

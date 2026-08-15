@@ -1744,6 +1744,29 @@ beside the control rather than as a chart-wide warning naming a measure the read
 
 ## Hover values, and two docket items
 
+### ⚠️ THE HOVER LAYER REACHED ONE CHART OUT OF TWENTY-ONE
+
+I mounted it in `Composite` and wrote a comment explaining why that was the right place — **and only one
+curated chart emits `kind: "composite"`.** Six emit `lines`, five `stack`, two `bars`; every one of them
+reaches its renderer DIRECTLY and never passes through the composite. **The feature worked and was
+almost nowhere.**
+
+It lives in `Wrap` now, which is already the single place that knows "this renderer owns a canvas" —
+the same component created earlier to hoist three `<svg>` elements into one. **A canvas-level overlay
+belongs wherever a canvas is opened, and `Wrap` is the only place that is true.**
+
+**⚠️ AND THE POINTER MATHS SUBTRACTED THE PADDING TWICE.** `getBoundingClientRect()` is taken on the
+RECT, so the coordinates are already relative to the plot's left edge — passing `left: box.x` to
+`indexAt` removed it again. **The left third of every chart clamped to index 0 and the last index was
+unreachable.** Verified: far left → 0, halfway → 9, far right → 17.
+
+**`todayIndex` was supplied by nothing**, so every month would have reported as recorded. It is stamped
+in `buildChart`, which every spec passes through — **asking twenty-one builders to remember the same
+fact is twenty-one chances to forget it.** `buildCustom` does not pass through there and stamps its own.
+
+**Both bugs are the same shape as the session's others:** a thing produced and not consumed, and a
+mechanism placed where it read correctly rather than where it applied.
+
 ### The year rule, generalised — Corey's catch
 
 **"First label plus every January" had a hole**: when labels thin, a chart spanning a year change may

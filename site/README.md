@@ -2,7 +2,7 @@
 
 Static HTML. No build step, no framework, no dependencies. Drop the folder on Vercel, Netlify or
 anything that serves files.
- 
+
 ## Structure
 
     /                        home

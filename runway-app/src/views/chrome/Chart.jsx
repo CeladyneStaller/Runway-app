@@ -155,9 +155,18 @@ const TimeAxis = ({ ticks, n, y, width = W, yearEvery = false }) => {
  *  had to be hoisted out, which is also what guarantees the groups share one scale rather than each
  *  drawing to its own.
  */
-const Wrap = ({ marks, aria, children }) => (marks
+const Wrap = ({ marks, aria, children, hover = null }) => (marks
   ? <g>{children}</g>
-  : <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria || "chart"}>{children}</svg>);
+  : <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria || "chart"}>
+      {children}
+      {/* ⚠️ THE HOVER LAYER BELONGS WHEREVER AN `<svg>` IS OPENED, WHICH IS HERE.
+          Mounting it only in `Composite` gave it to ONE chart out of twenty-one: every curated chart
+          emits `lines`, `stack` or `bars` and reaches its renderer directly, never passing through the
+          composite. **The feature worked and was almost nowhere.**
+          `Wrap` is already the single place that knows "this renderer owns a canvas", which makes it
+          the single place a canvas-level overlay can go without four copies. */}
+      {hover}
+    </svg>);
 
 /** Names along the axis, one per category.
  *
@@ -253,7 +262,10 @@ function Lines({ spec }) {
 
   return (
 
-    <Wrap marks={spec.marks} aria={spec.aria}>
+    <Wrap marks={spec.marks} aria={spec.aria}
+            hover={<HoverLayer spec={spec} format={spec.format}
+                               box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                               ctx={{ todayIndex: spec.todayIndex }} />}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.band && (
         // The band is drawn first and lightly: it is context for the line, not a third series.
@@ -329,7 +341,10 @@ function Stack({ spec }) {
 
   return (
 
-    <Wrap marks={spec.marks} aria={spec.aria}>
+    <Wrap marks={spec.marks} aria={spec.aria}
+            hover={<HoverLayer spec={spec} format={spec.format}
+                               box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                               ctx={{ todayIndex: spec.todayIndex }} />}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {/* ⚠️ THERE WAS NO STACKED-BAR RENDERER AT ALL. `Stack` only ever drew filled paths, so selecting
           Bar and then Stacked produced a stacked AREA — the shapes are the same bands either way, and
@@ -385,7 +400,10 @@ function Bars({ spec }) {
 
   return (
 
-    <Wrap marks={spec.marks} aria={spec.aria}>
+    <Wrap marks={spec.marks} aria={spec.aria}
+            hover={<HoverLayer spec={spec} format={spec.format}
+                               box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                               ctx={{ todayIndex: spec.todayIndex }} />}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.series.map((sr, si) => sr.values.map((v, i) => {
         const x = PAD.l + i * groupW + groupW * 0.15 + si * barW;

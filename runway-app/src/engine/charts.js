@@ -963,7 +963,16 @@ export function buildChart(id, doc, parts) {
   const spec = chartById(id);
   if (!spec) return { empty: "No chart selected." };
   try {
-    return spec.build(doc || {}, parts || {}) || { empty: "Nothing to show yet." };
+    const built = spec.build(doc || {}, parts || {}) || { empty: "Nothing to show yet." };
+    // ⚠️ STAMPED IN ONE PLACE, NOT IN TWENTY-ONE BUILDERS. Every spec passes through here, and the
+    // divide between recorded and modelled is the same question on all of them — asking each chart to
+    // remember it is asking twenty-one chances to forget.
+    //
+    // `history.length` is how many months are recorded, so it is the index of the first PROJECTED
+    // month minus one. Absent history means no divide is known, and `valueAt` then claims nothing
+    // rather than calling everything recorded.
+    const hist = (doc?.history || []).length;
+    return hist > 0 ? { ...built, todayIndex: hist - 1 } : built;
   } catch (e) {
     return { empty: "This chart could not be drawn from the current model.", error: String(e?.message || e) };
   }

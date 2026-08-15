@@ -21,10 +21,15 @@ export function HoverLayer({ spec, box, ctx = {}, format }) {
   const move = useCallback((e) => {
     const r = ref.current?.getBoundingClientRect();
     if (!r) return;
-    const px = e.clientX - r.left, py = e.clientY - r.top;
+    // ⚠️ `r` IS THE RECT, SO THESE ARE ALREADY RELATIVE TO THE PLOT'S LEFT EDGE. Passing `left: box.x`
+    // subtracted the padding a SECOND time — the left third of every chart clamped to index 0 and the
+    // last index was unreachable. The offset belongs in one place, and the rect has already applied it.
+    const px = ((e.clientX - r.left) / (r.width || 1)) * box.w;
+    const py = ((e.clientY - r.top) / (r.height || 1)) * box.h;
     const n = spec?.x?.length || spec?.series?.[0]?.values?.length || 0;
-    const i = indexAt(px * (box.w / r.width), { left: box.x, width: box.w, n });
-    if (i != null) setAt({ i, px: px * (box.w / r.width), py: py * (box.h / r.height) });
+    const i = indexAt(px, { left: 0, width: box.w, n });
+    // STORED IN VIEWBOX UNITS, and offset back to the canvas for the guide line and the tooltip.
+    if (i != null) setAt({ i, px: box.x + px, py: box.y + py });
   }, [spec, box]);
 
   // ⚠️ ARROW KEYS MOVE THE MONTH, ESCAPE DISMISSES. The values have to be reachable without a pointer —
