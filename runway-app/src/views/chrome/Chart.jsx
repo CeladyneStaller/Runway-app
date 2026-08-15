@@ -9,6 +9,7 @@
 // AN EMPTY CHART SAYS WHY. `spec.empty` is a sentence — "no spend history imported yet" — because a
 // blank box looks like a bug and a sentence looks like an answer.
 import React, { useMemo } from "react";
+import { HoverLayer } from "./Hover";
 import { useStart } from "../../state/StartCtx";
 import { plotFrame } from "../../engine/plotframe";
 import { money } from "../../engine/money";
@@ -852,6 +853,12 @@ function Composite({ spec }) {
       {groups.stackArea.length > 0 && <Stack spec={sub(groups.stackArea)} />}
       {groups.bars.length > 0 && <Bars spec={sub(groups.bars)} />}
       {groups.lines.length > 0 && <Lines spec={sub(groups.lines)} />}
+      {/* ⚠️ MOUNTED HERE BECAUSE `Composite` OWNS THE CANVAS. Putting it in each renderer would give a
+          composite chart three overlays fighting for the same pointer — the same fault as the three
+          `<svg>` elements this component was created to hoist. */}
+      <HoverLayer spec={spec} format={spec.format}
+                  box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                  ctx={{ todayIndex: spec.todayIndex }} />
     </svg>
   );
 }

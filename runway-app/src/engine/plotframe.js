@@ -54,7 +54,7 @@ export function monthTick(startY, startM, i, { first = false } = {}) {
  *  Every month, then every third, then every sixth, then first and last. Choosing an arbitrary spacing
  *  per width would make the same chart label differently on two devices.
  */
-export function monthTicks(n, width, { yearEvery = false } = {}) {
+export function monthTicks(n, width, { yearEvery = false, startY, startM } = {}) {
   if (n <= 1) return [{ i: 0, year: true }];
   const per = width < 380 ? 96 : width < 620 ? 74 : 58;   // px a label needs
   const room = Math.max(2, Math.floor(width / per));
@@ -65,17 +65,23 @@ export function monthTicks(n, width, { yearEvery = false } = {}) {
   for (let i = 0; i < n; i += step) idx.push(i);
   if (idx[idx.length - 1] !== n - 1) idx.push(n - 1);
 
-  // ⚠️ THE RULE IS: FIRST LABEL, AND EVERY JANUARY. Nothing else.
+  // ⚠️ THE RULE IS: THE FIRST LABEL SHOWN FOR EACH CALENDAR YEAR CARRIES THE YEAR.
   //
-  // I had built a density rule on top of this — years on every label when they fit, plus a
-  // repeated-month check — after reading a preference for the runway chart's labels as a request to
-  // change the rule. IT WAS NOT ONE. The approved rule is this one, and it is simpler; the density
-  // version was me generalising from a single remark.
+  // "First label plus every January" had a hole Corey found: **when labels thin, a chart spanning a year
+  // change may show no January at all** — `Jul 26 · Jul · Jul` at a twelve-month step — and the year
+  // change becomes invisible on a chart whose whole subject is when things happen.
   //
-  // `yearEvery` exists for ONE caller: RunwayChart labels every 2-6 months and carries a year on each,
-  // which Corey wants kept. An explicit opt-in from that chart is honest — a rule that guesses its way
-  // to the same outcome is the thing that went wrong here.
-  return idx.map(i => ({ i, year: yearEvery || i === 0 }));
+  // This rule SUBSUMES the old one rather than adding a case to it. January is the first month of its
+  // year, so it still gets the year whenever it is shown; the first label is the first of its year, so
+  // it still gets one; and a bare `Jul` in a new year now gets one too. **One rule, no exceptions, and
+  // strictly more correct than the version it replaces.**
+  const seen = new Set();
+  return idx.map(i => {
+    const y = Number.isFinite(startY) ? new Date(startY, (startM || 0) + i, 1).getFullYear() : null;
+    const first = y != null && !seen.has(y);
+    if (y != null) seen.add(y);
+    return { i, year: yearEvery || first || i === 0 };
+  });
 }
 
 /** Evenly spaced rule values across a domain, including both ends. */
@@ -140,7 +146,7 @@ export function plotFrame({
   const y = (v) => P.t + ph - ((Number(v) || 0) - yMin) / span * ph;
 
   const rules = ruleValues(yMin, yMax).map(v => ({ v, y: y(v), label: moneyTick(v) }));
-  const ticks = monthTicks(n, w, { yearEvery }).map(({ i, year }) => ({
+  const ticks = monthTicks(n, w, { yearEvery, startY, startM }).map(({ i, year }) => ({
     i, x: x(i),
     label: Number.isFinite(startY) ? monthTick(startY, startM, i, { first: year }) : String(i),
   }));

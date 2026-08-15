@@ -17,7 +17,7 @@ export function DashOptions({ opts, setOpts, onClose, ctx = {} }) {
           <span className="meta">Runway · this device</span>
         </div>
         <div className="modal-b">
-          {shown.map(k => (
+          {shown.filter(k => k !== "horizon").map(k => (
             <label className="dopt" key={k}>
               <input type="checkbox" checked={!!opts[k]}
                      onChange={(e) => setOpts({ ...opts, [k]: e.target.checked })} />
@@ -27,6 +27,26 @@ export function DashOptions({ opts, setOpts, onClose, ctx = {} }) {
               </span>
             </label>
           ))}
+          {/* ⚠️ A NUMBER, NOT A CHECKBOX. "Show the full 36 months" was a switch for a window that is
+              already adaptive — so it only ever meant "stop fitting". A length says what somebody wants.
+              The blank option is "fit to the content", which is the default and has to stay reachable. */}
+          <label className="dopt">
+            <span style={{ flex: 1 }}>
+              <span className="dopt-n">{LABELS.horizon[0]}</span>
+              <span className="dopt-w">{LABELS.horizon[1]}</span>
+              <span className="dopt-h">
+                <select className="sel" value={opts.horizon ?? ""}
+                        onChange={(e) => setOpts({ ...opts,
+                          horizon: e.target.value ? Number(e.target.value) : null })}>
+                  <option value="">Fit to the content</option>
+                  {[6, 12, 18, 24, 36].map(m => (
+                    <option key={m} value={m}>{m} months</option>
+                  ))}
+                </select>
+              </span>
+            </span>
+          </label>
+
           {/* ⚠️ SAYS WHAT IS ABSENT AND WHY, rather than leaving a shorter list to look arbitrary. An
               option that has nothing to act on is hidden; somebody who remembers seeing it should not
               have to wonder whether they imagined it. */}

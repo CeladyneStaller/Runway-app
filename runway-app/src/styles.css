@@ -1721,3 +1721,22 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .signin-resend{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 4px}
 .reac-p{font-size:13px;line-height:1.65;margin:0 0 10px}
 .reac-check{margin-top:14px;padding-top:13px;border-top:1px solid var(--line-2)}
+.dopt-h{display:block;margin-top:7px}
+
+/* ---- hover values ---- */
+.hv-hit{cursor:crosshair;outline:none}
+.hv-hit:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
+.hv-guide{stroke:var(--muted-2);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
+.hv-fo{pointer-events:none;overflow:visible}
+.hv-tip{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+  box-shadow:0 8px 22px rgba(12,26,34,.14);font-family:var(--fb);font-size:11.5px;color:var(--ink)}
+.hv-m{font-family:var(--fm);font-size:10px;color:var(--muted-2);margin-bottom:6px;padding-bottom:5px;
+  border-bottom:1px solid var(--line-2);display:flex;justify-content:space-between;gap:10px;
+  align-items:center}
+.hv-r{display:flex;align-items:center;gap:7px;padding:2px 0}
+.hv-r i{width:9px;height:9px;border-radius:2px;flex:none}
+.hv-r b{margin-left:auto;font-family:var(--fm);font-size:11px;font-weight:500}
+.hv-r.dim{opacity:.45}
+.hv-t{border-top:1px solid var(--line-2);margin-top:5px;padding-top:5px;font-weight:600}
+.hv-ax{font-size:9px;color:var(--muted-2)}
+.hv-f{font-size:10px;color:var(--muted-2);margin-top:6px;padding-top:5px;border-top:1px solid var(--line-2)}

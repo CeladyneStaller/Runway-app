@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { needsReacceptance } from "./legal";
 import { Reaccept } from "./views/chrome/Reaccept";
-import { readOpts, writeOpts } from "./engine/dashopts";
+import { readOpts, writeOpts, horizonOf } from "./engine/dashopts";
 import { DashOptions } from "./views/chrome/DashOptions";
 import { planSummary } from "./state/plans";
 import { ProfileMenu } from "./views/chrome/ProfileMenu";
@@ -762,7 +762,7 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                 <RunwayChart rows={rows} rowsUp={rowsUp} rowsOp={rowsNoRaise} band={dashOpts.band ? band : null}
                   upBand={dashOpts.band && dashOpts.upside ? upBand : null}
                   axisBreak={dashOpts.axisBreak}
-                  months={dashOpts.fullHorizon ? 36 : null} cash={model.cashOnHand} milestones={dashOpts.milestones ? msWithBal : []}
+                  months={horizonOf(dashOpts)} cash={model.cashOnHand} milestones={dashOpts.milestones ? msWithBal : []}
                              projectEnd={null} showUpside={showUpside && dashOpts.upside} zero={zero} zeroUp={zeroUp} actuals={dashOpts.actuals ? actualsCash : null} />
                 {dashModal && (
                   <DashOptions opts={dashOpts} onClose={() => setDashModal(false)}

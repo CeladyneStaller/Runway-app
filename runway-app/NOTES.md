@@ -1742,6 +1742,60 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Hover values, and two docket items
+
+### The year rule, generalised — Corey's catch
+
+**"First label plus every January" had a hole**: when labels thin, a chart spanning a year change may
+show NO January at all — `Jul 26 · Jul · Jul` at a twelve-month step — and **the year change becomes
+invisible on a chart whose whole subject is when things happen.**
+
+**The rule is now: the first label shown for each calendar year carries the year.** It SUBSUMES the old
+one rather than adding a case — January is the first month of its year, so it still qualifies; the first
+label is the first of its year, so it still qualifies; and a bare `Jul` in a new year now qualifies too.
+`Jul 26 · Jul 27 · Jul 28`, and every other case unchanged.
+
+### The horizon is a length, not a switch
+
+"Show the full 36 months" was a checkbox for a window that is ALREADY adaptive, so it only ever meant
+"stop fitting". A number says what somebody wants: how far ahead to look. `null` keeps the fit.
+
+**⚠️ `isDefault` HAD TO LEARN THAT ONE OPTION IS NOT A BOOLEAN.** Comparing by truthiness would call
+`horizon: 24` equal to `horizon: 12` and leave "Reset to defaults" disabled on a chart that is not at
+its defaults.
+
+### `hover.js` — it reads the spec, not the drawing
+
+**A hover layer that asked each renderer to hit-test what it had drawn would need `Lines`, `Bars`,
+`Stack` and `HBars` to grow a path each — four implementations of one question**, which is the fault
+this codebase produced five times this week. The spec already holds every value.
+
+**⚠️ "PROJECTED" IS NOT DECORATION.** A tooltip reporting a modelled figure the same way it reports a
+recorded one undoes the actuals/projection divide — **and it is worse than the line, because a precise
+number FEELS like a fact.** With no divide known it claims nothing rather than guessing.
+
+**⚠️ IF THE CHART DRAWS A RANGE, THE TOOLTIP REPORTS A RANGE.** Reporting the centre line alone would
+use the most precise-feeling surface in the interface to say the one thing this product's design exists
+to avoid saying.
+
+**The stack total is required**, and excludes right-axis series. People read a stack by its height, so
+the total is usually the number they are after; listing segments without it makes them add up figures
+the chart already knows.
+
+**Nearest x, not nearest mark** — requiring somebody to hit a 2px line is a chart you can only read with
+a mouse and good aim, and it makes touch impossible rather than merely awkward. **Arrow keys move the
+month**; the accessibility requirements of this customer base are a procurement question.
+
+**Mounted in `Composite`, which owns the canvas.** Per-renderer overlays would give a composite chart
+three of them fighting for one pointer — the same fault as the three `<svg>` elements `Composite` was
+created to hoist.
+
+**Not built, deliberately: click-to-pin.** It is the obvious next feature and it introduces a mode — a
+pinned tooltip that stays while the chart changes underneath is a number attached to nothing.
+
+**Derisking is still owed**, per Corey: this is built and lint-clean, and the pointer maths has been
+checked numerically rather than by rendering.
+
 ### ⚠️ THE REAL CAUSE: `load_document` RETURNS 403 FOR A COMPANY YOU ARE NOT A MEMBER OF
 
     if not is_member(p_company_id) then

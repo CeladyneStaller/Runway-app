@@ -15,7 +15,10 @@ export const DEFAULTS = Object.freeze({
   milestones: true,
   actuals: true,
   axisBreak: true,     // give the operating band most of the height when a raise dwarfs it
-  fullHorizon: false,  // 36 months rather than 18
+  // ⚠️ A LENGTH, NOT A SWITCH. It was "show the full 36 months" — but the window is already ADAPTIVE,
+  // fitting the crossing and the last milestone, so the switch only ever meant "stop fitting". A number
+  // says what somebody actually wants: how far ahead to look. `null` keeps the fit.
+  horizon: null,       // null = fit to the content · 6..36 = that many months
 });
 
 /** ⚠️ THE OPTIONS PEOPLE CANNOT SENSIBLY CHANGE ARE ABSENT, NOT DISABLED.
@@ -44,8 +47,8 @@ export const LABELS = Object.freeze({
     "What the bank actually said, up to today — solid, against the dashed projection after it."],
   axisBreak: ["Break the axis for a large raise",
     "Gives most of the height to the operating band when a raise would otherwise flatten it. Off means one true scale and a very small operating band."],
-  fullHorizon: ["Show the full 36 months",
-    "The chart normally fits the window to the crossing and the last milestone. This shows the whole 36-month projection instead — most of the tail is assumption."],
+  horizon: ["How far ahead to look",
+    "The chart normally fits the window to the crossing and the last milestone. Set a length to override that — the projection runs to 36 months, and most of the tail is assumption."],
 });
 
 export function readOpts() {
@@ -63,4 +66,14 @@ export function writeOpts(next) {
   return { ...DEFAULTS, ...next };
 }
 
-export const isDefault = (o) => Object.keys(DEFAULTS).every(k => !!o?.[k] === !!DEFAULTS[k]);
+// ⚠️ `horizon` IS COMPARED BY VALUE, NOT TRUTHINESS. Every other option is a boolean; treating a
+// number as one would call `horizon: 24` equal to `horizon: 12` and leave "Reset to defaults" disabled
+// on a chart that is not at its defaults.
+export const isDefault = (o) => Object.keys(DEFAULTS).every(k =>
+  (k === "horizon" ? (o?.[k] ?? null) === DEFAULTS[k] : !!o?.[k] === !!DEFAULTS[k]));
+
+/** Clamped where it is read, so a stored value from a future build cannot draw past the projection. */
+export const horizonOf = (o) => {
+  const v = Number(o?.horizon);
+  return Number.isFinite(v) && v >= 6 ? Math.min(36, Math.round(v)) : null;
+};
