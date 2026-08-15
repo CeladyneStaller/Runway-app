@@ -186,8 +186,9 @@ export function padFor({ rightAxis = false, titled = false, categorical = false,
   return {
     // A rotated title needs room OUTSIDE the tick labels, which already set this width.
     l: base.l + (titled ? 14 : 0),
-    // FIVE TICK LABELS PLUS A TITLE. This is the clipping bug.
-    r: base.r + (rightAxis ? 44 : 0),
+    // FIVE TICK LABELS PLUS A TITLE, and two more so the longest label is not flush against the panel
+    // edge — the same reason the legend needed clearance from the 16px corner.
+    r: base.r + (rightAxis ? 46 : 0),
     // So a title clears the frame rather than sitting on it.
     t: base.t + (titled ? 10 : 0),
     // Category names wrap where `Jul 26` does not.

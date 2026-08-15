@@ -330,7 +330,13 @@ function Lines({ spec }) {
             hover={<HoverLayer spec={spec} format={spec.format}
                                box={{ x: pad.l, y: pad.t, w: pw, h: ph }}
                                ctx={{ todayIndex: spec.todayIndex }} />}>
-      <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
+      {/* ⚠️ NOT UNDER `Composite`, WHICH DRAWS THEM ONCE. Three renderers each drawing their own axes
+          gave a composite chart THREE — and because this call passed no `pad`, they defaulted to the
+          base while the composite drew at the computed one, so the duplicates sat at different
+          positions and the x-axis ran past the plot to the old full width.
+          **The chrome belongs wherever the canvas is opened, which is the rule `Wrap` already
+          encodes** — `marks` is exactly "somebody else owns the canvas". */}
+      {!spec.marks && <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} pad={pad} />}
       {spec.band && (
         // The band is drawn first and lightly: it is context for the line, not a third series.
         <path d={`${path(spec.band.hi)} ${spec.band.lo.map((v, i) =>
@@ -414,7 +420,13 @@ function Stack({ spec }) {
             hover={<HoverLayer spec={spec} format={spec.format}
                                box={{ x: pad.l, y: pad.t, w: pw, h: ph }}
                                ctx={{ todayIndex: spec.todayIndex }} />}>
-      <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
+      {/* ⚠️ NOT UNDER `Composite`, WHICH DRAWS THEM ONCE. Three renderers each drawing their own axes
+          gave a composite chart THREE — and because this call passed no `pad`, they defaulted to the
+          base while the composite drew at the computed one, so the duplicates sat at different
+          positions and the x-axis ran past the plot to the old full width.
+          **The chrome belongs wherever the canvas is opened, which is the rule `Wrap` already
+          encodes** — `marks` is exactly "somebody else owns the canvas". */}
+      {!spec.marks && <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} pad={pad} />}
       {/* ⚠️ THERE WAS NO STACKED-BAR RENDERER AT ALL. `Stack` only ever drew filled paths, so selecting
           Bar and then Stacked produced a stacked AREA — the shapes are the same bands either way, and
           only the drawing differs. The band arithmetic above (two baselines, one per sign) serves both.
@@ -478,7 +490,13 @@ function Bars({ spec }) {
             hover={<HoverLayer spec={spec} format={spec.format}
                                box={{ x: pad.l, y: pad.t, w: pw, h: ph }}
                                ctx={{ todayIndex: spec.todayIndex }} />}>
-      <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
+      {/* ⚠️ NOT UNDER `Composite`, WHICH DRAWS THEM ONCE. Three renderers each drawing their own axes
+          gave a composite chart THREE — and because this call passed no `pad`, they defaulted to the
+          base while the composite drew at the computed one, so the duplicates sat at different
+          positions and the x-axis ran past the plot to the old full width.
+          **The chrome belongs wherever the canvas is opened, which is the rule `Wrap` already
+          encodes** — `marks` is exactly "somebody else owns the canvas". */}
+      {!spec.marks && <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} pad={pad} />}
       {spec.series.map((sr, si) => sr.values.map((v, i) => {
         const x = pad.l + i * groupW + groupW * 0.15 + si * barW;
         const yy = yOf(sr); const y = Math.min(yy(v), yy(0));

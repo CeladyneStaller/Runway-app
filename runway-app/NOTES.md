@@ -1742,6 +1742,29 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Three symptoms, two causes — from the margin change
+
+**⚠️ FOUR `<Axes>` CALLS.** `Composite` drew one at the computed pad; the three sub-renderers each drew
+their own **and passed no `pad`**, so they defaulted to the base. Two axes at different positions, and
+an x-axis running past the plot to the old full width.
+
+**Both of Corey's first two symptoms were this one fault** — the duplicate left axis and the hover
+disagreeing with the x-axis were the same two frames of reference, seen from different controls.
+
+**The fix is the rule `Wrap` already encodes:** `marks` means somebody else owns the canvas, so the
+chrome is theirs too. The sub-renderers now draw axes only when standalone.
+
+**⚠️ AND I MISREAD MY OWN CHECK ON THE WAY.** It reported `Bars` as not passing a pad to `xAt` — `Bars`
+does not use `xAt` at all, it has its own band layout from `pad.l`, which was already correct.
+**A check that tests for the wrong mechanism reports a fault that is not there**, which costs the same
+attention as one that misses a real one.
+
+**Right gutter 44 -> 46**, so the longest tick label is not flush against the panel edge — the same
+reasoning as the legend needing clearance from the 16px corner.
+
+Verified the three frames of reference now agree: plot spans 66-658, first and last marks land on 66 and
+658, hover box spans the same.
+
 ## Two spacing gaps
 
 ### The legend was cut by the panel's corner
