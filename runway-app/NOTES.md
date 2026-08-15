@@ -1742,6 +1742,35 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Two spacing gaps
+
+### The legend was cut by the panel's corner
+
+`.ch-legend` had `margin-top:6px` and **no padding**, so a swatch row ran to the edge of `.chartwrap`
+and the panel's 16px radius clipped it.
+
+**⚠️ A CURVED CORNER CLIPS CONTENT THAT A STRAIGHT EDGE WOULD MERELY HAVE TOUCHED** — which is exactly
+why this showed on the legend and not on the axis labels directly above it. Same distance from the
+edge, different geometry at that height.
+
+Now 24px in from the panel and 18px of bottom clearance, both past the 16px corner.
+
+**⚠️ AND I NEARLY LEFT A DUPLICATE RULE BEHIND.** My grep for the container matched only the child
+selectors, so I concluded there was no container rule and wrote one — creating a second
+`.ch-legend{...}` with the first still above it. **The one that loses is invisible.** Caught by counting
+definitions afterwards rather than by reading, which is the only reliable way to notice a CSS duplicate.
+
+### Empty states sat on whatever contained them
+
+`.ch-empty` had `padding:26px 4px` — **4px horizontal against an 18px panel inset** — and `.plan-empty`
+had no inset at all. So the same kind of message appeared at three different distances from the edge
+depending on which panel it was in.
+
+**The standoff is deliberately LARGER than the panel's own 18px.** An empty state is the only thing in
+its container, and text at the container's normal inset reads as pinned to the edge rather than as the
+considered "there is nothing here yet" it is meant to be — and it is the first thing somebody sees on a
+tab they have not filled in.
+
 ### `RunwayChart` takes the same rules
 
 `L 66, R 26, T 22, B 40` lived in its own file while `Chart.jsx` had its own four. **Two sets of

@@ -1111,12 +1111,20 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .ch-svg{font-size:clamp(10.5px, 2.5vw, 11px)}
 .ch-t{font-family:var(--fm);font-size:0.82em;fill:var(--muted-2)}
 .ch-l{font-family:var(--fb);font-size:0.9em;fill:var(--muted)}
-.ch-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;
+/* ⚠️ IT HAD A TOP MARGIN AND NO PADDING, so a swatch row ran to the very edge of `.chartwrap` and the
+   panel's 16px corner CUT IT. **A curved corner clips content that a straight edge would merely have
+   touched**, which is why this showed on the legend and not on the axis labels directly above it.
+   The side padding matches the panel's own inset; the bottom keeps it off the curve. */
+.ch-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;
+  margin-top:8px;padding:0 6px 10px;
   font-family:var(--fb);font-size:11.5px;color:var(--muted)}
 .ch-legend span{display:inline-flex;align-items:center;gap:5px}
 .ch-legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
 .ch-note{margin-top:6px;font-family:var(--fb);font-size:11.5px;color:var(--muted-2);line-height:1.5}
-.ch-empty{padding:26px 4px;font-family:var(--fb);font-size:12.5px;color:var(--muted-2)}
+/* ⚠️ 4px HORIZONTAL AGAINST AN 18px PANEL INSET. An empty state is the only thing in its container, so
+   it reads as text pinned to the edge rather than centred content — and it is the first thing somebody
+   sees on a tab they have not filled in yet. */
+.ch-empty{padding:30px 20px;font-family:var(--fb);font-size:12.5px;color:var(--muted-2)}
 .ch-err{color:var(--caution);cursor:help}
 .ch-pick{display:grid;gap:6px;margin-top:4px}
 .ch-opt{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:8px;cursor:pointer}
@@ -1476,7 +1484,10 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .plan-add.sub{padding:5px 0 5px 30px}
 .plan-gaps{font-size:11.5px;color:var(--caution);background:#FBF3E4;border-radius:7px;
   padding:8px 11px;margin:0 0 10px}
-.plan-empty{max-width:64ch;margin:0 0 8px}
+/* ⚠️ IT HAD NO INSET OF ITS OWN and sat on whatever the panel body provided. Same sentence, three
+   different distances from the edge depending on which panel it was in — which is what a shared class
+   is for. */
+.plan-empty{max-width:64ch;margin:0;padding:22px 24px 18px}
 .linkbtn.danger{color:var(--danger)}
 @media(max-width:720px){
   .plan-ed{grid-template-columns:1fr}
@@ -1745,3 +1756,17 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .rc-hv-v{font-family:var(--fm);font-size:11px;fill:#fff}
 .ch-axt{font-family:var(--fb);font-size:9.5px;font-weight:600;fill:var(--muted-2);
   letter-spacing:.03em}
+
+
+/* ---- empty states ----
+   ⚠️ ONE RULE, BECAUSE THEY WERE INHERITING FROM WHATEVER CONTAINED THEM. `.ch-empty` had 4px sides,
+   `.plan-empty` had none of its own, and the tables' own messages sat on the table's padding — so the
+   same sentence appeared at three different insets depending on which panel it was in.
+
+   The standoff is deliberately larger than the panel's own 18px: an empty state is the ONLY thing in
+   its container, and text at the container's normal inset reads as pinned to the edge rather than as
+   the considered "there is nothing here yet" it is meant to be. */
+.emptynote{padding:26px 24px;font-family:var(--fb);font-size:12.5px;color:var(--muted-2);
+  line-height:1.6;max-width:64ch}
+.emptynote.tight{padding:18px 24px}
+.panel .emptynote,.tbl + .emptynote{padding:24px}
