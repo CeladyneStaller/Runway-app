@@ -122,11 +122,13 @@ const fmt = (v, f) => {
  *  this canvas", and a gridline two pixels off its own baseline is the kind of bug nobody reports and
  *  everybody notices. The shape of the return is unchanged so the 600 lines below it are untouched.
  */
-function scale(values) {
+function scale(values, pad = PAD) {
   const finite = (values || []).filter(Number.isFinite);
   const lo = Math.min(0, ...finite);
   const hi = Math.max(0, ...finite);
-  const f = plotFrame({ w: W, h: H, yMin: lo, yMax: hi, pad: PAD });
+  // ⚠️ THE VERTICAL SCALE IS PAD-DEPENDENT TOO. `t` and `b` move when an axis is titled, so a scale
+  // built on the base pad puts every value 10px off inside a widened chart. Callers pass their own.
+  const f = plotFrame({ w: W, h: H, yMin: lo, yMax: hi, pad });
   return { lo, hi, y: f.y, zero: f.y(0) };
 }
 
@@ -162,10 +164,16 @@ const clean = (n) => (Number.isFinite(n) ? n : 0);
  *  `useStart()` is where every other view in this file's neighbourhood gets it, and it cannot be
  *  undefined the way a spec field can.
  */
-const TimeAxis = ({ ticks, n, y, width = W, yearEvery = false }) => {
+const TimeAxis = ({ ticks, n, y, width = W, yearEvery = false, pad = PAD }) => {
   const { START_Y, START_M } = useStart();
   const count = n || (ticks || []).length || 1;
-  const f = plotFrame({ w: width, h: H, n: count, pad: PAD,
+  // ⚠️ IT HARDCODED `PAD`, so the month labels spanned the BASE width while the plot had narrowed —
+  // "Jan 28" ran to the panel edge and every label sat right of the mark it names. The hover looked
+  // wrong for the same reason: it agreed with the plot and disagreed with the labels beside it.
+  //
+  // **This is the third component to compute its own geometry from a constant that stopped being
+  // constant** — after `xAt` and the sub-renderers' axes.
+  const f = plotFrame({ w: width, h: H, n: count, pad,
                         startY: START_Y, startM: START_M, yearEvery });
   // A TICK PER MONTH still — the marks are cheap and let somebody count. Only the LABELS thin.
   const labelled = new Map(f.ticks.map(t => [t.i, t.label]));
@@ -213,16 +221,16 @@ const Wrap = ({ marks, aria, children, hover = null }) => (marks
  *  ⚠️ IT DRAWS THE LABEL THE SPEC GAVE IT. Months are computed from the model start; categories are
  *  not derivable from anything — they come from the data and must be carried.
  */
-const CategoryAxis = ({ ticks, y }) => {
+const CategoryAxis = ({ ticks, y, pad = PAD }) => {
   const n = ticks.length;
-  const groupW = PW / Math.max(n, 1);
+  const groupW = (W - pad.l - pad.r) / Math.max(n, 1);
   return (
     <g>
       {ticks.map((t, i) => (
         <g key={i}>
-          <line x1={PAD.l + i * groupW + groupW / 2} y1={y} x2={PAD.l + i * groupW + groupW / 2} y2={y + 5}
+          <line x1={pad.l + i * groupW + groupW / 2} y1={y} x2={pad.l + i * groupW + groupW / 2} y2={y + 5}
                 stroke="var(--muted-2)" />
-          <text x={PAD.l + i * groupW + groupW / 2} y={y + 16} className="ch-t" textAnchor="middle">
+          <text x={pad.l + i * groupW + groupW / 2} y={y + 16} className="ch-t" textAnchor="middle">
             {/* TRUNCATED TO ITS SLOT rather than overlapping its neighbour — the Y orientation exists
                 precisely because names do not fit here. */}
             {String(t.label).length > 12 ? `${String(t.label).slice(0, 11)}…` : t.label}
@@ -259,9 +267,9 @@ const Axes = ({ s, xs, ticks, format, sRight = null, rightFormat = null,
     {/* AN EXPLICIT FLAG, not an inference. My first attempt tried to DETECT categorical ticks from
         their shape and was unreadable and fragile — the spec knows which kind it built, so it says so. */}
     {ticks?.length && ticks[0]?.categorical
-      ? <CategoryAxis ticks={ticks} y={pad.t + (H - pad.t - pad.b)} />
+      ? <CategoryAxis ticks={ticks} y={pad.t + (H - pad.t - pad.b)} pad={pad} />
       : ticks?.length
-      ? <TimeAxis ticks={ticks} n={ticks.length} y={pad.t + (H - pad.t - pad.b)} />
+      ? <TimeAxis ticks={ticks} n={ticks.length} y={pad.t + (H - pad.t - pad.b)} pad={pad} />
       : xs?.length > 0 && (
           // Charts whose x-axis is not months — periods, milestone names — keep the ends only.
           <>
@@ -316,10 +324,10 @@ function Lines({ spec }) {
   const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   const all = [...spec.series.flatMap(sr => sr.values),
                ...(spec.band ? [...spec.band.lo, ...spec.band.hi] : [])];
-  const s = scale(spec.domain || (all));
+  const s = scale(spec.domain || (all), pad);
   // ⚠️ A SERIES ON THE RIGHT AXIS USES THE RIGHT SCALE. Everything shared one, so a count against money
   // was drawn on money's range — technically plotted and practically invisible.
-  const sR = spec.domainRight ? scale(spec.domainRight) : null;
+  const sR = spec.domainRight ? scale(spec.domainRight, pad) : null;
   const yOf = (sr) => (sR && spec.rightIds?.has(sr.id) ? sR.y : s.y);
   const n = Math.max(...spec.series.map(sr => sr.values.length), spec.band?.lo?.length || 0);
   const path = (vals, y = s.y) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n, pad)} ${y(v)}`).join(" ");
@@ -400,7 +408,7 @@ function Stack({ spec }) {
   // SIGNS SUMMED SEPARATELY, so the domain reaches both extremes rather than the net of them.
   const totals = Array.from({ length: n }, (_, i) => spec.series.reduce((a, sr) => a + clean(sr.values[i]), 0));
   // A SUPPLIED DOMAIN WINS. Under `Composite` all three groups must share one scale.
-  const s = scale(spec.domain || [...totals, spec.refLine?.y ?? 0]);
+  const s = scale(spec.domain || [...totals, spec.refLine?.y ?? 0], pad);
 
   // ⚠️ TWO BASELINES, BECAUSE A STACK WITH MIXED SIGNS HAS TWO DIRECTIONS. With one accumulator a
   // -40k segment is drawn INSIDE a +100k one and the total is nonsense. Positives stack up from zero,
@@ -476,10 +484,10 @@ function Bars({ spec }) {
   const pad = spec.pad || PAD;
   const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   const n = Math.max(...spec.series.map(sr => sr.values.length));
-  const s = scale(spec.domain || (spec.series.flatMap(sr => sr.values)));
+  const s = scale(spec.domain || (spec.series.flatMap(sr => sr.values), pad));
   // ⚠️ A SERIES ON THE RIGHT AXIS USES THE RIGHT SCALE. Everything shared one, so a count against money
   // was drawn on money's range — technically plotted and practically invisible.
-  const sR = spec.domainRight ? scale(spec.domainRight) : null;
+  const sR = spec.domainRight ? scale(spec.domainRight, pad) : null;
   const yOf = (sr) => (sR && spec.rightIds?.has(sr.id) ? sR.y : s.y);
   const groupW = pw / Math.max(n, 1);
   const barW = Math.max(2, (groupW * 0.7) / spec.series.length);
@@ -764,7 +772,7 @@ function Goals({ spec }) {
       {band(post, postTop, "post")}
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
-      <TimeAxis ticks={spec.ticks} n={n} y={base} />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} pad={spec.pad || PAD} />
     </svg>
   );
 }
@@ -882,7 +890,7 @@ function Milestones({ spec }) {
       {band(fromRound, roundTop)}
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
-      <TimeAxis ticks={spec.ticks} n={n} y={base} />
+      <TimeAxis ticks={spec.ticks} n={n} y={base} pad={spec.pad || PAD} />
     </svg>
   );
 }

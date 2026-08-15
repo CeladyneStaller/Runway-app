@@ -1742,6 +1742,28 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### `TimeAxis` was the third component computing geometry from a constant that stopped being one
+
+It hardcoded `PAD`, so month labels spanned the BASE width while the plot had narrowed — "Jan 28" ran to
+the panel edge and every label sat right of the mark it names. **The hover looked wrong for the same
+reason: it agreed with the plot and disagreed with the labels beside it.**
+
+**⚠️ AND FIXING IT ONE COMPONENT AT A TIME WAS THE MISTAKE.** `xAt`, then the sub-renderers' axes, then
+`TimeAxis` — three rounds, each found by Corey looking at a screenshot. **Making a constant dynamic
+means auditing every reader of it, not waiting for each one to surface.**
+
+So I scanned instead of guessing: 63 hits on `PAD.*`, but only the renderers reachable from `Composite`
+can ever be handed a widened pad. That left two real gaps nobody had reported yet:
+
+- **`scale()`** — the VERTICAL scale is pad-dependent too. `t` and `b` move when an axis is titled, so a
+  scale built on the base pad puts every value 10px off inside a widened chart.
+- **`CategoryAxis`** — same fault as `TimeAxis`, in the branch that draws category names.
+
+`Pace`, `Goals`, `Milestones`, `HBars` and `Diverging` keep the constant correctly: **they open their own
+canvas and are never handed a computed pad.**
+
+Verified at both widths: ticks land exactly on the plot edges, 52->704 and 66->658.
+
 ### Three symptoms, two causes — from the margin change
 
 **⚠️ FOUR `<Axes>` CALLS.** `Composite` drew one at the computed pad; the three sub-renderers each drew
