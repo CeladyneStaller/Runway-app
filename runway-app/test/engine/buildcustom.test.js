@@ -387,14 +387,20 @@ describe("⚠️ across a category — the field that was stored and never read"
     expect(s.kind).toBe("hbars");
     expect(Array.isArray(s.rows)).toBe(true);
     expect(s.rows.length).toBeGreaterThan(0);
+    // ⚠️ ROWS CARRY `segments`, A LIST — the renderer's own contract. `{ label, value }` was invented
+    // and threw on `r.segments.reduce`.
     expect(s.rows[0]).toHaveProperty("label");
-    expect(s.rows[0]).toHaveProperty("value");
+    expect(Array.isArray(s.rows[0].segments)).toBe(true);
+    expect(s.rows[0].segments[0]).toHaveProperty("value");
   });
 
-  it("says so when a horizontal chart can only show one measure", () => {
+  it("⚠️ SHOWS EVERY MEASURE — the one-measure limit was mine, not the renderer's", () => {
+    // A row carries `segments`, a LIST. I read that field, used one element, and wrote a note in the UI
+    // explaining why more was impossible. Corey found it by trying the thing the note said not to.
     const s = buildCustom({ across: "project", orient: "y",
                             measures: [{ id: "projectSpend" }, { id: "drawdowns" }] }, d, parts, rows);
-    expect(s.note).toMatch(/one measure per chart/i);
+    expect(s.rows[0].segments).toHaveLength(2);
+    expect(s.note).toBeNull();
   });
 
   it("says so when nothing is tagged with that dimension", () => {

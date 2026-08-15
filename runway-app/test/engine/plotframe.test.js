@@ -70,14 +70,27 @@ describe("label thinning", () => {
 
 describe("yearEvery — the one opt-in", () => {
   it("IS OFF BY DEFAULT, and belongs to the caller that wants it", () => {
-    // RunwayChart labels every 2-6 months and carries a year on each. An explicit opt-in from that
-    // chart is honest; a rule that guesses its way to the same outcome is what went wrong before.
+    // ⚠️ THE BASELINE IS NOW ONE YEAR LABEL PER YEAR, not one in total. Corey found the hole in "first
+    // label plus every January": when labels thin, a chart spanning a year change may show no January
+    // at all — `Jul 26 · Jul · Jul` — and **the year change becomes invisible on a chart whose whole
+    // subject is when things happen.**
+    //
+    // A 36-month window spans four calendar years, so four labels carry one. `yearEvery` still differs:
+    // it puts a year on EVERY label, which is what the runway chart wants at its own density.
     const plain = plotFrame({ w: 320, n: 36, startY: 2026, startM: 6, yMin: 0, yMax: 10 });
-    expect(plain.ticks.filter(t => /\d\d$/.test(t.label)).length).toBe(1);
+    const withYear = plain.ticks.filter(t => /\d\d$/.test(t.label));
+    expect(withYear.length).toBe(4);
+    expect(new Set(withYear.map(t => t.label.slice(-2))).size).toBe(4);   // one per YEAR, not repeats
 
     const every = plotFrame({ w: 320, n: 36, startY: 2026, startM: 6, yMin: 0, yMax: 10,
                               yearEvery: true });
     expect(every.ticks.every(t => /\d\d$/.test(t.label))).toBe(true);
+  });
+
+  it("⚠️ MARKS A YEAR CHANGE THAT CONTAINS NO JANUARY", () => {
+    // The case the old rule missed entirely.
+    const f = plotFrame({ w: 320, n: 36, startY: 2026, startM: 6, yMin: 0, yMax: 10 });
+    expect(f.ticks.map(t => t.label)).toEqual(["Jul 26", "Jul 27", "Jul 28", "Jun 29"]);
   });
 });
 

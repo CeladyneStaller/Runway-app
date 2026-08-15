@@ -1742,6 +1742,34 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Ten failures — one real regression, nine deliberate changes
+
+**⚠️ THE REAL ONE: I DISABLED `lens.rows` WHILE FIXING `lens.keep`.**
+
+The hbars fix short-circuited row-shaped specs out of `applyLens` entirely — `if (!spec.series &&
+spec.rows) return spec;` — which **silently disabled row filtering, a different feature that was
+working.** A test caught it; nothing else would have, because the affected charts still rendered.
+
+The narrower fix: **a lens can only EMPTY what it was actually able to filter.** No series to keep is not
+an empty result; it is a question that does not apply to this shape. Both filters work again, and a
+genuine empty is still reported.
+
+**⚠️ AND ONE TEST HAD BEEN PASSING FOR THE WRONG REASON.** `dashopts` round-trips through
+`localStorage`, which does not exist in the node test project — `writeOpts` caught the error and did
+nothing, so the test asserted against a store that was never written. **It only failed when the defaults
+changed.** A stub makes the round trip real.
+
+**The other eight were assertions outliving changes Corey asked for:** hbars rows carry `segments` not
+`value`; the one-measure limit was removed; sales gained a fourth chart; `fullHorizon` became a length;
+`count` and `percent` joined the units; `subscribers` and `allocPct` are legitimately empty on a demo
+with no subscription product and no allocated payroll; and the year rule now puts one label per YEAR
+rather than one in total.
+
+**Two hard counts replaced with properties**, because they buy nothing and cost an edit every time:
+`toHaveLength(3)` per tab became `toBeGreaterThanOrEqual(3)`, and the unit list is asserted as a closed
+set — **an unrecognised unit silently shares an axis with money, which is the failure the second axis
+exists to prevent.**
+
 ## Subscriptions on the sales chart
 
 **Every number already existed.** `saasSeries` has emitted `{ month, customers, arpu, mrr }` per product

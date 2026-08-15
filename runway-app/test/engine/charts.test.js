@@ -14,8 +14,11 @@ const parts = (doc) => {
 
 describe("the registry", () => {
   it("offers three on every tab that has a picker", () => {
+    // ⚠️ AT LEAST THREE, NOT EXACTLY THREE. A hard count has to be edited every time a tab gains a
+    // chart — friction that buys nothing, since what it guards is "every tab with a picker has enough
+    // to pick from". Sales now has four; Commitments has two by design.
     for (const tab of ["flow", "pay", "proj", "sales", "inv", "hist"]) {
-      expect(chartsForTab(tab), tab).toHaveLength(3);
+      expect(chartsForTab(tab).length, tab).toBeGreaterThanOrEqual(3);
     }
   });
 

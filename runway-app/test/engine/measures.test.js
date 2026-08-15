@@ -43,14 +43,20 @@ describe("⚠️ every measure reads something real", () => {
     //
     // `windDown` and `costShareAccrued` are deliberately NOT here: both read data the demo has, so a
     // zero in either would be a real fault.
-    const allowed = ["saasRev", "baseline", "shortfall", "debtOutstanding"];
+    //   subscribers      the demo seeds no subscription product, so saasRev is empty too
+    //   allocPct         no employee in the demo is allocated to a project, so the ratio is 0/total
+    const allowed = ["saasRev", "subscribers", "allocPct",
+                     "baseline", "shortfall", "debtOutstanding"];
     expect(dead.filter(id => !allowed.includes(id)),
            `flat zero on the demo: ${dead.join(", ")}`).toEqual([]);
   });
 
   it("declares a unit and at least one allowed type", () => {
     for (const m of MEASURES) {
-      expect(["money", "people"], `${m.id}`).toContain(m.unit);
+      // ⚠️ FOUR UNITS NOW. `count` arrived with orders, projects and subscribers; `percent` with
+      // payroll allocation. The list is asserted rather than open-ended, because an unrecognised unit
+      // silently shares an axis with money — the failure the second axis exists to prevent.
+      expect(["money", "people", "count", "percent"], `${m.id}`).toContain(m.unit);
       expect(m.allows.length, `${m.id}`).toBeGreaterThan(0);
     }
   });

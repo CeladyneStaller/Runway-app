@@ -87,14 +87,22 @@ export function applyLens(spec, lens, doc) {
   // That is why every fix to `HBars` appeared to do nothing: the values, the magnitude flag and the
   // sign colours were all correct and none of them were ever drawn. A lens narrows what a chart shows;
   // it cannot narrow a shape it has no handle on, so it leaves it alone.
-  if (!spec.series && spec.rows) return spec;
-
-  const series = lens.keep ? (spec.series || []).filter(s => lens.keep.includes(s.id)) : spec.series;
+  // ⚠️ A `keep` LENS FILTERS SERIES; A `rows` LENS FILTERS ROWS. Conflating them broke both in turn.
+  //
+  // Originally `keep` filtered an EMPTY series list on an `hbars` spec — which carries `rows` and no
+  // series — concluded the lens had emptied the chart, and replaced the whole thing with "Nothing under
+  // X yet." So I short-circuited row-shaped specs out of the function entirely, **and that silently
+  // disabled `lens.rows` filtering, which is a different feature that was working.**
+  //
+  // The honest fix is narrower: a lens can only EMPTY what it was actually able to filter. No series to
+  // keep is not an empty result; it is a question that does not apply to this shape.
+  const series = lens.keep && spec.series
+    ? spec.series.filter(s => lens.keep.includes(s.id))
+    : spec.series;
   const rows = lens.rows ? (spec.rows || []).filter(r => lens.rows(r, doc)) : spec.rows;
 
-  // A LENS THAT LEAVES NOTHING SAYS WHICH LENS DID IT. An axis with no content in it reads as broken;
-  // "Nothing under Grants" reads as an answer.
-  const emptied = (lens.keep && !series.length) || (lens.rows && !rows.length);
+  const emptied = (lens.keep && spec.series && !series.length)
+    || (lens.rows && spec.rows && !rows.length);
   if (emptied) return { empty: `Nothing under ${lens.label || "this view"} yet.` };
 
   return {
