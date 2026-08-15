@@ -1744,6 +1744,24 @@ beside the control rather than as a chart-wide warning naming a measure the read
 
 ## Hover values, and two docket items
 
+### `RunwayChart` needed its own, because it is its own canvas
+
+`Wrap` carries the hover for everything in `Chart.jsx`. **This file opens its own `<svg>`, uses a
+CONTINUOUS time axis rather than month indices, and has a BROKEN y scale** — so the shared overlay would
+have computed the wrong month and read the wrong value. **The values are the same question; the geometry
+is not.**
+
+**It reports the BAND, which is the whole point of this chart.** A single number here would use the most
+precise-feeling surface in the interface to say the one thing the design exists to avoid saying — and it
+reports the speculative curve alongside when that is showing.
+
+**Nearest WHOLE month on a continuous axis.** The trace has a point per month; a fractional reading
+between them is a number nobody can check against anything else in the app.
+
+**Layering asserted, not assumed:** the hit area sits after the traces (so it receives the pointer) and
+the readout after the hit area (so it draws on top), with `pointerEvents: none` on the readout so it
+cannot steal the pointer from the surface underneath it.
+
 ### ⚠️ THE HOVER LAYER REACHED ONE CHART OUT OF TWENTY-ONE
 
 I mounted it in `Composite` and wrote a comment explaining why that was the right place — **and only one

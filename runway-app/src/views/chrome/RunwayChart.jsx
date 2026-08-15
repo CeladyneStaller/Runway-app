@@ -2,7 +2,7 @@
 import React from "react";
 import { plotFrame } from "../../engine/plotframe";
 import { money } from "../../engine/money";
-import { dateShort } from "../../engine/time";
+import { dateShort, monthLabel } from "../../engine/time";
 import { useStart } from "../../state/StartCtx";
 
 export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
@@ -155,6 +155,35 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
   if (!yTicks.some(v => Math.abs(v) < 1)) yTicks.push(0);
   if (BRK) yTicks.push(balMax);
 
+  // ⚠️ ITS OWN HOVER, BECAUSE IT HAS ITS OWN CANVAS AND ITS OWN SCALES. `Wrap` carries the layer for
+  // every chart in `Chart.jsx`; this file opens its own `<svg>`, uses a CONTINUOUS time axis rather
+  // than month indices, and has a BROKEN y scale — so the shared overlay would compute the wrong month
+  // and the wrong value. **The values are the same question; the geometry is not.**
+  //
+  // It reports the BAND, which is the whole point of this chart: a single number here would use the
+  // most precise-feeling surface in the interface to say the one thing the design exists to avoid.
+  const [hoverT, setHoverT] = React.useState(null);
+  const hoverAt = (ev) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    const px = ((ev.clientX - r.left) / (r.width || 1)) * W;
+    // NEAREST WHOLE MONTH on a continuous axis — the trace has a point per month, so a fractional
+    // position between them is a reading nobody can check against the numbers elsewhere in the app.
+    const t = Math.round(((px - L) / Math.max(1, W - L - R)) * tMax);
+    setHoverT(t >= 0 && t <= tMax ? t : null);
+  };
+  const at = (rws, t) => {
+    const p = (rws || []).find(q => Math.round(q.t) === t);
+    return p ? p.b : null;
+  };
+  const hv = hoverT == null ? null : {
+    t: hoverT,
+    label: monthLabel(START_Y, START_M, hoverT),
+    balance: at(pts, hoverT),
+    up: showUpside ? at(bandPts(rowsUp), hoverT) : null,
+    lo: band ? at(bandPts(band.floor.rows), hoverT) : null,
+    hi: band ? at(bandPts(band.ceiling.rows), hoverT) : null,
+  };
+
   return (
     <svg className="svgc" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img"
          aria-label="Cash balance projection over time showing the zero-funds crossing and milestone dates">
@@ -294,6 +323,41 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
       {/* start marker */}
       <circle cx={x(0)} cy={y(cash)} r="4" fill="#fff"/>
       <text x={x(0) + 8} y={y(cash) - 8} fontSize="11.5" fontFamily="var(--fm)" fill="#fff">{money(cash)}</text>
+      {/* the guide, the hit area, and the readout — added last so nothing draws over them */}
+      {hv && (
+        <line x1={x(hv.t)} y1={T} x2={x(hv.t)} y2={H - B} stroke="var(--on-dark-mute)"
+              strokeWidth="1" strokeDasharray="3 3" opacity=".7" />
+      )}
+      <rect x={L} y={T} width={W - L - R} height={PH} fill="transparent"
+            style={{ cursor: "crosshair" }}
+            onMouseMove={hoverAt} onMouseLeave={() => setHoverT(null)}
+            onPointerDown={hoverAt} />
+      {hv && hv.balance != null && (
+        <g transform={`translate(${x(hv.t) + (x(hv.t) > W * 0.62 ? -232 : 14)}, ${T + 10})`}
+           style={{ pointerEvents: "none" }}>
+          <rect width="218" height={hv.lo != null ? 96 : 62} rx="9"
+                fill="var(--dark, #0E1B22)" opacity=".96" stroke="var(--on-dark-mute)" strokeOpacity=".3" />
+          <text x="12" y="20" className="rc-hv-m">{hv.label}</text>
+          <text x="12" y="40" className="rc-hv-l">Cash balance</text>
+          <text x="206" y="40" className="rc-hv-v" textAnchor="end">{money(hv.balance)}</text>
+          {hv.lo != null && (
+            <>
+              {/* ⚠️ THE RANGE, NOT JUST THE LINE. If the chart draws a band, the readout reports a band —
+                  a single number here is the one thing this product's design exists to avoid saying. */}
+              <text x="12" y="60" className="rc-hv-l">Range</text>
+              <text x="206" y="60" className="rc-hv-v" textAnchor="end">
+                {money(hv.lo)} to {money(hv.hi)}
+              </text>
+            </>
+          )}
+          {hv.up != null && (
+            <>
+              <text x="12" y="80" className="rc-hv-l">With speculative</text>
+              <text x="206" y="80" className="rc-hv-v" textAnchor="end">{money(hv.up)}</text>
+            </>
+          )}
+        </g>
+      )}
     </svg>
   );
 }
