@@ -1787,3 +1787,40 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   line-height:1.6;max-width:64ch}
 .emptynote.tight{padding:18px 24px}
 .panel .emptynote,.tbl + .emptynote{padding:24px}
+
+
+/* ---- panel edge insets ----
+   ⚠️ SCOPED TO A DIRECT CHILD OF `.panel`, NOT APPLIED TO THE BASE RULE.
+   `.acct-row-s` is used 47 times and only 8 of those are flush — the other 39 sit inside a parent that
+   already pads them, and widening the base rule would inset all 47. **A fix whose blast radius is six
+   times its target is not a fix**, and the 39 would have drifted right by 18px with nobody to notice
+   until a screenshot.
+
+   `.panel` has no padding of its own — background, border, radius, `overflow:hidden` and nothing else —
+   so every child answers "how far in do I sit" separately. That is why the audit found 47 rows rather
+   than three, and this is a targeted patch rather than the structural answer. */
+.panel > .acct-row-s,
+.panel > .acct-warn,
+.panel > .acct-warnbox,
+.panel > .members-form,
+.panel > .subs,
+.panel > .scn-deltas,
+.panel > .pf-stats,
+.panel > .flavour-pick { padding-left:18px; padding-right:18px; }
+
+/* Empty states sit alone in their container, so they take the LARGER standoff — the same reasoning as
+   `.ch-empty` and `.plan-empty`: text at the container's normal inset reads as pinned to the wall
+   rather than as the considered "nothing here yet" it is. */
+.cmt-empty{padding:24px 24px}
+.panel > .scn-empty{padding:22px 24px}
+
+/* ⚠️ THE CHANGE CHART MENU — the panel people open most, and every option row was flush. */
+.ch-pick{padding:4px 18px 12px}
+
+/* ⚠️ THE LEGAL TEXT, FLUSH INSIDE A MODAL. The one place in the app where the content IS a legal
+   document, and it read as unfinished. `.modal-b` supplies 17px; this only needed the scroll container
+   not to cancel it — but an explicit value is safer than relying on a sibling's padding. */
+.lgl-scroll{max-height:56vh;padding-left:2px;padding-right:2px}
+
+/* The milestone table body — its header was fixed when `.plan-add` was; this is the rows beneath. */
+.panel > .plan-rows{margin-left:18px;margin-right:18px}

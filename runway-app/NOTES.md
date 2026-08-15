@@ -1742,6 +1742,40 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Panel edge audit, and the three fixes
+
+**274 parent/child relationships checked**, built from the JSX nesting rather than guessed from class
+names. 47 direct children of a real panel sat under 12px; 26 were flush on all four sides.
+
+**One cause behind nearly all of it: `.panel` has no padding.** Background, border, `radius:16px`,
+`overflow:hidden` and nothing else — so 34 different children each answer "how far in do I sit"
+separately. **That is why every gap Corey has reported has been one at a time.**
+
+### ⚠️ THE FIX I NEARLY MADE WOULD HAVE BEEN SIX TIMES TOO BIG
+
+`.acct-row-s` is used **47 times and only 8 are flush** — the other 39 sit inside a parent that already
+pads them. Widening the base rule would have shifted all 47, and the 39 would have drifted 18px right
+with nothing to notice it until a screenshot. **A fix whose blast radius is six times its target is not
+a fix.** Scoped to `.panel > .acct-row-s` instead.
+
+**`.cmt-empty` already had 16px and `.scn-empty` had no rule of its own** — both worth checking rather
+than assuming from the audit, which reports declarations and not layout.
+
+### What the three fixes did
+
+    47 direct panel children under 12px  ->  34
+
+Thirteen fixed: the eight repeated text/control children, both empty states, the Change chart menu, the
+legal text, and the milestone rows.
+
+**Of the 34 remaining, 22 are modals** — a different container with its own header/body/footer
+convention, which should be assessed as a set rather than patched piecemeal. **The rest are structural**
+— a `.tbl` flush inside a panel is correct, because its cells carry the inset.
+
+**The durable answer is still that `.panel` should own its inset and tables opt out**, rather than 34
+children opting in. That wants doing when there is time to walk every tab afterwards, not on top of a
+session that has already moved the chart geometry twice.
+
 ### Four spacing faults in the Projects tab, one shape
 
 **`+ Thrust` and `+ Milestone` were `linkbtn`** — underlined text. They are the only way to put anything
