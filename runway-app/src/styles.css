@@ -1743,3 +1743,5 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .rc-hv-m{font-family:var(--fm);font-size:10px;fill:var(--on-dark-mute)}
 .rc-hv-l{font-family:var(--fb);font-size:11px;fill:var(--on-dark)}
 .rc-hv-v{font-family:var(--fm);font-size:11px;fill:#fff}
+.ch-axt{font-family:var(--fb);font-size:9.5px;font-weight:600;fill:var(--muted-2);
+  letter-spacing:.03em}

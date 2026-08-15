@@ -1742,6 +1742,57 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Axis labels, and a right axis formatting money as counts
+
+**⚠️ THE RIGHT AXIS WAS HARDCODED TO `count`** — right for subscribers by luck, wrong for a percentage
+or a headcount. And `spec.format` describes THE CHART, which is only ever true of the LEFT axis, so
+subscribers on the right rendered as dollars. **A second axis formatted in the first axis's unit is
+worse than no second axis: it reports 24 subscribers as $24.**
+
+**The unit now travels with the SERIES**, and the axis reads it. Both breakdown and plain paths carry
+it — the second one was missed on the first pass and caught by counting.
+
+**⚠️ AND UNITS AND FORMATS ARE DIFFERENT VOCABULARIES.** A measure declares `percent` meaning 0-100; the
+renderer's `percent` means a FRACTION, and three curated charts depend on that. **I nearly redefined it
+for the new allocation measures, which would have turned 0.62 into "1%" on all three.** The newcomer got
+its own name (`pct100`) and an explicit `UNIT_FMT` map, which is what stops the next person assuming the
+two vocabularies are interchangeable.
+
+**`count` is whole now.** "6.0 subscribers" is a decimal on a thing that cannot have one, and on an axis
+it reads as precision the number does not have.
+
+**Both axes are titled**: the series name when an axis carries one, the unit when it carries several —
+naming one of four spend measures would be wrong about the other three. The left title sits rotated in
+the gutter, which is the only space that exists without stealing plot width.
+
+### A breakdown subtotals whether or not it is stacked
+
+The hover's total was gated on `stacked` — **a DRAWING choice.** Eight projects drawn as eight lines are
+still eight parts of one measure, and their sum is still that measure's value. **Gating a semantic fact
+on a visual setting meant the number appeared and disappeared depending on which shape somebody picked.**
+
+**Subtotalled per GROUP**, which is what "parts of one measure" means. Several distinct measures each
+form their own group of one and get no subtotal — summing money in and cash balance is arithmetic nobody
+asked for. **The subtotal is NAMED**, because "Total" alone is ambiguous the moment a chart has a
+breakdown and a second measure.
+
+**The stack height stays a separate number** for the case where several MEASURES are stacked together —
+one group each, so no subtotal, but the height is what the eye reads.
+
+**⚠️ AND IT CAME BACK EMPTY ON THE FIRST ATTEMPT, because `rows` never copied `group`.** The hand-written
+pick in `valueAt` predated the field. **That is the same omission that dropped `color` in the renderer,
+`color` again in the legend, and four fields in `saveChart`** — four times in one session, always a pick
+written before the field existed, always silent.
+
+### `note` was absent rather than null on one branch
+
+The hbars return dropped the field when the one-measure limitation was removed. **An absent field is not
+the same as an empty one to a caller** — `.toMatch()` reports `null` as "object" and `undefined` as
+"undefined", which is the confusion that made a stale assertion read as a type error earlier today.
+
+**A spec shape that varies by branch makes every consumer handle two cases where there should be one.**
+All four branches now carry `note` explicitly — checked, not assumed.
+
 ### Ten failures — one real regression, nine deliberate changes
 
 **⚠️ THE REAL ONE: I DISABLED `lens.rows` WHILE FIXING `lens.keep`.**

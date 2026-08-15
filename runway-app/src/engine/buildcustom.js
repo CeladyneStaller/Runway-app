@@ -123,6 +123,14 @@ export function buildCustom(cfg, doc, parts, rows) {
       const colors = colorsFor(perMeasure.map(({ spec }) => ({ id: spec.id })), null);
       return {
         kind: "hbars", format: "money", magnitude: true,
+        // ⚠️ EXPLICITLY NULL, NOT ABSENT. Every other return from this function carries `note` — a
+        // string or null — and this one dropped the field when the one-measure limitation was removed.
+        //
+        // An absent field is not the same as an empty one to a caller: `.toMatch()` reports `null` as
+        // "object" and `undefined` as "undefined", which is exactly the confusion that made a stale
+        // assertion read as a type error earlier today. **A spec shape that varies by branch makes
+        // every consumer handle two cases where there should be one.**
+        note: null,
         rows: keys.map(k => ({
           label: cats.get(k),
           segments: perMeasure.map(({ spec, m, totals }, idx) => ({
@@ -185,8 +193,11 @@ export function buildCustom(cfg, doc, parts, rows) {
         id: `${spec.id}:${sp.id}`, label: `${sp.label}`, values: flip(clip(sp.values)),
         color: colors[k], tone: sp.unassigned ? "muted" : null,
         shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
-        // THE GROUP IT CAME FROM, so a stack of one measure's parts does not merge with another's.
-        group: spec.id,
+        unit: m.unit,
+        // THE GROUP IT CAME FROM, so a stack of one measure's parts does not merge with another's —
+        // and so the hover can subtotal a breakdown. `groupLabel` travels with it because the tooltip
+        // must name the measure without importing the registry.
+        group: spec.id, groupLabel: m.label,
       }));
     } else {
       // ⚠️ MODIFIERS EXPAND ONE DATASET INTO ONE OR TWO SERIES. Model draws the pair, Cumulative
@@ -201,7 +212,10 @@ export function buildCustom(cfg, doc, parts, rows) {
           dashed: !!part.dashed,
           tone: TONES[colorIdx % TONES.length],
           shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
-          group: spec.id,
+          // ⚠️ THE UNIT TRAVELS WITH THE SERIES. The axis cannot format a number it does not know the
+          // unit of, and `spec.format` describes the chart — which is only ever the LEFT axis.
+          unit: m.unit,
+          group: spec.id, groupLabel: m.label,
         });
       }
       colorIdx++;

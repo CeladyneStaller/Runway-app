@@ -105,3 +105,54 @@ describe("placement", () => {
     expect(p.y).toBeLessThanOrEqual(252 - 4);
   });
 });
+
+describe("⚠️ a breakdown subtotals whether or not it is stacked", () => {
+  const mk = (stacked) => ({
+    format: "money", x: ["a"], ticks: [{ label: "Nov" }],
+    series: [
+      { id: "p:1", label: "Catalyst", group: "p", groupLabel: "Project spend", values: [41000], stacked },
+      { id: "p:2", label: "Pilot", group: "p", groupLabel: "Project spend", values: [26800], stacked },
+      { id: "p:3", label: "Stack", group: "p", groupLabel: "Project spend", values: [18200], stacked },
+    ],
+  });
+
+  it("GIVES THE SAME SUBTOTAL EITHER WAY", () => {
+    // The total was gated on `stacked`, which is a DRAWING choice — but eight projects drawn as eight
+    // lines are still eight parts of one measure. **Gating a semantic fact on a visual setting meant
+    // the number appeared and disappeared depending on which shape somebody picked.**
+    for (const stacked of [true, false]) {
+      const g = valueAt(mk(stacked), 0).groups;
+      expect(g, `stacked=${stacked}`).toHaveLength(1);
+      expect(g[0].value).toBe(86000);
+      expect(g[0].label).toBe("Project spend");     // named, not just "Total"
+    }
+  });
+
+  it("⚠️ DOES NOT SUM UNRELATED MEASURES", () => {
+    // Money in plus cash balance is arithmetic nobody asked for. Each measure is its own group of one.
+    const un = { format: "money", x: ["a"], ticks: [{ label: "Nov" }], series: [
+      { id: "rev", group: "rev", label: "Money in", values: [80000] },
+      { id: "end", group: "end", label: "Cash", values: [500000] },
+    ] };
+    expect(valueAt(un, 0).groups).toHaveLength(0);
+    expect(valueAt(un, 0).total).toBeNull();
+  });
+
+  it("still reports the STACK HEIGHT when several measures are stacked together", () => {
+    // One group each, so no subtotal — but the height is what the eye reads.
+    const two = { format: "money", x: ["a"], ticks: [{ label: "Nov" }], series: [
+      { id: "rev", group: "rev", label: "Money in", values: [80000], stacked: true },
+      { id: "cost", group: "cost", label: "Money out", values: [-40000], stacked: true },
+    ] };
+    expect(valueAt(two, 0).total).toBe(40000);
+    expect(valueAt(two, 0).groups).toHaveLength(0);
+  });
+
+  it("⚠️ CARRIES `group` THROUGH THE ROW PICK", () => {
+    // The subtotal came back empty on the first attempt because `rows` never copied `group` — the same
+    // hand-written-pick omission that dropped `color` in the renderer, `color` again in the legend, and
+    // four fields in `saveChart`.
+    expect(valueAt(mk(true), 0).rows[0].group).toBe("p");
+    expect(valueAt(mk(true), 0).rows[0].groupLabel).toBe("Project spend");
+  });
+});

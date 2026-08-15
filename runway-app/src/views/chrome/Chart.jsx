@@ -72,9 +72,18 @@ function signRuns(values, xOf, yOf) {
 
 const fmt = (v, f) => {
   if (!Number.isFinite(v)) return "";
+  // ⚠️ `percent` TAKES A FRACTION, AND THREE CURATED CHARTS DEPEND ON THAT. I nearly changed it to take
+  // 0-100 for the new allocation measures and would have turned 0.62 into "1%" on all three. **A shared
+  // formatter cannot be redefined for a newcomer's convenience** — the newcomer gets its own name.
   if (f === "percent") return `${Math.round(v * 100)}%`;
+  // `pct100` is for measures that already return 0-100, which is what `allocPct` and `unallocPct` do
+  // because that is what every other reader of a percentage measure expects.
+  if (f === "pct100") return `${Math.round(v)}%`;
   if (f === "ratio") return v.toFixed(2);
-  if (f === "count") return v.toFixed(1);
+  // A COUNT IS WHOLE. "6.0 subscribers" is a decimal on a thing that cannot have one — and on an axis
+  // it reads as precision the number does not have.
+  if (f === "count") return String(Math.round(v));
+  if (f === "people") return String(Math.round(v));
   return money(v);
 };
 
@@ -193,7 +202,18 @@ const CategoryAxis = ({ ticks, y }) => {
   );
 };
 
-const Axes = ({ s, xs, ticks, format, sRight = null, rightLabel = null }) => (
+/** ⚠️ EACH AXIS FORMATS IN ITS OWN UNIT, AND SAYS WHAT THAT UNIT IS.
+ *
+ *  The right axis was hardcoded to `count` — right for subscribers and wrong for a percentage or a
+ *  headcount, and it made money on the LEFT look like the only unit that had been thought about.
+ *  **A second axis whose numbers are formatted as the first axis's unit is worse than no second axis:
+ *  it reports 24 subscribers as $24.**
+ *
+ *  And neither side was titled. On a chart with one unit that is arguably fine; on a chart with TWO it
+ *  is a reader guessing which scale a line belongs to.
+ */
+const Axes = ({ s, xs, ticks, format, sRight = null, rightFormat = null,
+                leftTitle = null, rightTitle = null }) => (
   <>
     <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH} stroke="var(--line)" />
     <line x1={PAD.l} y1={s.zero} x2={W - PAD.r} y2={s.zero} stroke="var(--line)" />
@@ -218,6 +238,12 @@ const Axes = ({ s, xs, ticks, format, sRight = null, rightLabel = null }) => (
     {/* ⚠️ THE RIGHT AXIS IS LABELLED, or it is a mystery. A second scale nobody can read is worse than
         one shared scale: at least a flattened line is visibly flat. Its ticks sit outside the plot and
         carry the name of the series they belong to. */}
+    {/* THE LEFT TITLE SITS IN THE GUTTER, ROTATED — the only space that exists without stealing plot
+        width, and the convention every reader already knows. */}
+    {leftTitle && (
+      <text x={12} y={PAD.t + PH / 2} className="ch-axt" textAnchor="middle"
+            transform={`rotate(-90 12 ${PAD.t + PH / 2})`}>{leftTitle}</text>
+    )}
     {sRight && (
       <g>
         <line x1={W - PAD.r} y1={PAD.t} x2={W - PAD.r} y2={PAD.t + PH} stroke="var(--line)" />
@@ -225,13 +251,12 @@ const Axes = ({ s, xs, ticks, format, sRight = null, rightLabel = null }) => (
           const v = sRight.lo + (sRight.hi - sRight.lo) * (1 - f);
           return (
             <text key={i} x={W - PAD.r + 5} y={PAD.t + PH * f + 3} className="ch-t" textAnchor="start">
-              {fmt(v, "count")}
+              {fmt(v, rightFormat || "count")}
             </text>
           );
         })}
-        {rightLabel && (
-          <text x={W - PAD.r + 5} y={PAD.t - 4} className="ch-t" textAnchor="start"
-                fill="var(--muted-2)">{rightLabel}</text>
+        {rightTitle && (
+          <text x={W - PAD.r + 5} y={PAD.t - 6} className="ch-axt" textAnchor="start">{rightTitle}</text>
         )}
       </g>
     )}
@@ -805,6 +830,23 @@ function Milestones({ spec }) {
  *  This is a DISPATCHER, not a rewrite. `Lines`, `Stack`, `Bars` each already draw a SET of series in
  *  one shape; they are handed subsets and left alone.
  */
+/** What an axis is measured in, said in the reader's words rather than the code's.
+ *
+ *  ⚠️ THE SERIES NAME WHEN THERE IS ONE, THE UNIT WHEN THERE ARE SEVERAL. A right axis carrying only
+ *  "Subscribers" should say so; a left axis carrying four spend measures should say "USD", because
+ *  naming one of the four would be wrong about the other three.
+ */
+// ⚠️ UNITS AND FORMATS ARE DIFFERENT VOCABULARIES. A measure declares `percent` meaning 0-100; the
+// renderer's `percent` means a fraction. Mapping them explicitly is what stops the next person
+// assuming they are interchangeable.
+const UNIT_FMT = { money: "money", count: "count", people: "people", percent: "pct100" };
+
+function titleFor(list, unit) {
+  if (!list?.length) return null;
+  if (list.length === 1) return list[0].label || null;
+  return ({ money: "USD", count: "Count", percent: "Percent", people: "People" })[unit] || null;
+}
+
 function Composite({ spec }) {
   // ⚠️ A SPEC WITH NO SERIES IS NOT A CHART WITH NOTHING IN IT — it may be a shape this renderer does
   // not handle, or a refusal carrying only a note. Drawing an empty canvas would hide both.
@@ -862,9 +904,15 @@ function Composite({ spec }) {
   const sub = (list) => ({ ...spec, series: list, domain, domainRight, rightIds, marks: true });
   return (
     <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
+      {/* ⚠️ THE UNIT COMES FROM THE SERIES, NOT FROM THE CHART. `spec.format` describes the chart, which
+          is only ever true of the LEFT axis — the right axis belongs to whichever series was sent
+          there, and asking the chart produced "24 subscribers" rendered as "$24". */}
       <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format}
             sRight={domainRight ? scale(domainRight) : null}
-            rightLabel={rightSeries[0]?.label} />
+            // A MEASURE'S UNIT MAPS TO A FORMAT NAME; they are not the same vocabulary.
+            rightFormat={UNIT_FMT[rightSeries[0]?.unit] || "count"}
+            leftTitle={titleFor(series.filter(sr => !rightIds.has(sr.id)), spec.format)}
+            rightTitle={titleFor(rightSeries, rightSeries[0]?.unit)} />
       {/* FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED. A filled stack over a line hides it
           completely; a line over a stack is always readable. */}
       {groups.stackBars.length > 0 && <Stack spec={{ ...sub(groups.stackBars), bars: true }} />}

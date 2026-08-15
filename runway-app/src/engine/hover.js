@@ -35,21 +35,49 @@ export function valueAt(spec, i, ctx = {}) {
     // axis scale, so it stays here, marked so the tooltip can grey it to match.
     dim: !!s.dim,
     stacked: !!s.stacked,
+    // ⚠️ COPIED, BECAUSE THE SUBTOTAL DEPENDS ON THEM. This hand-written pick is the same shape that
+    // dropped `color` in the renderer, `color` again in the legend, and four fields in `saveChart`.
+    // **A field produced upstream and omitted from a pick fails silently every time.**
+    group: s.group ?? s.id,
+    groupLabel: s.groupLabel || null,
     // ⚠️ A RIGHT-AXIS SERIES SAYS SO. Two scales are already a compromise; a number lifted off the
     // wrong one is worse than not reading it.
     axis: s.axis === "right" ? "right" : "left",
   }));
 
-  // ⚠️ THE STACK TOTAL IS REQUIRED, NOT OPTIONAL. People read a stack by its HEIGHT, so the number
-  // they are usually after is the total — and listing four segments without it makes them add up
-  // figures the chart already knows.
+  // ⚠️ A BREAKDOWN SUMS WHETHER OR NOT IT IS STACKED. The total was gated on `stacked`, which is a
+  // DRAWING choice — but eight projects drawn as eight lines are still eight parts of one measure, and
+  // their sum is still that measure's value. **Gating a semantic fact on a visual setting meant the
+  // number appeared and disappeared depending on which shape somebody picked.**
+  //
+  // Subtotalled per GROUP, because that is what "parts of one measure" means here. Several distinct
+  // measures each form their own group of one and get no subtotal — summing money in and money out
+  // would be arithmetic nobody asked for.
+  const byGroup = new Map();
+  for (const r of rows) {
+    const g = r.group ?? r.id;
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push(r);
+  }
+  const groups = [...byGroup.entries()]
+    .filter(([, list]) => list.length > 1)
+    .map(([g, list]) => ({
+      group: g,
+      label: list[0].groupLabel || "Total",
+      value: list.reduce((a, r) => a + r.value, 0),
+    }));
+
+  // ⚠️ AND THE STACK HEIGHT IS A DIFFERENT NUMBER when several MEASURES are stacked together — one
+  // group each, so no subtotal above, but the height is what the eye reads. Reported only when it is
+  // not already covered by a group subtotal.
   const stacked = rows.filter(r => r.stacked);
-  const total = stacked.length > 1
+  const stackGroups = new Set(stacked.map(r => r.group ?? r.id));
+  const total = stacked.length > 1 && stackGroups.size > 1
     ? stacked.reduce((a, r) => a + r.value, 0)
     : null;
 
   return {
-    label, categorical, rows, total,
+    label, categorical, rows, groups, total,
     // ⚠️ "PROJECTED" IS NOT DECORATION. A tooltip that reports a modelled figure the same way it
     // reports a recorded one undoes the actuals/projection divide — and it is worse than the line,
     // because a precise number FEELS like a fact.

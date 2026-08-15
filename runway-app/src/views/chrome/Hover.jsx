@@ -83,8 +83,15 @@ export function HoverLayer({ spec, box, ctx = {}, format }) {
                 <b>{fmt(r.value, format || v.format)}</b>
               </div>
             ))}
+            {/* ⚠️ A SUBTOTAL PER BREAKDOWN, NAMED. "Total" alone is ambiguous the moment a chart has a
+                breakdown AND a second measure — it has to say WHICH measure it totals. */}
+            {(v.groups || []).map(g => (
+              <div className="hv-r hv-t" key={g.group}>
+                <span>{g.label}</span><b>{fmt(g.value, format || v.format)}</b>
+              </div>
+            ))}
             {v.total != null && (
-              <div className="hv-r hv-t"><span>Total</span><b>{fmt(v.total, format || v.format)}</b></div>
+              <div className="hv-r hv-t"><span>Stack total</span><b>{fmt(v.total, format || v.format)}</b></div>
             )}
             {v.band && (
               <div className="hv-f">Range {fmt(v.band.lo, v.format)} to {fmt(v.band.hi, v.format)}</div>
