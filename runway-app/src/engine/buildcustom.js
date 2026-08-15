@@ -11,7 +11,7 @@
 import { axisTicks, months } from "./charts.js";
 import { measureById, overlaps, unitsOf, allowedTypes } from "./measures.js";
 import { dimensionById, splitBy, tooManySeries } from "./dimensions.js";
-import { colorsFor } from "./palette.js";
+import { colorsFor, chartColors } from "./palette.js";
 import { applyModifiers } from "./modifiers.js";
 import { renderKind, axesFor } from "./charttype.js";
 
@@ -171,7 +171,6 @@ export function buildCustom(cfg, doc, parts, rows) {
   // what makes "spend split by project, with cash over it" expressible. The old builder had ONE
   // breakdown for the chart, so a split measure and an unsplit one could not coexist.
   const out = [];
-  let colorIdx = 0;
   for (const spec of cfg.measures || []) {
     const m = measureById(spec.id);
     if (!m) continue;
@@ -188,10 +187,9 @@ export function buildCustom(cfg, doc, parts, rows) {
 
     if (dim) {
       const split = splitBy(dim, linesFor(spec.id, parts, doc), n, doc);
-      const colors = colorsFor(split, dim.typeOf ? (k) => dim.typeOf(k, doc) : null);
       split.forEach((sp, k) => out.push({
         id: `${spec.id}:${sp.id}`, label: `${sp.label}`, values: flip(clip(sp.values)),
-        color: colors[k], tone: sp.unassigned ? "muted" : null,
+        tone: sp.unassigned ? "muted" : null, unassigned: sp.unassigned,
         shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
         unit: m.unit,
         // THE GROUP IT CAME FROM, so a stack of one measure's parts does not merge with another's —
@@ -210,7 +208,6 @@ export function buildCustom(cfg, doc, parts, rows) {
           id: part.suffix ? `${spec.id}:${part.suffix}` : spec.id,
           label: part.label, values: flip(part.values), signColor,
           dashed: !!part.dashed,
-          tone: TONES[colorIdx % TONES.length],
           shape: spec.shape || "lines", stacked: !!spec.stacked, axis: spec.axis || "left",
           // ⚠️ THE UNIT TRAVELS WITH THE SERIES. The axis cannot format a number it does not know the
           // unit of, and `spec.format` describes the chart — which is only ever the LEFT axis.
@@ -218,8 +215,25 @@ export function buildCustom(cfg, doc, parts, rows) {
           group: spec.id, groupLabel: m.label,
         });
       }
-      colorIdx++;
     }
+  }
+
+  // ⚠️ ONE COLOUR PASS FOR THE WHOLE CHART. Two allocators that did not know about each other gave a
+  // breakdown three computed hues and the plain measure beside it index 0 — the same green the ramp
+  // starts on. **A chart's colours are a property of the chart, not of the branch that built a series.**
+  {
+    const byGroup = new Map();
+    for (const sr of out) {
+      if (!byGroup.has(sr.group)) byGroup.set(sr.group, []);
+      byGroup.get(sr.group).push(sr);
+    }
+    const spec = (id) => (cfg.measures || []).find(m => m.id === id);
+    const groups = [...byGroup.entries()].map(([id, series]) => {
+      const by = spec(id)?.by ? dimensionById(spec(id).by) : null;
+      return { id, series, typeOf: by?.typeOf ? (k) => by.typeOf(k, doc) : null };
+    });
+    const colors = chartColors(groups);
+    for (const sr of out) if (colors.has(sr.id)) sr.color = colors.get(sr.id);
   }
 
   // ⚠️ THE CAP IS ON THE TOTAL, because two datasets each split eight ways is sixteen series produced

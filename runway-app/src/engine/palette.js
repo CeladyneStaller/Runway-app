@@ -62,7 +62,10 @@ export function ramp(base, n) {
  * @param series  [{ id, label, unassigned }]
  * @param typeOf  (id) => typeKey | null   — from the dimension; null means "no type to preserve"
  */
-export function colorsFor(series = [], typeOf = null) {
+export function colorsFor(series = [], typeOf = null, avoid = []) {
+  // Hues already spoken for elsewhere on this chart. Empty for a single-breakdown chart, which is why
+  // this parameter is optional and why nothing below changes when it is.
+  const taken = new Set(avoid);
   const out = new Array(series.length);
 
   // Semantic first: if every value is a known tier, the fixed map wins outright.
@@ -72,8 +75,10 @@ export function colorsFor(series = [], typeOf = null) {
   }
 
   if (!typeOf) {
+    const free = SOLO.filter(c => !taken.has(c));
+    const pool = free.length >= series.length ? free : SOLO;
     let k = 0;
-    series.forEach((s, i) => { out[i] = s.unassigned ? UNASSIGNED : SOLO[k++ % SOLO.length]; });
+    series.forEach((s, i) => { out[i] = s.unassigned ? UNASSIGNED : pool[k++ % pool.length]; });
     return out;
   }
 
@@ -87,7 +92,8 @@ export function colorsFor(series = [], typeOf = null) {
   });
   let spare = 0;
   for (const [t, idxs] of groups) {
-    const base = HUES[t] || SOLO[spare++ % SOLO.length];
+    // A TYPE WITHOUT A DECLARED HUE takes the first unclaimed one rather than index 0.
+    const base = HUES[t] || SOLO.filter(c => !taken.has(c))[spare++] || SOLO[spare % SOLO.length];
     const steps = ramp(base, idxs.length);
     idxs.forEach((idx, j) => { out[idx] = steps[j]; });
   }
@@ -95,3 +101,46 @@ export function colorsFor(series = [], typeOf = null) {
 }
 
 export { HUES };
+
+
+/** Colours for a WHOLE chart, in one pass.
+ *
+ *  ⚠️ TWO ALLOCATORS THAT DID NOT KNOW ABOUT EACH OTHER. A breakdown drew its hues from `colorsFor`,
+ *  while a plain measure took the next name off a cycling `TONES` list — and neither advanced the
+ *  other's counter. So "subscription revenue by product" consumed three computed hues and the
+ *  subscriber line beside it still took index 0, **which is the same green the ramp starts on.**
+ *
+ *  **A chart's colours are a property of the chart, not of whichever branch happened to build a
+ *  series.** One pass, one used-set, and a series cannot collide with one it never met.
+ *
+ *  @param groups  [{ id, series: [{ id, unassigned }], typeOf }] — a breakdown is a group of many, a
+ *                 plain measure a group of one.
+ */
+export function chartColors(groups = []) {
+  const used = new Set();
+  const out = new Map();
+
+  // BREAKDOWNS FIRST. They need a contiguous ramp and there is no point giving a single line the best
+  // hue and leaving a ramp to squeeze around it.
+  const ordered = [...groups].sort((a, b) => (b.series?.length || 0) - (a.series?.length || 0));
+
+  for (const g of ordered) {
+    const list = g.series || [];
+    if (list.length > 1) {
+      // ⚠️ A SECOND BREAKDOWN MUST NOT RESTART THE RAMP. `colorsFor` allocates from the top of `SOLO`
+      // every time, so two breakdowns on one chart came back identical — eight series in four colours,
+      // each appearing twice. **The used-set has to be honoured WITHIN a group's allocation, not only
+      // between groups.**
+      const cs = colorsFor(list, g.typeOf || null, [...used]);
+      list.forEach((sr, i) => { out.set(sr.id, cs[i]); used.add(cs[i]); });
+    } else if (list.length === 1) {
+      const sr = list[0];
+      if (sr.unassigned) { out.set(sr.id, UNASSIGNED); continue; }
+      // THE FIRST HUE NOBODY HAS TAKEN. Falling back to a used one is better than crashing, but the
+      // fallback should be the LAST resort rather than index 0 by default.
+      const free = SOLO.find(c => !used.has(c)) || SOLO[used.size % SOLO.length];
+      out.set(sr.id, free); used.add(free);
+    }
+  }
+  return out;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { colorsFor, ramp, shade, UNASSIGNED, SEMANTIC, SOLO } from "../../src/engine/palette.js";
+import { colorsFor, chartColors, ramp, shade, UNASSIGNED, SEMANTIC, SOLO } from "../../src/engine/palette.js";
 
 const S = (...ids) => ids.map(id => ({ id }));
 
@@ -129,5 +129,47 @@ describe("⚠️ the renderer can actually draw what the palette names", () => {
     // token for "the second grant". The renderer read `tone` only, and discarded every computed colour.
     expect(chart).toMatch(/const colorOf = \(s\) => s\?\.color \|\| tone\(s\?\.tone\)/);
     expect(chart).toMatch(/colorOf\(sr\)/);
+  });
+});
+
+describe("⚠️ one colour allocator for the whole chart", () => {
+  const g = (id, n, extra = {}) => ({ id, series: Array.from({ length: n }, (_, i) => ({ id: `${id}${i}` })), ...extra });
+  const values = (groups) => [...chartColors(groups).values()];
+
+  it("⚠️ A BREAKDOWN AND A PLAIN MEASURE DO NOT COLLIDE", () => {
+    // Two allocators that did not know about each other: a breakdown drew from `colorsFor`, a plain
+    // measure took the next name off a cycling TONES list, and neither advanced the other's counter.
+    // **So three products consumed three hues and the subscriber line beside them still took index 0 —
+    // the same green the ramp starts on.**
+    const v = values([g("p", 3), g("x", 1)]);
+    expect(new Set(v).size).toBe(v.length);
+  });
+
+  it("⚠️ TWO BREAKDOWNS DO NOT RESTART THE RAMP", () => {
+    // `colorsFor` allocates from the top of SOLO every call, so two breakdowns came back identical —
+    // eight series in four colours, each appearing twice. **The used-set has to be honoured WITHIN a
+    // group's allocation, not only between groups.**
+    const v = values([g("p", 2), g("q", 2)]);
+    expect(new Set(v).size).toBe(4);
+  });
+
+  it("keeps unassigned grey without spending a hue on it", () => {
+    const v = values([{ id: "p", series: [{ id: "p1" }, { id: "n", unassigned: true }] }, g("x", 1)]);
+    expect(v).toContain(UNASSIGNED);
+    expect(new Set(v).size).toBe(v.length);
+  });
+
+  it("allocates breakdowns before single series", () => {
+    // A ramp needs contiguous hues; there is no point giving a single line the best one and leaving the
+    // ramp to squeeze around it.
+    const v = values([g("x", 1), g("p", 3)]);
+    expect(v.slice(0, 3)).toEqual([...new Set(v.slice(0, 3))]);
+  });
+
+  it("⚠️ NEITHER BRANCH ALLOCATES ITS OWN COLOUR ANY MORE", async () => {
+    // The durable fix is that there is one pass, not that the two happen to agree today.
+    const src = (await import("node:fs")).readFileSync("src/engine/buildcustom.js", "utf8");
+    expect(src).not.toMatch(/TONES\[colorIdx/);
+    expect(src).toMatch(/chartColors\(groups\)/);
   });
 });

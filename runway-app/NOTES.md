@@ -1742,6 +1742,30 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ TWO COLOUR ALLOCATORS THAT DID NOT KNOW ABOUT EACH OTHER
+
+A breakdown drew its hues from `colorsFor`; a plain measure took the next name off a cycling `TONES`
+list. **Neither advanced the other's counter** — so "subscription revenue by product" consumed three
+computed hues and the subscriber line beside it still took index 0, **which is the same green the ramp
+starts on.** Corey saw it in the legend: two swatches, one colour.
+
+**A chart's colours are a property of the CHART, not of whichever branch happened to build a series.**
+`chartColors(groups)` now runs once over everything, with one used-set. Breakdowns are allocated first,
+because a ramp needs contiguous hues and there is no point giving a single line the best one and leaving
+the ramp to squeeze around it.
+
+**⚠️ AND FIXING IT EXPOSED A SECOND COLLISION NOBODY HAD REPORTED.** `colorsFor` allocates from the top
+of `SOLO` on every call, so **two breakdowns on one chart came back identical** — eight series in four
+colours, each appearing twice. The used-set had to be honoured WITHIN a group's allocation, not only
+between groups.
+
+Verified across five shapes: 3 plain, breakdown + plain, two breakdowns, breakdown + 2 plain, and
+unassigned — **every one now fully distinct**, and unassigned stays grey without spending a hue.
+
+**This is the same fault as the units, the precedence chain and the stack rule**: two places deciding
+one thing. The guard asserts neither branch allocates its own colour any more, rather than that the two
+happen to agree today.
+
 ### `TimeAxis` was the third component computing geometry from a constant that stopped being one
 
 It hardcoded `PAD`, so month labels spanned the BASE width while the plot had narrowed — "Jan 28" ran to
