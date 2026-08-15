@@ -1742,6 +1742,34 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### The modals were TWO SYSTEMS sharing a header class
+
+Not one duplicate — two conventions grown side by side:
+
+    .modal        radius 18, 22px insets, `modal-body` / `modal-foot`   6 views
+    .modal-card   radius 12, 18px insets, `modal-b`    / `modal-f`      4 views
+
+**And they shared `.modal-h`, with the second definition winning for all fourteen users.** So the six
+older modals had a header inset disagreeing with their own body and footer by 5px — **invisibly, because
+a losing CSS rule leaves no trace.** Nothing errors, nothing warns, and the file reads as though the
+first declaration is in force.
+
+**`.modal-body` was defined twice as well**, 2px apart, and the later one won — so `min-height:220px`
+was silently lost for every modal that relied on it. Merged, and the duplicate removed.
+
+The compact card is now scoped (`.modal-card .modal-h`) so both systems can coexist explicitly rather
+than by accident.
+
+### ⚠️ AND THREE OF THE TEN DUPLICATES WERE MINE, FROM LAST TURN
+
+`.ch-pick`, `.cmt-empty`, `.lgl-scroll` — I appended a block instead of editing each rule in place,
+**after flagging that exact fault two turns earlier on `.ch-legend`.** Merged into the originals.
+
+**Seven pre-existing duplicates remain** — `.badge`, `.crow`, `.crow-l`, `.fold-c`, `.modal-sub`,
+`.plan-ed`, `.seg`. Several look like deliberate responsive overrides rather than accidents, so they are
+listed rather than changed: **the fix for a real duplicate and the fix for an intentional override are
+opposite, and telling them apart needs the screen.**
+
 ## Panel edge audit, and the three fixes
 
 **274 parent/child relationships checked**, built from the JSX nesting rather than guessed from class
