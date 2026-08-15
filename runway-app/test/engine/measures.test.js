@@ -217,3 +217,44 @@ describe("⚠️ every tab with charts actually mounts the panel", () => {
     }
   });
 });
+
+describe("⚠️ subscriptions — computed since the engine was built, drawn nowhere", () => {
+  const doc = () => ({
+    saas: [{ id: "s1", name: "Cellsight", startCustomers: 10, arpu: 480, churnPct: 2, newGrowthPct: 8 },
+           { id: "s2", name: "Fleet", startCustomers: 4, arpu: 1200, churnPct: 1, newGrowthPct: 12 }],
+    pos: [], projects: [], lines: [], employees: [], history: [], settings: {},
+    startY: 2026, startM: 6,
+  });
+  const rows = Array.from({ length: 12 }, (_, m) => ({ m, rev: 0, cost: 0, net: 0, end: 0 }));
+
+  it("⚠️ SUMS ACROSS PRODUCTS, not just the first", () => {
+    // `saasSeries` is PER PRODUCT. A company with three of them would otherwise show whichever happened
+    // to be first — Corey caught this before it was built.
+    const v = measureById("subscribers").get(rows, {}, doc());
+    expect(Math.round(v[0])).toBe(14);          // 10 + 4
+  });
+
+  it("⚠️ IS A POSITION, so it cannot be cumulated", () => {
+    // How many you HAVE this month, not how many you gained. Summing gives customer-months, which is a
+    // real unit and never what anybody means.
+    expect(measureById("subscribers").position).toBe(true);
+    expect(measureById("subscribers").unit).toBe("count");
+  });
+
+  it("is offered on Sales alongside the two revenues", () => {
+    const ids = measuresFor("sales").map(m => m.id);
+    expect(ids).toContain("subscribers");
+    expect(ids).toContain("saasRev");
+    expect(ids).toContain("salesRev");
+  });
+
+  it("⚠️ THE PRODUCT DIMENSION READS A FIELD THE LINES ACTUALLY CARRY", () => {
+    // Compiled subscription lines carry `saasId`. A grouper reading a key nothing sets puts everything
+    // in one bucket labelled "Unassigned", which looks like a company with one product.
+    const d = dimensionsFor("sales").find(x => x.id === "product");
+    expect(d).toBeTruthy();
+    expect(d.of({ saasId: "s1" })).toBe("s1");
+    expect(d.labelOf("s1", doc())).toBe("Cellsight");
+    expect(d.labelOf(null, doc())).toMatch(/not a subscription/i);
+  });
+});

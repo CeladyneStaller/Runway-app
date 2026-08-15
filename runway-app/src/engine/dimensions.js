@@ -37,6 +37,16 @@ export const DIMENSIONS = [
     // lines by a field. `buildCustom` handles it specially; there is no `of` to write.
     synthetic: true, of: () => null, labelOf: (k) => k },
 
+  // ⚠️ THE WARNING WAS RIGHT: a company with three subscription products had three curves collapsed
+  // into one, with no way to tell them apart. Compiled subscription lines carry `saasId`, so the
+  // dimension has a real field to read rather than an invented one.
+  { id: "product", tab: ["sales", "flow"], label: "Subscription product",
+    of: (l) => l?.saasId ?? null,
+    labelOf: (k, doc) => (doc?.saas || []).find(p => p.id === k)?.name || "Not a subscription",
+    // NO `typeOf` — subscription products have no kind worth preserving, so each gets its own hue and
+    // identity is the whole point, exactly like spend codes and customers.
+  },
+
   { id: "poType", tab: ["sales"], label: "Type",
     of: (l) => l?.saas ? "subscription" : "po",
     labelOf: (k) => ({ po: "Purchase order", subscription: "Subscription" })[k] || k },

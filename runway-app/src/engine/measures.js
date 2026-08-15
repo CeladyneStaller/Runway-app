@@ -11,6 +11,7 @@
 
 import { accruedCostShare, shortfallAt, outstandingDebt, windDownCost } from "./commitments.js";
 import { monthTotal } from "./coding.js";
+import { saasSeries } from "./saas.js";
 
 /** The projection row is `{ m, start, rev, cost, net, end, inNonGrant }` — seven fields, and three of
  *  them contain each other. `contains` is what stops a chart double-counting. */
@@ -92,9 +93,28 @@ export const MEASURES = [
     get: (rows, parts) => sumLines(parts?.roundLines, rows.length),
     allows: ["lines", "bars", "stack"] },
 
-  { id: "saasRev", tab: ["flow"], label: "Recurring revenue", unit: "money",
+  { id: "saasRev", tab: ["flow", "sales"], label: "Subscription revenue", unit: "money",
     get: (rows, parts) => sumLines(parts?.saasLines, rows.length),
     allows: ["lines", "bars", "stack"] },
+
+  // ── subscriptions ────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠️ `saasSeries` HAS EMITTED `customers` PER MONTH SINCE THE ENGINE WAS BUILT, and nothing has ever
+  // drawn it. The subscriber count is the number a recurring-revenue business is actually run on:
+  // revenue rising while subscribers are flat is a price rise; revenue flat while subscribers rise is
+  // churn eating the growth. **Neither is visible from the money alone.**
+  { id: "subscribers", tab: ["sales"], label: "Subscribers", unit: "count",
+    // ⚠️ SUMMED ACROSS PRODUCTS. `saasSeries` is PER PRODUCT, so a company with three of them would
+    // otherwise show whichever one happened to be first. Breaking down by product is the dimension
+    // below; this is the total.
+    get: (rows, parts, doc) => {
+      const per = (doc?.saas || []).map(sp => saasSeries(sp, rows.length));
+      return rows.map((_, m) => per.reduce((a, ser) => a + (ser?.[m]?.customers || 0), 0));
+    },
+    // ⚠️ A STOCK, NOT A FLOW. How many you HAVE this month, not how many you gained — summing it gives
+    // customer-months, which is a real unit and never what anybody means.
+    position: true,
+    allows: ["lines", "bars"] },
 
   // ── counts, which are a different unit and behave differently ────────────────────────────────
   { id: "salesCount", tab: ["sales"], label: "Orders", unit: "count",

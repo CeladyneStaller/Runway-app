@@ -1742,6 +1742,40 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Subscriptions on the sales chart
+
+**Every number already existed.** `saasSeries` has emitted `{ month, customers, arpu, mrr }` per product
+since the recurring-revenue engine was built — **MRR was drawn on one chart nobody visits and
+`customers` was drawn nowhere.** This is two registry entries and a chart, not new arithmetic.
+
+**`sales.recurring`** stacks order revenue and subscription revenue with the subscriber count as a
+right-axis line. **Revenue stacks; a count does not** — and everything needed to draw that shape landed
+earlier today: per-dataset shape, per-dataset axis, two independent domains, the composite renderer.
+
+**⚠️ A SUBSCRIBER COUNT IS A STOCK.** How many you HAVE this month, not how many you gained, so
+`position: true` and no Cumulative — summing it gives customer-months.
+
+**⚠️ AND IT SUMS ACROSS PRODUCTS.** `saasSeries` is PER PRODUCT; a company with three would otherwise
+have shown whichever came first. **Corey flagged this before it was built rather than after**, which is
+the only reason it is not a bug.
+
+### The `product` dimension
+
+Compiled subscription lines carry `saasId`, so the dimension reads a real field rather than an invented
+one — the failure the measure guard exists to catch. **No `typeOf`**: subscription products have no kind
+worth preserving, so each gets its own hue, exactly like spend codes and customers.
+
+**`linesFor` had to learn `saasRev`.** Without it the measure returns no lines and "subscription revenue
+by product" comes back entirely Unassigned — **silently**, which is the shape of half this session's
+bugs.
+
+Verified end to end: two revenues stacked, subscribers on the right axis at 14 for two products of 10
+and 4, and a breakdown naming Cellsight and Fleet separately.
+
+**Not built, deliberately: ARPU as a measure.** It is `mrr / customers` — derivable by eye from two
+series already on the chart, and a third unit where there are already two is where a reader stops
+trusting the axes.
+
 ## Hover values, and two docket items
 
 ### `RunwayChart` needed its own, because it is its own canvas

@@ -30,6 +30,10 @@ function linesFor(measureId, parts, doc) {
     case "projectSpend": return (parts?.projectLines || []).filter(l => l.kind === "cost");
     case "drawdowns": return (parts?.projectLines || []).filter(l => l.kind === "revenue");
     case "salesRev": return parts?.salesLines || [];
+    // ⚠️ SUBSCRIPTION LINES, so "subscription revenue broken down by product" splits on `saasId`.
+    // Without this the measure returns no lines and the breakdown comes back entirely Unassigned —
+    // silently, which is the failure mode the measure guard exists for.
+    case "saasRev": return parts?.saasLines || [];
     case "capital": return parts?.roundLines || [];
     case "baseline": return parts?.baselineLines || [];
     // ⚠️ `cost` AND `rev` ARE PROJECTION TOTALS, not a line collection — they are the sum of every

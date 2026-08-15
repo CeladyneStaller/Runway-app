@@ -870,6 +870,43 @@ export const CHARTS = Object.freeze([
   { id: "sales.forecast", tab: "sales", name: "Forecast against booked",
     why: "Two lines diverging. A forecast running hot is a runway longer on screen than in the bank.",
     build: salesForecast },
+  {
+    id: "sales.recurring", tab: "sales", name: "Revenue and subscribers",
+    why: "Order revenue and subscription revenue stacked, with the subscriber count over them. Revenue rising while subscribers are flat is a price rise; revenue flat while subscribers rise is churn eating the growth.",
+    build: (doc, parts) => {
+      const rows = parts?.rows || [];
+      const n = Math.min(rows.length, 18);
+      const sum = (lines) => {
+        const out = Array.from({ length: n }, () => 0);
+        for (const l of lines || []) {
+          const a = Number(l?.amount) || 0;
+          const st = Math.max(0, Number(l?.start) || 0);
+          const en = l?.end == null ? n - 1 : Number(l.end);
+          if (l?.cadence === "onetime") { if (st < n) out[st] += a; continue; }
+          for (let m = st; m <= Math.min(en, n - 1); m++) out[m] += a;
+        }
+        return out;
+      };
+      const per = (doc?.saas || []).map(sp => saasSeries(sp, n));
+      return {
+        // ⚠️ COMPOSITE, because the two revenues STACK and the count does not. A subscriber count is a
+        // different unit on the right axis — the shape this chart needs is exactly what the composite
+        // renderer and the two-domain axis work landed for.
+        kind: "composite", x: months(doc), ticks: axisTicks(doc),
+        series: [
+          { id: "orders", label: "Order revenue", values: sum(parts?.salesLines),
+            tone: "signal", shape: "bars", stacked: true },
+          { id: "subs", label: "Subscription revenue", values: sum(parts?.saasLines),
+            tone: "gate", shape: "bars", stacked: true },
+          { id: "count", label: "Subscribers",
+            values: Array.from({ length: n }, (_, m) =>
+              per.reduce((a, ser) => a + (ser?.[m]?.customers || 0), 0)),
+            tone: "thrust", shape: "lines", axis: "right" },
+        ],
+        format: "money",
+      };
+    },
+  },
   { id: "sales.mrr", tab: "sales", name: "Recurring revenue",
     why: "What subscription revenue is doing on its own.", build: salesMrr },
 
