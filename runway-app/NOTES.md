@@ -1742,6 +1742,31 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Four spacing faults in the Projects tab, one shape
+
+**`+ Thrust` and `+ Milestone` were `linkbtn`** — underlined text. They are the only way to put anything
+into an empty plan, so **the primary action on the panel was styled as an aside.** Given the same shape
+as `.pcm`, which the project chart already uses for a real control.
+
+**And three rules had vertical padding and no horizontal:**
+
+    .plan-add    padding:7px 0
+    .pchart-ctrl (no padding at all, on a space-between row)
+    .ovnote      padding-top:14px
+
+**⚠️ `.pchart-ctrl` PRODUCED BOTH OF COREY'S CHART COMPLAINTS FROM ONE MISSING VALUE** — it is
+`justify-content:space-between`, so the metric buttons pinned to the left wall and the monthly/cumulative
+toggle to the right.
+
+**The pattern is consistent enough to name:** a rule written to separate itself from what is ABOVE it,
+by somebody not thinking about the wall to its LEFT. `padding-top` and `border-top` together, nothing
+horizontal.
+
+**A scan found 29 rules of that shape across the stylesheet.** Most sit inside an already-padded parent
+and are harmless — **which is why this is a reporting problem rather than a sweep**: the fault only shows
+where the rule is a direct child of a panel, and only Corey looking at the screen can tell which those
+are. Fixed the four reported plus `.pchart`; the rest are listed rather than changed.
+
 ### ⚠️ A REGEX REWRITE PRODUCED VALID JAVASCRIPT WITH DIFFERENT MEANING
 
 Spend history crashed with `(e || []).filter is not a function`.
