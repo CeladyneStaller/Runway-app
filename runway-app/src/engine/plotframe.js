@@ -162,3 +162,30 @@ export function plotFrame({
     legend: legendMode,
   };
 }
+
+
+/** ⚠️ THE GUTTER IS A FUNCTION OF WHAT IS DRAWN IN IT.
+ *
+ *  `PAD = { l: 52, r: 16, t: 14, b: 38 }` was set before axis titles, a right axis, or a hover tooltip
+ *  existed — and every element added since competed with a constant that predated it. **The right
+ *  gutter is 16px and a right axis needs about 44**, so on any two-unit chart those tick labels were
+ *  being drawn past the edge of the viewBox. "Cramped" was the visible half of a clipping bug.
+ *
+ *  A chart with one unit keeps exactly today's plot width; a chart with two pays for its second axis —
+ *  which is the chart that needs the room. **Most of the 37 curated charts are single-unit and none of
+ *  them shifts because the builder gained a feature.**
+ */
+export const BASE_PAD = Object.freeze({ l: 52, r: 16, t: 14, b: 38 });
+
+export function padFor({ rightAxis = false, titled = false, categorical = false } = {}) {
+  return {
+    // A rotated title needs room OUTSIDE the tick labels, which already set this width.
+    l: BASE_PAD.l + (titled ? 14 : 0),
+    // FIVE TICK LABELS PLUS A TITLE. This is the clipping bug.
+    r: BASE_PAD.r + (rightAxis ? 44 : 0),
+    // So a title clears the frame rather than sitting on it.
+    t: BASE_PAD.t + (titled ? 10 : 0),
+    // Category names wrap where `Jul 26` does not.
+    b: BASE_PAD.b + (categorical ? 12 : 0),
+  };
+}

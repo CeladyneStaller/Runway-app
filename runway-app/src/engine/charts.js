@@ -901,7 +901,9 @@ export const CHARTS = Object.freeze([
           { id: "count", label: "Subscribers",
             values: Array.from({ length: n }, (_, m) =>
               per.reduce((a, ser) => a + (ser?.[m]?.customers || 0), 0)),
-            tone: "thrust", shape: "lines", axis: "right" },
+            // ⚠️ DECLARED, NOT INFERRED. Without it the axis fell back to `count` BY LUCK and the
+            // tooltip fell back to money — two consumers guessing differently about the same series.
+            tone: "thrust", shape: "lines", axis: "right", unit: "count" },
         ],
         format: "money",
       };

@@ -1,13 +1,24 @@
 import { useState, useRef, useCallback } from "react";
+import { formatFor } from "../../engine/measures";
 import { valueAt, indexAt, placeTip } from "../../engine/hover";
 import { moneyFull } from "../../engine/money";
 
+// ⚠️ UNITS AND FORMATS ARE DIFFERENT VOCABULARIES, and this file had its own third version of the
+// mapping. A measure declares `percent` meaning 0-100; the renderer's `percent` means a fraction.
+// **Three implementations of one translation is three chances to disagree** — which is what produced
+// "$24 subscribers" while the axis beside it said 24.
+// The unit-to-format translation lives in `measures.js` — see UNIT_FORMAT there.
+
 const fmt = (v, f) => {
   if (!Number.isFinite(v)) return "";
-  if (f === "percent") return `${Math.round(v)}%`;
-  if (f === "count") return String(Math.round(v));
+  if (f === "percent") return `${Math.round(v * 100)}%`;
+  if (f === "pct100") return `${Math.round(v)}%`;
+  if (f === "count" || f === "people") return String(Math.round(v));
   return moneyFull(v);
 };
+
+/** A row formats in ITS OWN unit, falling back to the chart's only when it has none. */
+const fmtRow = (r, chartFormat) => fmt(r.value, formatFor(r, chartFormat));
 
 /** The values under the pointer.
  *
@@ -80,7 +91,7 @@ export function HoverLayer({ spec, box, ctx = {}, format }) {
                 <i style={{ background: r.color || `var(--${r.tone || "signal"})` }} />
                 <span>{r.label}</span>
                 {r.axis === "right" && <span className="hv-ax">right</span>}
-                <b>{fmt(r.value, format || v.format)}</b>
+                <b>{fmtRow(r, format || v.format)}</b>
               </div>
             ))}
             {/* ⚠️ A SUBTOTAL PER BREAKDOWN, NAMED. "Total" alone is ambiguous the moment a chart has a

@@ -267,3 +267,22 @@ export function allowedTypes(ids = []) {
   // membership is known, in `buildCustom`, which un-stacks only genuine same-stack containment.
   return ok;
 }
+
+
+/** ⚠️ ONE TRANSLATION FROM A MEASURE'S UNIT TO A RENDERER'S FORMAT NAME.
+ *
+ *  These are DIFFERENT VOCABULARIES and the difference is not obvious: a measure declares `percent`
+ *  meaning 0-100, while the renderer's `percent` means a FRACTION and three curated charts depend on
+ *  that. Written once, beside the units it translates.
+ *
+ *  **It existed in three copies before this** — `Chart.jsx`, `Hover.jsx`, and an implicit fallback in
+ *  the axis — and they disagreed, which is how a subscriber count rendered as "$24" in a tooltip while
+ *  the axis beside it said "24".
+ */
+export const UNIT_FORMAT = Object.freeze({
+  money: "money", count: "count", people: "people", percent: "pct100",
+});
+
+/** The format a series should be drawn in: its own unit if it declares one, else the chart's. */
+export const formatFor = (series, chartFormat) =>
+  (series?.unit && UNIT_FORMAT[series.unit]) || chartFormat || "money";

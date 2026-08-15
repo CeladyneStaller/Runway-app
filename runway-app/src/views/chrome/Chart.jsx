@@ -9,7 +9,9 @@
 // AN EMPTY CHART SAYS WHY. `spec.empty` is a sentence — "no spend history imported yet" — because a
 // blank box looks like a bug and a sentence looks like an answer.
 import React, { useMemo } from "react";
+import { formatFor } from "../../engine/measures";
 import { HoverLayer } from "./Hover";
+import { padFor } from "../../engine/plotframe";
 import { useStart } from "../../state/StartCtx";
 import { plotFrame } from "../../engine/plotframe";
 import { money } from "../../engine/money";
@@ -18,6 +20,32 @@ import { TimelineRows } from "./TimelineRows";
 const W = 720, H = 252;
 const PAD = { l: 52, r: 16, t: 14, b: 38 };
 const PW = W - PAD.l - PAD.r, PH = H - PAD.t - PAD.b;
+
+/** ⚠️ THE PAD FOR A GIVEN SPEC, computed from what that chart actually draws.
+ *
+ *  The module constants stay as the BASE and as the single-unit answer, so the 74 call sites that read
+ *  `PAD`, `PW` and `PH` keep working unchanged — **rewriting all of them to thread a computed value
+ *  would be a large edit for no benefit on the charts that do not need it.** Only the renderers that
+ *  can draw a second axis ask for the wider one.
+ */
+const padOf = (spec) => {
+  const right = (spec?.series || []).some(sr => sr.axis === "right");
+  return padFor({
+    rightAxis: right,
+    // ⚠️ A TITLE IS DRAWN ONLY WHERE IT EARNS ITS SPACE. My first version asked "are there any series",
+    // which is true of every chart — so NOTHING kept the base pad and all 37 curated charts would have
+    // shifted. **A condition that is always true is not a condition.**
+    //
+    // `titleFor` names an axis when a chart has TWO units (which side is which) or when one series
+    // carries the whole axis (what it measures). One measure and one unit needs neither.
+    titled: right,
+    categorical: !!spec?.ticks?.[0]?.categorical,
+  });
+};
+const boxOf = (spec) => {
+  const p = padOf(spec);
+  return { pad: p, w: W - p.l - p.r, h: H - p.t - p.b };
+};
 
 // ⚠️ FIVE TONES, AND EVERYTHING ELSE FELL BACK TO `signal`. That is the four-green-bars bug at its
 // source: `clay`, `brown`, `gate` and `signal-2` were never keys here, so any chart naming them drew
@@ -102,7 +130,10 @@ function scale(values) {
   return { lo, hi, y: f.y, zero: f.y(0) };
 }
 
-const xAt = (i, n) => plotFrame({ w: W, h: H, n, pad: PAD }).x(i);
+// ⚠️ IT TAKES A PAD NOW. Hardcoding `PAD` meant that under a widened gutter every MARK would sit at
+// the old x while the FRAME moved — the marks drifting out of the box that contains them, which is a
+// worse failure than the cramping this change exists to fix.
+const xAt = (i, n, pad = PAD) => plotFrame({ w: W, h: H, n, pad }).x(i);
 
 const clean = (n) => (Number.isFinite(n) ? n : 0);
 
@@ -213,26 +244,29 @@ const CategoryAxis = ({ ticks, y }) => {
  *  is a reader guessing which scale a line belongs to.
  */
 const Axes = ({ s, xs, ticks, format, sRight = null, rightFormat = null,
-                leftTitle = null, rightTitle = null }) => (
+                leftTitle = null, rightTitle = null,
+                // ⚠️ DEFAULTS TO THE MODULE CONSTANT, so every renderer that does not compute one — the
+                // single-unit majority — draws exactly where it drew before.
+                pad = PAD }) => (
   <>
-    <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH} stroke="var(--line)" />
-    <line x1={PAD.l} y1={s.zero} x2={W - PAD.r} y2={s.zero} stroke="var(--line)" />
-    <text x={PAD.l - 6} y={s.zero + 3} textAnchor="end" className="ch-t">{fmt(0, format)}</text>
-    <text x={PAD.l - 6} y={PAD.t + 8} textAnchor="end" className="ch-t">{fmt(s.hi, format)}</text>
+    <line x1={pad.l} y1={pad.t} x2={pad.l} y2={pad.t + (H - pad.t - pad.b)} stroke="var(--line)" />
+    <line x1={pad.l} y1={s.zero} x2={W - pad.r} y2={s.zero} stroke="var(--line)" />
+    <text x={pad.l - 6} y={s.zero + 3} textAnchor="end" className="ch-t">{fmt(0, format)}</text>
+    <text x={pad.l - 6} y={pad.t + 8} textAnchor="end" className="ch-t">{fmt(s.hi, format)}</text>
     {/* ⚠️ A TICK THAT CARRIES ITS OWN LABEL IS NOT A MONTH. `TimeAxis` builds labels from `useStart()`
         and IGNORES whatever the spec supplied — so a category chart's project names were replaced by
         months, silently, because both are just "ticks" from here. */}
     {/* AN EXPLICIT FLAG, not an inference. My first attempt tried to DETECT categorical ticks from
         their shape and was unreadable and fragile — the spec knows which kind it built, so it says so. */}
     {ticks?.length && ticks[0]?.categorical
-      ? <CategoryAxis ticks={ticks} y={PAD.t + PH} />
+      ? <CategoryAxis ticks={ticks} y={pad.t + (H - pad.t - pad.b)} />
       : ticks?.length
-      ? <TimeAxis ticks={ticks} n={ticks.length} y={PAD.t + PH} />
+      ? <TimeAxis ticks={ticks} n={ticks.length} y={pad.t + (H - pad.t - pad.b)} />
       : xs?.length > 0 && (
           // Charts whose x-axis is not months — periods, milestone names — keep the ends only.
           <>
-            <text x={PAD.l} y={H - 8} className="ch-t">{xs[0]}</text>
-            <text x={W - PAD.r} y={H - 8} textAnchor="end" className="ch-t">{xs[xs.length - 1]}</text>
+            <text x={pad.l} y={H - 8} className="ch-t">{xs[0]}</text>
+            <text x={W - pad.r} y={H - 8} textAnchor="end" className="ch-t">{xs[xs.length - 1]}</text>
           </>
         )}
     {/* ⚠️ THE RIGHT AXIS IS LABELLED, or it is a mystery. A second scale nobody can read is worse than
@@ -241,22 +275,22 @@ const Axes = ({ s, xs, ticks, format, sRight = null, rightFormat = null,
     {/* THE LEFT TITLE SITS IN THE GUTTER, ROTATED — the only space that exists without stealing plot
         width, and the convention every reader already knows. */}
     {leftTitle && (
-      <text x={12} y={PAD.t + PH / 2} className="ch-axt" textAnchor="middle"
-            transform={`rotate(-90 12 ${PAD.t + PH / 2})`}>{leftTitle}</text>
+      <text x={12} y={pad.t + (H - pad.t - pad.b) / 2} className="ch-axt" textAnchor="middle"
+            transform={`rotate(-90 12 ${pad.t + (H - pad.t - pad.b) / 2})`}>{leftTitle}</text>
     )}
     {sRight && (
       <g>
-        <line x1={W - PAD.r} y1={PAD.t} x2={W - PAD.r} y2={PAD.t + PH} stroke="var(--line)" />
+        <line x1={W - pad.r} y1={pad.t} x2={W - pad.r} y2={pad.t + (H - pad.t - pad.b)} stroke="var(--line)" />
         {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
           const v = sRight.lo + (sRight.hi - sRight.lo) * (1 - f);
           return (
-            <text key={i} x={W - PAD.r + 5} y={PAD.t + PH * f + 3} className="ch-t" textAnchor="start">
+            <text key={i} x={W - pad.r + 5} y={pad.t + (H - pad.t - pad.b) * f + 3} className="ch-t" textAnchor="start">
               {fmt(v, rightFormat || "count")}
             </text>
           );
         })}
         {rightTitle && (
-          <text x={W - PAD.r + 5} y={PAD.t - 6} className="ch-axt" textAnchor="start">{rightTitle}</text>
+          <text x={W - pad.r + 5} y={pad.t - 6} className="ch-axt" textAnchor="start">{rightTitle}</text>
         )}
       </g>
     )}
@@ -275,6 +309,11 @@ const Markers = ({ marks, n, s }) => (marks || []).map((m, i) => {
 });
 
 function Lines({ spec }) {
+  // ⚠️ THE SPEC'S PAD WINS. Under `Composite` the frame and the axes are drawn at a computed pad; a
+  // sub-renderer using the module constant would draw its marks in a different place from the box that
+  // contains them. Standalone, `spec.pad` is absent and this is exactly today's geometry.
+  const pad = spec.pad || PAD;
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   const all = [...spec.series.flatMap(sr => sr.values),
                ...(spec.band ? [...spec.band.lo, ...spec.band.hi] : [])];
   const s = scale(spec.domain || (all));
@@ -283,19 +322,19 @@ function Lines({ spec }) {
   const sR = spec.domainRight ? scale(spec.domainRight) : null;
   const yOf = (sr) => (sR && spec.rightIds?.has(sr.id) ? sR.y : s.y);
   const n = Math.max(...spec.series.map(sr => sr.values.length), spec.band?.lo?.length || 0);
-  const path = (vals, y = s.y) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${y(v)}`).join(" ");
+  const path = (vals, y = s.y) => vals.map((v, i) => `${i ? "L" : "M"}${xAt(i, n, pad)} ${y(v)}`).join(" ");
 
   return (
 
     <Wrap marks={spec.marks} aria={spec.aria}
             hover={<HoverLayer spec={spec} format={spec.format}
-                               box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                               box={{ x: pad.l, y: pad.t, w: pw, h: ph }}
                                ctx={{ todayIndex: spec.todayIndex }} />}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.band && (
         // The band is drawn first and lightly: it is context for the line, not a third series.
         <path d={`${path(spec.band.hi)} ${spec.band.lo.map((v, i) =>
-                   `L${xAt(spec.band.lo.length - 1 - i, n)} ${s.y(spec.band.lo[spec.band.lo.length - 1 - i])}`).join(" ")} Z`}
+                   `L${xAt(spec.band.lo.length - 1 - i, n, pad)} ${s.y(spec.band.lo[spec.band.lo.length - 1 - i])}`).join(" ")} Z`}
               fill="var(--signal-2)" opacity="0.18" />
       )}
       {/* THE UNDERWATER STRETCH, filled and hatched. The line already dips below zero; without this
@@ -303,15 +342,15 @@ function Lines({ spec }) {
           with money they do not yet have. */}
       {spec.underwater && Number.isFinite(spec.underwater.fromT) && (() => {
         const u = spec.underwater;
-        const x0 = xAt(u.fromT, n);
-        const x1 = u.toT == null ? W - PAD.r : xAt(u.toT, n);
+        const x0 = xAt(u.fromT, n, pad);
+        const x1 = u.toT == null ? W - pad.r : xAt(u.toT, n, pad);
         return (
           <g>
             <rect x={x0} y={s.zero} width={Math.max(0, x1 - x0)}
-                  height={Math.max(0, PAD.t + PH - s.zero)} fill="var(--danger)" opacity="0.14" />
-            <line x1={x0} y1={PAD.t} x2={x0} y2={PAD.t + PH} stroke="var(--danger)" strokeWidth="1.4" />
+                  height={Math.max(0, pad.t + ph - s.zero)} fill="var(--danger)" opacity="0.14" />
+            <line x1={x0} y1={pad.t} x2={x0} y2={pad.t + ph} stroke="var(--danger)" strokeWidth="1.4" />
             {u.deepest != null && (
-              <text x={(x0 + x1) / 2} y={PAD.t + PH - 4} textAnchor="middle" className="ch-d"
+              <text x={(x0 + x1) / 2} y={pad.t + ph - 4} textAnchor="middle" className="ch-d"
                     fill="var(--danger)">
                 {u.days != null ? `${u.days} days underwater · ` : "underwater · "}
                 deepest {fmt(u.deepest, "money")}
@@ -327,12 +366,12 @@ function Lines({ spec }) {
         const v = spec.committed.values;
         // `s.y` is the scaler this shape already built — the same one the cash line uses, so the two
         // are drawn against one axis rather than two that happen to look alike.
-        const d = v.map((val, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(val)}`).join(" ");
+        const d = v.map((val, i) => `${i ? "L" : "M"}${xAt(i, n, pad)} ${s.y(val)}`).join(" ");
         return <path d={d} fill="none" stroke="var(--commit)" strokeWidth="1.8" strokeDasharray="5 4" />;
       })()}
       {spec.series.map(sr => (
         sr.signColor
-        ? signRuns(sr.values, (i) => xAt(i, n), yOf(sr)).map((r, k) => (
+        ? signRuns(sr.values, (i) => xAt(i, n, pad), yOf(sr)).map((r, k) => (
             <path key={`${sr.id}-${k}`} fill="none" strokeWidth="2"
                   stroke={r.neg ? TONE.danger : TONE.signal}
                   d={r.pts.map(([px, py], j) => `${j ? "L" : "M"}${px} ${py}`).join(" ")} />
@@ -346,6 +385,11 @@ function Lines({ spec }) {
 }
 
 function Stack({ spec }) {
+  // ⚠️ THE SPEC'S PAD WINS. Under `Composite` the frame and the axes are drawn at a computed pad; a
+  // sub-renderer using the module constant would draw its marks in a different place from the box that
+  // contains them. Standalone, `spec.pad` is absent and this is exactly today's geometry.
+  const pad = spec.pad || PAD;
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   const n = Math.max(...spec.series.map(sr => sr.values.length));
   // SIGNS SUMMED SEPARATELY, so the domain reaches both extremes rather than the net of them.
   const totals = Array.from({ length: n }, (_, i) => spec.series.reduce((a, sr) => a + clean(sr.values[i]), 0));
@@ -368,7 +412,7 @@ function Stack({ spec }) {
 
     <Wrap marks={spec.marks} aria={spec.aria}
             hover={<HoverLayer spec={spec} format={spec.format}
-                               box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                               box={{ x: pad.l, y: pad.t, w: pw, h: ph }}
                                ctx={{ todayIndex: spec.todayIndex }} />}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {/* ⚠️ THERE WAS NO STACKED-BAR RENDERER AT ALL. `Stack` only ever drew filled paths, so selecting
@@ -381,29 +425,29 @@ function Stack({ spec }) {
         ? <g key={sr.id}>
             {hi.map((v, i) => {
               const y0 = s.y(lo[i]), y1 = s.y(v);
-              // ⚠️ A BAND LAYOUT, NOT A POINT ONE. `xAt(i, n)` returns the POSITION OF A DATA POINT, and
-              // `xAt(0, n)` is exactly `PAD.l` — the y-axis itself — so a rect centred there hung half
+              // ⚠️ A BAND LAYOUT, NOT A POINT ONE. `xAt(i, n, pad)` returns the POSITION OF A DATA POINT, and
+              // `xAt(0, n, pad)` is exactly `pad.l` — the y-axis itself — so a rect centred there hung half
               // of the first bar over the axis. A line legitimately starts on the axis; a bar occupies
               // a slot BESIDE it. This is `Bars`' own layout: a group per month, inset by 15%.
-              const groupW = PW / Math.max(n, 1);
+              const groupW = pw / Math.max(n, 1);
               const w = Math.max(2, groupW * 0.7);
               return Math.abs(y1 - y0) < 0.5 ? null : (
-                <rect key={i} x={PAD.l + i * groupW + groupW * 0.15} y={Math.min(y0, y1)}
+                <rect key={i} x={pad.l + i * groupW + groupW * 0.15} y={Math.min(y0, y1)}
                       width={w} height={Math.abs(y1 - y0)}
                       fill={sr.signColor ? signColor(sr.values[i]) : colorOf(sr)} opacity="0.85" />
               );
             })}
           </g>
         : <path key={sr.id} fill={colorOf(sr)} opacity="0.5"
-                d={hi.map((v, i) => `${i ? "L" : "M"}${xAt(i, n)} ${s.y(v)}`).join(" ") + " " +
-                   lo.map((v, i) => `L${xAt(n - 1 - i, n)} ${s.y(lo[n - 1 - i])}`).join(" ") + " Z"} />
+                d={hi.map((v, i) => `${i ? "L" : "M"}${xAt(i, n, pad)} ${s.y(v)}`).join(" ") + " " +
+                   lo.map((v, i) => `L${xAt(n - 1 - i, n, pad)} ${s.y(lo[n - 1 - i])}`).join(" ") + " Z"} />
       ))}
       {spec.refLine && (
         <>
-          <line x1={PAD.l} y1={s.y(spec.refLine.y)} x2={W - PAD.r} y2={s.y(spec.refLine.y)}
+          <line x1={pad.l} y1={s.y(spec.refLine.y)} x2={W - pad.r} y2={s.y(spec.refLine.y)}
                 stroke="var(--caution)" strokeDasharray="3 2" />
           {spec.refLine.label && (
-            <text x={W - PAD.r} y={s.y(spec.refLine.y) - 4} textAnchor="end" className="ch-l"
+            <text x={W - pad.r} y={s.y(spec.refLine.y) - 4} textAnchor="end" className="ch-l"
                   fill="var(--caution)">{spec.refLine.label}</text>
           )}
         </>
@@ -414,24 +458,29 @@ function Stack({ spec }) {
 }
 
 function Bars({ spec }) {
+  // ⚠️ THE SPEC'S PAD WINS. Under `Composite` the frame and the axes are drawn at a computed pad; a
+  // sub-renderer using the module constant would draw its marks in a different place from the box that
+  // contains them. Standalone, `spec.pad` is absent and this is exactly today's geometry.
+  const pad = spec.pad || PAD;
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   const n = Math.max(...spec.series.map(sr => sr.values.length));
   const s = scale(spec.domain || (spec.series.flatMap(sr => sr.values)));
   // ⚠️ A SERIES ON THE RIGHT AXIS USES THE RIGHT SCALE. Everything shared one, so a count against money
   // was drawn on money's range — technically plotted and practically invisible.
   const sR = spec.domainRight ? scale(spec.domainRight) : null;
   const yOf = (sr) => (sR && spec.rightIds?.has(sr.id) ? sR.y : s.y);
-  const groupW = PW / Math.max(n, 1);
+  const groupW = pw / Math.max(n, 1);
   const barW = Math.max(2, (groupW * 0.7) / spec.series.length);
 
   return (
 
     <Wrap marks={spec.marks} aria={spec.aria}
             hover={<HoverLayer spec={spec} format={spec.format}
-                               box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                               box={{ x: pad.l, y: pad.t, w: pw, h: ph }}
                                ctx={{ todayIndex: spec.todayIndex }} />}>
       <Axes s={s} xs={spec.x} ticks={spec.ticks} format={spec.format} />
       {spec.series.map((sr, si) => sr.values.map((v, i) => {
-        const x = PAD.l + i * groupW + groupW * 0.15 + si * barW;
+        const x = pad.l + i * groupW + groupW * 0.15 + si * barW;
         const yy = yOf(sr); const y = Math.min(yy(v), yy(0));
         // `tones` lets one series colour bars individually — over plan in red, within it in green —
         // without splitting it into two series that would then be drawn side by side.
@@ -839,7 +888,7 @@ function Milestones({ spec }) {
 // ⚠️ UNITS AND FORMATS ARE DIFFERENT VOCABULARIES. A measure declares `percent` meaning 0-100; the
 // renderer's `percent` means a fraction. Mapping them explicitly is what stops the next person
 // assuming they are interchangeable.
-const UNIT_FMT = { money: "money", count: "count", people: "people", percent: "pct100" };
+// The unit-to-format translation lives in `measures.js` — see UNIT_FORMAT there.
 
 function titleFor(list, unit) {
   if (!list?.length) return null;
@@ -901,16 +950,21 @@ function Composite({ spec }) {
   // `marks: true` asks a renderer for its marks in a `<g>` and nothing else: no svg, no frame, no
   // ticks. The chrome is drawn ONCE, here, from the shared domain — which is also what guarantees the
   // groups cannot disagree about where a value sits.
-  const sub = (list) => ({ ...spec, series: list, domain, domainRight, rightIds, marks: true });
+  // ⚠️ THE COMPUTED PAD TRAVELS ON THE SPEC, so the sub-renderers and the hover box agree with the axes
+  // about where the plot is. Three components deriving it separately is the fault that put three `y`
+  // functions in this codebase.
+  const pad = padOf(spec);
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const sub = (list) => ({ ...spec, series: list, domain, domainRight, rightIds, pad, marks: true });
   return (
     <svg className="ch-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.aria || "chart"}>
       {/* ⚠️ THE UNIT COMES FROM THE SERIES, NOT FROM THE CHART. `spec.format` describes the chart, which
           is only ever true of the LEFT axis — the right axis belongs to whichever series was sent
           there, and asking the chart produced "24 subscribers" rendered as "$24". */}
-      <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format}
+      <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format} pad={pad}
             sRight={domainRight ? scale(domainRight) : null}
             // A MEASURE'S UNIT MAPS TO A FORMAT NAME; they are not the same vocabulary.
-            rightFormat={UNIT_FMT[rightSeries[0]?.unit] || "count"}
+            rightFormat={formatFor(rightSeries[0], "count")}
             leftTitle={titleFor(series.filter(sr => !rightIds.has(sr.id)), spec.format)}
             rightTitle={titleFor(rightSeries, rightSeries[0]?.unit)} />
       {/* FILLS BENEATH, LINES ABOVE, AND THAT IS FIXED. A filled stack over a line hides it
@@ -923,7 +977,7 @@ function Composite({ spec }) {
           composite chart three overlays fighting for the same pointer — the same fault as the three
           `<svg>` elements this component was created to hoist. */}
       <HoverLayer spec={spec} format={spec.format}
-                  box={{ x: PAD.l, y: PAD.t, w: PW, h: PH }}
+                  box={{ x: pad.l, y: pad.t, w: pw, h: ph }}
                   ctx={{ todayIndex: spec.todayIndex }} />
     </svg>
   );

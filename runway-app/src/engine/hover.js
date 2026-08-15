@@ -40,6 +40,10 @@ export function valueAt(spec, i, ctx = {}) {
     // **A field produced upstream and omitted from a pick fails silently every time.**
     group: s.group ?? s.id,
     groupLabel: s.groupLabel || null,
+    // ⚠️ THE UNIT, PER ROW. The tooltip formatted every row with the CHART's format — so subscribers on
+    // a money chart read as "$24". Exactly the fault just fixed on the right axis, in a second consumer
+    // that also asked the chart instead of the series.
+    unit: s.unit || null,
     // ⚠️ A RIGHT-AXIS SERIES SAYS SO. Two scales are already a compromise; a number lifted off the
     // wrong one is worse than not reading it.
     axis: s.axis === "right" ? "right" : "left",

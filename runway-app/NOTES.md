@@ -1742,6 +1742,56 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Chart margins — padded by what is present
+
+`PAD = { l: 52, r: 16, t: 14, b: 38 }` was set before axis titles, a right axis or a hover tooltip
+existed. **The right gutter is 16px and a right axis needs about 44**, so on any two-unit chart those
+tick labels were drawn past the edge of the viewBox — **"cramped" was the visible half of a clipping
+bug.**
+
+    single unit   l52 r16 t14 b38   plot 652x200   ← byte-identical to before
+    two units     l66 r60 t24 b38   plot 594x190
+    category      l52 r16 t14 b50   plot 652x188
+
+**⚠️ MY FIRST `titled` CONDITION WAS ALWAYS TRUE** — "are there any series", which every chart satisfies
+— so nothing would have kept the base pad and all 37 curated charts would have shifted. **A condition
+that is always true is not a condition.** It is `rightAxis` now: an axis is titled when there are two of
+them and the reader has to tell which is which.
+
+**⚠️ AND `xAt` HARDCODED `PAD`.** Under a widened gutter every MARK would have sat at the old x while
+the FRAME moved — **marks drifting out of the box that contains them, a worse failure than the cramping
+this fixes.** It takes a pad now, and the three renderers pass their own. Verified: marks land exactly
+on the frame edges at both pads.
+
+**The module constants stay as the base**, so the 74 call sites reading `PAD`, `PW` and `PH` keep
+working — rewriting all of them to thread a computed value would be a large edit for no benefit on the
+charts that do not need it.
+
+**Still owed:** `RunwayChart` keeps its own `L 66, R 26, T 22, B 40`. It should take `padFor` too, or the
+two drift again the next time an element is added.
+
+### The same unit fault, in the tooltip — and a translation that existed three times
+
+Fixing the right axis did not fix the tooltip, **because the tooltip asked the same wrong question**:
+`fmt(r.value, format || v.format)` formatted every row with the CHART's format, so subscribers on a
+money chart read as "$24" while the axis beside them said "24".
+
+**Three faults, one shape:**
+
+1. `hover.js` never copied `unit` into its rows — **the fifth hand-written pick this session to omit a
+   field that existed upstream.**
+2. The tooltip formatted per chart rather than per series.
+3. **The curated `sales.recurring` chart never declared `unit` at all** — the axis fell back to `count`
+   BY LUCK and the tooltip fell back to money. Two consumers guessing differently about one series.
+
+**⚠️ AND `UNIT_FMT` EXISTED IN THREE COPIES** — `Chart.jsx`, `Hover.jsx`, and an implicit axis fallback.
+**Three implementations of one translation is three chances to disagree**, which is this session's most
+repeated fault and exactly what produced the mismatch. It now lives once, in `measures.js`, beside the
+units it translates, with `formatFor(series, chartFormat)` as the single entry point.
+
+**A test asserts every declared unit has a format** — an unmapped one falls back to money silently —
+**and that neither view file redefines the table.**
+
 ### Axis labels, and a right axis formatting money as counts
 
 **⚠️ THE RIGHT AXIS WAS HARDCODED TO `count`** — right for subscribers by luck, wrong for a percentage

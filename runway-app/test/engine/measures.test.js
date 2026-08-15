@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MEASURES, measuresFor, measureById, overlaps, unitsOf, allowedTypes } from "../../src/engine/measures.js";
+import { MEASURES, measuresFor, measureById, overlaps, unitsOf, allowedTypes, UNIT_FORMAT, formatFor } from "../../src/engine/measures.js";
 import { DIMENSIONS, dimensionsFor, splitBy, tooManySeries, SERIES_LIMIT } from "../../src/engine/dimensions.js";
 import { demoDoc } from "../../src/state/document.js";
 import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel.js";
@@ -262,5 +262,31 @@ describe("⚠️ subscriptions — computed since the engine was built, drawn no
     expect(d.of({ saasId: "s1" })).toBe("s1");
     expect(d.labelOf("s1", doc())).toBe("Cellsight");
     expect(d.labelOf(null, doc())).toMatch(/not a subscription/i);
+  });
+});
+
+describe("⚠️ one translation from unit to format", () => {
+  it("MAPS EVERY UNIT A MEASURE CAN DECLARE", () => {
+    // These are DIFFERENT VOCABULARIES: a measure's `percent` means 0-100, the renderer's means a
+    // fraction, and three curated charts depend on the second. An unmapped unit falls back to money,
+    // which is how a subscriber count rendered as "$24".
+    const units = [...new Set(MEASURES.map(m => m.unit))];
+    for (const u of units) expect(UNIT_FORMAT[u], `${u} has no format`).toBeTruthy();
+  });
+
+  it("prefers the SERIES' unit over the chart's format", () => {
+    expect(formatFor({ unit: "count" }, "money")).toBe("count");
+    expect(formatFor({ unit: "percent" }, "money")).toBe("pct100");
+    expect(formatFor({}, "money")).toBe("money");
+  });
+
+  it("⚠️ EXISTS IN ONE PLACE", () => {
+    // It was in three — `Chart.jsx`, `Hover.jsx`, and an implicit axis fallback — and they disagreed,
+    // so the tooltip said "$24" while the axis beside it said "24". **Three implementations of one
+    // translation is three chances to disagree**, which is this session's most repeated fault.
+    const fs = require("node:fs");
+    for (const f of ["src/views/chrome/Chart.jsx", "src/views/chrome/Hover.jsx"]) {
+      expect(fs.readFileSync(f, "utf8"), `${f} redefines the table`).not.toMatch(/const UNIT_FMT\s*=/);
+    }
   });
 });
