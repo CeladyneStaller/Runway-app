@@ -484,7 +484,13 @@ function Bars({ spec }) {
   const pad = spec.pad || PAD;
   const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
   const n = Math.max(...spec.series.map(sr => sr.values.length));
-  const s = scale(spec.domain || (spec.series.flatMap(sr => sr.values), pad));
+  // ⚠️ THE PAREN LANDED INSIDE THE `||`, so this read `scale(spec.domain || (values, pad))` — the COMMA
+  // OPERATOR, which evaluates the array, throws it away, and yields `pad`. `scale` then received an
+  // OBJECT where it expected a list, and `(values || []).filter` was called on `{l,r,t,b}`.
+  //
+  // **A regex rewrite across three functions produced valid JavaScript with different meaning in one of
+  // them** — and lint cannot see it, because the comma operator is legal.
+  const s = scale(spec.domain || spec.series.flatMap(sr => sr.values), pad);
   // ⚠️ A SERIES ON THE RIGHT AXIS USES THE RIGHT SCALE. Everything shared one, so a count against money
   // was drawn on money's range — technically plotted and practically invisible.
   const sR = spec.domainRight ? scale(spec.domainRight, pad) : null;
@@ -987,8 +993,8 @@ function Composite({ spec }) {
       {/* ⚠️ THE UNIT COMES FROM THE SERIES, NOT FROM THE CHART. `spec.format` describes the chart, which
           is only ever true of the LEFT axis — the right axis belongs to whichever series was sent
           there, and asking the chart produced "24 subscribers" rendered as "$24". */}
-      <Axes s={scale(domain)} xs={spec.x} ticks={spec.ticks} format={spec.format} pad={pad}
-            sRight={domainRight ? scale(domainRight) : null}
+      <Axes s={scale(domain, pad)} xs={spec.x} ticks={spec.ticks} format={spec.format} pad={pad}
+            sRight={domainRight ? scale(domainRight, pad) : null}
             // A MEASURE'S UNIT MAPS TO A FORMAT NAME; they are not the same vocabulary.
             rightFormat={formatFor(rightSeries[0], "count")}
             leftTitle={titleFor(series.filter(sr => !rightIds.has(sr.id)), spec.format)}

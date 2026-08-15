@@ -1742,6 +1742,32 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ A REGEX REWRITE PRODUCED VALID JAVASCRIPT WITH DIFFERENT MEANING
+
+Spend history crashed with `(e || []).filter is not a function`.
+
+    scale(spec.domain || (spec.series.flatMap(sr => sr.values), pad))
+
+**The closing paren landed inside the `||`, making it the COMMA OPERATOR** — which evaluates the array,
+throws it away, and yields `pad`. `scale` then received `{l,r,t,b}` where it expected a list.
+
+**⚠️ AND LINT CANNOT SEE THIS, because the comma operator is legal.** The regex that added `, pad` to
+`scale(...)` calls ran across three functions and got two right; the third had a parenthesised operand
+and the match ended in the wrong place. **A rewrite that produces syntactically valid code with
+different semantics is the worst outcome of a bulk edit** — worse than a syntax error, which would have
+failed immediately.
+
+**It also explains why only Spend history crashed.** Its charts reach `Bars`; the other tabs' charts
+reach `Lines` and `Stack`, where the same rewrite happened to land correctly.
+
+**I spent six tool calls looking in the wrong place** — the lens, the alerts, `unmappedCodes`,
+`codesInLedger` — because the error named a shape (`filter` on a non-array) and I searched for data that
+could be the wrong shape, rather than for a CALL that could pass the wrong argument. **The stack trace
+pointed at a renderer and I was reading the engine.**
+
+Every `scale()` call now passes `pad` as the second argument, outside the `||` — audited, seven of
+seven.
+
 ### ⚠️ TWO COLOUR ALLOCATORS THAT DID NOT KNOW ABOUT EACH OTHER
 
 A breakdown drew its hues from `colorsFor`; a plain measure took the next name off a cycling `TONES`
