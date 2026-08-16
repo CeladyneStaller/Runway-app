@@ -1742,6 +1742,33 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ ADDING A STATE TO AN ENUM MEANS AUDITING EVERY COMPARISON AGAINST IT
+
+`LOAD_WRONG_COMPANY` was handled in the loader and **caught by `if (loadState !== LOAD_OK)` in the
+renderer** — which is true of every state that is not success, including the recoverable one I had just
+invented. So the deleted-company recovery landed on the dead-end screen anyway.
+
+**Three more comparisons used the same shape**, and one of them mattered: the SAVE GUARD. Without it the
+fresh document the recovery creates could never be written — the app would sit on a new empty model
+forever and save nothing. **The guard's reason still holds** (never save what we did not successfully
+load) which is why this is a whitelist rather than a loosening: a wrong-company load returns a
+deliberate `emptyDoc()`, and there is no real model it could overwrite.
+
+### Every dead end needs a way out that is not Reload
+
+**Reload repeats whatever just failed.** On a company you no longer belong to it fails identically,
+forever, and the only real escape was knowing to clear browser storage. **A screen whose single control
+cannot change the outcome is a trap, however politely it is worded.**
+
+Three controls now, each of which changes something: **Pick a different company** (forgets which company
+this device points at — the one that actually recovers a deleted or revoked company), **Try again**, and
+**Sign out**. A line below says which one to use, because the person reading it has just been told their
+model could not be read and should not have to reason about it.
+
+**Scanned for other dead ends**: one more, the "sync configured but never started" screen. **Left alone
+deliberately** — it is a build fault rather than a user state, and reload IS the correct action after
+rebuilding.
+
 ## Sign-up, deletion, and an empty company
 
 ### ⚠️ ACCEPTANCE WAS BEING ASKED THREE TIMES

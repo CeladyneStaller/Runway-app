@@ -20,7 +20,7 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
          demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
          markDemoReset, takeDemoReset, switchCompany,
-         LOAD_OK, LOAD_STALE, LOAD_FAILED, LOAD_WRONG_COMPANY } from "./state/storage";
+         LOAD_OK, LOAD_STALE, LOAD_FAILED, LOAD_WRONG_COMPANY, clearActiveCompany } from "./state/storage";
 import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
 import { AcceptInvite } from "./views/chrome/Members";
 import { AdvisorScenarios } from "./views/chrome/AdvisorScenarios";
@@ -1297,7 +1297,14 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   }, [demo]);
 
   useEffect(() => {
-    if (!doc || loadState !== LOAD_OK) return;   // ← the guard: never save what we didn't successfully load
+    // ⚠️ THE SAVE GUARD MUST ALLOW `LOAD_WRONG_COMPANY` TOO, or the fresh document the recovery creates
+    // can never be written — the app would sit on a new empty model forever and save nothing.
+    //
+    // The guard's REASON still holds and is why this is a whitelist rather than a loosening: never save
+    // what we did not successfully load. A wrong-company load returns a deliberate `emptyDoc()`, which
+    // IS a successful outcome — there is no real model it could overwrite, because the company it would
+    // have belonged to is gone.
+    if (!doc || (loadState !== LOAD_OK && loadState !== LOAD_WRONG_COMPANY)) return;
     save(doc);   // storage owns the cadence: debounce, coalescing, no-op skipping, retry
   }, [doc, loadState]);
 
@@ -1340,7 +1347,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   // Fetched once the document is open, and re-fetched on a company switch — `activeCompany()` changes
   // and both answers belong to the company rather than to the person.
   useEffect(() => {
-    if (demo || !doc || loadState !== LOAD_OK) return;
+    if (demo || !doc || (loadState !== LOAD_OK && loadState !== LOAD_WRONG_COMPANY)) return;
     const account = getAccountApi?.();
     const cid = getAuthAdapter?.()?.activeCompany?.();
     if (!account?.myMembership || !cid) return;
@@ -1403,7 +1410,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
 
   // Could not read the stored document. Show why, and do NOT hand over an editable company that would
   // overwrite it — the original is still there, and a copy has been parked.
-  if (loadState !== LOAD_OK) return (
+  // ⚠️ `LOAD_WRONG_COMPANY` IS NOT A FAILURE, AND THIS GATE CAUGHT IT ANYWAY. I added the state to the
+  // loader and never checked what ELSE tests `loadState` — `!== LOAD_OK` is true of every state that is
+  // not success, including the recoverable one I had just invented. **Adding a value to an enum means
+  // auditing every comparison against it, not only the place that produces it.**
+  if (loadState !== LOAD_OK && loadState !== LOAD_WRONG_COMPANY) return (
     <div className="rw"><div className="splash" style={{ maxWidth: 560, textAlign: "left" }}>
       <h2 style={{ marginTop: 0 }}>
         {loadState === LOAD_STALE ? "This model needs a newer version of the app" : "Couldn't open your model"}
@@ -1414,7 +1425,25 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
       {err && <p style={{ fontFamily: "var(--fm)", fontSize: 12, color: "var(--muted)" }}>{String(err.message || err)}</p>}
       <p><b>Nothing has been overwritten.</b> Editing is disabled here on purpose, so that an empty
         model can't be saved over your real one.</p>
-      <button className="addbtn" onClick={() => window.location.reload()}>Reload</button>
+      {/* ⚠️ EVERY DEAD END NEEDS A WAY OUT THAT IS NOT RELOAD. Reload repeats whatever just failed — on
+          a company you no longer belong to it fails identically, forever, and the only real escape was
+          knowing to clear browser storage. **A screen whose single control cannot change the outcome is
+          a trap, however politely it is worded.**
+
+          These three each change something: forget which company this device is looking at, sign out, or
+          try again. The first is the one that actually recovers a deleted or revoked company. */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+        <button className="addbtn" onClick={async () => {
+          try { await clearActiveCompany(); } catch { /* nothing to clear */ }
+          window.location.reload();
+        }}>Pick a different company</button>
+        <button className="addbtn ghost" onClick={() => window.location.reload()}>Try again</button>
+        <button className="linkbtn" onClick={() => getSessionProvider()?.signOut?.()}>Sign out</button>
+      </div>
+      <p className="signin-fine" style={{ marginTop: 10 }}>
+        If this company was deleted or your access was removed, <b>Pick a different company</b> is the
+        one that will work — this device is still pointed at it.
+      </p>
     </div></div>
   );
 
