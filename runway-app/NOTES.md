@@ -1742,6 +1742,25 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ `>` REACHED ONLY ONE LEVEL, AND THE MEMBERS ROWS ARE TWO DEEP
+
+The people section stayed flush while every other panel was fixed, because the rows nest inside
+`.members-pending` and `.acct-binned-h` rather than sitting directly in `.panel`. **Scoping tightly was
+right; scoping to exactly one level was tighter than the markup.**
+
+Switched to a descendant selector — still scoped to `.panel`, so the 14 uses of `.acct-row` outside one
+are untouched.
+
+**⚠️ AND THAT IMMEDIATELY CREATED NINE DOUBLE-PADDING CASES.** `.acct-card`, `.invite-card`,
+`.members-link`, `.panel-h`, `.focusbox`, `.startcfg`, `.inp`, `.signin-input` already pad horizontally
+— a row inside `.invite-card` would have sat 42px in rather than 24. **The loosening that fixes the
+missed case is the same loosening that breaks the working ones**, which is why the child selector looked
+safe in the first place.
+
+Guarded with an explicit `:is(...)` zeroing those wrappers. **Zeroed rather than narrowing the selector
+further, because the list of SAFE wrappers changes whenever somebody adds one, while the list of PADDED
+ones is checkable** — and I checked it: zero unguarded risks.
+
 ### Company settings and the advisor panels
 
 Four more scoped to `.panel >`: **`.acct-row`, `.members-invite`, `.tabgrid`, `.tabtiles`.**
