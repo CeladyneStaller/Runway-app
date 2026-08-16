@@ -2,7 +2,8 @@ import React, { useState } from "react";
 
 // The published documents live on the marketing site, which is the version anybody could also have read
 // before signing up. Linking to an in-app copy would create two texts to keep in step.
-const SITE = "https://waterline-runway.com";
+// `SITE` removed with the acceptance block — it existed only to link the two documents from here, and
+// `TermsGate` links them where acceptance is now asked.
 import { passwordRules, passwordScore } from "../engine/password";
 
 // ONE component, two entry points: choosing a password while creating an account, and choosing a new one
@@ -28,11 +29,13 @@ export function SetPassword({
   const rules = passwordRules(password, { email, confirm });
   const { passed, total } = passwordScore(password, { email, confirm });
   const resetting = mode === "reset";
-  const [agreed, setAgreed] = useState(false);
 
   // AGREEMENT IS PART OF READINESS, so the same disabled button covers both. A separate validation
   // message for the checkbox would be a second way to be blocked, and people read neither.
-  const ready = rules.every(r => r.ok) && (resetting || agreed);
+  // ⚠️ THIS GATED THE SUBMIT BUTTON. Removing the checkbox without this line would have left the form
+  // permanently unsubmittable on the account-creation path — `agreed` starts false and nothing could
+  // ever set it. **Deleting a control means finding what depended on it, not only where it rendered.**
+  const ready = rules.every(r => r.ok);
 
   const submit = () => { if (ready && !busy) onSubmit(password); };
 
@@ -96,16 +99,12 @@ export function SetPassword({
       {/* ONLY WHEN CREATING AN ACCOUNT. Somebody resetting a password agreed a long time ago, and
           asking again would imply the reset was a new agreement. */}
       {!resetting && (
-        <label className="agree">
-          <input type="checkbox" checked={agreed} disabled={busy}
-                 onChange={e => setAgreed(e.target.checked)} />
-          <span>
-            I agree to the{" "}
-            <a href={`${SITE}/terms/`} target="_blank" rel="noreferrer">terms</a>
-            {" "}and the{" "}
-            <a href={`${SITE}/privacy/`} target="_blank" rel="noreferrer">privacy notice</a>.
-          </span>
-        </label>
+        {/* ⚠️ THE THIRD ACCEPTANCE CHECKBOX, REMOVED. Acceptance was asked on the email step, here on
+            the password step, and again by `TermsGate` once the company exists — **three times, which is
+            not three times the consent.** It is a person clicking past something they have already
+            agreed to, and that is weaker evidence than asking once.
+            `TermsGate` is the one that stays: it renders in the shell, so it covers every route into the
+            app rather than one step of one flow. */}
       )}
 
       <button className="addbtn signin-go" disabled={!ready || busy} onClick={submit}>

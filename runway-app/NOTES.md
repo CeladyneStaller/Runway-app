@@ -1742,6 +1742,23 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### The third checkbox — and it gated the submit button
+
+`SetPassword.jsx` had one too. **Three acceptance controls across the flow**, and I had only found two:
+`SignIn` (mine, removed) and `TermsGate` (pre-existing, kept). This one predated the session.
+
+**⚠️ IT GATED `ready`.** `const ready = rules.every(r => r.ok) && (resetting || agreed)` — so removing
+the checkbox without that line would have left the form **permanently unsubmittable** on the
+account-creation path, because `agreed` starts false and nothing could ever set it. **Deleting a control
+means finding what depended on it, not only where it rendered** — the render was 65 lines from the
+condition.
+
+`SITE` went with it: it existed only to link the documents from that block, and `TermsGate` links them
+where acceptance is now asked.
+
+**Final state: one acceptance control, in `TermsGate`**, which renders in the shell and therefore covers
+every route into the app rather than one step of one flow.
+
 ### ⚠️ ADDING A STATE TO AN ENUM MEANS AUDITING EVERY COMPARISON AGAINST IT
 
 `LOAD_WRONG_COMPANY` was handled in the loader and **caught by `if (loadState !== LOAD_OK)` in the
