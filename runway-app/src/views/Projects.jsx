@@ -1,12 +1,13 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { empMonthlyOf, empSalaryAt } from "../engine/payroll";
 import { TabInsights } from "./chrome/TabInsights";
 import { MS_STATUS, TIMING_LABEL, computeGrant, isMsBilled, msPaid, msTier } from "../engine/grant";
 import { tripCost } from "../engine/history";
 import { money, moneyFull } from "../engine/money";
 import { HRS_YR, empHourlyAt, empTitleAt } from "../engine/payroll";
 import { buildProjection, lineSpan } from "../engine/projection";
-import { blankGrant, blankInternal, compileProject } from "../engine/projects";
+import { blankGrant, blankInternal, compileProject, laborCost, personMonths } from "../engine/projects";
 import { projectSummary } from "../engine/summary";
 import { ProjectPlan } from "./chrome/ProjectPlan";
 import { ProjectChart } from "./chrome/ProjectChart";
@@ -165,6 +166,7 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
               : p.type === "grant"
               ? <GrantCard p={p} setP={setP} setGrant={setGrant} setType={setType} delP={delP} employees={employees} />
               : <InternalCard p={p} setProjects={setProjects} setP={setP} setType={setType} delP={delP}
+                              employees={employees}
                               plan={planFor(p)} />}
             {/* THE PLAN SITS ON EVERY PROJECT TYPE, not just grants. A subcontract has deliverables and
                 an internal project has targets — the Appendix E shape is where it came from, not where
@@ -184,9 +186,33 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
 }
 
 /* ---- internal project (draws internal funds) ---- */
-export function InternalCard({ p, setProjects, setP: setPById, setType, delP, plan = null }) {
+export function InternalCard({ p, setProjects, setP: setPById, setType, delP, plan = null,
+                               // ⚠️ `employees` IS THE PROP THAT WAS MISSING. `GrantCard` and
+                               // `FulfillmentCard` both took it; this one did not, which is the whole
+                               // reason internal projects could not allocate labor.
+                               employees = [], workingDays = null }) {
   const { START_Y, START_M } = useStart();
   const setP = (patch) => setProjects(ps => ps.map(x => x.id === p.id ? { ...x, ...patch } : x));
+
+  // ⚠️ THE SAME RESOLUTION PAYROLL USES. A second salary path here would give two answers for one
+  // salary the first time somebody's raise landed — the fault this codebase produced five times this
+  // week in other forms.
+  const monthlyRate = (e) => empMonthlyOf(e, empSalaryAt(e, Math.max(0, e.start || 0)));
+
+  const addLabor = (employeeId) => setP({
+    labor: [...(p.labor || []),
+            // The span defaults to the PROJECT's own — most internal work runs its length, so the
+            // common case is one field rather than three.
+            { id: uid(), employeeId, days: 0, start: p.start, end: p.end }],
+  });
+  const setLabor = (id, patch) => setP({
+    labor: (p.labor || []).map(a => a.id === id ? { ...a, ...patch } : a),
+  });
+  const laborDays = (p.labor || []).reduce((n, a) => n + (Number(a.days) || 0), 0);
+  const laborTotal = (p.labor || []).reduce((n, a) => {
+    const e = employees.find(x => x.id === a.employeeId);
+    return n + (e ? laborCost(a, e, { settings: { workingDaysPerYear: workingDays } }, monthlyRate) : 0);
+  }, 0);
   const prospective = p.stage === "prospective";
   const updLine = (lid, patch) => setProjects(ps => ps.map(x => x.id !== p.id ? x : { ...x, lines: x.lines.map(l => l.id === lid ? { ...l, ...patch } : l) }));
   const delLine = (lid) => setProjects(ps => ps.map(x => x.id !== p.id ? x : { ...x, lines: x.lines.filter(l => l.id !== lid) }));
@@ -244,6 +270,62 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP, pl
             </div>
           </div>
         </div>
+        {/* ⚠️ BELOW THE BUDGET BAR AND ABOVE THE COST TABLE. The bar has only ever counted "other
+            costs" — **on a project whose cost is mostly people it reported a fraction of the spend as
+            though it were the whole**, which is the reason this section exists at all. Sitting directly
+            under it means the number and the thing that changes it are read together. */}
+        <div className="fieldlab" style={{ marginTop: 18, marginBottom: 8 }}>Labor</div>
+        <table className="tbl">
+          <thead><tr>
+            <th>Who</th>
+            {/* ⚠️ DAYS, NOT PERCENT. "Dana for about twenty-two days a quarter" is how internal work is
+                discussed — and a percentage typed by hand silently becomes wrong at the next raise. */}
+            <th style={{ width: 92 }}>Days</th>
+            <th>Spread over</th>
+            <th style={{ textAlign: "right" }}>Cost</th>
+            <th style={{ width: 30 }} />
+          </tr></thead>
+          <tbody>
+            {(p.labor || []).map(a => {
+              const e = employees.find(x => x.id === a.employeeId);
+              const cost = e ? laborCost(a, e, { settings: { workingDaysPerYear: workingDays } }, monthlyRate) : 0;
+              // ⚠️ SAYS SO WHEN SOMEBODY HAS LEFT. Their line stops at their end date and the project
+              // total drops — **silently, which is a number changing for a reason nobody can see.**
+              const gone = e && Number.isFinite(Number(e.end)) && Number(e.end) < (a.start ?? p.start);
+              return (
+                <tr key={a.id}>
+                  <td>{e ? e.name : <span className="meta">Employee removed</span>}
+                    {gone && <span className="chip bad" style={{ marginLeft: 6 }}>has left</span>}</td>
+                  <td><input className="inp" type="number" min="0" value={a.days ?? ""}
+                             onChange={ev => setLabor(a.id, { days: Number(ev.target.value) || 0 })} /></td>
+                  <td className="meta">
+                    {monthLabel(START_Y, START_M, a.start ?? p.start)} – {monthLabel(START_Y, START_M, a.end ?? p.end)}
+                  </td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(cost)}</td>
+                  <td><button className="iconbtn" title="Remove"
+                              onClick={() => setP({ labor: (p.labor || []).filter(x => x.id !== a.id) })}>×</button></td>
+                </tr>
+              );
+            })}
+            <tr>
+              <td>
+                <select className="sel" value=""
+                        onChange={ev => { if (ev.target.value) addLabor(ev.target.value); }}>
+                  <option value="">Add somebody…</option>
+                  {employees.filter(e => !(p.labor || []).some(a => a.employeeId === e.id))
+                            .map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              </td>
+              <td style={{ fontFamily: "var(--fm)" }}>{laborDays} d</td>
+              {/* Person-months shown beside the days: this audience thinks in them for everything else,
+                  and anybody reconciling against an Appendix E should not do the arithmetic. */}
+              <td className="meta">≈ {personMonths(laborDays, { settings: { workingDaysPerYear: workingDays } }).toFixed(1)} person-months</td>
+              <td style={{ textAlign: "right", fontFamily: "var(--fm)", fontWeight: 600 }}>{money(laborTotal)}</td>
+              <td />
+            </tr>
+          </tbody>
+        </table>
+
         <table className="tbl" style={{ marginTop: 18 }}>
           <thead><tr><th>Cost line</th><th>Cadence</th><th style={{ textAlign: "right" }}>Amount</th><th>Timing</th><th style={{ textAlign: "right" }}>Growth</th><th></th></tr></thead>
           <tbody>

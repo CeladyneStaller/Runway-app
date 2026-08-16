@@ -1742,6 +1742,41 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Labor on internal projects
+
+**`GrantCard` and `FulfillmentCard` both took `employees`; `InternalCard` did not.** So people cost on
+internal work landed in unallocated payroll with nothing to attribute it to — and because the Payroll
+tab reports Allocated and Unallocated as percentages, **an organisation doing real internal R&D read a
+permanently high unallocated figure and concluded the model was wrong, when the model had no way to be
+right.**
+
+**Days are the input; the percentage is derived** — Corey's call. "Dana for about twenty-two days a
+quarter" is how internal work is discussed, and **a percentage typed by hand silently becomes wrong at
+the next raise.** Days do not. Person-months are shown beside them, because this audience thinks in
+person-months for everything else.
+
+**⚠️ 220 WORKING DAYS, NOT 260.** 260 is the naive answer and nobody works it — holidays and leave put
+most organisations near 220, and **using 260 understates every internal project by roughly 15%.** A
+company setting with a stated default and a sanity clamp, not a constant in the engine.
+
+**The lines carry `projectId`**, which is the same field the grant path emits — so the allocation bar,
+`allocPct`, the `project` dimension and every payroll chart pick this up with **no change**. This was a
+missing input, not a missing feature.
+
+**⚠️ ONE SALARY PATH.** `empMonthlyOf(e, empSalaryAt(e, …))` is what Payroll uses, and resolving salary
+a second time here would give two answers for one salary the first time a raise landed — the fault this
+codebase produced five times this week in other forms.
+
+**The setting is passed, not the document.** `Projects` never receives `doc`, and threading the whole
+document through to read one scalar would hand this component everything for the sake of a number.
+
+**Placed below the budget bar and above the cost table**, per Corey. The bar has only ever counted
+"other costs" — **on a project whose cost is mostly people it reported a fraction of the spend as though
+it were the whole** — so the number and the thing that changes it are now read together.
+
+**An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
+**silently, that is a number changing for a reason nobody can see.**
+
 ### ⚠️ `>` REACHED ONLY ONE LEVEL, AND THE MEMBERS ROWS ARE TWO DEEP
 
 The people section stayed flush while every other panel was fixed, because the rows nest inside
