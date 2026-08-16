@@ -96,16 +96,15 @@ export function SetPassword({
 
       {error && <div className="signin-error" role="alert">{error}</div>}
 
-      {/* ONLY WHEN CREATING AN ACCOUNT. Somebody resetting a password agreed a long time ago, and
-          asking again would imply the reset was a new agreement. */}
-      {!resetting && (
-        {/* ⚠️ THE THIRD ACCEPTANCE CHECKBOX, REMOVED. Acceptance was asked on the email step, here on
-            the password step, and again by `TermsGate` once the company exists — **three times, which is
-            not three times the consent.** It is a person clicking past something they have already
-            agreed to, and that is weaker evidence than asking once.
-            `TermsGate` is the one that stays: it renders in the shell, so it covers every route into the
-            app rather than one step of one flow. */}
-      )}
+      {/* ⚠️ THE ACCEPTANCE BLOCK IS GONE, AND SO IS THE `{!resetting && (...)}` THAT WRAPPED IT.
+          I removed the `<label>` and left the conditional around a bare JSX comment — and **a comment
+          inside braces is `{/* ... *\/}`, which evaluates to an empty object**. React renders `{}` as a
+          child, throws error #31, and the whole screen goes white.
+          The lesson is narrow and worth keeping: **deleting JSX means deleting its wrapper, not just its
+          body.** Nothing in lint objects, because both halves are valid on their own.
+
+          Acceptance now lives only in `TermsGate`, which renders in the shell and covers every route
+          into the app rather than one step of one flow. */}
 
       <button className="addbtn signin-go" disabled={!ready || busy} onClick={submit}>
         {busy ? "Saving…" : resetting ? "Set password and sign in" : "Create account"}

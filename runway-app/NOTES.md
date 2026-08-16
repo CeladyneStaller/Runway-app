@@ -1742,6 +1742,23 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### ⚠️ A CONDITIONAL AROUND A BARE JSX COMMENT RENDERS `{}`
+
+Removing the checkbox left `{!resetting && ( {/* comment */} )}` — the `<label>` gone, the wrapper
+still there. **A JSX comment inside braces is an empty object**, so React got `{}` as a child, threw
+error #31, and the password screen went white.
+
+**Deleting JSX means deleting its wrapper, not just its body.** Nothing in lint objects, because both
+halves are valid on their own — a conditional is fine, a comment is fine, and the combination is a
+runtime crash.
+
+**Scanned every `.jsx` for the same shape: none elsewhere.**
+
+**This is the second failure in two turns from removing that one control** — first the submit gate 65
+lines away, then the wrapper immediately around it. **A control that has been in place a while has
+accumulated more attachments than its own markup shows**, and the honest way to remove one is to grep
+its state name and read its enclosing block before deleting anything.
+
 ### The third checkbox — and it gated the submit button
 
 `SetPassword.jsx` had one too. **Three acceptance controls across the flow**, and I had only found two:
