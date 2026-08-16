@@ -1777,6 +1777,37 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### ⚠️ THREE ALLOCATION MECHANISMS, AND I HAD WIRED ONE
+
+Corey assigned himself 100% to an internal project and the Payroll tab showed nothing. Tracing every
+surface found **three separate systems that answer "who is allocated":**
+
+    teamLoad(rProjects)   HOURS, from `p.grant.categories.personnel` or `p.lines` with `isLabor`
+    allocPct/unallocPct   MONEY, filtered from `employeeLines` by `projectId`
+    projectLines          the lines I added, carrying `employeeId`
+
+**I wired the third and neither of the first two read it.** `teamLoad` never looked at `p.labor`;
+`allocPct` filtered `employeeLines` for a `projectId` that nothing there has. **Three surfaces, one
+right.**
+
+**⚠️ AND FIXING THE MEASURE EXPOSED A DOUBLE-CHARGE I HAD SHIPPED.** `compileEmployee` already charges
+Dana's full salary — she is paid whether or not she is assigned to anything. Pricing the project line
+too charged her twice: £23,000 a month for one person on £120k. **Internal labor ATTRIBUTES an existing
+cost; it does not add one.** The line is now `amount: 0` with the share in `laborAmount`, so allocation
+and the card can read it and the projection cannot.
+
+**⚠️ AND THEN THE PERCENTAGE WAS WRONG THREE TIMES BEFORE IT WAS RIGHT** — 43%, then 77%, for somebody
+allocated a full year. Both were the same fault: `employeeLines` carries salary PLUS fringe and exposes
+no base field, so **dividing the labor share by it compares two numbers that measure different things.**
+The denominator is now base salary recomputed from the employees, which is the only place it exists
+unmixed.
+
+Verified across all three: 220 days = 100%, 110 = 50%, 0 = 0%, and one salary charged rather than two.
+
+**The lesson is the one Corey's question implied**: I added a field and tested the surfaces I had
+touched. **"Check all of the wiring" found two consumers I never opened**, and the double-charge sat
+behind them.
+
 ### The two items that were owed
 
 **The projection now includes internal labor.** It joins in `projectLines`, **not `employeeLines`** — it

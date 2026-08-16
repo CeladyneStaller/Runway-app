@@ -107,7 +107,7 @@ export function Payroll({ routeTab, setRouteTab = () => {}, baseDoc, employees, 
   };
   const cyMoSalary = employees.reduce((a, e) => a + maxMoInYear(e, START_Y), 0);
 
-    const load = useMemo(() => teamLoad(rProjects, toggles), [rProjects, toggles]);
+    const load = useMemo(() => teamLoad(rProjects, toggles, baseDoc), [rProjects, toggles, baseDoc]);
   const peakOf = (id) => { const ms = Object.values(load[id]?.months || {}); return ms.length ? Math.max(...ms) : 0; };
   const overCount = employees.filter(e => peakOf(e.id) > HRS_YR / 12).length;
   const TABS = [["total", "Total"], ["employees", "Employees"], ["fringe", "Fringe"], ["alloc", "Allocation"], ["priority", "Prioritization"]];

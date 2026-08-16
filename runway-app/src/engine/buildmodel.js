@@ -56,11 +56,21 @@ export function buildModelParts(doc, horizon = HORIZON) {
     //
     // The salary is resolved with the SAME helpers Payroll uses. A second resolution would give two
     // answers for one salary the first time a raise landed.
+    // ⚠️ ZERO-COST LINES. `compileEmployee` ALREADY CHARGES DANA'S FULL SALARY in `employeeLines` —
+    // she is paid whether or not she is assigned to a project. Pricing this line too charged her twice
+    // and overstated burn by the allocated share.
+    //
+    // **Internal labor ATTRIBUTES an existing cost; it does not add one.** The line carries the
+    // employee, the project and the share so allocation and the project's own cost can read it, and
+    // `amount: 0` so the projection does not.
+    //
+    // `laborAmount` is what the CARD shows — the cost of that person's time — and is deliberately not
+    // the same field, because one is an attribution and the other is a charge.
     const labor = compileInternalLabor(p, employees, doc).map(l => {
       const e = employees.find(x => x.id === l.employeeId);
       const monthly = e ? empMonthlyOf(e, empSalaryAt(e, Math.max(0, l.start || 0))) : 0;
       const perDay = l.workingDays > 0 ? (monthly * 12) / l.workingDays : 0;
-      return { ...l, amount: perDay * l.daysPerMonth };
+      return { ...l, amount: 0, laborAmount: perDay * l.daysPerMonth };
     });
     return [...compileProject(p), ...labor]
       .map(l => ({ ...l, projectId: p.id, projectName: p.name }));

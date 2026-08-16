@@ -50,7 +50,7 @@ export const syncFulfilStage = (projects, pos) => projects.map(p => {
 
 // Who is committed to what, month by month, across grants and fulfillment work. This is the payoff of
 // linking labour to people: capacity is finite, and two projects can quietly claim the same engineer.
-export const teamLoad = (rProjects, toggles = { committed: true, expected: true, speculative: true }) => {
+export const teamLoad = (rProjects, toggles = { committed: true, expected: true, speculative: true }, doc = null) => {
   const byEmp = {};
   const push = (id, project, label, hrs, s, e) => {
     if (!id || !hrs) return;
@@ -67,6 +67,23 @@ export const teamLoad = (rProjects, toggles = { committed: true, expected: true,
         const pp = P[i]; if (pp && b?.hrs) push(l.employeeId, p.name, l.role, b.hrs, clampM(pp.start), clampM(pp.end));
       }));
     } else {
+      // ⚠️ `p.labor` WAS INVISIBLE TO THE ALLOCATION TAB. `teamLoad` is a THIRD mechanism — measured in
+      // HOURS, read from `p.grant.categories.personnel` for grants and `p.lines` with `isLabor` for
+      // everything else. **The `projectId` lines I wired feed the charts and the projection; the
+      // Payroll allocation view has never read them.**
+      //
+      // So somebody could assign themselves 100% to an internal project, see the cost on the card and
+      // in the runway, and read zero allocation — three surfaces, two of them right.
+      //
+      // Days convert to hours at the company's own working day: `HRS_YR / workingDays` is the length
+      // of one, which keeps a day here meaning the same as a day in the cost.
+      (p.labor || []).forEach(a2 => {
+        const days = Number(a2.days) || 0;
+        if (!days || !a2.employeeId) return;
+        const hrsPerDay = HRS_YR / workingDaysOf(doc);
+        push(a2.employeeId, p.name, "Internal work", days * hrsPerDay,
+             clampM(a2.start ?? p.start ?? 0), clampM(a2.end ?? p.end ?? 0));
+      });
       (p.lines || []).filter(l => l.isLabor && !(l.confidence && !toggles[l.confidence]))
         .forEach(l => push(l.employeeId, p.name, l.label, l.hours || 0, clampM(l.start ?? 0), clampM(l.end ?? l.start ?? 0)));
     }

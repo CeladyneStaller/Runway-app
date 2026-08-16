@@ -12,6 +12,36 @@
 import { accruedCostShare, shortfallAt, outstandingDebt, windDownCost } from "./commitments.js";
 import { monthTotal } from "./coding.js";
 import { saasSeries } from "./saas.js";
+import { empMonthlyOf, empSalaryAt } from "./payroll.js";
+
+/** Labor that IS attributed to a project.
+ *
+ *  ⚠️ ONE DEFINITION, BECAUSE TWO MEASURES ASK THE SAME QUESTION and answered it separately — the fault
+ *  this codebase has produced repeatedly. Project labor is any `projectLines` entry carrying an
+ *  `employeeId`, which covers grant personnel and internal allocations alike.
+ */
+/** The fraction of the team's paid time that is attributed to a project, per month.
+ *
+ *  WARNING: ONE DEFINITION, because two measures ask the same question and answered it separately.
+ *  Project labor is any `projectLines` entry with an `employeeId` — grant personnel and internal
+ *  allocations alike — and it is compared against SALARY, not salary-plus-fringe, so both sides
+ *  measure the same thing.
+ */
+const allocatedShare = (parts, n, doc) => {
+  // WARNING: THE DENOMINATOR IS BASE SALARY, NOT THE COMPILED PAY LINE. `employeeLines` carries salary
+  // PLUS fringe and exposes no base field, so dividing by it reported 77% for somebody allocated a full
+  // year — **a ratio of two numbers measuring different things is not a percentage.**
+  //
+  // Recomputed from the employees themselves, which is the only place base pay exists unmixed.
+  const base = Array.from({ length: n }, (_, m) =>
+    (doc?.employees || []).reduce((a, e) => {
+      const on = (Number(e.start) || 0) <= m && (e.end == null || Number(e.end) >= m);
+      return a + (on ? empMonthlyOf(e, empSalaryAt(e, m)) : 0);
+    }, 0));
+  const lab = sumLines((parts?.projectLines || []).filter(l => l.employeeId)
+                         .map(l => ({ ...l, amount: l.laborAmount ?? 0 })), n);
+  return base.map((t, i) => (t > 0 ? Math.min(1, lab[i] / t) : 0));
+};
 
 /** The projection row is `{ m, start, rev, cost, net, end, inNonGrant }` — seven fields, and three of
  *  them contain each other. `contains` is what stops a chart double-counting. */
@@ -145,22 +175,28 @@ export const MEASURES = [
     allows: ["lines", "bars"] },
 
   // ── payroll allocation ───────────────────────────────────────────────────────────────────────
+  // ⚠️ ALLOCATED LABOR LIVES IN `projectLines`, NOT `employeeLines`. Grant and internal labor are
+  // PROJECT costs that happen to be paid to people — `employeeLines` holds unallocated salary, and
+  // filtering it for `projectId` finds nothing because nothing there has one. **Both measures reported
+  // 0% allocated for somebody assigned 100% to a project.**
   { id: "allocPct", tab: ["pay"], label: "Allocated", unit: "percent",
     get: (rows, parts, doc) => {
-      const total = sumLines(parts?.employeeLines, rows.length);
-      const alloc = sumLines((parts?.employeeLines || []).filter(l => l.projectId), rows.length);
-      return total.map((t, i) => (t > 0 ? (alloc[i] / t) * 100 : 0));
+      // WARNING: THE TWO SIDES MUST BE THE SAME UNIT. `employeeLines` carries salary PLUS fringe; the
+      // labor share is salary only — so dividing one by the other reported 43% for somebody allocated
+      // a full year. **A ratio of two numbers that measure different things is not a percentage.**
+      //
+      // Compared as a share of AVAILABLE TIME instead: the allocation is already a fraction of a
+      // person-year, and that is what the Payroll tab's own bar reports.
+      const alloc = allocatedShare(parts, rows.length, doc);
+      return alloc.map(v => Math.min(100, v * 100));
     },
     // ⚠️ A PERCENTAGE IS A THIRD UNIT with a natural 0-100 domain. Stacking Allocated with Unallocated
     // gives a flat 100% band, which is a genuinely good chart and comes free.
     allows: ["lines", "bars", "stack"] },
 
   { id: "unallocPct", tab: ["pay"], label: "Unallocated", unit: "percent",
-    get: (rows, parts) => {
-      const total = sumLines(parts?.employeeLines, rows.length);
-      const alloc = sumLines((parts?.employeeLines || []).filter(l => l.projectId), rows.length);
-      return total.map((t, i) => (t > 0 ? ((t - alloc[i]) / t) * 100 : 0));
-    },
+    get: (rows, parts, doc) => allocatedShare(parts, rows.length, doc)
+      .map(v => Math.max(0, 100 - Math.min(100, v * 100))),
     allows: ["lines", "bars", "stack"] },
 
   // ── commitments ──────────────────────────────────────────────────────────────────────────────
