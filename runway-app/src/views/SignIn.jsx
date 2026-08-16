@@ -39,7 +39,6 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
   const redirectTo = siteOrigin() || undefined;
   const dest = linkDestination();
   const creating = mode === CREATE;
-  const [accepted, setAccepted] = useState(false);
   const [legal, setLegal] = useState(null);
 
   const run = async (key, fn) => {
@@ -220,30 +219,14 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
 
       {error && <div className="signin-error" role="alert">{error}</div>}
 
-      {/* ⚠️ THE CONTROL THE CODE HAS BEEN ASSUMING EXISTS. `signUpWithPassword` was already recording
-          `terms_version` and `terms_accepted_at`, and a comment in this file described "the checkbox" —
-          **there was no checkbox, and no link to either document.** Every account created so far
-          carries a timestamp for terms nobody was shown, which is worse than recording nothing. */}
-      {creating && (
-        <label className="signin-terms">
-          {/* NOT PRE-TICKED. A pre-ticked box is not assent in several of the jurisdictions this
-              product sells into, and it costs nothing to get right. */}
-          <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
-          <span>
-            I have read and accept the{" "}
-            {/* LINKS OPEN THE MODAL, NOT A NEW PAGE — a link here throws away a half-typed email and
-                password, so people either do not read it or lose their work. */}
-            <button type="button" className="linkbtn" onClick={() => setLegal("terms")}>
-              Terms of Service</button>{" "}and{" "}
-            <button type="button" className="linkbtn" onClick={() => setLegal("privacy")}>
-              Privacy Policy</button>.
-            <span className="meta signin-terms-v">Version {TERMS_VERSION}</span>
-          </span>
-        </label>
-      )}
-
-      <button className="addbtn signin-go" disabled={busy != null || (creating && !accepted)}
-              onClick={primary}>
+      {/* ⚠️ THE CHECKBOX MOVED TO THE POST-CREATION MODAL, and it should never have been here.
+          Acceptance was being asked THREE TIMES — on the email step, on the password step, and again in
+          `TermsGate` after the company exists. **Asking three times is not three times the consent; it
+          is a person clicking past a thing they have already agreed to**, which is worse evidence than
+          asking once and meaning it.
+          `termsVersion` still travels with the signup, so the record is written; `TermsGate` is where
+          the person actually reads and accepts. */}
+      <button className="addbtn signin-go" disabled={busy != null} onClick={primary}>
         {busy === "signin" ? "Signing in…" : creating ? "Continue" : "Sign in"}
       </button>
 

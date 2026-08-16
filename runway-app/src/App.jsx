@@ -1,7 +1,5 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { needsReacceptance } from "./legal";
-import { Reaccept } from "./views/chrome/Reaccept";
 import { readOpts, writeOpts, horizonOf } from "./engine/dashopts";
 import { DashOptions } from "./views/chrome/DashOptions";
 import { planSummary } from "./state/plans";
@@ -67,38 +65,16 @@ import mark from './assets/waterline-mark.svg';
 /** ⚠️ ITS OWN PREDICATE, because `isEmpty` is declared 200 lines below where the wizard hook needs it —
  *  reading it there would be a temporal dead zone, which is the fault that blanked the whole app earlier
  *  today. Same question, asked where it can be. */
-/** ⚠️ ASKED ONCE, AFTER SIGN-IN, BEFORE THE APP. It gates rendering rather than sitting over the top,
- *  because a prompt somebody can work behind is a prompt they will work behind.
+/* ⚠️ `ReacceptGate` REMOVED — `TermsGate` ALREADY DID THIS.
+ *
+ * I built a second re-acceptance gate without finding the one wired into `RunwayApp` since before this
+ * session. Two gates meant acceptance was asked on the email step, the password step, and again after
+ * the company exists — **three times, which is not three times the consent; it is a person clicking
+ * past something they have already agreed to.**
+ *
+ * `TermsGate` keeps the job. `needsReacceptance` and `REACCEPT_FROM` from `src/legal` remain useful and
+ * are what it should compare against.
  */
-function ReacceptGate({ children }) {
-  const session = getSessionProvider();
-  const [user, setUser] = useState(undefined);   // undefined = still asking
-  useEffect(() => {
-    if (!session?.getUser) { setUser(null); return; }
-    let live = true;
-    Promise.resolve(session.getUser())
-      .then(r => { if (live) setUser(r?.data?.user ?? r?.user ?? null); })
-      .catch(() => { if (live) setUser(null); });
-    return () => { live = false; };
-  }, [session]);
-
-  // ⚠️ WHILE THE ANSWER IS UNKNOWN, SHOW THE APP — not a spinner and not the prompt. A gate that
-  // guesses "stale" during a slow round trip shows a legal demand to somebody who has already
-  // accepted, which is worse than asking a beat late.
-  if (user === undefined || !user) return children;
-  if (!needsReacceptance(session.acceptedTermsVersion?.(user))) return children;
-
-  return (
-    <Reaccept email={user.email}
-              onSignOut={() => session.signOut?.()}
-              onAccept={async (v) => {
-                const r = await session.acceptTerms?.(v);
-                // ONLY DISMISSES ON A CONFIRMED WRITE. Dismissing optimistically would leave the false
-                // record in place and never ask again — the failure this screen exists to fix.
-                if (r?.ok) setUser({ ...user, user_metadata: { ...user.user_metadata, terms_version: v } });
-              }} />
-  );
-}
 
 const isEmptyDoc = (d) => !d?.employees?.length && !d?.lines?.length && !d?.projects?.length
   && !d?.rounds?.length && !d?.pos?.length;
@@ -1479,6 +1455,16 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
           // it was found and can be offered the wizard again. Only a document with something in it is
           // set — and the ordinary save effect persists it, so there is one write path, not two.
           setDoc(built);
+        } else {
+          // ⚠️ AN EMPTY COMPANY MUST STILL BE WRITTEN. `built` is null when somebody finishes the wizard
+          // without entering anything, and this branch did not exist — so **no document row was created
+          // at all.** The company existed, the membership existed, and the model did not.
+          //
+          // That is the state that produces a 403 on the next `load_document`: `is_member` passes but
+          // there is nothing to load, and the app reports storage as unreachable. **Publishing a company
+          // with nothing in it is a legitimate thing to do** — somebody exploring, or planning to import
+          // — and it should leave a real, empty, saved model rather than a half-created account.
+          setDoc(emptyDoc());
         }
         skipSetup(currentCompanyId());
         void track("setup_completed");
@@ -1785,7 +1771,7 @@ export default function App() {
   // ⚠️ THE GATE WRAPS THE SIGNED-IN PATH ONLY. The demo, the misconfigured screen and the recovery
   // screen return above this — none of them has a user to ask, and putting a legal prompt in front of
   // the demo would demand acceptance from somebody who has not created an account.
-  return <ReacceptGate><DocumentHost /></ReacceptGate>;
+  return <DocumentHost />;
 }
 
 /** Who you are signed in as, and the way out. Reads the registered provider directly rather than being

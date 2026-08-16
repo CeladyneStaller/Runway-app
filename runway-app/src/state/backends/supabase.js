@@ -44,6 +44,13 @@ function classify(status, payload) {
   // Also above the 403 branch: the seat check sits behind `can_edit`, so a generic permission mapping
   // would swallow the specific answer exactly as it did for a deleted company.
   if (code === "P0013" || msg.includes("no_seat")) return ERR_NO_SEAT;
+  // ⚠️ A DELETED COMPANY LOOKS EXACTLY LIKE A PERMISSION FAILURE. `is_member` joins on
+  // `deleted_at is null`, so the moment a company is soft-deleted every RPC against it returns 42501 —
+  // `forbidden`, not `company_deleted`. The client then reports "you do not have access" for a company
+  // the person has just deleted on purpose, or says nothing at all while three RPCs fail in flight.
+  //
+  // There is no way to tell the two apart from the status alone, which is why the CALLER has to know it
+  // is mid-delete. `abandonCompany` switching first is what makes the difference — see Account.jsx.
   if (code === "42501" || status === 401 || status === 403) return ERR_FORBIDDEN;
   return ERR_UNREACHABLE;
 }

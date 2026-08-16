@@ -1742,6 +1742,47 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+## Sign-up, deletion, and an empty company
+
+### ⚠️ ACCEPTANCE WAS BEING ASKED THREE TIMES
+
+Email step, password step, and again after the company exists. **`TermsGate` already existed and was
+wired into `RunwayApp` before this session — I built `ReacceptGate` without finding it.** Both my
+sign-up checkbox and my duplicate gate are removed; `TermsGate` keeps the job, and `termsVersion` still
+travels with the signup so the record is written.
+
+**Asking three times is not three times the consent.** It is a person clicking past something they have
+already agreed to, which is weaker evidence than asking once.
+
+### An empty company wrote nothing at all
+
+    } else if (built) { setDoc(built); }        // and no else
+
+`built` is null when somebody finishes the wizard without entering anything — **so the company existed,
+the membership existed, and the document did not.** That is exactly the state that produces a 403 on the
+next `load_document`. **Publishing a company with nothing in it is legitimate** — somebody exploring, or
+about to import — and it should leave a real empty saved model.
+
+### ⚠️ DELETE ACCOUNT IS A DEPLOYMENT PROBLEM, NOT A CODE ONE
+
+    Request header field apikey is not allowed by Access-Control-Allow-Headers
+
+Misleading: `apikey` IS in `ALLOWED_REQUEST_HEADERS`. **`allowedOrigin` returns `""` when the origin is
+not in the allow-list, and an empty `Access-Control-Allow-Origin` fails preflight** — which the browser
+reports as the headers being wrong. The allow-list **fails closed**, and the file says so.
+
+**The fix is `supabase secrets set ALLOWED_ORIGINS=https://app.waterline-runway.com` and a redeploy.**
+Nothing in the repo changes.
+
+### Delete company: the 403s were the app talking to a company it had just deleted
+
+`is_member` joins on `deleted_at is null`, so **the instant a company is soft-deleted every RPC still
+pointed at it returns 42501 — `forbidden`, not `company_deleted`.** `load_document` and `company_plan`
+were failing in flight, which is why it looked like nothing happened.
+
+**`abandonCompany` now runs BEFORE the delete rather than after.** A 403 on a company you just deleted
+is not worth surfacing; leaving the app pointed at one that no longer exists is worth avoiding.
+
 ### The modals were TWO SYSTEMS sharing a header class
 
 Not one duplicate — two conventions grown side by side:

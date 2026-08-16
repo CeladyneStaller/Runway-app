@@ -548,6 +548,15 @@ export function Account({ doc, onSwitched, onClose, onNewCompany, tabPrefs, onTa
     const remaining = companies.filter(c => c.id !== company.id);
     const next = remaining[0]?.id || null;
 
+    // ⚠️ SWITCH AWAY FIRST. `is_member` joins on `deleted_at is null`, so the instant the company is
+    // soft-deleted every RPC still pointed at it returns 403 — `load_document` and `company_plan` were
+    // failing in flight, which is the "delete does nothing" Corey saw.
+    //
+    // **A 403 on a company you have just deleted is not worth surfacing** — but leaving the app pointed
+    // at a company that no longer exists is worth avoiding, and doing this before the delete avoids
+    // both. `abandonCompany` deliberately does not flush: pending work belongs to the company being
+    // removed, and on a slow connection a flush could land after the delete.
+    if (company.id === activeId) await abandonCompany(auth, next);
     await account.deleteCompany(company.id);
 
     if (company.id === activeId) {
