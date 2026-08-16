@@ -16,7 +16,7 @@ import { canCumulate, canModel } from "../../engine/modifiers";
  *  The engine computes; this explains. Every refusal below is `buildCustom`'s decision, surfaced with a
  *  reason rather than shown as a control that quietly does nothing.
  */
-export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true }) {
+export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true, hasSubtabs = false }) {
   const measures = measuresFor(tab);
   const dims = dimensionsFor(tab);
   const ids = (cfg.measures || []).map(m => m.id);
@@ -114,6 +114,23 @@ export function ChartBuilder({ tab, cfg, setCfg, onClose, onSave, canSave = true
 
       {/* ⚠️ A CATEGORY AXIS HAS NO TIME, so a per-dataset breakdown BY THE SAME FIELD is meaningless —
           the axis already is that field. `across` is excluded from each dataset's own list below. */}
+      {/* ⚠️ ONLY WHERE A SUB-TAB EXISTS TO FOLLOW. On a tab with no sub-tabs the choice has nothing to
+          act on, and a control that does nothing teaches people the settings are decorative — the same
+          rule as the dashboard options. */}
+      {hasSubtabs && (
+        <label className="cb-row cb-dim">
+          <input type="checkbox" checked={!!cfg.dimOthers}
+                 onChange={e => setCfg(c => ({ ...c, dimOthers: e.target.checked }))} />
+          <span>
+            <span className="cb-dim-n">Keep every sub-tab's series on the chart</span>
+            <span className="cb-dim-w">
+              A sub-tab normally narrows this chart to its own measures. Ticked, the others stay drawn
+              and greyed — better for comparing, worse for reading one line.
+            </span>
+          </span>
+        </label>
+      )}
+
       {cfg.across && cfg.across !== "month" && (
         <p className="cb-note">
           Each measure contributes one total per {dims.find(d => d.id === cfg.across)?.label.toLowerCase()},

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { valueAt, indexAt, placeTip } from "../../src/engine/hover.js";
+import { valueAt, indexAt, placeTip, rowAt, rowIndexAt } from "../../src/engine/hover.js";
 
 const spec = {
   format: "money",
@@ -154,5 +154,43 @@ describe("⚠️ a breakdown subtotals whether or not it is stacked", () => {
     // four fields in `saveChart`.
     expect(valueAt(mk(true), 0).rows[0].group).toBe("p");
     expect(valueAt(mk(true), 0).rows[0].groupLabel).toBe("Project spend");
+  });
+});
+
+describe("⚠️ row-shaped charts get a DIFFERENT hover", () => {
+  const seg = { format: "money", rows: [
+    { label: "Catalyst", segments: [{ label: "Spend", value: -96000 }, { label: "Draws", value: 72000 }] },
+    { label: "Pilot", segments: [{ label: "Spend", value: -36000 }] },
+  ] };
+
+  it("reads a row rather than a column across series", () => {
+    // Five renderers are row-shaped. There is no index into a month, and the thing under the pointer is
+    // a whole row — **a separate function rather than a flag, because forcing one shape to answer both
+    // questions is how `spec.rows` and `spec.series` got conflated in the lens.**
+    const v = rowAt(seg, 0);
+    expect(v.label).toBe("Catalyst");
+    expect(v.parts.map(p => p.value)).toEqual([-96000, 72000]);
+    expect(v.total).toBe(-24000);
+  });
+
+  it("gives no total for a single segment", () => {
+    expect(rowAt(seg, 1).total).toBeNull();
+  });
+
+  it("handles a flat row and carries its note", () => {
+    const flat = { format: "count", rows: [{ label: "Q1", value: 12, note: "behind plan" }] };
+    expect(rowAt(flat, 0).parts[0].value).toBe(12);
+    expect(rowAt(flat, 0).note).toBe("behind plan");
+  });
+
+  it("returns null past the end rather than throwing", () => {
+    expect(rowAt(seg, 99)).toBeNull();
+    expect(rowAt(null, 0)).toBeNull();
+  });
+
+  it("maps a y position to a row, and nothing outside", () => {
+    expect(rowIndexAt(70, { top: 10, rowH: 26, count: 5 })).toBe(2);
+    expect(rowIndexAt(5, { top: 10, rowH: 26, count: 5 })).toBeNull();
+    expect(rowIndexAt(999, { top: 10, rowH: 26, count: 5 })).toBeNull();
   });
 });

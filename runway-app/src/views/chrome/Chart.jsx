@@ -10,7 +10,7 @@
 // blank box looks like a bug and a sentence looks like an answer.
 import React, { useMemo } from "react";
 import { formatFor } from "../../engine/measures";
-import { HoverLayer } from "./Hover";
+import { HoverLayer, RowHoverLayer } from "./Hover";
 import { padFor } from "../../engine/plotframe";
 import { useStart } from "../../state/StartCtx";
 import { plotFrame } from "../../engine/plotframe";
@@ -592,6 +592,9 @@ function HBars({ spec }) {
           </g>
         );
       })}
+    {/* ⚠️ ROW-SHAPED, so it takes the ROW hover rather than the time-axis one. */}
+    <RowHoverLayer spec={spec} format={spec.format} rowH={rowH}
+                    box={{ x: 0, y: 0, w: W, h: rows.length * rowH }} />
     </svg>
   );
 }
@@ -621,6 +624,9 @@ function Diverging({ spec }) {
           </g>
         );
       })}
+    {/* ⚠️ ROW-SHAPED, so it takes the ROW hover rather than the time-axis one. */}
+    <RowHoverLayer spec={spec} format={spec.format} rowH={rowH}
+                    box={{ x: 0, y: 0, w: W, h: rows.length * rowH }} />
     </svg>
   );
 }
@@ -651,6 +657,12 @@ function Pace({ spec }) {
         );
       })}
       <text x={PAD.l} y={H - 8} className="ch-t">period elapsed →</text>
+      {/* ⚠️ NO HOVER LAYER HERE, DELIBERATELY. `Pace` looks row-shaped because it reads `spec.rows`,
+          but it is a SCATTER — each row is a point placed by `elapsed` and `spent`, not a band at a
+          fixed height. A row hover would report whichever row happened to be at that y, which is not
+          what is under the pointer.
+          I mounted one here on the assumption that `spec.rows` meant rows; it does not. A per-point
+          hover is a different job and worth doing on its own rather than approximated. */}
     </svg>
   );
 }
@@ -779,6 +791,11 @@ function Goals({ spec }) {
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
       <TimeAxis ticks={spec.ticks} n={n} y={base} pad={spec.pad || PAD} />
+      {/* ⚠️ NO HOVER YET, AND NOT FORCED. `Goals` builds its timeline from `pre` and `post`, which are
+          scoped to an inner block and not in scope at the canvas level where an overlay must mount.
+          Reaching them means restructuring the renderer, which is a real change rather than a mount —
+          **and a hover that reports the wrong row is worse than none**, because it looks authoritative.
+          The row hover exists and fits; this renderer needs its lists lifted first. */}
     </svg>
   );
 }
@@ -897,6 +914,11 @@ function Milestones({ spec }) {
 
       <line x1={PAD.l} y1={base} x2={W - PAD.r} y2={base} stroke="var(--line)" />
       <TimeAxis ticks={spec.ticks} n={n} y={base} pad={spec.pad || PAD} />
+      {/* ⚠️ NO HOVER YET, AND NOT FORCED. `Milestones` builds its timeline from `pre` and `post`, which are
+          scoped to an inner block and not in scope at the canvas level where an overlay must mount.
+          Reaching them means restructuring the renderer, which is a real change rather than a mount —
+          **and a hover that reports the wrong row is worse than none**, because it looks authoritative.
+          The row hover exists and fits; this renderer needs its lists lifted first. */}
     </svg>
   );
 }

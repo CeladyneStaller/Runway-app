@@ -40,6 +40,10 @@ export function saveChart(doc, tab, cfg, { name, savedBy } = {}) {
       signColor: !!m.signColor,
     })),
     across: cfg?.across || "month", orient: cfg?.orient || "x",
+    // ⚠️ BOTH `saveChart` AND `updateChart`. A chart-level field omitted from one of these picks is
+    // silently lost — the fault that dropped four per-dataset fields earlier today, and `across` itself
+    // before them. Two call sites, checked by count rather than by reading.
+    dimOthers: !!cfg?.dimOthers,
     savedBy: savedBy || null, savedAt: new Date().toISOString(),
   };
   return {
@@ -146,6 +150,10 @@ export function updateChart(doc, id, cfg, { name } = {}) {
       signColor: !!m.signColor,
     })),
     across: cfg?.across || "month", orient: cfg?.orient || "x",
+    // ⚠️ BOTH `saveChart` AND `updateChart`. A chart-level field omitted from one of these picks is
+    // silently lost — the fault that dropped four per-dataset fields earlier today, and `across` itself
+    // before them. Two call sites, checked by count rather than by reading.
+    dimOthers: !!cfg?.dimOthers,
     editedAt: new Date().toISOString(),
   };
   return {

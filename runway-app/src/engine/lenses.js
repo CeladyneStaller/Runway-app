@@ -51,6 +51,14 @@ export const LENSES = Object.freeze({
 
 export const lensFor = (tab, subtab) => LENSES[tab]?.[subtab] || null;
 
+/** Does this tab have sub-tabs at all?
+ *
+ *  The "keep every sub-tab's series" option has nothing to act on where there are none, and a control
+ *  that does nothing teaches people the settings are decorative — the same rule as the dashboard
+ *  options hiding an axis break that cannot apply.
+ */
+export const hasSubtabs = (tab) => Object.keys(LENSES[tab] || {}).length > 0;
+
 /** Which chart to build for a tab and sub-tab.
  *
  *  AN EXPLICIT CHOICE WINS. Picking a chart from the picker is a decision; clicking a sub-tab is

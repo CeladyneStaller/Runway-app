@@ -1742,6 +1742,64 @@ lines, and the note describes what was drawn rather than what was intended.
 **Refusals moved into each dataset's own block** — "a balance has no parts", "balances do not sum" —
 beside the control rather than as a chart-wide warning naming a measure the reader has to go find.
 
+### Company settings and the advisor panels
+
+Four more scoped to `.panel >`: **`.acct-row`, `.members-invite`, `.tabgrid`, `.tabtiles`.**
+
+**`.acct-row` is the settings row itself** — a `space-between` flex, so the missing inset pinned the
+label left and the control right. **Same double fault as `.pchart-ctrl`**, which is now the third time
+that shape has appeared: one omission producing two visible edges.
+
+**`.members-invite` had `padding-top` and nothing else** — the same "separated itself from what is
+above, forgot the wall to its left" pattern.
+
+**`.tabgrid` and `.tabtiles` are the tab pickers.** Their tiles have padding; the GRID had none, so the
+outer column sat on the wall — **a container inheriting its children's inset is a thing that looks
+correct in the CSS and wrong on screen.**
+
+**`acct-row-a` and `acct-row-t` needed nothing**, checked rather than assumed: they nest INSIDE
+`.acct-row` and inherit its new inset.
+
+**One flush child remains in those views and is correct**: `.tbl` in AdvisorHome, whose cells carry the
+inset.
+
+**All fourteen are scoped to `.panel >`.** `.acct-row` alone is used 14 times across the app and only
+the panel-child cases are flush — **the base rule is still untouched**, which is the same reasoning that
+kept this from being a six-times-too-large edit last time.
+
+## The sub-tab option, and hover on the row-shaped charts
+
+### `dimOthers` had a reader and no writer
+
+`applyLens` has honoured it since the engine work and **no chart ever emitted it** — so "keep every
+sub-tab's series, dimmed" was reachable only by hand-editing a saved chart. **A flag with a reader and
+no writer is a feature that exists in exactly one direction.**
+
+Now a builder control, emitted by `buildCustom`, and **persisted in BOTH `saveChart` and `updateChart`**
+— checked by count, since a chart-level field omitted from one of those picks is silently lost, which
+has happened three times in this session.
+
+**Hidden where a tab has no sub-tabs** (`cmt`, `dash`) — a control with nothing to act on teaches people
+the settings are decorative.
+
+### `rowAt` — a second hover, because the geometry is genuinely second
+
+Five renderers are ROW-shaped rather than series-shaped. There is no index into a month, and the thing
+under the pointer is a whole row. **A separate function rather than a flag on `valueAt`: forcing one
+shape to answer both questions is exactly how `spec.rows` and `spec.series` got conflated in the lens.**
+
+Mounted on **`HBars` and `Diverging`**. Coverage is now 6 of 9 renderers.
+
+**⚠️ AND I MOUNTED IT ON `Pace` FIRST, WHICH WAS WRONG.** It reads `spec.rows`, so it looked row-shaped
+— **but it is a SCATTER**: each row is a point placed by `elapsed` and `spent`, not a band at a fixed
+height. A row hover there would report whichever row happened to sit at that y. **Reading the field name
+is not reading the geometry.**
+
+**`Goals` and `Milestones` are left without one, deliberately.** They build their timelines from `pre`
+and `post`, scoped to an inner block and not in scope where an overlay must mount. Reaching them means
+restructuring the renderer — a real change rather than a mount — **and a hover that reports the wrong
+row is worse than none, because it looks authoritative.**
+
 ### ⚠️ A CONDITIONAL AROUND A BARE JSX COMMENT RENDERS `{}`
 
 Removing the checkbox left `{!resetting && ( {/* comment */} )}` — the `<label>` gone, the wrapper

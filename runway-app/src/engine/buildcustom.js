@@ -298,6 +298,14 @@ function finish(cfg, doc, series, ids, axis = null) {
   return {
     kind,
     x: axis?.x || months(doc), ticks: axis?.ticks || axisTicks(doc),
+    // WARNING: `dimOthers` WAS READ BY THE LENS AND SET BY NOTHING. `applyLens` has honoured it since
+    // the engine work and no chart ever emitted it, so "show all sub-tabs, dimmed" was reachable only
+    // by hand-editing a saved chart. A flag with a reader and no writer is a feature that exists in
+    // exactly one direction.
+    //
+    // What it means: a sub-tab normally FILTERS the chart to its own series. With this set the others
+    // stay drawn and greyed, so the sub-tab emphasises rather than hides.
+    dimOthers: !!cfg?.dimOthers,
     // SAME STAMP AS `buildChart`, because a custom chart does not pass through it.
     todayIndex: (doc?.history || []).length > 0 ? (doc.history.length - 1) : undefined,
     series, format: "money",

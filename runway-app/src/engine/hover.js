@@ -120,3 +120,46 @@ export function placeTip(px, py, { w, h, tipW = 210, tipH = 120, gap = 14 }) {
     flipped: flip,
   };
 }
+
+
+/** What one ROW of a row-shaped chart says.
+ *
+ *  ⚠️ FIVE RENDERERS ARE ROW-SHAPED, NOT SERIES-SHAPED — `HBars`, `Pace`, `Goals`, `Milestones`,
+ *  `Diverging`. The time-axis hover does not fit them: there is no index into a month, and the thing
+ *  under the pointer is a whole row rather than a column across every series.
+ *
+ *  **The difference is real, so this is a second function rather than a flag on the first.** Forcing
+ *  one shape to answer both questions is how `spec.rows` and `spec.series` got conflated in the lens.
+ */
+export function rowAt(spec, i) {
+  const rows = spec?.rows || [];
+  const r = rows[i];
+  if (!r) return null;
+
+  // A row carries EITHER `segments` (a share or magnitude bar) or a bare value.
+  const segs = Array.isArray(r.segments) ? r.segments : null;
+  const parts = segs
+    ? segs.filter(sg => Number.isFinite(Number(sg?.value)))
+          .map(sg => ({ label: sg.label || sg.id || "", value: Number(sg.value),
+                        color: sg.color || null, tone: sg.tone || null }))
+    : (Number.isFinite(Number(r.value)) ? [{ label: r.label, value: Number(r.value) }] : []);
+
+  return {
+    label: r.label ?? String(i),
+    parts,
+    // ⚠️ THE TOTAL IS THE MAGNITUDE SUM, matching what the bar actually occupies. A share row whose
+    // segments are 60 and 40 reads as 100, which is the number the width represents.
+    total: parts.length > 1 ? parts.reduce((a, p) => a + p.value, 0) : null,
+    // Carried through for the renderers that have one — `Goals` and `Milestones` have dates, `Pace` a
+    // rate. Absent rather than invented where there is none.
+    note: r.note || r.sub || null,
+    format: spec.format || "money",
+  };
+}
+
+/** Which row a pointer at `py` is over. Rows are a fixed height, unlike months. */
+export const rowIndexAt = (py, { top, rowH, count }) => {
+  if (!count || !rowH) return null;
+  const i = Math.floor((py - top) / rowH);
+  return i >= 0 && i < count ? i : null;
+};

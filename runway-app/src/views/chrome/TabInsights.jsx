@@ -19,7 +19,7 @@ import { savedFor, saveChart, updateChart, setDefaultChart, defaultChartId, reso
 import { ChartBuilder, SaveChartBar } from "./ChartBuilder";
 import { buildChart, chartsForTab, defaultChartFor, chartById } from "../../engine/charts";
 import { alertsFor } from "../../engine/alerts";
-import { lensFor, chartIdFor, applyLens } from "../../engine/lenses";
+import { hasSubtabs, lensFor, chartIdFor, applyLens } from "../../engine/lenses";
 import { Chart } from "./Chart";
 
 const InsightCtx = createContext(null);
@@ -277,6 +277,7 @@ export function TabInsights({ tab, subtab }) {
           ) : picking && building ? (
             <>
               <ChartBuilder tab={tab} cfg={cfg} setCfg={setCfg} canSave={!!ctx.setDoc}
+                            hasSubtabs={hasSubtabs(tab)}
                             onClose={() => { setBuilding(false); setPicking(false); setEditing(null); }}
                             onSave={() => setNaming(true)} />
               {naming && (

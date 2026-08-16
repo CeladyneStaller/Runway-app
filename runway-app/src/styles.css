@@ -1812,6 +1812,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
    `.panel` has no padding of its own — background, border, radius, `overflow:hidden` and nothing else —
    so every child answers "how far in do I sit" separately. That is why the audit found 47 rows rather
    than three, and this is a targeted patch rather than the structural answer. */
+.panel > .acct-row,
 .panel > .acct-row-s,
 .panel > .acct-warn,
 .panel > .acct-warnbox,
@@ -1819,7 +1820,14 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .panel > .subs,
 .panel > .scn-deltas,
 .panel > .pf-stats,
-.panel > .flavour-pick { padding-left:18px; padding-right:18px; }
+.panel > .flavour-pick,
+/* ⚠️ COMPANY SETTINGS AND THE ADVISOR PANELS. `.acct-row` is the settings row itself — a
+   `space-between` flex, so a missing horizontal inset pins the label left and the control right, the
+   same double fault as `.pchart-ctrl`. `.tabgrid` and `.tabtiles` are the tab pickers; their tiles
+   have their own padding but the GRID had none, so the outer column sat on the wall. */
+.panel > .members-invite,
+.panel > .tabgrid,
+.panel > .tabtiles { padding-left:18px; padding-right:18px; }
 
 /* Empty states sit alone in their container, so they take the LARGER standoff — the same reasoning as
    `.ch-empty` and `.plan-empty`: text at the container's normal inset reads as pinned to the wall
@@ -1837,3 +1845,4 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 
 /* The milestone table body — its header was fixed when `.plan-add` was; this is the rows beneath. */
 .panel > .plan-rows{margin-left:18px;margin-right:18px}
+.hv-band{fill:var(--signal);opacity:.07;pointer-events:none}

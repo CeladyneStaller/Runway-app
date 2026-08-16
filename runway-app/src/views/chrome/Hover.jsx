@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { formatFor } from "../../engine/measures";
-import { valueAt, indexAt, placeTip } from "../../engine/hover";
+import { valueAt, indexAt, placeTip, rowAt, rowIndexAt } from "../../engine/hover";
 import { moneyFull } from "../../engine/money";
 
 // ⚠️ UNITS AND FORMATS ARE DIFFERENT VOCABULARIES, and this file had its own third version of the
@@ -110,6 +110,78 @@ export function HoverLayer({ spec, box, ctx = {}, format }) {
             {v.categorical && (
               <div className="hv-f">Totalled across the whole window — there is no time axis here.</div>
             )}
+          </div>
+        </foreignObject>
+      )}
+    </>
+  );
+}
+
+
+/** Values for a ROW-shaped chart — `HBars`, `Pace`, `Goals`, `Milestones`, `Diverging`.
+ *
+ *  ⚠️ A SEPARATE COMPONENT, BECAUSE THE GEOMETRY IS SEPARATE. Rows are a fixed height and the thing
+ *  under the pointer is one row, not a column across every series. Sharing `HoverLayer` would have
+ *  meant a flag inside it choosing between two coordinate systems — which is how `spec.rows` and
+ *  `spec.series` got conflated in the lens.
+ */
+export function RowHoverLayer({ spec, box, rowH, format }) {
+  const [at, setAt] = useState(null);
+  const ref = useRef(null);
+  const count = (spec?.rows || []).length;
+
+  const move = useCallback((e) => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r || !count) return;
+    const py = ((e.clientY - r.top) / (r.height || 1)) * box.h;
+    const px = ((e.clientX - r.left) / (r.width || 1)) * box.w;
+    const i = rowIndexAt(py, { top: 0, rowH, count });
+    setAt(i == null ? null : { i, px: box.x + px, py: box.y + py });
+  }, [box, rowH, count]);
+
+  const key = useCallback((e) => {
+    if (!count) return;
+    if (e.key === "Escape") { setAt(null); return; }
+    const d = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    setAt(p => {
+      const i = Math.max(0, Math.min(count - 1, (p?.i ?? -1) + d));
+      return { i, px: box.x + box.w / 2, py: box.y + i * rowH + rowH / 2 };
+    });
+  }, [box, rowH, count]);
+
+  const v = at ? rowAt(spec, at.i) : null;
+  const tip = at ? placeTip(at.px, at.py, { w: box.x + box.w + 40, h: box.y + box.h + 40 }) : null;
+
+  return (
+    <>
+      {/* THE HOVERED ROW IS BANDED, not underlined — a row is an area, and a rule beneath it reads as
+          belonging to the row below. */}
+      {at && (
+        <rect x={box.x} y={box.y + at.i * rowH} width={box.w} height={rowH}
+              className="hv-band" />
+      )}
+      <rect ref={ref} x={box.x} y={box.y} width={box.w} height={box.h}
+            fill="transparent" tabIndex={0} className="hv-hit"
+            role="application" aria-label="Chart values — use the arrow keys"
+            onMouseMove={move} onMouseLeave={() => setAt(null)}
+            onPointerDown={move} onKeyDown={key} onBlur={() => setAt(null)} />
+      {v && tip && (
+        <foreignObject x={tip.x} y={tip.y} width="230" height="180" className="hv-fo">
+          <div className="hv-tip" xmlns="http://www.w3.org/1999/xhtml">
+            <div className="hv-m"><span>{v.label}</span></div>
+            {v.parts.map((p, i) => (
+              <div className="hv-r" key={i}>
+                <i style={{ background: p.color || `var(--${p.tone || "signal"})` }} />
+                <span>{p.label}</span>
+                <b>{fmt(p.value, format || v.format)}</b>
+              </div>
+            ))}
+            {v.total != null && (
+              <div className="hv-r hv-t"><span>Total</span><b>{fmt(v.total, format || v.format)}</b></div>
+            )}
+            {v.note && <div className="hv-f">{v.note}</div>}
           </div>
         </foreignObject>
       )}
