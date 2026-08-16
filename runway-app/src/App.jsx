@@ -825,7 +825,13 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
               ...d, projects: (d.projects || []).map(p => (p.id === id ? body : p)),
             }))} />
           )}
-          {view === "proj" && <Projects startY={startY} startM={startM} routeTab={routeTab} setRouteTab={setTab} projects={rProjects} setProjects={setProjects} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
+          {view === "proj" && <Projects startY={startY} startM={startM} routeTab={routeTab} setRouteTab={setTab} projects={rProjects} setProjects={setProjects}
+                  // THE WORKING-DAY SETTING TRAVELS WITH THE VIEW THAT USES IT: it converts days to
+                  // money on internal labor and is used nowhere else, so a settings tab would separate
+                  // the number from the only screen where its effect is visible.
+                  workingDays={doc.settings?.workingDaysPerYear ?? null}
+                  setWorkingDays={(n) => setDoc(d => ({ ...d,
+                    settings: { ...(d.settings || {}), workingDaysPerYear: n } }))} hist={hist} codeMap={codeMap} customerMap={customerMap} projWeeks={projWeeks} employees={employees} pos={pos} />}
           {view === "sales" && <Sales saas={saas} setSaas={setSaas} routeTab={routeTab} setRouteTab={setTab} pos={pos} setPos={setPos} projects={projects} addPO={addPO} delPO={delPO} decideDev={decideDev} />}
           {view === "inv" && <Investment routeTab={routeTab} setRouteTab={setTab} rounds={rounds} setRounds={setRounds} zeroNoRaise={zeroNoRaise} rowsNoRaise={rowsNoRaise} rowsFin={rowsFin} rowsUp={rowsUp} zeroUp={zeroUp} toggles={toggles} setToggles={setToggles} />}
           {view === "hist" && <History

@@ -64,3 +64,48 @@ describe("⚠️ internal projects can allocate labor", () => {
     expect(personMonths(110, null)).toBeCloseTo(6, 1);
   });
 });
+
+describe("⚠️ the labor reaches the PROJECTION, not just the card", () => {
+  it("emits priced lines through buildModelParts", async () => {
+    // The card showed correct costs while the projection did not include them — **a number that is
+    // right on one screen and absent from the model is worse than a number that is missing from both**,
+    // because the first looks like it worked.
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const doc = {
+      settings: { workingDaysPerYear: 220 }, startY: 2026, startM: 6, cash: 500000,
+      employees: [{ id: "e1", name: "Dana", basis: "annual", amount: 120000, start: 0 }],
+      projects: [{ id: "p1", name: "Durability", type: "internal", start: 0, end: 8, budget: 150000,
+                   lines: [], labor: [{ id: "a1", employeeId: "e1", days: 110 }] }],
+      lines: [], pos: [], rounds: [], saas: [], history: [],
+    };
+    const labor = (buildModelParts(doc).projectLines || []).filter(l => l.employeeId);
+    expect(labor).toHaveLength(1);
+    const total = labor.reduce((a, l) => a + l.amount * (l.end - l.start + 1), 0);
+    // 110 days of a £120k salary at 220 working days is exactly half a year.
+    expect(total).toBeCloseTo(60000, 0);
+  });
+
+  it("⚠️ THE WORKING-DAY SETTING CHANGES THE ANSWER, which is why it is editable", async () => {
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const mk = (wd) => ({
+      settings: { workingDaysPerYear: wd }, startY: 2026, startM: 6, cash: 500000,
+      employees: [{ id: "e1", name: "Dana", basis: "annual", amount: 120000, start: 0 }],
+      projects: [{ id: "p1", name: "D", type: "internal", start: 0, end: 8, budget: 150000,
+                   lines: [], labor: [{ id: "a1", employeeId: "e1", days: 110 }] }],
+      lines: [], pos: [], rounds: [], saas: [], history: [],
+    });
+    const cost = (wd) => (buildModelParts(mk(wd)).projectLines || [])
+      .filter(l => l.employeeId)
+      .reduce((a, l) => a + l.amount * (l.end - l.start + 1), 0);
+    // 260 is the naive figure nobody works, and it understates the project by roughly 15%.
+    expect(cost(260)).toBeLessThan(cost(220));
+  });
+
+  it("does not double-count somebody already drawing a salary", () => {
+    // Internal labor is a PROJECT cost that happens to be paid to a person. Putting it with the
+    // employees would count their pay twice, because `compileEmployee` already emits it in full.
+    const src = (require("node:fs")).readFileSync("src/engine/buildmodel.js", "utf8");
+    expect(src).toMatch(/compileInternalLabor\(p, employees, doc\)/);
+    expect(src.indexOf("compileInternalLabor")).toBeGreaterThan(src.indexOf("const employeeLines"));
+  });
+});

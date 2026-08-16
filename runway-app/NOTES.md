@@ -1777,6 +1777,29 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### The two items that were owed
+
+**The projection now includes internal labor.** It joins in `projectLines`, **not `employeeLines`** — it
+is a PROJECT cost that happens to be paid to a person, and putting it with the employees would
+double-count anybody already drawing a salary, because `compileEmployee` has already emitted their full
+pay. Verified end to end: 110 days of a £120k salary at 220 working days costs exactly £60,000.
+
+**⚠️ THE CARD HAD BEEN RIGHT WHILE THE MODEL WAS EMPTY**, which is the worse half of that pair: a number
+that is correct on one screen and absent from the model **looks like it worked.**
+
+**`workingDaysPerYear` is editable**, on the project card beside the labor it converts. **Not in a
+settings tab** — it is used nowhere else, and separating it from the only screen where its effect is
+visible would make it a number nobody understands the purpose of.
+
+**⚠️ AND THE REAL COST OF GETTING IT WRONG IS 18%, NOT THE 15% I ESTIMATED.** 110 days at 260 days a
+year prices at £50,769 against £60,000 at 220 — measured rather than guessed, and worth the correction
+because it is the argument for the control existing.
+
+**Two edits went wrong on the way**, both from writing into a shape I had not read: a JSX comment placed
+inside a props list, where `{/* */}` is not valid, and a regex that cut a parameter list at the first
+`}` — **which was inside `() => {}`**. Both were caught by lint immediately; neither would have been
+caught by a test.
+
 ### ⚠️ `>` REACHED ONLY ONE LEVEL, AND THE MEMBERS ROWS ARE TWO DEEP
 
 The people section stayed flush while every other panel was fixed, because the rows nest inside

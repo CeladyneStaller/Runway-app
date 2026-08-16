@@ -7,9 +7,9 @@
 // uses it and a test pins that it reproduces App's base projection.
 
 import { HORIZON } from "./time.js";
-import { compileEmployee, empCostAt } from "./payroll.js";
+import { compileEmployee, empCostAt, empMonthlyOf, empSalaryAt } from "./payroll.js";
 import { resolveFringeRate } from "./fringe.js";
-import { compileProject, resolveProjectRates, syncFulfilStage } from "./projects.js";
+import { compileProject, resolveProjectRates, syncFulfilStage, compileInternalLabor } from "./projects.js";
 import { compilePO } from "./sales.js";
 import { compileInstrument } from "./capital.js";
 import { compileSaas, saasVariances } from "./saas.js";
@@ -50,7 +50,20 @@ export function buildModelParts(doc, horizon = HORIZON) {
   const rProjects = syncFulfilStage(resolveProjectRates(projects, employees, fringePct), pos);
   const projectLines = rProjects.flatMap(p => {
     if (p.stage === "prospective" && !p.include) return [];
-    return compileProject(p).map(l => ({ ...l, projectId: p.id, projectName: p.name }));
+    // ⚠️ INTERNAL LABOR JOINS HERE, NOT IN `employeeLines`. It is a PROJECT cost that happens to be
+    // paid to a person — putting it with the employees would double-count anybody already drawing a
+    // salary, because `compileEmployee` has already emitted their full pay.
+    //
+    // The salary is resolved with the SAME helpers Payroll uses. A second resolution would give two
+    // answers for one salary the first time a raise landed.
+    const labor = compileInternalLabor(p, employees, doc).map(l => {
+      const e = employees.find(x => x.id === l.employeeId);
+      const monthly = e ? empMonthlyOf(e, empSalaryAt(e, Math.max(0, l.start || 0))) : 0;
+      const perDay = l.workingDays > 0 ? (monthly * 12) / l.workingDays : 0;
+      return { ...l, amount: perDay * l.daysPerMonth };
+    });
+    return [...compileProject(p), ...labor]
+      .map(l => ({ ...l, projectId: p.id, projectName: p.name }));
   });
 
   // baseline burn (anchors opex forward to the historical run-rate)

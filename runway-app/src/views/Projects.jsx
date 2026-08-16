@@ -7,7 +7,7 @@ import { tripCost } from "../engine/history";
 import { money, moneyFull } from "../engine/money";
 import { HRS_YR, empHourlyAt, empTitleAt } from "../engine/payroll";
 import { buildProjection, lineSpan } from "../engine/projection";
-import { blankGrant, blankInternal, compileProject, laborCost, personMonths } from "../engine/projects";
+import { blankGrant, blankInternal, compileProject, laborCost, personMonths, WORKING_DAYS_DEFAULT } from "../engine/projects";
 import { projectSummary } from "../engine/summary";
 import { ProjectPlan } from "./chrome/ProjectPlan";
 import { ProjectChart } from "./chrome/ProjectChart";
@@ -26,7 +26,7 @@ const ActualsCtx = createContext({ setProjects: () => {}, hist: [], codeMap: {},
 const useProjectsSetter = () => useContext(ActualsCtx).setProjects;
 const useActualsCtx = () => useContext(ActualsCtx);
 
-export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} , startY = 2026, startM = 0 }) {
+export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjects, projWeeks, employees, pos = [], hist = [], codeMap = {}, customerMap = {} , startY = 2026, startM = 0, workingDays = null, setWorkingDays = null }) {
   const tabPrefs = useTabPrefs();
   const tab = resolveTab("proj", routeTab, "all", tabPrefs);
   const setTab = (t) => setRouteTab(t);
@@ -166,7 +166,8 @@ export function Projects({ routeTab, setRouteTab = () => {}, projects, setProjec
               : p.type === "grant"
               ? <GrantCard p={p} setP={setP} setGrant={setGrant} setType={setType} delP={delP} employees={employees} />
               : <InternalCard p={p} setProjects={setProjects} setP={setP} setType={setType} delP={delP}
-                              employees={employees}
+                              employees={employees} workingDays={workingDays}
+                              setWorkingDays={setWorkingDays}
                               plan={planFor(p)} />}
             {/* THE PLAN SITS ON EVERY PROJECT TYPE, not just grants. A subcontract has deliverables and
                 an internal project has targets — the Appendix E shape is where it came from, not where
@@ -190,7 +191,7 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP, pl
                                // ⚠️ `employees` IS THE PROP THAT WAS MISSING. `GrantCard` and
                                // `FulfillmentCard` both took it; this one did not, which is the whole
                                // reason internal projects could not allocate labor.
-                               employees = [], workingDays = null }) {
+                               employees = [], workingDays = null, setWorkingDays = null }) {
   const { START_Y, START_M } = useStart();
   const setP = (patch) => setProjects(ps => ps.map(x => x.id === p.id ? { ...x, ...patch } : x));
 
@@ -274,7 +275,22 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP, pl
             costs" — **on a project whose cost is mostly people it reported a fraction of the spend as
             though it were the whole**, which is the reason this section exists at all. Sitting directly
             under it means the number and the thing that changes it are read together. */}
-        <div className="fieldlab" style={{ marginTop: 18, marginBottom: 8 }}>Labor</div>
+        <div className="fieldlab" style={{ marginTop: 18, marginBottom: 8 }}>
+          Labor
+          {setWorkingDays && (
+            <span className="meta" style={{ float: "right", fontWeight: 400, textTransform: "none",
+                                            letterSpacing: 0 }}>
+              {/* ⚠️ 220, NOT 260. Nobody works 260 — holidays and leave put most organisations near
+                  220, and using 260 understates every internal project by roughly 15%. Editable here
+                  because this is the only screen where the conversion it drives is visible. */}
+              <input className="inp" type="number" min="120" max="366"
+                     style={{ width: 62, textAlign: "right" }}
+                     value={workingDays ?? WORKING_DAYS_DEFAULT}
+                     onChange={ev => setWorkingDays(Number(ev.target.value) || null)} />
+              {" "}working days a year
+            </span>
+          )}
+        </div>
         <table className="tbl">
           <thead><tr>
             <th>Who</th>
