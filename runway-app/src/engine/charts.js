@@ -19,6 +19,8 @@ import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, monthRevenue, isCost, lineAmount, lineCode, resolveLine, OVERHEAD } from "./coding.js";
 import { instConf } from "./capital.js";
+import { teamLoad } from "./projects.js";
+import { HRS_YR } from "./payroll.js";
 import { commitmentPressure } from "./commitments.js";
 import { spentToDate } from "./summary.js";
 import { saasSeries } from "./saas.js";
@@ -254,13 +256,32 @@ const payAllocation = (doc, parts) => {
 
   // Each person's share of project effort, from the rates the engine already resolved. What is left is
   // time no project is paying for — which is the number worth seeing.
+  // ⚠️ THIS READ `p.team[].fte`, A FIELD NOTHING HAS EVER WRITTEN. Only two files mention it and both
+  // only READ it — so this chart has answered "No project allocations recorded yet" for every company
+  // since it was built, no matter how much allocation existed.
+  //
+  // **A FOURTH allocation mechanism**, after `teamLoad` (hours), the `allocPct` measures (money) and
+  // the `projectId` lines. `teamLoad` is the one the Allocation sub-tab uses and the one that now knows
+  // about grants, internal labor and `p.lines` alike — so this chart uses it too, and the tab and its
+  // chart can no longer disagree.
+  const load = teamLoad(rProjects, doc?.settings?.toggles || undefined, doc);
+  const cap = HRS_YR / 12;
   const rows = emp.map(e => {
-    const per = rProjects.map(p => {
-      const alloc = (p.team || []).find(t => t.employeeId === e.id || t.id === e.id);
-      return { id: p.id, label: p.name, value: clean(alloc?.fte ?? alloc?.pct ?? 0) };
-    }).filter(x => x.value > 0);
+    const rec = load[e.id];
+    const byProject = new Map();
+    for (const it of rec?.items || []) {
+      const months = Math.max(1, (it.end ?? 0) - (it.start ?? 0) + 1);
+      const perMonth = (it.hours || 0) / months;
+      byProject.set(it.project, (byProject.get(it.project) || 0) + perMonth);
+    }
+    const per = [...byProject.entries()]
+      .map(([label, hrs]) => ({ id: label, label, value: clean(hrs / cap) }))
+      .filter(x => x.value > 0);
     const used = sum(per.map(x => x.value));
-    return { id: e.id, label: e.name || e.role || "Unnamed", parts: per, unfunded: Math.max(0, 1 - used) };
+    return { id: e.id, label: e.name || e.role || "Unnamed", parts: per,
+             // Somebody over 100% has no unfunded time — clamping at zero rather than going negative,
+             // because the over-allocation is reported as its own number on the tab.
+             unfunded: Math.max(0, 1 - used) };
   });
 
   if (!rows.some(r => r.parts.length)) {

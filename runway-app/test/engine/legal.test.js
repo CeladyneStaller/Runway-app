@@ -42,6 +42,16 @@ describe("⚠️ the legal documents are IN the repo, as one source", () => {
   });
 });
 
+// ⚠️ A NEGATIVE ASSERTION AGAINST A SOURCE FILE MUST STRIP COMMENTS FIRST.
+//
+// "This word does not appear" is false the moment somebody writes a comment ABOUT the word — which is
+// exactly what happened here, in a comment explaining what the removed control used to do. The five
+// POSITIVE assertions in this file are safe by comparison: a comment matching means the code almost
+// certainly does too, and a false pass would need somebody to document a thing they never built.
+//
+// **The asymmetry is the point: `toMatch` on source is weak evidence, `not.toMatch` is no evidence at
+// all until the comments are gone.**
+
 describe("⚠️ acceptance is asked ONCE, in TermsGate", () => {
   const signin = readFileSync("src/views/SignIn.jsx", "utf8");
   const setpw = readFileSync("src/views/SetPassword.jsx", "utf8");
@@ -70,8 +80,14 @@ describe("⚠️ acceptance is asked ONCE, in TermsGate", () => {
     // `agreed` gated `ready` sixty-five lines from where the checkbox rendered. **Deleting a control
     // means finding what depended on it, not only where it appeared** — without this the
     // account-creation path could never be submitted, because nothing could set the flag.
-    expect(setpw).not.toMatch(/\bagreed\b/);
-    expect(setpw).toMatch(/const ready = rules\.every/);
+    // ⚠️ CHECKED IN CODE, NOT IN THE WHOLE FILE. My first version searched the source for the word
+    // `agreed` — and matched the COMMENT I had just written explaining that it used to gate the
+    // button. **A test that reads comments is testing the prose, not the program**, and this is the
+    // third assertion in this area to check a string where it meant to check behaviour.
+    const code = setpw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(code, "no acceptance state remains").not.toMatch(/\bagreed\b/);
+    // The gate is the password rules and nothing else — so nothing unsettable can block submission.
+    expect(code).toMatch(/const ready = rules\.every\(r => r\.ok\);/);
   });
 });
 

@@ -1777,6 +1777,44 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### ⚠️ A FOURTH ALLOCATION MECHANISM — and this one read a field nothing writes
+
+The Allocation sub-tab showed 100% and its own chart showed nothing. `payAllocation` read
+`p.team[].fte`:
+
+    grep -rc "\.team" src/   ->  charts.js: 2, alerts.js: 1   — all READS, no writes
+
+**So `pay.allocation` has answered "No project allocations recorded yet" for every company since it was
+built**, however much allocation existed. Nobody noticed because the tab beside it looked right.
+
+That makes **four** systems answering "who is allocated": `teamLoad` (hours), the `allocPct` measures
+(money), the `projectId` lines, and this. The chart now uses `teamLoad` — the same source as the sub-tab
+it sits on — so the two cannot disagree. Verified: 220 days = 100% on both, 110 = 50% on both, 0 = the
+empty state.
+
+**⚠️ AND I READ THE WRONG FIELD WHILE TESTING IT**, concluded the chart was broken, and nearly changed
+working code: the spec emits `rows[].segments`, not `rows[].parts`. **The failure was in my check, and
+the check crashed rather than reporting a wrong number** — which is the only reason I looked again
+instead of "fixing" it.
+
+### ⚠️ A TEST THAT READS COMMENTS IS TESTING THE PROSE
+
+`expect(setpw).not.toMatch(/\bagreed\b/)` failed — because the word appears in **the comment I had just
+written explaining that `agreed` used to gate the button.**
+
+**This is the third assertion in this area to check a string where it meant to check behaviour**, after
+the source-position check for double-counting and the `l.amount` sum. The pattern is consistent enough
+to name: **when the thing I want to assert is awkward to reach, I reach for the source text instead, and
+the source text answers a different question.**
+
+Now strips comments before matching, and asserts the gate positively: `ready` is the password rules and
+nothing else, so nothing unsettable can block submission.
+
+**Scanned the suite for the same shape: five more, all POSITIVE.** Those are safe by asymmetry — a
+comment matching means the code almost certainly does too, and a false pass would require somebody to
+document a thing they never built. **`toMatch` on source is weak evidence; `not.toMatch` is no evidence
+at all until the comments are gone.**
+
 ### Seven failures — five stale, two testing the wrong thing
 
 **Five were assertions outliving changes Corey asked for**: the checkbox moved to `TermsGate` (three

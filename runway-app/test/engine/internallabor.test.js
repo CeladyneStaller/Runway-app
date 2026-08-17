@@ -114,3 +114,49 @@ describe("⚠️ the labor reaches the PROJECTION as an ATTRIBUTION, not a charg
     expect(share(260) / share(220)).toBeCloseTo(220 / 260, 2);
   });
 });
+
+describe("⚠️ the allocation CHART and the allocation TAB must agree", () => {
+  const mk = (days) => ({
+    settings: { workingDaysPerYear: 220 }, startY: 2026, startM: 6, cash: 500000,
+    employees: [{ id: "e1", name: "Dana", basis: "annual", amount: 120000, start: 0 }],
+    projects: [{ id: "p1", name: "Durability", type: "internal", start: 0, end: 11, budget: 200000,
+                 lines: [], labor: [{ id: "a1", employeeId: "e1", days }] }],
+    lines: [], pos: [], rounds: [], saas: [], history: [],
+  });
+
+  it("⚠️ `pay.allocation` READ `p.team[].fte`, WHICH NOTHING HAS EVER WRITTEN", async () => {
+    // Only two files mentioned that field and both only READ it — so this chart answered "No project
+    // allocations recorded yet" for every company since it was built, however much allocation existed.
+    // **A fourth allocation mechanism**, after teamLoad (hours), the allocPct measures (money) and the
+    // projectId lines.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const doc = mk(220);
+    const spec = buildChart("pay.allocation", doc, buildModelParts(doc));
+    expect(spec.empty).toBeFalsy();
+    expect(spec.rows[0].segments[0].value).toBeCloseTo(1, 2);
+  });
+
+  it("MATCHES what the Allocation sub-tab computes", async () => {
+    // Both now read `teamLoad`, so the tab and its own chart cannot disagree.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { teamLoad } = await import("../../src/engine/projects.js");
+    const { HRS_YR } = await import("../../src/engine/payroll.js");
+    for (const days of [220, 110]) {
+      const doc = mk(days);
+      const load = teamLoad(doc.projects, { committed: true, expected: true, speculative: true }, doc);
+      const peak = Math.max(...Object.values(load.e1.months));
+      const spec = buildChart("pay.allocation", doc, buildModelParts(doc));
+      expect(spec.rows[0].segments[0].value, `${days} days`)
+        .toBeCloseTo(peak / (HRS_YR / 12), 2);
+    }
+  });
+
+  it("still says so when there is nothing allocated", async () => {
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const doc = mk(0);
+    expect(buildChart("pay.allocation", doc, buildModelParts(doc)).empty).toBeTruthy();
+  });
+});
