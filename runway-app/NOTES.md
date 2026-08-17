@@ -1777,6 +1777,32 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### Seven failures — five stale, two testing the wrong thing
+
+**Five were assertions outliving changes Corey asked for**: the checkbox moved to `TermsGate` (three
+tests), the right gutter went 44 -> 46, and the labor line stopped carrying a charge.
+
+**⚠️ BUT TWO OF MY OWN TESTS WERE TESTING A PROXY.**
+
+    expect(src.indexOf("compileInternalLabor")).toBeGreaterThan(src.indexOf("const employeeLines"));
+
+That asserted **string positions in a source file** as a stand-in for "does not double-count". It broke
+because an import moved — an entirely irrelevant reason — and **it would have passed happily while the
+model charged one salary twice.** Replaced with the behaviour: `amount` is 0 and payroll totals one
+salary.
+
+The other asserted `l.amount` summed to 60,000, which was true only while the line was priced. **The
+number was right and the field was the wrong one to be asking about** — the share lives in
+`laborAmount` precisely so the projection cannot charge it.
+
+**The sign-up tests now assert the ABSENCE they should**: no checkbox in `SignIn` or `SetPassword`,
+exactly one in `TermsGate`, the version still recorded, and — the one that would actually catch a
+regression — **that removing the control did not leave the form unsubmittable**, which is the fault that
+white-screened the password page.
+
+Every new assertion was re-verified against the running code rather than trusted: gutter 62, amount 0,
+share 60,000, and the 260/220 ratio at 0.846 both measured and expected.
+
 ### ⚠️ THREE ALLOCATION MECHANISMS, AND I HAD WIRED ONE
 
 Corey assigned himself 100% to an internal project and the Payroll tab showed nothing. Tracing every

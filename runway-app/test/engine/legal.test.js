@@ -42,27 +42,36 @@ describe("⚠️ the legal documents are IN the repo, as one source", () => {
   });
 });
 
-describe("the sign-up gate", () => {
-  const src = readFileSync("src/views/SignIn.jsx", "utf8");
+describe("⚠️ acceptance is asked ONCE, in TermsGate", () => {
+  const signin = readFileSync("src/views/SignIn.jsx", "utf8");
+  const setpw = readFileSync("src/views/SetPassword.jsx", "utf8");
+  const gate = readFileSync("src/views/chrome/TermsGate.jsx", "utf8");
 
-  it("⚠️ HAS THE CHECKBOX THE CODE ALREADY ASSUMED EXISTED", () => {
-    // `signUpWithPassword` recorded `terms_version` and `terms_accepted_at`, and a comment described
-    // "the checkbox" — **there was none, and no link to either document.** Every account created so far
-    // has a timestamp for terms nobody was shown, which is worse than recording nothing.
-    expect(src).toMatch(/type="checkbox"/);
-    expect(src).toMatch(/signin-terms/);
+  it("⚠️ NOT ON THE EMAIL STEP, NOT ON THE PASSWORD STEP", () => {
+    // It was asked in all three places. **Asking three times is not three times the consent** — it is
+    // a person clicking past something they have already agreed to, which is weaker evidence than
+    // asking once and meaning it.
+    expect(signin, "SignIn must not ask").not.toMatch(/type="checkbox"/);
+    expect(setpw, "SetPassword must not ask").not.toMatch(/type="checkbox"/);
   });
 
-  it("IS NOT PRE-TICKED, and gates the button", () => {
-    // A pre-ticked box is not assent in several jurisdictions this product sells into.
-    expect(src).toMatch(/const \[accepted, setAccepted\] = useState\(false\)/);
-    expect(src).toMatch(/creating && !accepted/);
+  it("IS ASKED IN `TermsGate`, which renders in the shell", () => {
+    // The shell covers every route into the app, rather than one step of one flow.
+    expect(gate).toMatch(/type="checkbox"/);
   });
 
-  it("shows the version and opens the documents without leaving the form", () => {
-    expect(src).toMatch(/Version \{TERMS_VERSION\}/);
-    expect(src).toMatch(/setLegal\("terms"\)/);
-    expect(src).toMatch(/setLegal\("privacy"\)/);
+  it("still records the version with the signup", () => {
+    // Removing the control must not remove the record: `signUpWithPassword` carries the version the
+    // document was on, so the acceptance names a document rather than "whatever was current".
+    expect(signin).toMatch(/termsVersion: TERMS_VERSION/);
+  });
+
+  it("⚠️ AND REMOVING IT DID NOT LEAVE THE FORM UNSUBMITTABLE", () => {
+    // `agreed` gated `ready` sixty-five lines from where the checkbox rendered. **Deleting a control
+    // means finding what depended on it, not only where it appeared** — without this the
+    // account-creation path could never be submitted, because nothing could set the flag.
+    expect(setpw).not.toMatch(/\bagreed\b/);
+    expect(setpw).toMatch(/const ready = rules\.every/);
   });
 });
 

@@ -216,7 +216,9 @@ describe("⚠️ one set of padding rules, two bases", () => {
     // The gutter was 16px and a right axis needs about 44 — five tick labels plus a title — so on any
     // two-unit chart those labels were drawn past the edge of the viewBox. **"Cramped" was the visible
     // half of a clipping bug.**
-    expect(padFor({ rightAxis: true }).r).toBe(BASE_PAD.r + 44);
+    // 44 for five tick labels and a title, plus 2 so the longest is not flush against the panel edge —
+    // the same clearance reasoning as the legend and the 16px corner.
+    expect(padFor({ rightAxis: true }).r).toBe(BASE_PAD.r + 46);
     expect(padFor({}).r).toBe(BASE_PAD.r);
   });
 
