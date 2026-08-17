@@ -337,3 +337,58 @@ describe("mobile ergonomics", () => {
     expect(mobile).toMatch(/\.avatar::after\{[^}]*inset:-3px/);
   });
 });
+
+describe("⚠️ every chart follows the same window", () => {
+  const mk = (h) => ({
+    settings: h ? { chartHorizon: h } : {}, startY: 2026, startM: 6, cash: 500000,
+    employees: [{ id: "e1", name: "D", basis: "annual", amount: 120000, start: 0 }],
+    projects: [], lines: [{ id: "l1", label: "R", amount: 5000, kind: "cost",
+                            cadence: "recurring", start: 0, end: 35 }],
+    pos: [{ id: "po1", customer: "Acme", amount: 40000, bookedMonth: 0, shipMonth: 2,
+            confidence: "committed" }],
+    rounds: [], history: [],
+    saas: [{ id: "s1", name: "Solo", startCustomers: 10, arpu: 40, churnPct: 2,
+             newGrowthPct: 9, newPerMonth: 2 }],
+  });
+
+  it("DRAWS ONE WIDTH ACROSS THE WHOLE APP, at every horizon", async () => {
+    // The runway chart had a settable horizon and everything else was a hardcoded 18 — so asking for
+    // 24 months moved one chart and left the rest behind.
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    for (const h of [null, 12, 24, 36]) {
+      const doc = mk(h), parts = buildModelParts(doc);
+      const widths = new Set();
+      for (const c of CHARTS) {
+        const s = buildChart(c.id, doc, parts);
+        if (s?.empty || !s?.series?.length || !s?.x) continue;
+        widths.add(s.x.length);
+      }
+      expect([...widths], `horizon ${h}`).toHaveLength(1);
+      if (h) expect([...widths][0]).toBe(h);
+    }
+  });
+
+  it("⚠️ KEEPS EVERY SERIES THE SAME LENGTH AS ITS AXIS", async () => {
+    // A window that moves the axis and not the values is worse than a fixed one — the same mismatch
+    // that put 37 values on an 18-point axis in the builder.
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    for (const h of [null, 24, 36]) {
+      const doc = mk(h), parts = buildModelParts(doc);
+      for (const c of CHARTS) {
+        const s = buildChart(c.id, doc, parts);
+        if (s?.empty || !s?.series?.length || !s?.x) continue;
+        for (const sr of s.series) {
+          if (!sr.values) continue;
+          expect(sr.values.length, `${c.id} at horizon ${h}`).toBe(s.x.length);
+        }
+      }
+    }
+  });
+
+  it("clamps a nonsense setting rather than trusting it", async () => {
+    const { monthsShown } = await import("../../src/engine/charts.js");
+    expect(monthsShown({ settings: { chartHorizon: 999 } })).toBe(36);
+    expect(monthsShown({ settings: { chartHorizon: 2 } })).toBe(18);
+    expect(monthsShown(null)).toBe(18);
+  });
+});

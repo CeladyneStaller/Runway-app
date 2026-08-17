@@ -28,6 +28,24 @@ import { HORIZON, monthLabel } from "./time.js";
 
 const MONTHS_SHOWN = 18;
 
+/** How many months every chart draws.
+ *
+ *  ⚠️ THE SETTING PROPAGATES; THE FIT DOES NOT. `RunwayChart` has two different windows and only one of
+ *  them is shareable:
+ *
+ *    - an explicit horizon from the dashboard options — "show me 24 months" — which is a statement
+ *      about how far ahead somebody wants to look, and is just as true of the payroll chart;
+ *    - an ADAPTIVE fit to the crossing and the last milestone, which is meaningful ONLY on a chart that
+ *      draws a crossing. **Applying it elsewhere would size a headcount chart by when the money runs
+ *      out**, which is a coincidence rather than a reason.
+ *
+ *  So this reads the setting and falls back to 18 — it never fits.
+ */
+export const monthsShown = (doc) => {
+  const v = Number(doc?.settings?.chartHorizon);
+  return Number.isFinite(v) && v >= 6 ? Math.min(36, Math.round(v)) : MONTHS_SHOWN;
+};
+
 const sum = (xs) => xs.reduce((a, b) => a + (Number(b) || 0), 0);
 const clean = (n) => (Number.isFinite(n) ? n : 0);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -50,7 +68,8 @@ const elapsedShare = (p, doc) => {
  *  EVERY MONTH GETS A TICK, only quarters get a name. Twelve month names on a 670-pixel axis is a
  *  smear at any font size that fits; the ticks keep the resolution and lose the noise.
  */
-export function axisTicks(doc, n = MONTHS_SHOWN) {
+export function axisTicks(doc, nIn = null) {
+  const n = nIn ?? monthsShown(doc);
   const y0 = doc?.startY ?? new Date().getFullYear();
   const m0 = doc?.startM ?? 0;
   return Array.from({ length: n }, (_, i) => {
@@ -80,9 +99,9 @@ const DAY = 86400000;
 /** Month labels from the document's start, for the horizon a chart shows. */
 // EXPORTED for `buildcustom.js`, which must return the same x array every curated chart returns —
 // a second implementation would be a second answer to where a month sits.
-export const months = (doc, n = MONTHS_SHOWN) =>
-  Array.from({ length: n }, (_, i) => monthLabel(doc.startY ?? new Date().getFullYear(),
-                                                doc.startM ?? 0, i));
+export const months = (doc, n = null) =>
+  Array.from({ length: n ?? monthsShown(doc) },
+             (_, i) => monthLabel(doc.startY ?? new Date().getFullYear(), doc.startM ?? 0, i));
 
 /** The projected balance per month, which several charts need and none should recompute. */
 function balances(doc, parts) {
@@ -105,7 +124,7 @@ function projectionRows(doc, parts) {
 
 const flowRunway = (doc) => {
   const band = confidenceBand(doc, HORIZON);
-  const take = (rows) => (rows || []).slice(0, MONTHS_SHOWN).map(r => clean(r.end));
+  const take = (rows) => (rows || []).slice(0, monthsShown(doc)).map(r => clean(r.end));
   const mid = take(band.expected?.rows);
   if (!mid.length) return { empty: "No projection yet — add cash and a line or two." };
 
@@ -124,7 +143,7 @@ const flowRunway = (doc) => {
     band: { lo: take(band.floor?.rows), hi: take(band.ceiling?.rows) },
     series: [{ id: "balance", label: "Cash balance", values: mid, tone: "signal" }],
     refLine: { y: 0 },
-    markers: Number.isFinite(z) && z < MONTHS_SHOWN
+    markers: Number.isFinite(z) && z < monthsShown(doc)
       ? [{ x: z, label: `${z.toFixed(1)} mo`, tone: "danger" }] : [],
     format: "money",
     // THE HOLE, so a recovery stops reading as good news. The line already dips; naming the gap is
@@ -164,9 +183,9 @@ const flowComposition = (doc, parts) => {
   const rows = projectionRows(doc, parts);
   if (!rows.length) return { empty: "No projection yet." };
 
-  const pay = rows.slice(0, MONTHS_SHOWN).map((_, i) =>
+  const pay = rows.slice(0, monthsShown(doc)).map((_, i) =>
     sum((parts?.employeeLines || []).map(l => clean(l.amounts?.[i]))));
-  const all = rows.slice(0, MONTHS_SHOWN).map(r => Math.max(0, -clean(r.net) + clean(r.in || 0)));
+  const all = rows.slice(0, monthsShown(doc)).map(r => Math.max(0, -clean(r.net) + clean(r.in || 0)));
   const other = all.map((v, i) => Math.max(0, v - pay[i]));
 
   return {
@@ -182,7 +201,7 @@ const flowComposition = (doc, parts) => {
 };
 
 const flowInOut = (doc, parts) => {
-  const rows = projectionRows(doc, parts).slice(0, MONTHS_SHOWN);
+  const rows = projectionRows(doc, parts).slice(0, monthsShown(doc));
   if (!rows.length) return { empty: "No projection yet." };
   return {
     kind: "bars",
@@ -203,7 +222,7 @@ const flowInOut = (doc, parts) => {
 const payTimeline = (doc, parts) => {
   const lines = parts?.employeeLines || [];
   if (!lines.length) return { empty: "No employees yet." };
-  const values = Array.from({ length: MONTHS_SHOWN }, (_, i) =>
+  const values = Array.from({ length: monthsShown(doc) }, (_, i) =>
     sum(lines.map(l => clean(l.amounts?.[i]))));
 
   // Each step is somebody starting. Marked so a hire is visible before it lands rather than after it
@@ -229,9 +248,9 @@ const payHeadcount = (doc, parts) => {
   if (!emp.length) return { empty: "No employees yet." };
   const lines = parts?.employeeLines || [];
 
-  const heads = Array.from({ length: MONTHS_SHOWN }, (_, i) =>
+  const heads = Array.from({ length: monthsShown(doc) }, (_, i) =>
     lines.filter(l => clean(l.amounts?.[i]) > 0).length);
-  const each = Array.from({ length: MONTHS_SHOWN }, (_, i) => {
+  const each = Array.from({ length: monthsShown(doc) }, (_, i) => {
     const n = heads[i];
     return n ? sum(lines.map(l => clean(l.amounts?.[i]))) / n : 0;
   });
@@ -366,8 +385,8 @@ const projLoad = (doc, parts) => {
 
   const perProject = rProjects.slice(0, 6).map(p => ({
     id: p.id, label: p.name, tone: "signal",
-    values: Array.from({ length: MONTHS_SHOWN }, (_, i) =>
-      sum((p.team || []).map(t => (i >= clean(t.startM) && i <= clean(t.endM ?? MONTHS_SHOWN)
+    values: Array.from({ length: monthsShown(doc) }, (_, i) =>
+      sum((p.team || []).map(t => (i >= clean(t.startM) && i <= clean(t.endM ?? monthsShown(doc))
         ? clean(t.fte ?? t.pct ?? 0) : 0)))),
   }));
 
@@ -395,10 +414,10 @@ const salesForecast = (doc, parts) => {
   if (!saas.length) return { empty: "No revenue lines yet." };
 
   const forecast = (parts?.salesLines || []).length
-    ? Array.from({ length: MONTHS_SHOWN }, (_, i) =>
+    ? Array.from({ length: monthsShown(doc) }, (_, i) =>
         sum((parts.salesLines || []).map(l => clean(l.amounts?.[i]))))
     : [];
-  const booked = hist.slice(-MONTHS_SHOWN).map(h => clean(monthRevenue(h)));
+  const booked = hist.slice(-monthsShown(doc)).map(h => clean(monthRevenue(h)));
   if (!booked.length) return { empty: "No booked revenue recorded yet." };
 
   return {
@@ -418,8 +437,8 @@ const salesMrr = (doc) => {
   if (!saas.length) return { empty: "No subscription revenue yet." };
   // `saasSeries` gives the per-month curve; `saasMRR` is today's figure only. Using the latter in a
   // loop would have drawn a flat line and called it growth.
-  const values = Array.from({ length: MONTHS_SHOWN }, (_, i) =>
-    sum(saas.map(x => clean(saasSeries(x, MONTHS_SHOWN).find(pt => pt.month === i)?.mrr))));
+  const values = Array.from({ length: monthsShown(doc) }, (_, i) =>
+    sum(saas.map(x => clean(saasSeries(x, monthsShown(doc)).find(pt => pt.month === i)?.mrr))));
   if (!values.some(v => v > 0)) return { empty: "No subscription revenue yet." };
   return {
     kind: "stack",
@@ -430,7 +449,7 @@ const salesMrr = (doc) => {
 };
 
 const salesCover = (doc, parts) => {
-  const rows = projectionRows(doc, parts).slice(0, MONTHS_SHOWN);
+  const rows = projectionRows(doc, parts).slice(0, monthsShown(doc));
   if (!rows.length) return { empty: "No projection yet." };
   const values = rows.map(r => {
     const out = Math.abs(clean(r.out));
@@ -452,7 +471,7 @@ const invSlip = (doc) => {
   const rounds = (doc.rounds || []).filter(r => r.amount > 0);
   if (!rounds.length) return { empty: "No rounds modelled yet." };
 
-  const onPlan = balances(doc).slice(0, MONTHS_SHOWN);
+  const onPlan = balances(doc).slice(0, monthsShown(doc));
 
   // The same model with every round three months later. Nobody builds this case deliberately, which is
   // exactly why it is worth drawing: the gap is the size of the bridge a late term sheet needs.
@@ -460,7 +479,7 @@ const invSlip = (doc) => {
     ...doc,
     rounds: rounds.map(r => ({ ...r, closeM: clean(r.closeM) + 3 })),
   };
-  const late = balances(slipped).slice(0, MONTHS_SHOWN);
+  const late = balances(slipped).slice(0, monthsShown(doc));
 
   const z = zeroInfo(buildProjection(buildModelFromDoc(slipped), doc.settings?.toggles || {}),
                      doc.startY, doc.startM);
@@ -622,7 +641,7 @@ const invGoals = (doc) => {
   const post = goals.filter(g => g.phase === "post").map(row).sort((a, b) => a.due - b.due);
 
   const lastDue = Math.max(0, ...[...pre, ...post].map(r => r.due));
-  const span = Math.max(MONTHS_SHOWN, lastDue + 3,
+  const span = Math.max(monthsShown(doc), lastDue + 3,
                         Number.isFinite(withRound?.months) ? Math.ceil(withRound.months) + 2 : 0);
 
   const unreachable = pre.filter(r => r.beyondCash).length;
@@ -731,7 +750,7 @@ const invMilestones = (doc, parts) => {
   const fromRound = ms.filter(m => m.fromRound).map(row).sort((a, b) => a.due - b.due);
 
   const last = Math.max(0, ...[...mine, ...fromRound].map(r => r.due));
-  const span = Math.max(MONTHS_SHOWN, Math.ceil(last) + 3);
+  const span = Math.max(monthsShown(doc), Math.ceil(last) + 3);
 
   const missed = [...mine, ...fromRound].filter(r => r.beyondCash).length;
   const biggestBridge = Math.max(0, ...[...mine, ...fromRound].map(r => clean(r.bridge)));
@@ -895,8 +914,14 @@ export const CHARTS = Object.freeze([
     id: "sales.recurring", tab: "sales", name: "Revenue and subscribers",
     why: "Order revenue and subscription revenue stacked, with the subscriber count over them. Revenue rising while subscribers are flat is a price rise; revenue flat while subscribers rise is churn eating the growth.",
     build: (doc, parts) => {
-      const rows = parts?.rows || [];
-      const n = Math.min(rows.length, 18);
+      // ⚠️ `parts.rows` DOES NOT EXIST. I wrote this chart against a field I assumed was there — every
+      // other chart calls `projectionRows(doc, parts)` — so `sales.recurring` has emitted empty series
+      // since the day it was added, and the "no chart" Corey would have seen on that entry was this.
+      const rows = projectionRows(doc, parts);
+      // ⚠️ A LITERAL 18, WHICH A SEARCH FOR `MONTHS_SHOWN` DOES NOT FIND. I wrote these three windows
+      // by hand, so they ignored the horizon setting AND could disagree with `months(doc)` beside them.
+      // **A magic number is not just unclear — it is invisible to the audit that would have caught it.**
+      const n = Math.min(rows.length, monthsShown(doc));
       const sum = (lines) => {
         const out = Array.from({ length: n }, () => 0);
         for (const l of lines || []) {
@@ -960,8 +985,14 @@ export const CHARTS = Object.freeze([
     id: "cmt.closure", tab: "cmt", name: "What you would owe if you stopped",
     why: "Obligations stacked, cash over them. Where the line enters the stack is the clean-exit date — not the runway date.",
     build: (doc, parts) => {
-      const rows = parts?.rows || [];
-      const n = Math.min(rows.length, 18);
+      // ⚠️ `parts.rows` DOES NOT EXIST. I wrote this chart against a field I assumed was there — every
+      // other chart calls `projectionRows(doc, parts)` — so `sales.recurring` has emitted empty series
+      // since the day it was added, and the "no chart" Corey would have seen on that entry was this.
+      const rows = projectionRows(doc, parts);
+      // ⚠️ A LITERAL 18, WHICH A SEARCH FOR `MONTHS_SHOWN` DOES NOT FIND. I wrote these three windows
+      // by hand, so they ignored the horizon setting AND could disagree with `months(doc)` beside them.
+      // **A magic number is not just unclear — it is invisible to the audit that would have caught it.**
+      const n = Math.min(rows.length, monthsShown(doc));
       const at = (f) => Array.from({ length: n }, (_, m) => f(m));
       const wd = windDownCost(doc);
       // ⚠️ COMPOSITE — THE ONE CURATED CHART THAT DESCRIBED SOMETHING UNDRAWABLE. It said `kind:
@@ -991,8 +1022,14 @@ export const CHARTS = Object.freeze([
     id: "cmt.costshare", tab: "cmt", name: "Cost share, accrued against matched",
     why: "The gap is the shortfall — you cannot match federal money with federal money.",
     build: (doc, parts) => {
-      const rows = parts?.rows || [];
-      const n = Math.min(rows.length, 18);
+      // ⚠️ `parts.rows` DOES NOT EXIST. I wrote this chart against a field I assumed was there — every
+      // other chart calls `projectionRows(doc, parts)` — so `sales.recurring` has emitted empty series
+      // since the day it was added, and the "no chart" Corey would have seen on that entry was this.
+      const rows = projectionRows(doc, parts);
+      // ⚠️ A LITERAL 18, WHICH A SEARCH FOR `MONTHS_SHOWN` DOES NOT FIND. I wrote these three windows
+      // by hand, so they ignored the horizon setting AND could disagree with `months(doc)` beside them.
+      // **A magic number is not just unclear — it is invisible to the audit that would have caught it.**
+      const n = Math.min(rows.length, monthsShown(doc));
       let run = 0;
       const matched = rows.slice(0, n).map(r => { run += r.inNonGrant || 0; return run; });
       return {

@@ -1777,6 +1777,33 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+## Every chart follows one window
+
+The runway chart had a settable horizon; everything else was `MONTHS_SHOWN = 18`, a module constant used
+21 times. **Asking for 24 months moved one chart and left the rest at 18.**
+
+**⚠️ THE SETTING PROPAGATES; THE FIT DOES NOT.** `RunwayChart` has two windows and only one is
+shareable — an explicit horizon is a statement about how far ahead somebody wants to look and is just as
+true of the payroll chart, but the ADAPTIVE fit to the crossing is meaningful only where a crossing is
+drawn. **Sizing a headcount chart by when the money runs out is a coincidence, not a reason.**
+
+`monthsShown(doc)` reads `settings.chartHorizon`, clamps to 6–36, and falls back to 18. Verified across
+every chart at four horizons: **one width, zero series/axis mismatches.**
+
+**⚠️ AND THE SWEEP FOUND TWO FAULTS THAT HAD NOTHING TO DO WITH THE HORIZON.**
+
+**Three literal `18`s I had written by hand** in `sales.recurring` and the two commitments charts — **a
+magic number is not merely unclear, it is invisible to the audit that would have caught it**, because a
+search for `MONTHS_SHOWN` does not find `18`.
+
+**And `sales.recurring` read `parts.rows`, which does not exist.** Every other chart calls
+`projectionRows(doc, parts)`. **So the chart I added for subscriptions has emitted empty series since
+the day it was written** — it would have drawn nothing, and nobody had opened it yet.
+
+**The horizon is the one dashboard option that is NOT per-device**, deliberately: every other switch
+changes what you see, this changes what every chart draws, and a runway chart at 24 months beside a
+payroll chart at 18 is worse than either.
+
 ### Subscriptions on the Sales summary
 
 The Summary sub-tab answers "how is sales doing" and showed only purchase orders. **A summary that omits

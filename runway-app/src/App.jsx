@@ -744,7 +744,19 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                   <DashOptions opts={dashOpts} onClose={() => setDashModal(false)}
                                // PERSISTED ON EVERY CHANGE — there is no Save here, because there is
                                // nothing to lose: the effect is visible behind the modal as you toggle.
-                               setOpts={(next) => setDashOpts(writeOpts(next))}
+                               setOpts={(next) => {
+                    setDashOpts(writeOpts(next));
+                    // ⚠️ THE HORIZON IS THE ONE OPTION THAT IS NOT PER-DEVICE. Every other switch here
+                    // changes what YOU see; "how far ahead to look" changes what every chart in the app
+                    // draws, and having the runway chart at 24 months beside a payroll chart at 18
+                    // would be worse than either.
+                    //
+                    // The adaptive FIT stays local to the runway chart — it is meaningful only where a
+                    // crossing is drawn, and sizing a headcount chart by when the money runs out is a
+                    // coincidence rather than a reason.
+                    const h = next.horizon ?? null;
+                    setDoc(d => ({ ...d, settings: { ...(d.settings || {}), chartHorizon: h } }));
+                  }}
                                ctx={{ hasUpside: showUpside,
                                       wouldBreak: !!band && !!upBand }} />
                 )}
