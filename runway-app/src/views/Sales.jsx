@@ -129,6 +129,72 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
             </tbody>
           </table>
         </div>
+
+        {/* ⚠️ SUBSCRIPTIONS BELONG IN THE SUMMARY, NOT ONLY IN THEIR OWN SUB-TAB. This tab answers
+            "how is sales doing" and recurring revenue is half that answer for anybody selling both —
+            **a summary that omits a revenue stream is not a summary.**
+            It sits AFTER the order book because orders are the larger number for most companies today;
+            somebody whose subscriptions outgrow their orders will want that reversed, which is a
+            reordering rather than a rebuild. */}
+        {includedSaas.length > 0 && (
+          <div className="panel">
+            <div className="panel-h">
+              <div><h3>Subscriptions</h3><p>Recurring revenue, and the subscriber count behind it.</p></div>
+              <button className="linkbtn" onClick={() => setRouteTab("saas")}>Open subscriptions</button>
+            </div>
+            <table className="tbl">
+              <thead><tr>
+                <th>Product</th>
+                <th style={{ textAlign: "right" }}>Subscribers</th>
+                <th style={{ textAlign: "right" }}>ARPU</th>
+                <th style={{ textAlign: "right" }}>MRR</th>
+                <th style={{ textAlign: "right" }}>In 12 months</th>
+              </tr></thead>
+              <tbody>
+                {includedSaas.map(x => {
+                  const ser = saasSeries(x);
+                  const now = ser.find(q => q.month === 0);
+                  // ⚠️ THE TWELVE-MONTH FIGURE IS THE POINT OF A SUBSCRIPTION BUSINESS. Today's MRR is
+                  // already on the stat above it; what this table adds is the direction of travel,
+                  // which is the number churn and growth actually argue about.
+                  const then = ser.find(q => q.month === 12) || ser[ser.length - 1];
+                  return (
+                    <tr key={x.id}>
+                      <td>{x.name || "Subscription"}</td>
+                      <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>
+                        {Math.round(now?.customers || 0)}</td>
+                      <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>
+                        {money(now?.arpu || 0)}</td>
+                      <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>
+                        {money(now?.mrr || 0)}</td>
+                      <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>
+                        {money(then?.mrr || 0)}</td>
+                    </tr>
+                  );
+                })}
+                {includedSaas.length > 1 && (
+                  <tr>
+                    <td><b>All products</b></td>
+                    <td style={{ textAlign: "right", fontFamily: "var(--fm)", fontWeight: 600 }}>
+                      {Math.round(includedSaas.reduce((a, x) =>
+                        a + (saasSeries(x).find(q => q.month === 0)?.customers || 0), 0))}</td>
+                    {/* ⚠️ NO BLENDED ARPU. Averaging revenue-per-user across products with different
+                        prices produces a number that describes no customer — the two totals either
+                        side of it are the ones worth reading. */}
+                    <td />
+                    <td style={{ textAlign: "right", fontFamily: "var(--fm)", fontWeight: 600 }}>
+                      {money(mrrNow)}</td>
+                    <td style={{ textAlign: "right", fontFamily: "var(--fm)", fontWeight: 600 }}>
+                      {money(includedSaas.reduce((a, x) => {
+                        const ser = saasSeries(x);
+                        return a + ((ser.find(q => q.month === 12) || ser[ser.length - 1])?.mrr || 0);
+                      }, 0))}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </>)}
 
       {tab === "orders" && (<>

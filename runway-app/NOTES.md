@@ -1777,6 +1777,27 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### Subscriptions on the Sales summary
+
+The Summary sub-tab answers "how is sales doing" and showed only purchase orders. **A summary that omits
+a revenue stream is not a summary** — for anybody selling both, recurring revenue is half the answer.
+
+Product, subscribers, ARPU, MRR now, and **MRR in twelve months**. Today's MRR was already on a stat
+above it, so what the table adds is the DIRECTION OF TRAVEL — the number churn and growth actually
+argue about.
+
+**⚠️ NO BLENDED ARPU ON THE TOTALS ROW.** Averaging revenue-per-user across products at different
+prices produces a number that describes no customer; the two totals either side of it are the ones worth
+reading.
+
+**Placed after the order book**, because orders are the larger number for most companies today. Somebody
+whose subscriptions outgrow their orders will want that reversed — a reordering, not a rebuild.
+
+**A false alarm worth recording:** my first check showed MRR falling 15% over the year and I nearly went
+looking for an engine fault. **The test data had no `newPerMonth`** — so churn had nothing to offset and
+the decline was arithmetically right. With 2 new customers a month the same product grows from 10 to 48.
+**The section reports the model; the model was reporting my incomplete input.**
+
 ### 2080 hours reading as 92% — the arithmetic was right and the card was silent
 
 `HRS_YR` is 2080 and the capacity is `HRS_YR / 12` a month, so 2080 hours over TWELVE months is exactly
