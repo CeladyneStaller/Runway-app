@@ -1777,6 +1777,27 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### 2080 hours reading as 92% — the arithmetic was right and the card was silent
+
+`HRS_YR` is 2080 and the capacity is `HRS_YR / 12` a month, so 2080 hours over TWELVE months is exactly
+100%. Corey's project spans **thirteen** — months 0 through 12 inclusive — and 2080 spread over 13 is
+160 h/month against a 173.3 capacity: **92%, and 13 months of capacity is 2253 hours, the "2260" he
+saw.**
+
+**Both numbers are correct and they describe different things.** The COST side converts 220 days at the
+company's working year, so it charges a full year of salary. The LOAD side spreads those same days
+across the calendar span. **A 13-month project therefore charges twelve months of salary and reports 92%
+load — right, but only if the person meant "220 days spread thinner" rather than "full time for 13
+months".**
+
+**⚠️ THE FAILURE IS THAT NOTHING SHOWED THE RATE.** Days are a TOTAL, and the card displayed the total
+back — so the number that determines the load, days per month, was the one thing invisible. The card now
+shows `16.9 d/month · 92% of full time` beside the span.
+
+**Worth stating plainly: this is not a bug in the model, it is a bug in what the model told somebody.**
+Corey read 92% and reasonably concluded the capacity constant was wrong; the constant was fine and the
+input meant something other than he intended.
+
 ### ⚠️ A FOURTH ALLOCATION MECHANISM — and this one read a field nothing writes
 
 The Allocation sub-tab showed 100% and its own chart showed nothing. `payAllocation` read

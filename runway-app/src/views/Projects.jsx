@@ -316,6 +316,23 @@ export function InternalCard({ p, setProjects, setP: setPById, setType, delP, pl
                              onChange={ev => setLabor(a.id, { days: Number(ev.target.value) || 0 })} /></td>
                   <td className="meta">
                     {monthLabel(START_Y, START_M, a.start ?? p.start)} – {monthLabel(START_Y, START_M, a.end ?? p.end)}
+                    {/* ⚠️ THE LOAD, NOT JUST THE SPAN. Days entered here spread evenly across the
+                        months, and NOTHING SAID WHAT THAT MEANT PER MONTH — so 220 days on a
+                        THIRTEEN-month project reads as 92% on the Payroll tab while costing a full
+                        year of salary, and both numbers are right.
+                        **The person entered a total and was shown a total; the rate was the thing they
+                        could not see.** */}
+                    {(() => {
+                      const months = Math.max(1, ((a.end ?? p.end) - (a.start ?? p.start)) + 1);
+                      const perMonth = (Number(a.days) || 0) / months;
+                      const full = (workingDays ?? WORKING_DAYS_DEFAULT) / 12;
+                      const pct = Math.round((perMonth / full) * 100);
+                      return (
+                        <span style={{ display: "block" }}>
+                          {perMonth.toFixed(1)} d/month · {pct}% of full time
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>{money(cost)}</td>
                   <td><button className="iconbtn" title="Remove"
