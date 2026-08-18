@@ -1222,9 +1222,14 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // already mounted, so the seed would be ignored and the portfolio would never appear.**
   // A seeded state that must also respond to later changes needs both.
   useEffect(() => {
-    if (!demoAdvisorHome) return;
-    setAdvisorHome(true);
-    setMayPortfolio(true);
+    // ⚠️ FOLLOWS THE PROP IN BOTH DIRECTIONS. Returning early on `false` meant that clicking into a
+    // client swapped the document and **left the portfolio rendered over it** — the model changed and
+    // the screen did not, which reads as a dead button.
+    //
+    // `mayPortfolio` is deliberately NOT turned off with it: it is a permission, and an advisor who
+    // opened a client still has the right to go back. **Clearing it would remove the way back.**
+    setAdvisorHome(!!demoAdvisorHome);
+    if (demoAdvisorHome) { setMayPortfolio(true); setAdvisorChecked(true); }
   }, [demoAdvisorHome]);
   const [landingCompany, setLandingCompany] = useState(null);
   const [enterView, setEnterView] = useState(null);
@@ -1250,7 +1255,12 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // LAND ON THE PORTFOLIO, ONCE. An advisor who has navigated into a client should stay there on the
   // next render — this decides where a SESSION starts, not where every render goes, so it fires on the
   // first successful profile read and never again.
-  const [advisorChecked, setAdvisorChecked] = useState(false);
+  // ⚠️ TRUE IN THE ADVISOR DEMO WITHOUT A SERVER CHECK. The effect below skips entirely when `demo`
+  // is set, so this stayed false — and `onBackToPortfolio` is gated on it, meaning **an advisor who
+  // opened a client had no way back to the portfolio.**
+  // The check exists to ask a server whether somebody is an advisor; in the advisor demo the answer is
+  // known and there is no server to ask.
+  const [advisorChecked, setAdvisorChecked] = useState(!!demoAdvisorHome);
   useEffect(() => {
     if (demo || advisorChecked) return;
     let alive = true;

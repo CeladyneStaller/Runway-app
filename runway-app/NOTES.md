@@ -1991,6 +1991,26 @@ message rather than an adjective on the first.
 **And the profile menu is hidden in the demo:** there is no account behind it, so every item either does
 nothing or offers to change settings for a person who does not exist.
 
+### "Open {company}" did nothing — the effect only ran one way
+
+    if (!demoAdvisorHome) return;
+    setAdvisorHome(true);
+
+Clicking Open swapped the document and set the flag false. **The effect returned early on false and
+never set `advisorHome` back — so the portfolio stayed rendered over the client.** The model changed and
+the screen did not, which reads as a dead button.
+
+**⚠️ AN EFFECT THAT SETS STATE FROM A PROP MUST FOLLOW IT IN BOTH DIRECTIONS.** `if (!x) return` is
+correct for a one-shot and wrong for a mirror, and I wrote a mirror while thinking about a one-shot.
+
+**And fixing it exposed the next one: `advisorChecked` gates the way back**, and its effect begins
+`if (demo || advisorChecked) return;` — so in a demo it stayed false and **an advisor who opened a
+client had no route back to the portfolio.** Seeded true for the advisor demo, where the answer that
+check asks a server for is already known.
+
+`mayPortfolio` is deliberately NOT cleared when entering a client: it is a permission, not a location,
+and **clearing it would remove the way back at the moment somebody needs it.**
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**
