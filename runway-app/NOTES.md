@@ -2033,6 +2033,47 @@ name.**
 **The lesson is the one this session keeps producing**: I invented `closeMonth` because it reads better
 than `closeM`, and **a field name that is nearly right fails exactly like a field that does not exist.**
 
+### The advisor chart plotted every balance one month early
+
+Corey found it precisely: **September's cash on hand drawn under August.** The runway number and the
+marker were right; only the series was wrong.
+
+    take = rows.map(r => clean(r.end))     // the advisor chart, via `flow.runway`
+    rs.map((r, m) => ({ b: r.start }))     // `RunwayChart`, what the company dashboard draws
+
+**Each row carries BOTH, and `end` of one month is `start` of the next.** So the chart showed each
+month's closing balance under that month's label — one month early, everywhere, and the first plotted
+value was not cash on hand.
+
+**Two renderers of the same number is how they drift, and the fix is to agree with the one people check
+against.** `RunwayChart` is on the dashboard everybody opens, so `flow.runway` moved.
+
+**A second series had it too**: `{ id: "cash", label: "Cash on hand" }`. **Cash on hand in a month is
+what you HAVE that month, not what is left after it.**
+
+Two other `r.end` readers were left alone deliberately — one is a cumulative series where end-of-month
+is the correct reading, the other is a commitments cover calculation rather than a plotted balance.
+
+**⚠️ AND I SPENT SIX TOOL CALLS ON THE WRONG THEORY FIRST** — index-versus-continuous geometry, then a
+`t`/`months` off-by-one, then a `confidenceBand` signature I misread. **Corey's one sentence naming the
+symptom precisely was worth more than all of it**, and I should have asked for exactly that
+after the first theory failed rather than the third.
+
+### `0[object Object]000` — a summed field that stopped being a number
+
+When the attention column started naming the worst finding instead of counting, `r.attention` became an
+object. **The stat tile above it still summed them**, and `0 + {}` is the string `"0[object Object]"`
+rather than an error — so it rendered.
+
+**⚠️ CHANGING A FIELD'S TYPE MEANS FINDING EVERY READER, and I found the one I was editing.** Lint says
+nothing, the type is not declared anywhere, and JavaScript's `+` will concatenate rather than complain.
+
+Now counts CLIENTS, which is also the right number: **an advisor's morning question is how many people
+to call, not how many findings exist across them.** Three problems at one client is still one call.
+
+Verified against the four demo companies: 1 client needing attention, 1 under six months, shortest 5.4
+months.
+
 ### ⚠️ I FIXED THE WRONG END OF THE FIELD-NAME MISMATCH
 
 `alerts.js` read `r.closeM`; every document writes `closeMonth`. **I renamed the field in four demo

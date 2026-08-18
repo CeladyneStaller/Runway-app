@@ -124,7 +124,14 @@ function projectionRows(doc, parts) {
 
 const flowRunway = (doc) => {
   const band = confidenceBand(doc, HORIZON);
-  const take = (rows) => (rows || []).slice(0, monthsShown(doc)).map(r => clean(r.end));
+  // ⚠️ `r.start`, NOT `r.end`. Each row carries both, and **`end` of one month IS `start` of the
+  // next** — so plotting `end` under a month's label shows that month's CLOSING balance where the
+  // company view shows its opening one. Every value appeared one month early.
+  //
+  // `RunwayChart` plots `r.start` and is what the company dashboard uses, so this was the copy that
+  // disagreed. **Two renderers of the same number is how they drift; the fix is to agree with the one
+  // people check against.**
+  const take = (rows) => (rows || []).slice(0, monthsShown(doc)).map(r => clean(r.start));
   const mid = take(band.expected?.rows);
   if (!mid.length) return { empty: "No projection yet — add cash and a line or two." };
 
@@ -1011,7 +1018,10 @@ export const CHARTS = Object.freeze([
             tone: "clay", stacked: true },
           // CASH RIDES OVER AS A LINE. A position, not a fourth component of the same total — and the
           // crossing where the line enters the stack is the clean-exit date, which is the whole point.
-          { id: "cash", label: "Cash on hand", values: rows.slice(0, n).map(r => r.end),
+          // ⚠️ `r.start` — "cash on hand" in a month is what you HAVE that month, not what is left
+          // after it. Same fault as `flow.runway`, same field, and it would have shifted this series
+          // by a month too.
+          { id: "cash", label: "Cash on hand", values: rows.slice(0, n).map(r => r.start),
             tone: "signal", shape: "lines" },
         ],
         format: "money",

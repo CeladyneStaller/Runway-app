@@ -392,3 +392,27 @@ describe("⚠️ every chart follows the same window", () => {
     expect(monthsShown(null)).toBe(18);
   });
 });
+
+describe("⚠️ a balance series plots the OPENING balance", () => {
+  it("starts at cash on hand", async () => {
+    // Each projection row carries `start` and `end`, and **`end` of one month IS `start` of the
+    // next** — so plotting `end` under a month's label shows that month's CLOSING balance where the
+    // company view shows its opening one. **Every value appeared one month early.**
+    const { demoDoc } = await import("../../src/state/document.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    for (const id of ["grant-startup", "hardware-vc", "nonprofit", "saas"]) {
+      const doc = demoDoc(id);
+      const spec = buildChart("flow.runway", doc, buildModelParts(doc));
+      expect(Math.round(spec.series[0].values[0]), id).toBe(doc.cash);
+    }
+  });
+
+  it("⚠️ AGREES WITH `RunwayChart`, which is what the company dashboard draws", async () => {
+    // Two renderers of the same number is how they drift. `RunwayChart` plots `r.start`; this is the
+    // copy that disagreed, so this is the copy that changed.
+    const src = (await import("node:fs")).readFileSync("src/engine/charts.js", "utf8");
+    const rc = (await import("node:fs")).readFileSync("src/views/chrome/RunwayChart.jsx", "utf8");
+    expect(rc).toMatch(/b:\s*r\.start/);
+    expect(src).toMatch(/const take = \(rows\) =>[\s\S]{0,40}clean\(r\.start\)/);
+  });
+});

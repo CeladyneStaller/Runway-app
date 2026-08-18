@@ -107,7 +107,13 @@ function Portfolio({ rows, onOpen }) {
   const pending = rows.filter(r => r.state === "loading").length;
   const short = ready.filter(r => r.months != null && r.months < 6);
   const shortest = ready.reduce((a, r) => (r.months != null && (a == null || r.months < a) ? r.months : a), null);
-  const attention = ready.reduce((a, r) => a + (r.attention || 0), 0);
+  // ⚠️ CLIENTS NEEDING ATTENTION, NOT ALERTS TOTALLED. `r.attention` became an object when the column
+  // started naming the worst finding instead of counting everything — and `0 + {}` is the string
+  // "0[object Object]" rather than an error, so it rendered.
+  //
+  // Counting CLIENTS is also the right number: **an advisor's morning question is how many people to
+  // call, not how many findings exist across them.** Three problems at one client is still one call.
+  const attention = ready.filter(r => r.attention).length;
 
   // WHO RUNS OUT FIRST, which is the order that answers the question an advisor opened the app with.
   // A client still loading sorts last rather than to the top: an unknown runway is not an urgent one.
