@@ -43,6 +43,69 @@ export const TAB_REGISTRY = [
  *  there is always somewhere to go home to. */
 export const isLocked = (view) => !!TAB_REGISTRY.find(t => t.view === view)?.locked;
 
+/** ⚠️ THE SUB-TABS, WHICH HAD NO REGISTRY AT ALL.
+ *
+ *  `prefs.subs[view]` has existed and `visibleTabs` has read it since the tab work — but the only way
+ *  to WRITE it was by hand. The settings screen listed the nine top-level tabs and nothing beneath
+ *  them, so a sub-tab hidden by anything else could not be brought back.
+ *
+ *  **A setting that can be set and not unset is a trap**, and shipping a wizard that hides these
+ *  before this existed would have been one with no exit.
+ *
+ *  Each view's FIRST sub-tab is locked: it is where the tab lands, and a tab whose every sub-tab is
+ *  hidden is a tab that opens onto nothing.
+ */
+export const SUBTAB_REGISTRY = Object.freeze({
+  flow:  [{ id: "net", label: "Net cash flow", locked: true },
+          { id: "revenue", label: "Revenue" },
+          { id: "costs", label: "Costs" }],
+  pay:   [{ id: "total", label: "Total", locked: true },
+          { id: "employees", label: "Employees" },
+          { id: "fringe", label: "Fringe" },
+          { id: "alloc", label: "Allocation" },
+          { id: "priority", label: "Prioritization" }],
+  proj:  [{ id: "all", label: "All", locked: true },
+          { id: "internal", label: "Internal" },
+          { id: "grants", label: "Grants" },
+          { id: "fulfil", label: "Fulfillment" },
+          { id: "proposals", label: "Proposals" }],
+  sales: [{ id: "summary", label: "Summary", locked: true },
+          { id: "orders", label: "Orders" },
+          { id: "targets", label: "Targets" },
+          { id: "subs", label: "Subscriptions" }],
+  inv:   [{ id: "summary", label: "Summary", locked: true },
+          { id: "stack", label: "Capital stack" },
+          { id: "goals", label: "Goals" }],
+  hist:  [{ id: "summary", label: "Summary", locked: true },
+          { id: "burn", label: "Burn" },
+          { id: "ledger", label: "Ledger" },
+          { id: "cash", label: "Cash on hand" },
+          { id: "forecasts", label: "Forecasts" }],
+});
+
+export const subtabsOf = (view) => SUBTAB_REGISTRY[view] || [];
+
+export const isSubLocked = (view, id) =>
+  !!subtabsOf(view).find(t => t.id === id)?.locked;
+
+/** ⚠️ SUB-TABS RIDE IN THE SAME FLAT LIST AS TABS, encoded `view:sub`.
+ *
+ *  `set_company_tabs` takes one array of strings and stores one column. Adding a second column and a
+ *  second RPC for sub-tabs would mean a migration, two round trips and two things to keep in step —
+ *  **for data that is already a list of "things this company does not show".**
+ *
+ *  A top-level view id never contains a colon, so the two cannot collide.
+ */
+export const subKey = (view, id) => `${view}:${id}`;
+
+export const splitHidden = (hidden = []) => ({
+  views: hidden.filter(h => !String(h).includes(":")),
+  subs: hidden.filter(h => String(h).includes(":")),
+});
+
+/** Is this sub-tab hidden, given the flat list? */
+export const isSubHidden = (hidden, view, id) => (hidden || []).includes(subKey(view, id));
+
 const EMPTY = { views: [], subs: {} };
 
 /** `{ views: [...], subs: { view: [...] } }` — the things that are HIDDEN. */
@@ -86,8 +149,22 @@ export const visibleNav = (nav, prefs, ctx = {}) =>
  *  no content, so the last one survives being hidden. The settings UI prevents this too, but the
  *  guarantee belongs here, where the rendering actually happens. */
 export function visibleTabs(view, tabs, prefs) {
-  const hidden = (prefs?.subs || {})[view] || [];
-  const out = (tabs || []).filter(([k]) => !hidden.includes(k));
+  // ⚠️ TWO SOURCES, DELIBERATELY, AND THEY UNION RATHER THAN OVERRIDE.
+  //
+  //   `prefs.subs[view]`  — this PERSON on this device, from the settings screen they already had
+  //   `prefs.companyHidden` — the COMPANY, from the owner's settings and (later) the setup wizard
+  //
+  // A union is right because both are statements about what NOT to show, and neither is more
+  // authoritative: an owner hiding Fringe company-wide and a person hiding Prioritization for
+  // themselves both mean it. **Making one win would silently undo the other's choice.**
+  const mine = (prefs?.subs || {})[view] || [];
+  const company = (prefs?.companyHidden || [])
+    .filter(h => String(h).startsWith(`${view}:`))
+    .map(h => String(h).slice(view.length + 1));
+  const hidden = new Set([...mine, ...company]);
+  const out = (tabs || []).filter(([k]) => !hidden.has(k));
+  // A view whose every sub-tab is hidden still opens on its first — a tab that lands on nothing is
+  // worse than one showing something its owner did not choose.
   return out.length ? out : (tabs || []).slice(0, 1);
 }
 

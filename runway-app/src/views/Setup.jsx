@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { TRIAL_DAYS } from "../state/plans";
 import { docFromSetup, missingSalaries, setupHasSubstance, num, classifyRunway } from "../state/setup";
 import { buildModelFromDoc } from "../engine/buildmodel";
+import { SHAPE_QUESTIONS, stepsFor } from "../engine/setupshape";
 import { buildProjection } from "../engine/projection";
 import { moneyFull } from "../engine/money";
 import { HORIZON } from "../engine/time";
@@ -17,7 +18,10 @@ import { HORIZON } from "../engine/time";
 // and it is the reason to finish rather than abandon. It also means the wizard is honest about the
 // consequence of a blank salary: the number visibly fails to move.
 
-const STEPS = ["Basics", "People", "Projects", "Funding"];
+// ⚠️ THE STEPS ARE DERIVED FROM THE ANSWERS NOW, not a constant. Somebody who says they do not run
+// projects must not then be asked to enter one — **a wizard that asks about work you have just said you
+// do not do teaches people the questions were not listened to.**
+// `stepsFor` owns the rule; this file only renders what it returns.
 
 const blankEmployee = () => ({ name: "", title: "", salary: "" });
 const blankProject = () => ({ name: "", type: "internal", budget: "" });
@@ -44,7 +48,32 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
   const [projects, setProject, dropProject] = useRows(blankProject);
   const [rounds, setRound, dropRound] = useRows(blankRound);
 
-  const answers = { name, cash, employees, projects, rounds };
+  // ⚠️ THE PARENTS DEFAULT TO YES AND THE CHILDREN FOLLOW THEM. Somebody who skips this step gets the
+  // whole app, which is the only safe default: hiding a tab somebody never asked to hide is a worse
+  // error than showing one they do not need.
+  const [shape, setShape] = useState(() => ({
+    projects: true, internal: true, grants: true, preproduction: true,
+    sales: true, orders: true, subs: true,
+    investment: true,
+  }));
+  const setShapeAnswer = (id, on) => setShape(sh => {
+    const next = { ...sh, [id]: on };
+    // Unticking a parent unticks its children, so the stored answers cannot say "no projects, but yes
+    // to grants" — a state no question asked for and nothing downstream would know how to read.
+    const q = SHAPE_QUESTIONS.find(x => x.id === id);
+    if (q && !on) for (const c of q.children || []) next[c.id] = false;
+    if (q && on) for (const c of q.children || []) next[c.id] = sh[c.id] ?? true;
+    return next;
+  });
+
+  const STEPS = stepsFor(shape);
+
+  // ⚠️ THE BODIES ARE KEYED BY NAME, NOT BY INDEX. With a derived step list `step === 2` means a
+  // different screen depending on the answers, so an inserted step would silently show the wrong body.
+  // `at` asks which step this IS, which stays true however the list is built.
+  const at = (label) => STEPS[step] === label;
+
+  const answers = { name, cash, employees, projects, rounds, shape };
 
   // The live figure.
   //
@@ -71,13 +100,17 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
   const noSalary = missingSalaries(answers);
   // Creating a company from nothing needs a name to create it UNDER; setting up an existing one does
   // not, because that company already has a name and this only defaults the model's.
-  const needsName = mode === "company" && step === 0 && !name.trim();
+  const needsName = mode === "company" && at("Basics") && !name.trim();
   const last = step === STEPS.length - 1;
 
   // The NAME is passed separately and unconditionally. A wizard skipped from the first step still has
   // to name the company it is about to create, and `docFromSetup` returns null when there is nothing
   // else to record — so the name cannot ride inside the document.
-  const finish = () => onDone(setupHasSubstance(answers) ? docFromSetup(answers) : null, name.trim());
+  // ⚠️ THE SHAPE TRAVELS AS A THIRD ARGUMENT. It is not part of the DOCUMENT — it decides which tabs a
+  // company shows, which is stored per company by `set_company_tabs` — so folding it into `docFromSetup`
+  // would put a display preference inside the financial model.
+  const finish = () => onDone(setupHasSubstance(answers) ? docFromSetup(answers) : null,
+                              name.trim(), shape);
 
   return (
     <div className="rw"><div className="splash setup">
@@ -89,7 +122,7 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
         ))}
       </div>
 
-      {step === 0 && (
+      {at("Basics") && (
         <div className="setup-body">
           <h2>The basics</h2>
           <p>Two things, and the forecast starts working. Everything else can wait.</p>
@@ -119,7 +152,42 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
         </div>
       )}
 
-      {step === 1 && (
+      {at("What to show") && (
+        <div className="setup-step">
+          <p className="setup-q">What do you want to keep track of here?</p>
+          <p className="setup-qs">Tick what applies. Anything you leave off can be turned on later from
+            Company settings, and nothing is deleted either way.</p>
+
+          {SHAPE_QUESTIONS.map(q => (
+            <div className={"shape-grp" + (shape[q.id] ? " on" : "")} key={q.id}>
+              <label className="shape-row">
+                <input type="checkbox" checked={!!shape[q.id]}
+                       onChange={e => setShapeAnswer(q.id, e.target.checked)} />
+                <span>
+                  <span className="shape-n">{q.q}</span>
+                  {q.hint && <span className="shape-w">{q.hint}</span>}
+                </span>
+              </label>
+              {/* ⚠️ THE CHILDREN DISAPPEAR WITH THEIR PARENT. Somebody who has said they do not run
+                  projects should not then be asked three questions about kinds of project — it is the
+                  same fault as a control with nothing to act on, and it makes a short form feel long. */}
+              {shape[q.id] && (q.children || []).length > 0 && (
+                <div className="shape-kids">
+                  {q.children.map(c => (
+                    <label className="shape-row" key={c.id}>
+                      <input type="checkbox" checked={!!shape[c.id]}
+                             onChange={e => setShapeAnswer(c.id, e.target.checked)} />
+                      <span className="shape-n sub">{c.q}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {at("People") && (
         <div className="setup-body">
           <h2>Who's on payroll?</h2>
           <p>Payroll is usually most of the burn, so this is the step that makes the forecast real.
@@ -144,7 +212,7 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
         </div>
       )}
 
-      {step === 2 && (
+      {at("Projects") && (
         <div className="setup-body">
           <h2>Any projects running?</h2>
           <p>Grants, builds, customer work. A name and a rough budget is enough — the costs get coded
@@ -167,7 +235,7 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
         </div>
       )}
 
-      {step === 3 && (
+      {at("Funding") && (
         <div className="setup-body">
           <h2>Money raised, or being raised?</h2>
           <p>Anything already closed counts as cash you have. Anything still in progress stays switched
@@ -220,7 +288,7 @@ export function Setup({ initialName = "", onDone, onCancel, onImport, mode = "mo
           {step === 0 ? "Cancel" : "Back"}
         </button>
         <div className="setup-nav-r">
-          {!(mode === "company" && step === 0) && (
+          {!(mode === "company" && at("Basics")) && (
             <button className="linkbtn" onClick={() => (last ? finish() : setStep(step + 1))}>
               {last ? "Finish without this" : "Skip this step"}
             </button>

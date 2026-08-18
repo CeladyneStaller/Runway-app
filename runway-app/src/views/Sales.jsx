@@ -140,7 +140,7 @@ export function Sales({ routeTab, setRouteTab = () => {}, pos, setPos, projects,
           <div className="panel">
             <div className="panel-h">
               <div><h3>Subscriptions</h3><p>Recurring revenue, and the subscriber count behind it.</p></div>
-              <button className="linkbtn" onClick={() => setRouteTab("saas")}>Open subscriptions</button>
+              <button className="linkbtn" onClick={() => setRouteTab("subs")}>Open subscriptions</button>
             </div>
             <table className="tbl">
               <thead><tr>

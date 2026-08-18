@@ -1777,6 +1777,71 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+## The setup wizard shapes the app
+
+Three questions with nested children, Corey's wording verbatim. **No question names a tab** — asserted
+in a test, because the wording is the whole design and it would drift the first time somebody edited it
+for brevity.
+
+**⚠️ THE STEPS ARE DERIVED FROM THE ANSWERS.** Corey's insight and the thing that makes this worth
+doing: somebody who says they do not run projects is not then asked to enter one. **A wizard that asks
+about work you have just said you do not do teaches people the questions were not listened to.**
+
+**⚠️ WHICH FORCED THE STEP BODIES TO BE KEYED BY NAME.** They were `step === 0..3`; with a derived list
+`step === 2` means a different screen depending on the answers, so an inserted step would silently show
+the wrong body. `at("Projects")` stays true however the list is built.
+
+**⚠️ IT COMPUTES WHAT TO HIDE, NOT WHAT TO SHOW.** A wizard producing a list of VISIBLE things would
+silently hide anything added to the app afterwards — a tab shipped next month would be invisible to
+every company created before it, which is the opposite of what a default should do. Verified:
+everything-yes hides nothing at all.
+
+**One question crosses two tabs.** "Pre-production products" shows Fulfillment under Projects AND
+Targets under Sales, because building something to sell is one activity the app models in two places.
+**Somebody who does it needs both or neither**, and asking twice would let them end up with half.
+
+**Sub-keys for a hidden tab are dropped** — somebody wanting pre-production but not sales would
+otherwise get `sales:targets` in the list, a row that can never be acted on while its parent is off.
+
+**⚠️ AND THE WRITE CANNOT FAIL THE SETUP.** Persisting tabs is wrapped so a timing-out RPC does not lose
+somebody's model — **trading the important thing for the cosmetic one is the wrong way round**, and the
+tabs are recoverable from settings while the company is not.
+
+## Sub-tab toggles, and where to say they exist
+
+**⚠️ `prefs.subs[view]` HAD A READER AND NO WRITER.** `visibleTabs` has honoured it since the tab work
+and the settings screen listed only the nine top-level tabs — **so a sub-tab hidden by anything could
+not be brought back.** A setting that can be set and not unset is a trap, and shipping the wizard before
+this would have been one with no exit.
+
+`SUBTAB_REGISTRY` covers all six views with sub-tabs, verified against the actual `TABS` arrays rather
+than assumed. **The first sub-tab of each view is locked** — it is where the tab lands, and a tab whose
+every sub-tab is hidden opens onto nothing.
+
+**Encoded `view:sub` in the SAME flat list** that `set_company_tabs` already takes. A second column and
+RPC would mean a migration and two things to keep in step, for data that is already a list of "what this
+company does not show". **Safe only because no view id contains a colon — asserted.**
+
+**⚠️ `visibleTabs` UNIONS THE TWO SOURCES RATHER THAN PICKING ONE.** The company's list and the person's
+`prefs.subs` are both statements about what not to show, and neither is more authoritative: an owner
+hiding Fringe company-wide and a person hiding Prioritization for themselves both mean it. **Making one
+win would silently undo the other's choice.**
+
+### Where to tell somebody they can change it
+
+**Under the rail entry, as a subtitle**: "Plan, tabs, people, connections". Naming TABS specifically is
+the point — "settings" is where everything lives and therefore says nothing.
+
+**⚠️ AND IT HAS TO BE ON THE ENTRY POINT, because the alternative surfaces do not exist.** Somebody who
+hid a tab has no place to be told where it went — **the tab is not there.** Telling them at setup is
+telling them at the moment of least need and least memory.
+
+### Found on the way
+
+The Sales summary's "Open subscriptions" button called `setRouteTab("saas")`. **The sub-tab's id is
+`subs`** — it resolved against the tab list, found nothing, and fell back silently. Same class as
+`p.team` and `parts.rows`: **a name that looks right, is wrong, and fails quietly.**
+
 ## Every chart follows one window
 
 The runway chart had a settable horizon; everything else was `MONTHS_SHOWN = 18`, a module constant used

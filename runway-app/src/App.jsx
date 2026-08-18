@@ -1,5 +1,7 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { hiddenFromAnswers } from "./engine/setupshape";
+import { subtabsOf } from "./state/tabprefs";
 import { readOpts, writeOpts, horizonOf } from "./engine/dashopts";
 import { DashOptions } from "./views/chrome/DashOptions";
 import { planSummary } from "./state/plans";
@@ -545,7 +547,15 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
           <div className="railfoot">
             {!demo && (
               <button className="nav navset railset" onClick={() => onOpenSettings?.("company", "general")}>
-                <span aria-hidden="true">⚙</span>Company settings
+                <span aria-hidden="true">⚙</span>
+                <span className="railset-t">Company settings
+                  {/* ⚠️ WHAT IS BEHIND IT, NOT JUST ITS NAME. Somebody who has hidden a tab — at setup
+                      or since — has no surface to be told where it went, because THE TAB IS NOT THERE.
+                      The entry point has to carry that itself.
+                      Naming "tabs" specifically is the point: "settings" is where everything lives and
+                      therefore tells you nothing. */}
+                  <span className="railset-s">Plan, tabs, people, connections</span>
+                </span>
               </button>
             )}
             {/* THE MODEL NAME IS GONE. Every company has a name; the model name was a SECOND string for the
@@ -1478,7 +1488,16 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
         };
         r.readAsText(file);
       }}
-      onDone={async (built, typedName) => {
+      onDone={async (built, typedName, shape) => {
+        // ⚠️ WRITE THE TAB SHAPE BEFORE ANYTHING ELSE, and never let it fail the setup. Somebody who
+        // finishes the wizard has created a company; losing their model because a preferences RPC
+        // timed out would be trading the important thing for the cosmetic one.
+        if (shape) {
+          try {
+            const hidden = hiddenFromAnswers(shape, subtabsOf);
+            if (hidden.length) await getAccountApi()?.setCompanyTabs?.(currentCompanyId(), hidden);
+          } catch { /* the company still exists; tabs can be set in settings */ }
+        }
         // AFTER the wizard's own work below, not here — see the `track` call at the end of this
         // handler. Firing on entry would count a completion that failed to save.
 

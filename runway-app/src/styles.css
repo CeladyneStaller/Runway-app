@@ -1860,3 +1860,24 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 /* The milestone table body — its header was fixed when `.plan-add` was; this is the rows beneath. */
 .panel > .plan-rows{margin-left:18px;margin-right:18px}
 .hv-band{fill:var(--signal);opacity:.07;pointer-events:none}
+
+/* ---- sub-tab toggles ---- */
+.tabrow{display:flex;flex-direction:column;gap:2px}
+.subtabs{margin:2px 0 8px 26px;padding-left:11px;border-left:2px solid var(--line-2);
+  display:flex;flex-direction:column;gap:1px}
+.tabtoggle.sub{font-size:12px;padding:3px 0}
+.tabtoggle.sub .meta{font-size:10px}
+.railset-t{display:flex;flex-direction:column;gap:1px;text-align:left;line-height:1.35}
+.railset-s{font-size:10px;color:var(--muted-2);font-weight:400;letter-spacing:.01em}
+
+/* ---- setup: what to show ---- */
+.setup-q{font-family:var(--fd);font-size:14px;font-weight:600;margin:0 0 2px}
+.setup-qs{color:var(--muted);font-size:12px;margin:0 0 14px;max-width:62ch}
+.shape-grp{border:1px solid var(--line-2);border-radius:11px;padding:11px 13px;margin-bottom:9px}
+.shape-grp.on{border-color:#BEDDD3;background:#F7FBFA}
+.shape-row{display:flex;gap:11px;align-items:flex-start;padding:6px 0;cursor:pointer}
+.shape-row input{margin-top:2px;width:15px;height:15px;accent-color:var(--signal);flex:none}
+.shape-n{font-size:12.5px;font-weight:600;display:block;line-height:1.4}
+.shape-n.sub{font-weight:500;font-size:12px}
+.shape-w{font-size:11px;color:var(--muted);margin-top:2px;display:block}
+.shape-kids{margin:4px 0 0 26px;padding-top:5px;border-top:1px solid var(--line-2)}
