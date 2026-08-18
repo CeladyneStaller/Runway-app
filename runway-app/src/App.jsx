@@ -1720,11 +1720,26 @@ export default function App() {
   // ⚠️ THE PICKER IS THE ENTRY POINT NOW, not a direct load. Both doors — the landing screen and the
   // sign-in link — go through `enterDemo`, so hooking it here covers both without a second code path.
   const [picking, setPicking] = useState(null);   // null | "enter" | "switch"
+  // ⚠️ ABOVE EVERY OTHER RETURN, WHICH IS WHY THE BUTTON DID NOTHING. `if (gated && user === null)`
+  // returns the Landing screen ~15 lines earlier, so `setPicking("enter")` set the state and the render
+  // never reached the check — **the click worked and nothing appeared.**
+  //
+  // A conditional return placed after the branch that would preempt it is dead code that lints clean,
+  // and this is the second time in this session I have done it (the wizard step check, the same shape).
+  if (picking) return (
+    <DemoPicker current={picking === "switch" ? demoId : null}
+                onPick={openDemo}
+                // ⚠️ CANCEL FROM THE BANNER RETURNS TO THE DEMO, not to the landing screen. Somebody
+                // who opened the switcher and changed their mind has not asked to leave.
+                onClose={() => setPicking(null)} />
+  );
+
   // ⚠️ HELD HERE, BECAUSE THIS SCOPE HAS NO DOCUMENT. `doc` lives inside `DocumentHost`, several
   // components down — reaching it would mean threading it up through everything in between for one
   // string. The picker sets it and the picker reads it, so the two cannot disagree.
   const [demoId, setDemoId] = useState(null);
   const enterDemo = () => setPicking("enter");
+
 
   const openDemo = (which) => {
     setDemoId(which);
@@ -1857,13 +1872,6 @@ export default function App() {
   // ⚠️ THE GATE WRAPS THE SIGNED-IN PATH ONLY. The demo, the misconfigured screen and the recovery
   // screen return above this — none of them has a user to ask, and putting a legal prompt in front of
   // the demo would demand acceptance from somebody who has not created an account.
-  if (picking) return (
-    <DemoPicker current={picking === "switch" ? demoId : null}
-                onPick={openDemo}
-                // ⚠️ CANCEL FROM THE BANNER RETURNS TO THE DEMO, not to the landing screen. Somebody
-                // who opened the switcher and changed their mind has not asked to leave.
-                onClose={() => setPicking(null)} />
-  );
 
   return <DocumentHost />;
 }

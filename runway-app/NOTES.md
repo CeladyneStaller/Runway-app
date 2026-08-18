@@ -1873,6 +1873,20 @@ demo teaches people the app is nervous about actions that cost nothing.**
 two of my replacements both matched the same import. Caught by reading the result rather than the
 success message — **the third time this session a bulk edit has produced valid-looking wrong text.**
 
+### ⚠️ THE DEMO BUTTON DID NOTHING — A RETURN PLACED AFTER THE BRANCH THAT PREEMPTS IT
+
+`enterDemo` set `picking`, and the check that renders the picker sat BELOW
+`if (gated && user === null) return <Landing/>` — **so a signed-out visitor, which is every visitor who
+sees that button, returned the Landing screen before the render ever reached it.** The click worked, the
+state changed, and nothing appeared.
+
+**A conditional return placed after the branch that would preempt it is dead code that lints clean**,
+and this is the second time this session in the same shape — the wizard step check was the first.
+
+Moved directly after the state that drives it, where nothing can return first. **Verified by line
+number with comments stripped**, because my first two checks matched the phrase inside my own
+explanatory comment — the fourth time comment-matching has produced a wrong answer today.
+
 ## Mobile: four overflows, three different causes
 
 **The runway tile.** `.statuspill` had `min-width:0` at 900px — **which lets a flex box SHRINK and does
