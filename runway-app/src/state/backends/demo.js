@@ -79,12 +79,18 @@ const drop = (key) => {
 const live = (env, windowMs) =>
   env && typeof env.startedAt === "number" && Date.now() - env.startedAt < windowMs ? env : null;
 
-export function createDemoBackend(seed) {
+export function createDemoBackend(seed, { replace = false } = {}) {
   const existing = live(get(KEY), DEMO_WINDOW_MS);
   // Adopt the EXISTING start time when there is one. Stamping `Date.now()` here unconditionally would
   // restart the twelve hours on every refresh, which is a demo that never expires.
   const startedAt = existing ? existing.startedAt : Date.now();
-  if (!existing && seed) put(KEY, { startedAt, doc: seed });
+  // ⚠️ `!existing` IS RIGHT FOR A REFRESH AND WRONG FOR A DELIBERATE SWITCH. Without `replace`, picking
+  // a different demo company set the backend up again and **kept the document already in memory** — the
+  // modal closed, the archetype changed, and the screen showed the same company.
+  //
+  // The twelve-hour clock is NOT restarted on a switch: somebody exploring three archetypes has not
+  // earned three fresh windows, and the guard above exists precisely so a refresh cannot do that.
+  if (seed && (replace || !existing)) put(KEY, { startedAt, doc: seed });
 
   return {
     name: "demo",

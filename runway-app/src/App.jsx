@@ -1728,7 +1728,10 @@ export default function App() {
   // this session with `upBand`, and it is invisible to lint because the reference is legal.
   const openDemo = (which) => {
     setDemoId(which);
-    activateDemoBackend(demoDoc(which));
+    // ⚠️ `replace: true` — WITHOUT IT THE BACKEND KEEPS THE DOCUMENT IT ALREADY HAS. The guard that
+    // protects a refresh from re-seeding also blocked a deliberate switch, so the archetype changed and
+    // the screen did not.
+    activateDemoBackend(demoDoc(which), { replace: true });
     window.location.hash = "#demo";
     setDemo(true);
     setPicking(null);
@@ -1808,25 +1811,28 @@ export default function App() {
     window.location.reload();
   };
 
-  // ⚠️ AFTER EVERY HOOK, BEFORE EVERY OTHER RETURN. This is the only window it can occupy.
+  // ⚠️ NOT AN EARLY RETURN ANY MORE — AN OVERLAY. As a return it replaced the whole screen, so
+  // switching from inside the demo showed a grey page behind the modal instead of the app, **and that
+  // is also why the three placement bugs happened**: an early return has to sit after every hook and
+  // before every branch that preempts it, and a modal has neither constraint.
   //
-  // Above the hooks it skipped ten of them whenever `picking` was set — React error #300, "rendered
-  // fewer hooks than expected", and a white screen. Below the other returns it was unreachable,
-  // because `if (gated && user === null)` renders the Landing screen first.
-  //
-  // **An early return is not a free position: it must sit after all hooks and before any branch that
-  // would preempt it**, and those two constraints are what made this take three attempts.
-  if (picking) return (
+  // Rendered as a sibling of whatever is showing, it appears in front of the demo, in front of the
+  // landing screen, in front of anything.
+  const pickerOverlay = picking ? (
     <DemoPicker current={picking === "switch" ? demoId : null}
                 onPick={openDemo}
-                // ⚠️ CANCEL FROM THE BANNER RETURNS TO THE DEMO, not to the landing screen. Somebody
-                // who opened the switcher and changed their mind has not asked to leave.
                 onClose={() => setPicking(null)} />
-  );
+  ) : null;
 
-  if (demo) return <DocumentHost demo onKeepDemo={keepDemo}
-                                  onSwitchDemo={() => setPicking("switch")}
-    onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />;
+
+  if (demo) return (
+    <>
+      {pickerOverlay}
+      <DocumentHost demo onKeepDemo={keepDemo}
+                    onSwitchDemo={() => setPicking("switch")}
+                    onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />
+    </>
+  );;
 
   if (misconfigured) return (
     <div className="rw"><div className="splash" style={{ maxWidth: 560, textAlign: "left" }}>
@@ -1873,6 +1879,7 @@ export default function App() {
     // authenticate to a product they had not yet decided they wanted.
     if (entry === null && !justReset) return (
       <>
+        {pickerOverlay}
         <LandedOnce />
         <Landing onDemo={() => { void track("demo_started"); enterDemo(); }}
                  onCreate={() => { void track("signup_started"); setEntry("create"); }}
@@ -1889,7 +1896,7 @@ export default function App() {
   // screen return above this — none of them has a user to ask, and putting a legal prompt in front of
   // the demo would demand acceptance from somebody who has not created an account.
 
-  return <DocumentHost />;
+  return <>{pickerOverlay}<DocumentHost /></>;
 }
 
 /** Who you are signed in as, and the way out. Reads the registered provider directly rather than being

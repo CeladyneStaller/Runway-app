@@ -40,7 +40,7 @@ export function activateLocalBackend() { setBackend(createLocalBackend()); }
 /** Enter demo mode: a working model that reaches neither the database nor this browser's real storage.
  *  The backend seam is what makes this small — cadence, status, conflicts and the journal all carry on
  *  working, and the only thing that changes is where a write goes, which is nowhere durable. */
-export function activateDemoBackend(seed) { setBackend(createDemoBackend(seed)); }
+export function activateDemoBackend(seed, opts) { setBackend(createDemoBackend(seed, opts)); }
 export { clearDemo, demoInProgress, demoExpired, demoRemainingMs, DEMO_WINDOW_MS,
          stashPromotion, pendingPromotion, clearPromotion, markDemoReset, takeDemoReset };
 export const isDemo = () => backend().name === "demo";

@@ -2006,6 +2006,30 @@ after it, nothing returning before it, `openDemo` declared first.
 theories. **Listing every constraint BEFORE the first move would have found the window immediately** —
 and the constraints were all knowable from the code.
 
+### The picker should have been an overlay all along
+
+**Both of Corey's issues came from it being an early RETURN.**
+
+**The grey background** was the whole screen being replaced — there was nothing behind the modal because
+the app had stopped rendering. It is a sibling now, so it appears in front of the demo, the landing
+screen, or anything else.
+
+**⚠️ AND THAT IS ALSO WHY THE THREE PLACEMENT BUGS HAPPENED.** An early return must sit after every hook
+and before every branch that preempts it; **an overlay has neither constraint.** I spent three turns
+satisfying rules that only applied because of a decision I never examined — **the fix for the bug was to
+question the shape, not to keep moving the block.**
+
+### And switching kept the old document
+
+    if (!existing && seed) put(KEY, { startedAt, doc: seed });
+
+**The guard that stops a REFRESH from re-seeding also stopped a deliberate SWITCH.** The archetype
+changed, the modal closed, and the screen showed the same company. `replace: true` on the switch path
+only — **a refresh still cannot restart the twelve-hour clock, which is what the guard is for.**
+
+**Somebody exploring three archetypes has not earned three fresh demo windows**, so `startedAt` is
+carried across a switch rather than reset.
+
 ### Where to tell somebody they can change it
 
 **Under the rail entry, as a subtitle**: "Plan, tabs, people, connections". Naming TABS specifically is
