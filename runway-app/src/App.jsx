@@ -1740,13 +1740,6 @@ export default function App() {
   //
   // A conditional return placed after the branch that would preempt it is dead code that lints clean,
   // and this is the second time in this session I have done it (the wizard step check, the same shape).
-  if (picking) return (
-    <DemoPicker current={picking === "switch" ? demoId : null}
-                onPick={openDemo}
-                // ⚠️ CANCEL FROM THE BANNER RETURNS TO THE DEMO, not to the landing screen. Somebody
-                // who opened the switcher and changed their mind has not asked to leave.
-                onClose={() => setPicking(null)} />
-  );
 
   // ⚠️ HELD HERE, BECAUSE THIS SCOPE HAS NO DOCUMENT. `doc` lives inside `DocumentHost`, several
   // components down — reaching it would mean threading it up through everything in between for one
@@ -1814,6 +1807,22 @@ export default function App() {
     window.location.hash = "";
     window.location.reload();
   };
+
+  // ⚠️ AFTER EVERY HOOK, BEFORE EVERY OTHER RETURN. This is the only window it can occupy.
+  //
+  // Above the hooks it skipped ten of them whenever `picking` was set — React error #300, "rendered
+  // fewer hooks than expected", and a white screen. Below the other returns it was unreachable,
+  // because `if (gated && user === null)` renders the Landing screen first.
+  //
+  // **An early return is not a free position: it must sit after all hooks and before any branch that
+  // would preempt it**, and those two constraints are what made this take three attempts.
+  if (picking) return (
+    <DemoPicker current={picking === "switch" ? demoId : null}
+                onPick={openDemo}
+                // ⚠️ CANCEL FROM THE BANNER RETURNS TO THE DEMO, not to the landing screen. Somebody
+                // who opened the switcher and changed their mind has not asked to leave.
+                onClose={() => setPicking(null)} />
+  );
 
   if (demo) return <DocumentHost demo onKeepDemo={keepDemo}
                                   onSwitchDemo={() => setPicking("switch")}
@@ -1894,6 +1903,7 @@ function SessionPill({ onOpenAccount }) {
     session.current().then(s => { if (alive) setUser(s); });
     return session.onChange(s => setUser(s));
   }, [session]);
+
   if (!session || !user) return null;
   const email = user?.user?.email || user?.email;
   return (

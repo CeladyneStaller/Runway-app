@@ -1984,6 +1984,28 @@ matching props against unrelated locals, then failing to brace-count JSX. **A sc
 scope cannot answer a scope question**, and the direct check on the one known fault was worth more than
 all three.
 
+### ⚠️ REACT #300 — AN EARLY RETURN ABOVE TEN HOOKS
+
+Third failure on the same feature, and the first two fixes caused it.
+
+**An early return has exactly one valid window: after every hook, before any branch that would preempt
+it.** I hit each constraint in turn and broke the other:
+
+    attempt 1   below the Landing return   -> unreachable, button did nothing
+    attempt 2   above the Landing return   -> above `openDemo`, temporal dead zone
+    attempt 3   above the hooks            -> ten hooks skipped, React #300, white screen
+
+**Hooks must run in the same order every render**, so a conditional return above any of them changes the
+count and React refuses. That is the constraint I did not have in mind for the first two attempts —
+**I was solving reachability and dependency order without knowing there was a third rule.**
+
+Now verified against all three at once, by parsing App's own body rather than the whole file: zero hooks
+after it, nothing returning before it, `openDemo` declared first.
+
+**The lesson is about the method, not the placement.** I moved the block three times on three different
+theories. **Listing every constraint BEFORE the first move would have found the window immediately** —
+and the constraints were all knowable from the code.
+
 ### Where to tell somebody they can change it
 
 **Under the rail entry, as a subtitle**: "Plan, tabs, people, connections". Naming TABS specifically is
