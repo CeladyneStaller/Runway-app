@@ -1917,6 +1917,24 @@ appear.** Both a seed and an effect — the seed for the mount, the effect for e
 `mayPortfolio` is seeded too: it is a permission check against a server that is not there, and a demo
 advisor may see the portfolio by definition.
 
+### "Could not be read" on every row — two mismatches
+
+**`readCompanyDocument` was never implemented.** `AdvisorHome` reads each client's document itself and
+builds the projection from it, so **a demo that lists clients without serving their documents produces
+four rows of nothing.**
+
+**⚠️ AND THE CLIENT SHAPE WAS WRONG: I returned `company_id`, the component reads `id`.** I copied the
+shape from the RPC that usually supplies it rather than from the component that consumes it — **the
+shape must be taken from the CONSUMER**, because that is what decides whether a field exists.
+
+Verified end to end on a shimmed tree: all four clients resolve, all four build a real projection.
+
+**⚠️ AND THE REAL NUMBERS DISAGREE WITH MY MOCKUP.** Tidewater is **6 months, not 11.2**, and Ridgeline
+is 5 rather than 8.4. I wrote those figures by hand into the mockup and the model does not agree —
+**Tidewater's band was supposed to be narrow and comfortable, which was the entire point of setting it
+beside Ridgeline's wide one.** Worth checking whether the advance-paid grant is landing as intended
+before trusting that archetype to teach anything.
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**

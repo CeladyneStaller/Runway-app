@@ -144,3 +144,35 @@ describe("⚠️ the advisor demo is the real advisor experience", () => {
     expect(sync.getAccountApi()).not.toBe(api);
   });
 });
+
+describe("⚠️ the portfolio can actually read every client", () => {
+  it("serves a document for every id it lists", async () => {
+    // `AdvisorHome` calls `readCompanyDocument(c.id)` and builds the projection itself. **A demo that
+    // lists clients without serving their documents produces four rows of "could not be read"** — which
+    // is exactly what my first version did, because I returned `company_id` and the component reads
+    // `id`.
+    const { createDemoAdvisorApi } = await import("../../src/state/demoadvisor.js");
+    const api = createDemoAdvisorApi();
+    const clients = await api.listAdvisedCompanies();
+    for (const c of clients) {
+      expect(c.id, "the component reads `id`, not `company_id`").toBeTruthy();
+      const doc = await api.readCompanyDocument(c.id);
+      expect(doc, c.id).toBeTruthy();
+      expect(doc.name).toBe(c.name);
+    }
+  });
+
+  it("⚠️ EVERY CLIENT PRODUCES A REAL PROJECTION", async () => {
+    // The row's runway and cash are computed by the same code that computes them for a paying advisor.
+    const { createDemoAdvisorApi } = await import("../../src/state/demoadvisor.js");
+    const { buildModelFromDoc } = await import("../../src/engine/buildmodel.js");
+    const { buildProjection } = await import("../../src/engine/projection.js");
+    const api = createDemoAdvisorApi();
+    for (const c of await api.listAdvisedCompanies()) {
+      const doc = await api.readCompanyDocument(c.id);
+      const rows = buildProjection(buildModelFromDoc(doc), doc.settings?.toggles);
+      expect(rows.length, c.name).toBeGreaterThan(0);
+      expect(Number.isFinite(rows[0].end), c.name).toBe(true);
+    }
+  });
+});

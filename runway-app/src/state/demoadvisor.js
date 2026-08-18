@@ -34,22 +34,31 @@ export function demoClientDoc(companyId) {
  * tests.**
  */
 export function createDemoAdvisorApi() {
-  const clients = ARCHETYPES.map(a => {
-    const doc = demoDoc(a.id);
-    return {
-      company_id: cid(a.id),
-      name: a.company,
-      role: "advisor",
-      is_advisor: true,
-      // The portfolio row reads these; they are computed from the document rather than typed, so a
-      // change to an archetype moves the portfolio with it.
-      cash: doc.cash,
-      kind: a.label,
-    };
-  });
+  // ⚠️ `id` AND `name`, WHICH IS WHAT `AdvisorHome` ACTUALLY READS. My first version returned
+  // `company_id` — the shape the RPC returns, not the shape the component consumes — so every row
+  // asked for a document with `id: undefined` and reported "could not be read".
+  //
+  // **The shape must be copied from the CONSUMER, not from the API it usually comes from.**
+  const clients = ARCHETYPES.map(a => ({
+    id: cid(a.id),
+    company_id: cid(a.id),
+    name: a.company,
+    role: "advisor",
+    is_advisor: true,
+  }));
 
   return {
     async listAdvisedCompanies() { return clients; },
+
+    // ⚠️ THE METHOD THE PORTFOLIO ACTUALLY CALLS, and the one I omitted. `AdvisorHome` reads each
+    // client's document itself and builds the projection from it — so a demo that lists clients
+    // without serving their documents produces four rows of "could not be read".
+    //
+    // Returning the REAL archetype document is what makes every number on the row real: runway, cash
+    // and the attention fact are computed by the same code that computes them for a paying advisor.
+    async readCompanyDocument(companyId) {
+      return demoClientDoc(companyId);
+    },
     // ⚠️ AN ADVISOR IN THE DEMO IS ALWAYS WITHIN THEIR SEATS. Showing a demo advisor a paywall is
     // showing them the one part of the product they have not agreed to buy yet.
     async advisorUsage() { return { allowed: 10, used: clients.length }; },
