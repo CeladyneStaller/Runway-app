@@ -65,12 +65,27 @@ function useClients(account) {
             parts = { ...parts, rows: rows2 };
             months = clean(runwayMonths(doc));
             cash = clean(doc.cash);
-            // ⚠️ EVERY TAB, NOT JUST `dash`. An advisor's question is "does this client need me",
-            // and **the answer is rarely on the dashboard** — it is an uncovered commitment, a
-            // payroll collision, a grant with no drawdown. Counting one tab's alerts reported zero
-            // for companies with real problems, which is worse than reporting nothing at all.
-            attention = ["dash", "flow", "pay", "proj", "sales", "inv", "cmt", "hist"]
-              .reduce((n, tab) => n + (alertsFor(tab, doc, parts) || []).length, 0);
+            // ⚠️ THE WORST THING, NAMED — NOT A COUNT OF EVERYTHING.
+            //
+            // Counting all alerts across all tabs gave every company 4, because the same alert appears
+            // on several tabs and most of them are `info` — "no spend history yet" is true of every new
+            // company and needs no advisor. **A number that is the same for everybody sorts nobody**,
+            // which is what a portfolio column is for.
+            //
+            // So: drop `info`, de-duplicate by id, and show the text of the most severe remaining one.
+            // An advisor scanning this wants to know WHAT is wrong, and a count cannot tell them.
+            const seen = new Map();
+            for (const tab of ["dash", "flow", "pay", "proj", "sales", "inv", "cmt", "hist"]) {
+              for (const al of alertsFor(tab, doc, parts) || []) {
+                if (al.tone === "info") continue;
+                if (!seen.has(al.id)) seen.set(al.id, al);
+              }
+            }
+            const worst = [...seen.values()]
+              .sort((x, y) => (y.tone === "bad" ? 1 : 0) - (x.tone === "bad" ? 1 : 0))[0];
+            attention = worst
+              ? { text: worst.text, tone: worst.tone, more: seen.size - 1 }
+              : null;
           } catch (e) { failed = e?.message || "This model could not be read."; doc = null; }
         }
         setRows(prev => prev.map(r => (r.id === c.id
@@ -156,8 +171,16 @@ function Portfolio({ rows, onOpen }) {
                       client with nothing wrong, which is the one thing it definitely is not. */}
                   {r.state === "failed"
                     ? <span className="chip bad">could not read</span>
-                    : r.attention ? <span className="chip warn">{r.attention}</span>
-                    : r.state === "ready" ? <span className="chip">—</span> : null}
+                    : r.attention
+                      ? (<span className={"chip " + (r.attention.tone === "bad" ? "bad" : "warn")}
+                               title={r.attention.text}>
+                           {r.attention.text}
+                           {r.attention.more > 0 && <b> +{r.attention.more}</b>}
+                         </span>)
+                    // ⚠️ "ON PLAN" RATHER THAN A DASH. A dash reads as "not checked"; this row HAS been
+                    // checked and found nothing, which is the single most reassuring thing a portfolio
+                    // can tell an advisor.
+                    : r.state === "ready" ? <span className="chip ok">On plan</span> : null}
                 </td>
                 <td><button className="linkbtn" onClick={() => onOpen(r.id)}>Open →</button></td>
               </tr>

@@ -80,7 +80,7 @@ const RIDGELINE = () => ({
   ],
   // Planning, not closed — so it follows its confidence tier rather than being certain money.
   rounds: [{ id: uid(), kind: "safe", name: "Seed SAFE", status: "planning", amount: 3000000,
-             closeMonth: 9, capType: "post", cap: 18000000, discount: 0.2, confAuto: true, goals: [] }],
+             closeM: 9, capType: "post", cap: 18000000, discount: 0.2, confAuto: true, goals: [] }],
   pos: [], saas: [],
 });
 
@@ -122,9 +122,9 @@ const KESTREL = () => ({
       bookedMonth: 3, shipMonth: 9, termsDays: 30, depositPct: 0.3, confidence: "expected" },
   ],
   rounds: [
-    { id: uid(), kind: "safe", name: "2024 SAFE", status: "closed", amount: 1200000, closeMonth: -18,
+    { id: uid(), kind: "safe", name: "2024 SAFE", status: "closed", amount: 1200000, closeM: -18,
       capType: "post", cap: 12000000, discount: 0.2, confAuto: true, goals: [] },
-    { id: uid(), kind: "priced", name: "Series A", status: "closed", amount: 6000000, closeMonth: -4,
+    { id: uid(), kind: "priced", name: "Series A", status: "closed", amount: 6000000, closeM: -4,
       capType: "post", cap: 32000000, discount: 0, confAuto: true, goals: [] },
   ],
   saas: [],
@@ -236,7 +236,7 @@ const LARKSPUR = () => ({
       newPerMonth: 0.5, newGrowthPct: 8, include: true },
   ],
   rounds: [{ id: uid(), kind: "safe", name: "Pre-seed SAFE", status: "closed", amount: 500000,
-             closeMonth: -6, capType: "post", cap: 6000000, discount: 0.2, confAuto: true, goals: [] }],
+             closeM: -6, capType: "post", cap: 6000000, discount: 0.2, confAuto: true, goals: [] }],
   pos: [],
 });
 

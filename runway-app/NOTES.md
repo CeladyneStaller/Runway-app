@@ -2011,6 +2011,28 @@ check asks a server for is already known.
 `mayPortfolio` is deliberately NOT cleared when entering a client: it is a permission, not a location,
 and **clearing it would remove the way back at the moment somebody needs it.**
 
+### Attention = 4 for everybody, which sorts nobody
+
+My widening to eight tabs counted **the same alert once per tab**, and most of what it counted was
+`info` — "no spend history yet" is true of every new company and needs no advisor. **A number identical
+for all four clients is worse than the dash it replaced**, because a number looks like a measurement.
+
+Now: drop `info`, de-duplicate by id, **show the TEXT of the most severe remaining alert**. An advisor
+scanning a portfolio wants to know what is wrong, and a count cannot tell them. Nothing found reads
+**"On plan"** rather than a dash — a dash says "not checked"; this row was checked.
+
+**⚠️ AND THAT EXPOSED A FIELD-NAME FAULT IN MY OWN ARCHETYPES.** Every alert came back empty because
+`slipRisk` reads `r.closeM` and I had written `closeMonth` in all four demo companies. **`Math.min` of
+`NaN` is `NaN`, every comparison against it is false, and the rule returned null silently** — inside a
+`try/catch` that would have swallowed a throw too.
+
+Ridgeline now reports what it should: a three-month slip on the round would put it past zero. **The
+other three read "On plan", which is honest — they do not have a problem the engine knows how to
+name.**
+
+**The lesson is the one this session keeps producing**: I invented `closeMonth` because it reads better
+than `closeM`, and **a field name that is nearly right fails exactly like a field that does not exist.**
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**
