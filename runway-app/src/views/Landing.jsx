@@ -112,6 +112,26 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
               ))}
             </div>
           </div>
+
+            {/* ⚠️ ADVISORS ARE A DIFFERENT BUYER, NOT A DIFFERENT PLAN. Somebody managing four clients is
+                not asking whether Waterline models THEIR runway — they are asking whether it makes four
+                other people's runways legible on a Tuesday morning. **The demo they need is the
+                portfolio**, which is why this tile has its own button rather than sharing the four. */}
+            <div className="way way-adv">
+              <div className="way-t">Advise on several companies</div>
+              <div className="way-s">One place for every client model you have been invited to, sorted by
+                who needs you first.</div>
+              <button className="btn-adv" onClick={onCreate}>Get started as an advisor</button>
+              <button className="btn-demo btn-demo-adv" onClick={() => onDemo("advisor")}>
+                <span className="d-t">Open the advisor demo</span>
+                <span className="d-s">See how Waterline can help manage your portfolio — four sample
+                  clients, two of them tight</span>
+              </button>
+              <ul className="way-facts">
+                <li>Priced per advisor, not per client</li>
+                <li>Clients invite you; you never hold their data</li>
+              </ul>
+            </div>
         </div>
 
         <div className="land-proof">
@@ -160,25 +180,6 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
         </div>
       </div>
 
-          {/* ⚠️ ADVISORS ARE A DIFFERENT BUYER, NOT A DIFFERENT PLAN. Somebody managing four clients is
-              not asking whether Waterline models THEIR runway — they are asking whether it makes four
-              other people's runways legible on a Tuesday morning. **The demo they need is the
-              portfolio**, which is why this tile has its own button rather than sharing the four. */}
-          <div className="way way-adv">
-            <div className="way-t">Advise on several companies</div>
-            <div className="way-s">One place for every client model you have been invited to, sorted by
-              who needs you first.</div>
-            <button className="btn-adv" onClick={onCreate}>Get started as an advisor</button>
-            <button className="btn-demo btn-demo-adv" onClick={() => onDemo("advisor")}>
-              <span className="d-t">Open the advisor demo</span>
-              <span className="d-s">See how Waterline can help manage your portfolio — four sample
-                clients, two of them tight</span>
-            </button>
-            <ul className="way-facts">
-              <li>Priced per advisor, not per client</li>
-              <li>Clients invite you; you never hold their data</li>
-            </ul>
-          </div>
     </div>
   );
 }

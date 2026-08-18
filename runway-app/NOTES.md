@@ -1864,6 +1864,21 @@ portfolio.** One variable, read by every caller including ones added later.
 **No paywall in the demo** — `advisorUsage` returns seats above the client count. Showing a demo advisor
 the one part of the product they have not agreed to buy yet is the wrong first impression.
 
+### The advisor tile landed below the footer
+
+My insertion anchored on `        </div>\n      </div>\n` — **a pattern that occurs several times in the
+file**, and `str.index` found one near the end rather than the one closing the demo tile. So the tile
+rendered after `.land-foot`, outside the grid entirely.
+
+**Fixed by locating the insertion point STRUCTURALLY**: find `.ways`, find `.land-proof`, take the last
+`</div>` between them. **Then verified by counting tags in that span and listing the direct children** —
+three tiles, balance zero — rather than trusting that the edit went where I meant.
+
+**⚠️ FOURTH TIME THIS SESSION AN ANCHOR MATCHED THE WRONG OCCURRENCE**, after the chart wrapper, the
+`canaryDoc` doubling and the JSX comment placement. The rule is now unavoidable: **when an insertion
+point is defined by structure, a text anchor will eventually find a different structure that spells the
+same.**
+
 ## The landing page
 
 Built to the mockup. **The shipped `waterline-icon.svg`, not a redrawn one** — a landing page with its
