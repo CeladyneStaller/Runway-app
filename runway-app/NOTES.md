@@ -1935,6 +1935,21 @@ is 5 rather than 8.4. I wrote those figures by hand into the mockup and the mode
 beside Ridgeline's wide one.** Worth checking whether the advance-paid grant is landing as intended
 before trusting that archetype to teach anything.
 
+### A refresh lost the advisor demo — state restored, side effect did not
+
+`demo` restored itself from the hash and **`demoId` did not** — so reloading `#demo=advisor` reinstated
+the demo and forgot which one, falling back to the placeholder document the advisor mode seeds. That is
+the Ridgeline Corey saw.
+
+**⚠️ AND RESTORING THE STATE WAS ONLY HALF OF IT. Holding the API in state is not installing it.**
+`setDemoAccountApi` writes a module variable that `getAccountApi()` reads, and only `openDemo` called it
+— so a restored advisor demo had its API in React state while every surface still asked the real one.
+**State restores the value; an effect restores the side effect**, and I would have shipped the first
+without the second.
+
+`hashDemoId()` is now the single parser: three pieces of state seed from it and the entry path reads it.
+**Separate regexes would drift the first time the format changed.**
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**

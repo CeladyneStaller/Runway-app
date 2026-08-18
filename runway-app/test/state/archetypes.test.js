@@ -176,3 +176,26 @@ describe("⚠️ the portfolio can actually read every client", () => {
     }
   });
 });
+
+describe("⚠️ the hash is the source of truth across a refresh", () => {
+  it("parses every demo hash form", async () => {
+    // On a refresh the whole component tree is new — React state is gone and **only the URL
+    // survives.** `demo` already restored itself this way; `demoId` did not, so a reload of
+    // `#demo=advisor` reinstated the demo and forgot which one.
+    const parse = (h) => { const m = /^#demo=([a-z-]+)$/.exec(h || ""); return m ? m[1] : null; };
+    expect(parse("#demo=advisor")).toBe("advisor");
+    expect(parse("#demo=grant-startup")).toBe("grant-startup");
+    expect(parse("#demo")).toBeNull();          // the picker, not a company
+    expect(parse("")).toBeNull();
+  });
+
+  it("every archetype id survives a round trip through the hash", () => {
+    // These are URLs the marketing site hands out; a form that does not parse back is a link that
+    // silently lands somewhere else.
+    for (const a of ARCHETYPES) {
+      const h = `#demo=${a.id}`;
+      expect(/^#demo=([a-z-]+)$/.exec(h)[1]).toBe(a.id);
+      expect(archetypeById(a.id)).toBeTruthy();
+    }
+  });
+});

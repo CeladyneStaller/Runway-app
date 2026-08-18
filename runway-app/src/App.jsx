@@ -1717,6 +1717,17 @@ export { RunwayApp, ViewBoundary, demoDoc, toJSON, fromJSON };
  *  looks, from the outside, exactly like a broken app.
  *
  *  In local mode this is a pass-through: the document lives in this browser and there is nobody to be. */
+/** Which demo the URL is asking for: `#demo=advisor` -> "advisor", `#demo` -> null.
+ *
+ *  ⚠️ ONE PARSER. Three pieces of state restore from this and a fourth reads it on entry — separate
+ *  regexes would drift the first time the format changed.
+ */
+function hashDemoId() {
+  if (typeof window === "undefined") return null;
+  const m = /^#demo=([a-z-]+)$/.exec(window.location.hash || "");
+  return m ? m[1] : null;
+}
+
 export default function App() {
   const session = getSessionProvider();
   // The registered provider IS the signal that hosted mode is live — enableHostedSync only registers one
@@ -1791,11 +1802,26 @@ export default function App() {
   // ⚠️ HELD HERE, BECAUSE THIS SCOPE HAS NO DOCUMENT. `doc` lives inside `DocumentHost`, several
   // components down — reaching it would mean threading it up through everything in between for one
   // string. The picker sets it and the picker reads it, so the two cannot disagree.
-  const [demoId, setDemoId] = useState(null);
-  // The demo's account API, when the advisor demo is running. Null the rest of the time, so every
-  // advisor surface either gets the real API or this one — never a half-populated mix.
-  const [demoAdvisor, setDemoAdvisor] = useState(null);
-  const [advisorHomeWanted, setAdvisorHomeWanted] = useState(false);
+  // ⚠️ RESTORED FROM THE HASH, NOT DEFAULTED TO NULL. On a refresh the whole component tree is new —
+  // React state is gone and **only the URL survives.** `demo` already restored itself this way and
+  // `demoId` did not, so a reload of `#demo=advisor` reinstated the demo and forgot WHICH demo,
+  // falling back to the placeholder document the advisor mode seeds.
+  //
+  // The hash is the source of truth for all three, read once, in one place.
+  const [demoId, setDemoId] = useState(() => hashDemoId());
+  const [demoAdvisor, setDemoAdvisor] = useState(() =>
+    isAdvisorDemo(hashDemoId()) ? createDemoAdvisorApi() : null);
+  const [advisorHomeWanted, setAdvisorHomeWanted] = useState(() =>
+    isAdvisorDemo(hashDemoId()));
+
+  // ⚠️ HOLDING THE API IN STATE IS NOT INSTALLING IT. `setDemoAccountApi` writes a module variable
+  // that `getAccountApi()` reads, and on a refresh only `openDemo` did that — so a restored advisor
+  // demo had its API in React state and every surface still asking the real one.
+  // **State restores the value; the effect restores the side effect.**
+  useEffect(() => {
+    setDemoAccountApi(demoAdvisor);
+    return () => setDemoAccountApi(null);
+  }, [demoAdvisor]);
   // ⚠️ THE HASH CAN NAME A COMPANY: `#demo=grant-startup`. The marketing site cannot open a modal in
   // the app — different origin, different build — so the honest hand-off is a link that carries the
   // intent. `#demo` alone still shows the picker, which is what a generic "walk through a demo" wants.
