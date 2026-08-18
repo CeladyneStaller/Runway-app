@@ -953,7 +953,19 @@ const fmtLeft = (ms) => {
  *  for twelve hours. Saying otherwise would train people to distrust the one label whose whole job is
  *  being trusted. What is true, and what it now says, is: kept here, not in an account, and going away
  *  at a time you can see. */
-function DemoPill({ onLeave, onKeep , onSwitch = null}) {
+/** The demo banner.
+ *
+ *  ⚠️ THE ADVISOR VARIANT DROPS TWO OF THE THREE ACTIONS, AND THAT IS NOT COSMETIC.
+ *
+ *  **Switch** offers company demos, and an advisor already has all four as clients — offering to
+ *  swap the portfolio for one of the companies inside it is offering to go backwards.
+ *
+ *  **Keep this** converts a demo document into a real company. An advisor portfolio is not a document:
+ *  there is nothing to keep, and a button that cannot do what it says is worse than no button.
+ *
+ *  So: label, clock, leave.
+ */
+function DemoPill({ onLeave, onKeep, onSwitch = null, advisor = false }) {
   const [left, setLeft] = useState(() => demoRemainingMs());
 
   // Self-contained on purpose — no parent callback, so no dependency to declare and no memo to keep
@@ -977,14 +989,15 @@ function DemoPill({ onLeave, onKeep , onSwitch = null}) {
   const soon = left !== null && left <= 60 * 60 * 1000;
   return (
     <span className={"demopill" + (soon ? " soon" : "")}>
-      <i />Demo · {left === null ? "not saved to an account" : `resets in ${fmtLeft(left)}`}
+      <i />{advisor ? "Advisor demo" : "Demo"} · {left === null ? "not saved to an account" : `resets in ${fmtLeft(left)}`}
       {/* ⚠️ SWITCH SITS FIRST AND IS THE ONLY ONE IN THE ACCENT COLOUR. Keep and Leave are exits;
           switching is what somebody actually wants while exploring, and the order should say which is
           which.
           ⚠️ AND IT DOES NOT CONFIRM. Nothing is saved, so there is nothing to lose — **a confirmation
           on a demo teaches people the app is nervous about actions that cost nothing.** */}
-      {onSwitch && <button className="linkbtn demo-switch" onClick={onSwitch}>Switch company</button>}
-      <button className="linkbtn" onClick={onKeep}>Keep this</button>
+      {!advisor && onSwitch &&
+        <button className="linkbtn demo-switch" onClick={onSwitch}>Switch company</button>}
+      {!advisor && <button className="linkbtn" onClick={onKeep}>Keep this</button>}
       <button className="linkbtn" onClick={onLeave}>Leave demo</button>
     </span>
   );
@@ -1594,6 +1607,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // list of them. Entering a client hands over to the ordinary app — same tabs, same permission rules,
   // no second implementation of anything — and `advisorHome` is how they get back.
   if (advisorHome && mayPortfolio) return (
+    <>
+      {/* ⚠️ THE PORTFOLIO HAD NO BANNER AT ALL. Every company demo says what it is and how long it
+          lasts; the advisor demo said nothing — **so the one screen an advisor evaluates the product on
+          was the one screen that did not tell them it was a demo.** */}
+      {demo && <div className="demobar"><DemoPill advisor onLeave={onLeaveDemo} /></div>}
     <AdvisorHome
       account={getAccountApi()}
       onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
@@ -1613,6 +1631,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
         } catch (e) { setErr?.(e?.message || String(e)); }
       }}
     />
+    </>
   );
 
   if (showAccount) return (

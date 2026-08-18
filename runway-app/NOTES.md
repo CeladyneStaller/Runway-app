@@ -1950,6 +1950,23 @@ without the second.
 `hashDemoId()` is now the single parser: three pieces of state seed from it and the entry path reads it.
 **Separate regexes would drift the first time the format changed.**
 
+### The advisor portfolio had no demo banner
+
+Every company demo says what it is and how long it lasts. **The portfolio said nothing — so the one
+screen an advisor evaluates the product on was the one screen that did not tell them it was a demo.**
+
+**⚠️ AND IT DROPS TWO OF THE THREE ACTIONS, WHICH IS NOT COSMETIC.**
+
+**Switch** offers company demos, and an advisor already has all four as clients — **offering to swap the
+portfolio for one of the companies inside it is offering to go backwards.**
+
+**Keep this** converts a demo document into a real company. **An advisor portfolio is not a document:
+there is nothing to keep**, and a button that cannot do what it says is worse than no button.
+
+So: `Advisor demo · resets in 11h · Leave demo`. One component with a flag rather than a second pill —
+the clock, the expiry warning and the leave path are identical, and **a copy would be the one that stops
+counting down when somebody changes the window.**
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**
