@@ -1607,12 +1607,8 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // list of them. Entering a client hands over to the ordinary app — same tabs, same permission rules,
   // no second implementation of anything — and `advisorHome` is how they get back.
   if (advisorHome && mayPortfolio) return (
-    <>
-      {/* ⚠️ THE PORTFOLIO HAD NO BANNER AT ALL. Every company demo says what it is and how long it
-          lasts; the advisor demo said nothing — **so the one screen an advisor evaluates the product on
-          was the one screen that did not tell them it was a demo.** */}
-      {demo && <div className="demobar"><DemoPill advisor onLeave={onLeaveDemo} /></div>}
     <AdvisorHome
+      banner={demo ? <DemoPill advisor onLeave={onLeaveDemo} /> : null}
       account={getAccountApi()}
       onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
       onEnterCompany={async (id, view) => {
@@ -1631,7 +1627,6 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
         } catch (e) { setErr?.(e?.message || String(e)); }
       }}
     />
-    </>
   );
 
   if (showAccount) return (

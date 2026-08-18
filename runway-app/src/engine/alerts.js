@@ -107,7 +107,19 @@ const unallocated = (doc, parts) => {
   const emp = doc.employees || [];
   const rProjects = parts?.rProjects || [];
   if (!emp.length || !rProjects.length) return null;
-  const charged = new Set(rProjects.flatMap(p => (p.team || []).map(t => t.employeeId || t.id)));
+  // ⚠️ `p.team` IS THE FIELD NOTHING HAS EVER WRITTEN — the same one that made `pay.allocation` draw
+  // an empty chart for every company. Read alone it means **every employee is uncharged**, so this
+  // alert has been firing "N people are not charged to any project" at companies whose people are
+  // fully allocated.
+  //
+  // The real sources are the ones the allocation view uses: grant personnel, `isLabor` lines, and
+  // internal `p.labor`.
+  const charged = new Set(rProjects.flatMap(p => [
+    ...(p.team || []).map(t => t.employeeId || t.id),
+    ...(p.labor || []).map(l => l.employeeId),
+    ...(p.lines || []).filter(l => l.isLabor).map(l => l.employeeId),
+    ...((p.grant?.categories?.personnel) || []).map(l => l.employeeId),
+  ].filter(Boolean)));
   const idle = emp.filter(e => !charged.has(e.id));
   if (!idle.length) return null;
   return {

@@ -65,7 +65,12 @@ function useClients(account) {
             parts = { ...parts, rows: rows2 };
             months = clean(runwayMonths(doc));
             cash = clean(doc.cash);
-            attention = (alertsFor("dash", doc, parts) || []).length;
+            // ⚠️ EVERY TAB, NOT JUST `dash`. An advisor's question is "does this client need me",
+            // and **the answer is rarely on the dashboard** — it is an uncovered commitment, a
+            // payroll collision, a grant with no drawdown. Counting one tab's alerts reported zero
+            // for companies with real problems, which is worse than reporting nothing at all.
+            attention = ["dash", "flow", "pay", "proj", "sales", "inv", "cmt", "hist"]
+              .reduce((n, tab) => n + (alertsFor(tab, doc, parts) || []).length, 0);
           } catch (e) { failed = e?.message || "This model could not be read."; doc = null; }
         }
         setRows(prev => prev.map(r => (r.id === c.id
@@ -164,7 +169,7 @@ function Portfolio({ rows, onOpen }) {
   );
 }
 
-export function AdvisorHome({ account, onEnterCompany, onOpenSettings }) {
+export function AdvisorHome({ account, onEnterCompany, onOpenSettings , banner = null}) {
   const { rows, loading, err } = useClients(account);
   const [at, setAt] = useState("portfolio");        // "portfolio" | a company id
 
@@ -230,7 +235,14 @@ export function AdvisorHome({ account, onEnterCompany, onOpenSettings }) {
       <main className="main">
         <div className="topbar">
           <div>
-            <span className="eyebrow">{here ? "Advising · read only" : "Advisor"}</span>
+            {/* ⚠️ THE BANNER BELONGS BESIDE THE LABEL IT QUALIFIES, not on a row of its own above
+                the page. "Advisor" and "Advisor demo" answer the same question — what am I looking at —
+                and separating them makes the second look like a system message rather than an
+                adjective on the first. */}
+            <span className="eyebrow-row">
+              <span className="eyebrow">{here ? "Advising · read only" : "Advisor"}</span>
+              {banner}
+            </span>
             <h1 className="h1">{here ? here.name : "Your portfolio"}</h1>
           </div>
           {/* THE AVATAR IS ON EVERY SCREEN OR IT IS ON NONE. It was in the company app's header and
@@ -245,7 +257,9 @@ export function AdvisorHome({ account, onEnterCompany, onOpenSettings }) {
                 Open {here.name} →
               </button>
             )}
-            <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />
+            {/* ⚠️ NO PROFILE IN THE DEMO. There is no account behind it — every item in that menu
+                either does nothing or offers to change settings for a person who does not exist. */}
+            {!banner && <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />}
           </div>
         </div>
 

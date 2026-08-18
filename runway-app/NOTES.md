@@ -1967,6 +1967,30 @@ So: `Advisor demo · resets in 11h · Leave demo`. One component with a flag rat
 the clock, the expiry warning and the leave path are identical, and **a copy would be the one that stops
 counting down when somebody changes the window.**
 
+### The attention column was empty because it counted ONE tab
+
+`alertsFor("dash", …)` — and **an advisor's question is rarely answered on the dashboard.** It is an
+uncovered commitment, a payroll collision, a grant with no drawdown. Counting one tab reported zero for
+companies with real problems, **which is worse than reporting nothing**, because a zero looks checked.
+
+**⚠️ AND ONE ALERT WAS READING `p.team`, THE FIELD NOTHING WRITES** — the same dead field that made
+`pay.allocation` draw an empty chart. Read alone it means every employee is uncharged, so
+**"N people are not charged to any project" has been firing at companies whose people are fully
+allocated.** It now reads the sources the allocation view uses: grant personnel, `isLabor` lines and
+internal `p.labor`.
+
+**That is the second consumer of `.team` found this session**, and the grep that found it was run when
+the chart was fixed — **I saw `alerts.js` in the results, said it was worth checking, and did not check
+it.** Noting that specifically: a known unchecked lead is worse than an unknown one, because it feels
+handled.
+
+**The banner moved beside the eyebrow** rather than sitting on its own row. "Advisor" and "Advisor demo"
+answer the same question — what am I looking at — and separating them makes the second read as a system
+message rather than an adjective on the first.
+
+**And the profile menu is hidden in the demo:** there is no account behind it, so every item either does
+nothing or offers to change settings for a person who does not exist.
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**
