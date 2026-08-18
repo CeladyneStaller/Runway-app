@@ -1867,6 +1867,32 @@ is a link that carries the intent, so "Walk through a demo" points at `#demo` an
 point at `#demo=grant-startup`. **A test asserts every archetype id resolves**, because those are URLs
 the site will hand out and never update again.
 
+### The site was sending `?demo=1`, which the app has never read
+
+**Eight links across seven pages, all dead.** The app reads `#demo` from the hash; the site sent a query
+string. **Nothing errored — the app opened at the landing screen and the visitor saw a normal front
+door**, which is why nobody reported it.
+
+Fixed, and **each page now points at the company that demonstrates its own subject** rather than all at
+the picker:
+
+    /                     #demo                  Walk through a demo
+    /advisors             #demo                  Walk through a demo
+    /product/payroll      #demo=hardware-vc      See it on a hardware demo
+    /product/funded-work  #demo=grant-startup    Walk through a grant-funded demo
+    /product/scenarios    #demo=grant-startup    Try it on a grant-funded demo
+    /product/commitments  #demo=nonprofit        See it on a non-profit demo
+    /writing/…-lag        #demo=grant-startup    See it on a grant-funded demo
+
+**⚠️ A COMMITMENTS PAGE SENDING SOMEBODY TO A PICKER ASKS THEM TO GUESS WHICH OF FOUR SAMPLES HAS AN
+UNCOVERED COMMITMENT.** The page already knows the answer, so it should carry it.
+
+**`saas` is linked from nowhere**, because no subscriptions page exists — a content gap rather than a
+bug, and worth knowing before writing one.
+
+**Every id used was checked against `ARCHETYPES`.** These are URLs the site hands out and never revisits;
+renaming an archetype breaks them silently, which is the same failure this fix just repaired.
+
 ## Four demo companies, and a canary kept out of reach
 
 `demoDoc(which)` builds one of four archetypes; **the original `Demo Company` survives as
