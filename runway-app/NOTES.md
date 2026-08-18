@@ -1777,6 +1777,32 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### Triage instead of two view trees — Corey's call, and the right one
+
+Two fixes rather than a mobile tree. **The risk I flagged was real enough that he pulled back, and the
+screenshot showed both problems were narrower than the architecture question suggested.**
+
+**⚠️ MY TABLE FIX WAS BROKEN.** `thead,tbody{display:table}` makes two SEPARATE table boxes that compute
+column widths INDEPENDENTLY — **the scroll worked and the header stopped lining up with the body**,
+which is worse than the clipping it replaced. `display:block` on the TABLE alone keeps one internal
+layout and scrolls it; the minimum belongs on the table.
+
+**⚠️ THE RIGHT GUTTER WAS SIZED FOR THE NUMBERS AND NOT THE WORD ABOVE THEM.** Five tick labels need
+~30px; "Subscribers" needs ~62. So a chart with a NAMED right axis overflowed while its ticks fitted
+fine. 72 now, and **the title is anchored to the canvas edge rather than the plot edge** — so a long
+series name grows INTO the gutter it was given instead of deciding whether the chart overflows.
+
+**⚠️ AND `.hv-fo{overflow:visible}` WAS THE PAGE-LEVEL OVERFLOW.** A tooltip near the right edge painted
+outside the canvas, outside the panel and past the viewport — **which clips EVERYTHING at the right edge
+on a phone, not just the chart.** That is the whole-page cut in Corey's screenshot. It existed so an
+edge tooltip would not be halved, and `placeTip` already flips before the edge, so it was covering a
+case that no longer happens.
+
+**`placeTip` defaulted to 210 while the `foreignObject` is 230** — a 20px escape that was harmless
+while overflow was visible and a horizontal scrollbar the moment it was not. **A default that disagrees
+with the element it positions is a bug waiting for the other thing to change.** Corrected, and clamped
+at both ends: zero escapes across 73 pointer positions.
+
 ### ⚠️ I TURNED EVERY SUB-TAB BAR IN THE PRODUCT VERTICAL
 
 `.subtabs` already existed as the app's horizontal sub-tab row — Cash flow, Payroll and the rest use it.

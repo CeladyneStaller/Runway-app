@@ -297,8 +297,13 @@ const Axes = ({ s, xs, ticks, format, sRight = null, rightFormat = null,
             </text>
           );
         })}
+        {/* ⚠️ ANCHORED TO THE CANVAS EDGE, NOT THE PLOT EDGE. Starting at the plot and running right
+            means a long series name decides whether the chart overflows — anchoring END at the edge
+            makes the title grow INTO the gutter it was given, which is what the gutter is for.
+            (And the comment goes OUTSIDE the conditional: a bare comment inside `&& (...)` is an empty
+            object, which is what white-screened the password page.) */}
         {rightTitle && (
-          <text x={W - pad.r + 5} y={pad.t - 6} className="ch-axt" textAnchor="start">{rightTitle}</text>
+          <text x={W - 6} y={pad.t - 6} className="ch-axt" textAnchor="end">{rightTitle}</text>
         )}
       </g>
     )}

@@ -186,9 +186,11 @@ export function padFor({ rightAxis = false, titled = false, categorical = false,
   return {
     // A rotated title needs room OUTSIDE the tick labels, which already set this width.
     l: base.l + (titled ? 14 : 0),
-    // FIVE TICK LABELS PLUS A TITLE, and two more so the longest label is not flush against the panel
-    // edge — the same reason the legend needed clearance from the 16px corner.
-    r: base.r + (rightAxis ? 46 : 0),
+    // ⚠️ THE TITLE IS WIDER THAN THE TICKS AND IT WAS THE THING OVERFLOWING. Five labels need ~30px;
+    // "Subscribers" needs ~62. **I sized this gutter for the numbers and forgot the word above them**,
+    // so a chart with a named right axis ran past the panel edge while its ticks fitted fine.
+    // 72 clears the longest series name this product produces, plus the 5px offset and a margin.
+    r: base.r + (rightAxis ? 72 : 0),
     // So a title clears the frame rather than sitting on it.
     t: base.t + (titled ? 10 : 0),
     // Category names wrap where `Jul 26` does not.

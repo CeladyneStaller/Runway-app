@@ -112,10 +112,16 @@ export function indexAt(px, { left, width, n }) {
  *  ⚠️ IT FLIPS BEFORE THE EDGE AND NEVER COVERS THE HOVERED COLUMN. A tooltip that hides the thing it
  *  describes makes people move the pointer to see what they were reading, which moves the tooltip.
  */
-export function placeTip(px, py, { w, h, tipW = 210, tipH = 120, gap = 14 }) {
+export function placeTip(px, py, { w, h, tipW = 230, tipH = 120, gap = 14 }) {
+  // ⚠️ 230, WHICH IS THE `foreignObject`'S ACTUAL WIDTH. It defaulted to 210 while the element was 230,
+  // so a tooltip at the far right edge escaped by 20px — harmless while the layer had
+  // `overflow:visible` and a horizontal page scroll the moment it did not.
+  // **A default that disagrees with the element it positions is a bug waiting for the other thing to
+  // change**, which is exactly what happened.
   const flip = px + gap + tipW > w;
   return {
-    x: Math.max(4, flip ? px - gap - tipW : px + gap),
+    // Clamped to the canvas at BOTH ends, so no pointer position can push it out.
+    x: Math.min(Math.max(4, flip ? px - gap - tipW : px + gap), Math.max(4, w - tipW - 4)),
     y: Math.max(4, Math.min(h - tipH - 4, py - tipH / 2)),
     flipped: flip,
   };

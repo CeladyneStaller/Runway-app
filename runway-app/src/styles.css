@@ -1778,7 +1778,11 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .hv-hit{cursor:crosshair;outline:none}
 .hv-hit:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
 .hv-guide{stroke:var(--muted-2);stroke-width:1;stroke-dasharray:3 3;pointer-events:none}
-.hv-fo{pointer-events:none;overflow:visible}
+/* ⚠️ `overflow:visible` LET THE TOOLTIP PAINT OUTSIDE THE CANVAS — and outside the panel, and past the
+   viewport, which is horizontal page overflow on a phone that clips EVERYTHING at the right edge, not
+   just the chart. It was there so a tooltip near an edge would not be cut in half; `placeTip` already
+   flips it before the edge, so the escape hatch was covering a case that no longer happens. */
+.hv-fo{pointer-events:none}
 .hv-tip{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 11px;
   box-shadow:0 8px 22px rgba(12,26,34,.14);font-family:var(--fb);font-size:11.5px;color:var(--ink)}
 .hv-m{font-family:var(--fm);font-size:10px;color:var(--muted-2);margin-bottom:6px;padding-bottom:5px;
@@ -1907,6 +1911,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
    surrounding prose still. **A panel that scrolls sideways as a whole moves its own title off screen**,
    which is worse than the clipping it fixes. */
 @media (max-width:900px){
+  /* The panel keeps `overflow:hidden` for its corner; the TABLE scrolls within it. */
   .panel > .tbl,
   .panel .tbl{
     display:block;
@@ -1916,7 +1921,12 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
        honest answer, not a squeeze that makes every cell unreadable. */
     min-width:100%;
   }
-  .panel .tbl thead,.panel .tbl tbody{display:table;width:100%;min-width:520px}
+  /* ⚠️ NOT `thead,tbody{display:table}` — THAT WAS THE BUG IN MY FIRST ATTEMPT. Two separate `table`
+     boxes compute their column widths INDEPENDENTLY, so the header stops lining up with the body: the
+     scroll works and the columns no longer mean anything.
+     `display:block` on the TABLE alone keeps one internal table layout and scrolls it, which is the
+     whole pattern. The minimum goes on the table so the columns stay legible instead of crushing. */
+  .panel .tbl{min-width:520px}
 
   /* Stat rows: `auto-fill` already wraps them, but the minimum was set for a desktop column. */
   .stats{grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}
@@ -1927,7 +1937,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
      viewport minus 36px of panel inset — technically fitting and practically unreadable, because the
      numbers inside them are the point and they truncate first. */
   .stats{grid-template-columns:1fr}
-  .panel .tbl thead,.panel .tbl tbody{min-width:460px}
+  .panel .tbl{min-width:460px}
 }
 
 /* ---- mobile: chart text ----
