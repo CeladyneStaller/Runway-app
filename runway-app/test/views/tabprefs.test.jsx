@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { RunwayApp } from "../../src/App";
 import { LayoutSection } from "../../src/views/Account";
 import { TabPrefsProvider, TAB_REGISTRY } from "../../src/state/tabprefs";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 const app = (prefs) => {
   function H() {

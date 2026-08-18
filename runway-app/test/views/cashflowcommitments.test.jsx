@@ -6,7 +6,7 @@ import { StartCtx } from "../../src/state/StartCtx";
 import { buildProjection } from "../../src/engine/projection";
 import { buildModelFromDoc } from "../../src/engine/buildmodel";
 import { addManual } from "../../src/engine/commitments";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 afterEach(cleanup);
 const rowsOf = (d) => buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});

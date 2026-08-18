@@ -3,7 +3,7 @@
 // and per-100h is null for non-grant staff.
 import { describe, it, expect } from "vitest";
 import { laborPriorities } from "../../src/engine";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 function withToggles(d) { d.settings.toggles = { committed: true, expected: true, speculative: false, financing: false }; return d; }
 

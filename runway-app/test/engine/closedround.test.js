@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compileInstrument, instConf } from "../../src/engine/capital.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 describe("a round marked closed", () => {
   const r = (demoDoc().rounds || []).find(x => x.kind === "equity");

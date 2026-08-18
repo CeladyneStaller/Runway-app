@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import React, { useState } from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 // stateful harness so the component actually re-renders on setDoc (the inner RunwayApp is controlled)
 function fringeTab(initial) {

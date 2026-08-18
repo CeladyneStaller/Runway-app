@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { CHARTS, chartsForTab, defaultChartFor, buildChart } from "../../src/engine/charts.js";
 import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
-import { demoDoc, emptyDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc, emptyDoc } from "../../src/state/document.js";
 
 const parts = (doc) => {
   const p = buildModelParts(doc);

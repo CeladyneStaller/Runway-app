@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { FACTORS, factorById, itemsOf, dateRemovable, buildPatches } from "../../src/engine/factors.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 describe("the factor registry", () => {
   it("COVERS THE EIGHT BUCKETS, plus cash and confidence", () => {

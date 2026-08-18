@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import React, { useState } from "react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 function H(props = {}) {
   const [d, s] = useState(demoDoc());

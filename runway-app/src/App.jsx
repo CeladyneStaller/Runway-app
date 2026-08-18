@@ -41,6 +41,7 @@ import { Landing } from "./views/Landing";
 import { Setup } from "./views/Setup";
 import { hasSubstance } from "./views/chrome/docsummary";
 import { demoDoc, emptyDoc, toJSON, fromJSON } from "./state/document";
+import { DemoPicker } from "./views/chrome/DemoPicker";
 import { roundMS, msTarget, msPass, msGap } from "./engine/capital";
 import { track } from "./state/funnel";
 import { money, moneyFull } from "./engine/money";
@@ -81,7 +82,7 @@ import mark from './assets/waterline-mark.svg';
 const isEmptyDoc = (d) => !d?.employees?.length && !d?.lines?.length && !d?.projects?.length
   && !d?.rounds?.length && !d?.pos?.length;
 
-function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
+function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTerms, onSignOutTerms, onOpenAccount, onOpenSettings, demo = false, onLeaveDemo, onKeepDemo = () => {},
                     companyName = null, tabPrefs, onSetup = null,
                     membership = null, companyHidden = [],
                     startView = null, onBackToPortfolio = null }) {
@@ -602,7 +603,8 @@ function RunwayApp({ doc, setDoc, termsRequired, onAcceptTerms, onSignOutTerms, 
                   the tab to say which one they are in — "Startup runway" is the same on all of them. */}
               <span className="eyebrow">{companyName || (demo ? doc.name : null) || "Untitled model"}</span>
               {demo
-                ? <DemoPill onLeave={onLeaveDemo} onKeep={() => onKeepDemo(doc)} />
+                ? <DemoPill onLeave={onLeaveDemo} onKeep={() => onKeepDemo(doc)}
+                            onSwitch={onSwitchDemo} />
                 : <><SyncPill />
                     {/* THE AVATAR REPLACES THE EMAIL PILL, in the header where that pill was. It was
                         beside the runway readout, which put an account control inside the reading of a
@@ -949,7 +951,7 @@ const fmtLeft = (ms) => {
  *  for twelve hours. Saying otherwise would train people to distrust the one label whose whole job is
  *  being trusted. What is true, and what it now says, is: kept here, not in an account, and going away
  *  at a time you can see. */
-function DemoPill({ onLeave, onKeep }) {
+function DemoPill({ onLeave, onKeep , onSwitch = null}) {
   const [left, setLeft] = useState(() => demoRemainingMs());
 
   // Self-contained on purpose — no parent callback, so no dependency to declare and no memo to keep
@@ -974,6 +976,12 @@ function DemoPill({ onLeave, onKeep }) {
   return (
     <span className={"demopill" + (soon ? " soon" : "")}>
       <i />Demo · {left === null ? "not saved to an account" : `resets in ${fmtLeft(left)}`}
+      {/* ⚠️ SWITCH SITS FIRST AND IS THE ONLY ONE IN THE ACCENT COLOUR. Keep and Leave are exits;
+          switching is what somebody actually wants while exploring, and the order should say which is
+          which.
+          ⚠️ AND IT DOES NOT CONFIRM. Nothing is saved, so there is nothing to lose — **a confirmation
+          on a demo teaches people the app is nervous about actions that cost nothing.** */}
+      {onSwitch && <button className="linkbtn demo-switch" onClick={onSwitch}>Switch company</button>}
       <button className="linkbtn" onClick={onKeep}>Keep this</button>
       <button className="linkbtn" onClick={onLeave}>Leave demo</button>
     </span>
@@ -1153,7 +1161,7 @@ const isDefaultName = (n) => !n || !String(n).trim() || String(n).trim() === "Un
  *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
-function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
+function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = null}) {
   // An invitation is answered BEFORE the model loads. Somebody arriving on a link is not here to look
   // at their own numbers, and dropping them into a dashboard with a banner would bury the decision.
   const [termsRequired, setTermsRequired] = useState(null);
@@ -1617,7 +1625,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo }) {
   );
 
   return <>
-    <RunwayApp doc={doc} setDoc={setDoc} demo={demo}
+    <RunwayApp onSwitchDemo={onSwitchDemo} doc={doc} setDoc={setDoc} demo={demo}
       termsRequired={termsRequired}
       onAcceptTerms={async (v) => { await getAccountApi()?.acceptTerms?.(v); setTermsRequired(null); }}
       onSignOutTerms={() => getAuthAdapter()?.signOut?.()} onLeaveDemo={onLeaveDemo} onKeepDemo={onKeepDemo}
@@ -1709,10 +1717,21 @@ export default function App() {
     return wanted;
   });
 
-  const enterDemo = () => {
-    activateDemoBackend(demoDoc());
+  // ⚠️ THE PICKER IS THE ENTRY POINT NOW, not a direct load. Both doors — the landing screen and the
+  // sign-in link — go through `enterDemo`, so hooking it here covers both without a second code path.
+  const [picking, setPicking] = useState(null);   // null | "enter" | "switch"
+  // ⚠️ HELD HERE, BECAUSE THIS SCOPE HAS NO DOCUMENT. `doc` lives inside `DocumentHost`, several
+  // components down — reaching it would mean threading it up through everything in between for one
+  // string. The picker sets it and the picker reads it, so the two cannot disagree.
+  const [demoId, setDemoId] = useState(null);
+  const enterDemo = () => setPicking("enter");
+
+  const openDemo = (which) => {
+    setDemoId(which);
+    activateDemoBackend(demoDoc(which));
     window.location.hash = "#demo";
     setDemo(true);
+    setPicking(null);
   };
   // ENV SAYS HOSTED BUT NOTHING REGISTERED. That combination is a misconfiguration, never a mode: it
   // means enableHostedSync() was not called (most often because the bootstrap in src/main.jsx is
@@ -1775,6 +1794,7 @@ export default function App() {
   };
 
   if (demo) return <DocumentHost demo onKeepDemo={keepDemo}
+                                  onSwitchDemo={() => setPicking("switch")}
     onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />;
 
   if (misconfigured) return (
@@ -1837,6 +1857,14 @@ export default function App() {
   // ⚠️ THE GATE WRAPS THE SIGNED-IN PATH ONLY. The demo, the misconfigured screen and the recovery
   // screen return above this — none of them has a user to ask, and putting a legal prompt in front of
   // the demo would demand acceptance from somebody who has not created an account.
+  if (picking) return (
+    <DemoPicker current={picking === "switch" ? demoId : null}
+                onPick={openDemo}
+                // ⚠️ CANCEL FROM THE BANNER RETURNS TO THE DEMO, not to the landing screen. Somebody
+                // who opened the switcher and changed their mind has not asked to leave.
+                onClose={() => setPicking(null)} />
+  );
+
   return <DocumentHost />;
 }
 

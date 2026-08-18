@@ -3,7 +3,7 @@ import { monthsFromNow, zeroInfo } from "../../src/engine/projection.js";
 import { commitmentPressure } from "../../src/engine/commitments.js";
 import { buildProjection } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 describe("months are measured from today, not from the model's start", () => {
   const today = new Date(2026, 5, 15);          // 15 June 2026

@@ -3,7 +3,7 @@ import { render, cleanup } from "@testing-library/react";
 import React from "react";
 import { Chart } from "../../src/views/chrome/Chart";
 import { buildChart, CHARTS } from "../../src/engine/charts";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 import { buildModelParts } from "../../src/engine/buildmodel";
 
 afterEach(cleanup);

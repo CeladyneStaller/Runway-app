@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { advisorTiles, TILES } from "../../src/engine/advisor.js";
 import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { buildProjection } from "../../src/engine/projection.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 const ctx = (doc) => {
   const p = buildModelParts(doc);

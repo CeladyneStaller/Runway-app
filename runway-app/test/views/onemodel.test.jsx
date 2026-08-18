@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import { useState } from "react";
 import { render } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc, emptyDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc, emptyDoc } from "../../src/state/document";
 import { buildModelFromDoc, buildProjection, anchorToActuals, zeroInfo, HORIZON } from "../../src/engine";
 
 const TOGGLES = [

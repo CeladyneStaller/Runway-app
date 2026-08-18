@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import React from "react";
 import { AdvisorHome } from "../../src/views/chrome/AdvisorHome";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 afterEach(cleanup);
 globalThis.matchMedia ||= () => ({ matches: false, addEventListener() {}, removeEventListener() {} });

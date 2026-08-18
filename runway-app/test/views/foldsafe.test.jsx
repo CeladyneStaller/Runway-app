@@ -25,7 +25,7 @@ describe("expanded-card collapse button doesn't sit on the delete button", () =>
 
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 describe("both controls are present and are different elements", () => {
   it("an expanded card has a collapse button AND a delete button", () => {

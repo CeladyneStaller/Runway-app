@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { emptyDoc, demoDoc } from "../../src/state/document";
+import { emptyDoc, canaryDoc as demoDoc } from "../../src/state/document";
 
 vi.mock("idb-keyval", () => ({ get: async () => undefined, set: async () => {}, keys: async () => [], clear: async () => {} }));
 

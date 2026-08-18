@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import App, { RunwayApp } from "../../src/App";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 const VIEWS = [
   ["dash", "Runway remaining"], ["flow", "Net cash flow"], ["pay", "Payroll"],

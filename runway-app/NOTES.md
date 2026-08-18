@@ -1839,6 +1839,40 @@ exists BEFORE writing a rule for it**, which costs one grep and has now cost fou
 is the same fault as the `agreed` test two turns ago. Comments have to be stripped before any negative
 or counting assertion against source.
 
+## Four demo companies, and a canary kept out of reach
+
+`demoDoc(which)` builds one of four archetypes; **the original `Demo Company` survives as
+`canaryDoc()`** — kept in the code, absent from the picker, and asserted absent by a test.
+
+**⚠️ IT IS THE GOLDEN CANARY: a known runway figure at known toggle settings.** Listing it would let
+somebody edit it into a different sanity check, which is the one thing it cannot survive. **61 test
+files were repointed at `canaryDoc`** so the regression check keeps checking the same thing.
+
+**The four, and what only each one shows:**
+
+    Ridgeline Catalysis    arrears + real lag, cash cost share, an UNFUNDED proposal
+    Kestrel Systems        net-60 orders, a deposit, a conversion in the capital stack
+    Tidewater Alliance     milestone billing, an ADVANCE grant, in-kind cost share
+    Larkspur Analytics     three plans with real churn, an internal project with no revenue
+
+**The test is not "is this realistic" but "does this show a mechanic no other sample shows"** — and a
+test asserts it, mechanic by mechanic, rather than trusting the descriptions.
+
+**⚠️ THE ARCHETYPE SUPPLIES ONLY WHAT DIFFERS.** Structure comes from `emptyDoc()`, so a field added to
+the document later reaches all four without editing any of them. **Four hand-written full documents
+would be four places to forget a schema addition.**
+
+**One picker, two entry points.** `enterDemo` was the single door already, so hooking it covers the
+landing screen and the sign-in link without a second code path. From the banner it opens with the
+current archetype selected — **the radio shows where you ARE, not only where you could go.**
+
+**Switching does not confirm.** Nothing is saved, so there is nothing to lose — **a confirmation on a
+demo teaches people the app is nervous about actions that cost nothing.**
+
+**⚠️ A BULK REWRITE DOUBLE-APPLIED ITSELF**: `canaryDoc as canaryDoc as demoDoc` in 29 files, because
+two of my replacements both matched the same import. Caught by reading the result rather than the
+success message — **the third time this session a bulk edit has produced valid-looking wrong text.**
+
 ## Mobile: four overflows, three different causes
 
 **The runway tile.** `.statuspill` had `min-width:0` at 900px — **which lets a flex box SHRINK and does

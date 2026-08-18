@@ -4,7 +4,7 @@ import { commitmentPressure, promote, addManual, promotable, removeCommitment, m
   from "../../src/engine/commitments.js";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 // THE DEMO NOW CARRIES FIVE COMMITMENTS, one of each flavour, because its job is to demonstrate the
 // product. That makes it the wrong fixture for tests that measure what a commitment DOES — they need a

@@ -5,7 +5,7 @@ import { Commitments } from "../../src/views/Commitments";
 import { buildProjection } from "../../src/engine/projection";
 import { buildModelFromDoc } from "../../src/engine/buildmodel";
 import { addManual, promote } from "../../src/engine/commitments";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 // The demo now ships five commitments to demonstrate them, so it is the wrong fixture for a test about
 // an empty tab or about what a single commitment does.

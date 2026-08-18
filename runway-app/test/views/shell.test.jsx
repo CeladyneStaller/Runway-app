@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { emptyDoc, demoDoc } from "../../src/state/document";
+import { emptyDoc, canaryDoc as demoDoc } from "../../src/state/document";
 
 function mount(initial) {
   let doc = initial;

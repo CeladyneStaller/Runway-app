@@ -1963,3 +1963,14 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   .ch-svg .ch-t{font-size:12px}
   .ch-svg .ch-axt{font-size:13px}
 }
+
+/* ---- demo picker ---- */
+.demo-pick{max-width:560px}
+.demo-opt{display:flex;gap:12px;align-items:flex-start;padding:12px 13px;margin:8px 0;
+  border:1px solid var(--line);border-radius:11px;cursor:pointer;background:var(--card)}
+.demo-opt.on{border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal);background:#F5FBF9}
+.demo-opt input{margin-top:3px;width:15px;height:15px;accent-color:var(--signal);flex:none}
+.demo-n{font-size:13px;font-weight:600;display:block}
+.demo-w{font-size:11.5px;color:var(--muted);display:block;margin-top:2px;line-height:1.45}
+.demo-m{font-family:var(--fm);font-size:10.5px;color:var(--muted-2);display:block;margin-top:5px}
+.demo-switch{color:var(--signal-2)!important;font-weight:600}

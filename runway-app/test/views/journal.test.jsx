@@ -5,7 +5,7 @@ import { useState } from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
 import { SEED_JOURNAL } from "../../src/seed";
-import { demoDoc, emptyDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc, emptyDoc } from "../../src/state/document";
 import { JournalPanel } from "../../src/views/chrome/JournalPanel";
 
 function harness(initial) {

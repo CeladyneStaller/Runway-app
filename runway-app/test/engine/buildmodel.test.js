@@ -3,7 +3,7 @@
 // and it must hit 5.6mo, the same as App's inline assembly.
 import { describe, it, expect } from "vitest";
 import { buildModelFromDoc, buildProjection, zeroInfo } from "../../src/engine";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 describe("buildModelFromDoc reproduces the base pipeline", () => {
   it("the demo doc yields its own runway (3.9mo, shorter than the seed's — it has commitments)", () => {

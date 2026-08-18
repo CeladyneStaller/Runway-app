@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { useState } from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { emptyDoc, demoDoc } from "../../src/state/document";
+import { emptyDoc, canaryDoc as demoDoc } from "../../src/state/document";
 import { buildProjection, zeroInfo, anchorToActuals } from "../../src/engine";
 
 function harness(initial) {

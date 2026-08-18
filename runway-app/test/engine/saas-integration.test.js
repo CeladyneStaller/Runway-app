@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { buildModelFromDoc, buildModelParts } from "../../src/engine/buildmodel";
 import { buildProjection, zeroInfo } from "../../src/engine/projection";
-import { emptyDoc, demoDoc } from "../../src/state/document";
+import { emptyDoc, canaryDoc as demoDoc } from "../../src/state/document";
 import { blankSaas } from "../../src/engine/saas";
 
 const base = (over = {}) => ({

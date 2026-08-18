@@ -6,7 +6,7 @@ import { alertsFor, ALL_RULES } from "../../src/engine/alerts.js";
 import { LENSES, lensFor, chartIdFor, applyLens } from "../../src/engine/lenses.js";
 import { buildChart, defaultChartFor } from "../../src/engine/charts.js";
 import { buildModelParts } from "../../src/engine/buildmodel.js";
-import { demoDoc, emptyDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc, emptyDoc } from "../../src/state/document.js";
 
 const TABS = ["flow", "pay", "proj", "sales", "inv", "hist"];
 const parts = (doc) => buildModelParts(doc);

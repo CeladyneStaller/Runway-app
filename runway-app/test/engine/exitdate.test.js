@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { commitmentPressure, outstandingDebt } from "../../src/engine/commitments.js";
 import { buildProjection } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 const rowsOf = (d) => buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
 // ENOUGH CASH THAT THE DATE HAS ROOM TO MOVE. With the scan anchored after the last actual, the demo's

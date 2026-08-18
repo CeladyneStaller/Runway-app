@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { emptyDoc, demoDoc, migrate, toJSON, fromJSON, SCHEMA_VERSION } from "../../src/state/document";
+import { emptyDoc, canaryDoc as demoDoc, migrate, toJSON, fromJSON, SCHEMA_VERSION } from "../../src/state/document";
 import { burnStats } from "../../src/engine";
 import { seedZero } from "../helpers";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";

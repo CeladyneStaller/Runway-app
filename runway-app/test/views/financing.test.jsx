@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { useState } from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 describe("financing toggle on the dashboard", () => {
   it("renders one financing switch, distinct from the three revenue tiers", () => {

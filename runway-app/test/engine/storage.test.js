@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { clear, get, keys, set } from "idb-keyval";
 import { load, save, flush, LOAD_OK, LOAD_STALE } from "../../src/state/storage";
-import { emptyDoc, demoDoc, SCHEMA_VERSION } from "../../src/state/document";
+import { emptyDoc, canaryDoc as demoDoc, SCHEMA_VERSION } from "../../src/state/document";
 
 beforeEach(() => clear());
 

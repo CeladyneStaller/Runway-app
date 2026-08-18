@@ -3,7 +3,7 @@
 // burn variance is measured (0 when too little history), and financing stays orthogonal.
 import { describe, it, expect } from "vitest";
 import { confidenceBand, burnVariance, buildModelFromDoc, buildProjection, anchorToActuals } from "../../src/engine";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 function withToggles(d) { d.settings.toggles = { committed: true, expected: true, speculative: false, financing: false }; return d; }
 

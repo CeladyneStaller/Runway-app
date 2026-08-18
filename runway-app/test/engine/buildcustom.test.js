@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildCustom } from "../../src/engine/buildcustom.js";
 import { buildChart } from "../../src/engine/charts.js";
 import { applyLens } from "../../src/engine/lenses.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { buildProjection } from "../../src/engine/projection.js";
 import { saveChart, updateChart, savedFor, setDefaultChart, defaultChartId, deleteChart,

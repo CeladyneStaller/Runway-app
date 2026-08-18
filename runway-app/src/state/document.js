@@ -3,6 +3,7 @@
 // The engine never sees this — it takes plain arrays. That seam is what keeps multi-user cheap.
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
+import { ARCHETYPES, archetypeById } from "./archetypes";
 
 export const SCHEMA_VERSION = 9;
 
@@ -106,7 +107,15 @@ const SEED_SCENARIOS = [];
 // The seed's cash, named so the divergence above is about commitments and nothing else.
 const SEED_CASH_DEMO = 560000;
 
-export const demoDoc = () => ({
+/** The original demo, kept and NOT offered to users.
+ *
+ *  ⚠️ IT IS THE GOLDEN CANARY — a known runway figure at known toggle settings, used as the regression
+ *  check through every change in this codebase. **Listing it in the picker would let somebody edit it
+ *  into a different sanity check**, which is the one thing it cannot survive.
+ *
+ *  Tests import this directly. Nothing in the UI reaches it.
+ */
+export const canaryDoc = () => ({
   ...emptyDoc(),
   // HARDCODED on purpose, and the only name in the app that is. Every other document takes its name
   // from the account's company; a demo has no account, so there is nothing to take one from.
@@ -171,6 +180,30 @@ export const demoDoc = () => ({
   // wrong way round. Recurring revenue stays unexercised in the demo — noted rather than hidden.
   scenarios: SEED_SCENARIOS,
 });
+
+/** The demo somebody actually opens.
+ *
+ *  ⚠️ THE ARCHETYPE SUPPLIES ONLY WHAT DIFFERS. Everything structural — schema version, id, settings,
+ *  toggles, code map — comes from `emptyDoc()`, so **a field added to the document later reaches all
+ *  four archetypes without editing any of them.** Four hand-written full documents would be four places
+ *  to forget.
+ *
+ *  An unknown id falls back to the first rather than throwing: a bad link should show somebody a demo,
+ *  not an error.
+ */
+export const demoDoc = (which = "grant-startup") => {
+  const a = archetypeById(which) || ARCHETYPES[0];
+  const built = a.build();
+  const now = new Date();
+  return {
+    ...emptyDoc(),
+    startY: now.getFullYear(), startM: now.getMonth(),
+    // `it` marks the document as a demo for the banner and the save guard.
+    it: "demo",
+    demoId: a.id,
+    ...built,
+  };
+};
 
 // Every schema change appends a step. Never edit an old one — someone's data went through it.
 const MIGRATIONS = {

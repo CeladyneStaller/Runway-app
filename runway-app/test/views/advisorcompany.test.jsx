@@ -4,7 +4,7 @@ import React from "react";
 import { AdvisorCompany } from "../../src/views/chrome/AdvisorCompany";
 import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel";
 import { buildProjection } from "../../src/engine/projection";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 afterEach(cleanup);
 globalThis.matchMedia ||= () => ({ matches: false, addEventListener() {}, removeEventListener() {} });

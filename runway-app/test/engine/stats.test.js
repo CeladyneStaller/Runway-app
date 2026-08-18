@@ -2,7 +2,7 @@
 // mostly about what the output must NOT contain and when it must refuse to produce anything.
 import { describe, it, expect } from "vitest";
 import { companyStats, computeStats, contributes, MIN_COHORT } from "../../src/engine/stats";
-import { emptyDoc, demoDoc } from "../../src/state/document";
+import { emptyDoc, canaryDoc as demoDoc } from "../../src/state/document";
 
 const emp = (name, amount) => ({
   id: "e" + name, name, title: "Engineer", basis: "annual", amount,

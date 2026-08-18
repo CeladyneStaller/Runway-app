@@ -6,7 +6,7 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import React from "react";
 import { OfferedScenarios } from "../../src/views/chrome/OfferedScenarios";
 import { Portfolio } from "../../src/views/chrome/Portfolio";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 afterEach(cleanup);
 

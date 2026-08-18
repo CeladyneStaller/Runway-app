@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 import { applyProfile, mergeImport } from "../../src/engine";
 
 describe("the import modal", () => {

@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp } from "../../src/App";
-import { demoDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc } from "../../src/state/document";
 
 describe("confidence band display", () => {
   it("shows a runway range in addition to the headline number", () => {

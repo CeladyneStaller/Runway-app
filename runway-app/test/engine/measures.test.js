@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { MEASURES, measuresFor, measureById, overlaps, unitsOf, allowedTypes, UNIT_FORMAT, formatFor } from "../../src/engine/measures.js";
 import { DIMENSIONS, dimensionsFor, splitBy, tooManySeries, SERIES_LIMIT } from "../../src/engine/dimensions.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { buildProjection } from "../../src/engine/projection.js";
 

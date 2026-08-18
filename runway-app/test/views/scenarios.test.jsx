@@ -11,7 +11,7 @@ import { render, fireEvent, cleanup } from "@testing-library/react";
 // what pointed here. Same leak that bit the plan-io tests.
 afterEach(cleanup);
 import { RunwayApp } from "../../src/App";
-import { demoDoc, emptyDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc, emptyDoc } from "../../src/state/document";
 import { blankSaas } from "../../src/engine/saas";
 
 function scenariosView(initial) {

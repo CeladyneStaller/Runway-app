@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { overheadHeadroom, overheadAdjustment } from "../../src/engine/factors.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 const run = (d) => zeroInfo(buildProjection(buildModelFromDoc(d), d.settings?.toggles || {}),
                             d.startY, d.startM)?.months;

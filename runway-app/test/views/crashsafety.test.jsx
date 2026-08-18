@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React, { useState } from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { RunwayApp, ViewBoundary } from "../../src/App";
-import { demoDoc, emptyDoc } from "../../src/state/document";
+import { canaryDoc as demoDoc, emptyDoc } from "../../src/state/document";
 
 vi.mock("../../src/views/Milestones", () => ({
   Milestones: () => { throw new Error("deliberate test explosion"); },

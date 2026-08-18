@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { zeroInfo, forecastFrom, anchorToActuals, buildProjection, solvency } from "../../src/engine/projection.js";
 import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { commitmentPressure } from "../../src/engine/commitments.js";
-import { demoDoc } from "../../src/state/document.js";
+import { canaryDoc as demoDoc } from "../../src/state/document.js";
 
 const rowsOf = (d) => buildProjection(buildModelFromDoc(d), d.settings?.toggles || {});
 
