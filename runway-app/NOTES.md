@@ -2033,6 +2033,29 @@ name.**
 **The lesson is the one this session keeps producing**: I invented `closeMonth` because it reads better
 than `closeM`, and **a field name that is nearly right fails exactly like a field that does not exist.**
 
+### ⚠️ I FIXED THE WRONG END OF THE FIELD-NAME MISMATCH
+
+`alerts.js` read `r.closeM`; every document writes `closeMonth`. **I renamed the field in four demo
+companies to match the reader** — and `capital.js` uses `closeMonth` FOURTEEN times, so the rounds
+stopped injecting cash where they should. Kestrel and Larkspur went cash-positive, **which quietly
+removed the runway the demo exists to show.**
+
+**One outlier against fourteen canonical uses, and I changed the fourteen.** The rule I should have
+applied before touching anything: **when a reader and its writers disagree, count them — the minority is
+the bug.**
+
+Reverted, and `alerts.js:181` fixed instead. Runways back: Kestrel 20.0, Larkspur 10.7, Ridgeline 5.4
+with its slip alert still firing.
+
+### And an advisor opening a client got a plain company demo
+
+`onEnterDemoClient` returned before `setEnterView(view)` and `setAdvisorHome(false)` — **the two lines
+that establish the advising context.** So there was no "Advising · read only" and no way back to the
+portfolio: **the exact experience the advisor demo exists to avoid showing.**
+
+**An early return that short-circuits a handler inherits responsibility for everything the handler did
+after that point**, and I checked what it replaced rather than what it skipped.
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**

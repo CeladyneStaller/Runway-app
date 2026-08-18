@@ -178,7 +178,16 @@ const slipRisk = (doc, parts) => {
   const rounds = (doc.rounds || []).filter(r => clean(r.amount) > 0 && r.status !== "closed");
   if (!rounds.length) return null;
   const z = zeroInfo(rowsOf(doc, parts), doc.startY, doc.startM);
-  const soonest = Math.min(...rounds.map(r => clean(r.closeM)));
+  // ⚠️ `closeMonth`, NOT `closeM`. `capital.js` uses `closeMonth` fourteen times and every document in
+  // this codebase writes it — **this line read a field no round has ever had.** `clean(undefined)` is
+  // 0, `Math.min` over zeros is 0, so the guard below compared against the wrong number rather than
+  // failing loudly.
+  //
+  // I chased this from the other end first and renamed the field in four demo companies to match the
+  // reader. **That made the reader work and broke the cash injection**, because `capital.js` then saw
+  // no close month at all — the round money landed at a clamped month instead of before the model
+  // started, and two companies went cash-positive. **The single outlier was the thing to fix.**
+  const soonest = Math.min(...rounds.map(r => clean(r.closeMonth)));
   if (!z || z.months > soonest + 3) return null;
   return {
     id: "slip", tone: "bad",

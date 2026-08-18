@@ -1626,7 +1626,17 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
         // There is no server here — but the document it loads is that archetype's REAL one, so
         // scenarios, charts and every tab behave exactly as they would for a real client.
         // **This is the line that makes the advisor demo the product rather than a screenshot of it.**
-        if (onEnterDemoClient?.(id)) return;
+        if (onEnterDemoClient?.(id)) {
+          // ⚠️ THE ADVISING CONTEXT IS SET BY THE LINES BELOW, AND MY EARLY RETURN SKIPPED THEM. So a
+          // demo advisor opening a client got a plain company demo: no "Advising · read only", no way
+          // back to the portfolio, **the exact experience the advisor demo exists to NOT show.**
+          //
+          // `enterView` is what `onBackToPortfolio` is gated on — a flag that reads as "we arrived here
+          // from a portfolio", which is precisely what just happened.
+          setEnterView(view || "dash");
+          setAdvisorHome(false);
+          return;
+        }
         try {
           const r = await switchCompany(getAuthAdapter(), id);
           if (r?.doc) setDoc(r.doc);
