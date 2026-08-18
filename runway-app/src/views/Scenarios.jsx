@@ -373,12 +373,20 @@ export function Scenarios({ baseDoc, buildModel, scenarios, setScenarios, onAppl
 
   // chart geometry
   const W = 760, H = 280, PADL = 64, PADR = 20, PADT = 20, PADB = 36;
-  const allBal = series.flatMap(s => s.rows.map(r => r.end));
+  // ⚠️ `r.start`, NOT `r.end` — AND THIS IS NOT A DEMO FAULT. `Scenarios` is the shared view, so every
+  // company on every plan has been reading these curves one month early.
+  //
+  // Each projection row carries both, and **`end` of one month IS `start` of the next**, so plotting
+  // `end` against an index labelled by month shows the closing balance under the opening month's name.
+  // `RunwayChart` plots `start` and is the curve people check against.
+  const allBal = series.flatMap(s => s.rows.map(r => r.start));
   const vMax = Math.max(0, ...allBal), vMin = Math.min(0, ...allBal);
   const span = (vMax - vMin) || 1;
   const x = (t) => PADL + (t / HORIZON) * (W - PADL - PADR);
   const y = (v) => PADT + (1 - (v - vMin) / span) * (H - PADT - PADB);
-  const path = (rows) => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(r.end).toFixed(1)}`).join(" ");
+  // The domain above and the path here must read the SAME field, or the curve is scaled against a
+  // range it does not occupy.
+  const path = (rows) => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(r.start).toFixed(1)}`).join(" ");
 
   const baseImpact = useMemo(() => scenarioImpact(baseDoc, emptyScenario()), [baseDoc]);
 

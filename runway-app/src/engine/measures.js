@@ -76,7 +76,11 @@ export const MEASURES = [
     allows: ["lines", "bars"] },
 
   { id: "end", tab: ["flow", "dash", "hist"], label: "Cash on hand", unit: "money",
-    get: (rows) => rows.map(r => r.end),
+    // ⚠️ `r.start` — "cash on hand" in a month is what you HAVE that month, not what is left after
+    // it. Third instance of this field pair being read the wrong way round, after `flow.runway` and
+    // the scenario curves. **`end` of one month is `start` of the next**, so every one of them drew
+    // the right shape one month early.
+    get: (rows) => rows.map(r => r.start),
     hasActual: true,
     actual: (rows, parts, doc) => rows.map((_, m) => Number((doc?.cashActuals || {})[m]) || 0),
     // ⚠️ A POSITION, NOT A FLOW. Balances do not sum, so stacking one is meaningless in EITHER shape —
@@ -234,7 +238,7 @@ export const MEASURES = [
     allows: ["lines", "bars"] },
 
   { id: "cmtCash", tab: ["cmt"], label: "Cash on hand", unit: "money",
-    get: (rows) => rows.map(r => r.end),
+    get: (rows) => rows.map(r => r.start),   // same reading as the `end` measure above
     // A POSITION. On this tab it is the line that rides OVER the stacked obligations — which is only
     // possible because stacking is per measure.
     position: true,

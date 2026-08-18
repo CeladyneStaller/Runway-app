@@ -2033,6 +2033,34 @@ name.**
 **The lesson is the one this session keeps producing**: I invented `closeMonth` because it reads better
 than `closeM`, and **a field name that is nearly right fails exactly like a field that does not exist.**
 
+### ⚠️ `r.end` VERSUS `r.start` — FIVE PLACES, AND ONLY THE FIRST WAS A DEMO FAULT
+
+Corey corrected my framing: the scenario charts were wrong for **every company on every plan**, not just
+the demo. `Scenarios.jsx` is the shared view; the demo was only where he happened to see it.
+
+Every projection row carries both, and **`end` of one month IS `start` of the next.** Plotted against an
+index labelled by month, `end` draws the closing balance under the opening month's name — the right
+shape, one month early.
+
+    charts.js  flow.runway `take()`      fixed
+    charts.js  { id: "cash" } series     fixed
+    Scenarios.jsx  domain + path         fixed  ← every company, not just demos
+    measures.js  { id: "end" }           fixed
+    measures.js  { id: "cmtCash" }       fixed
+
+**Two readers left alone deliberately**: a cumulative series where end-of-month is the correct reading,
+and a commitments cover calculation that is not a plotted balance.
+
+**⚠️ THE SHAPE OF THIS FAULT IS THE POINT.** A field pair where both members are numerically plausible
+and one is silently the neighbouring month's value **cannot be caught by lint, by types, or by a test
+asserting the curve looks right.** The only check that works is the one Corey applied: compare a value
+against the same value somewhere else in the product.
+
+**And I called it an advisor bug twice.** The first fix was in `charts.js` and genuinely reached the
+advisor path first, so I carried that framing into a second report where it did not apply — **the
+correction cost nothing here, but the same framing on a wider bug would have left it in production for
+every paying customer.**
+
 ### The advisor chart plotted every balance one month early
 
 Corey found it precisely: **September's cash on hand drawn under August.** The runway number and the
