@@ -1777,6 +1777,32 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+## Mobile: four overflows, three different causes
+
+**The runway tile.** `.statuspill` had `min-width:0` at 900px — **which lets a flex box SHRINK and does
+nothing to make its contents fit.** Five items in a row (label, number, divider, status, speculative
+flag) need more than 380px, so they overflowed the card rather than the card clipping them. It wraps
+now, and **the speculative flag takes the whole second line**: it is the longest item and the least
+urgent, so it should not be what pushes the runway number off screen.
+
+**⚠️ THE FOUR TABS: `.panel` IS `overflow:hidden` FOR ITS 16px CORNER, SO A WIDE TABLE IS CLIPPED
+RATHER THAN SCROLLABLE.** Cash flow, Sales, Payroll and Projects all put a `.tbl` directly inside a
+`.panel` — six columns at ~90px is ~540px against 344px of usable width, and the last columns were
+simply unreachable. No scrollbar, no hint.
+
+**The TABLE scrolls, not the panel.** A panel scrolling sideways as a whole moves its own title off
+screen, which is worse than the clipping it fixes. And it keeps a 520px minimum rather than squeezing
+six columns into a phone — **the scroll is the honest answer; a squeeze makes every cell unreadable.**
+
+**⚠️ AND THE CHARTS CANNOT BE FIXED FROM THE PAGE AT ALL.** An SVG `viewBox` scales as a unit, so a
+720-wide chart in a 344px panel renders at 0.48 — **8.5px tick text becomes 4.1px.** The text is inside
+the scaled coordinate system, so it has to be made bigger IN that system: 17px in the viewBox lands at
+8.1px rendered. Measured across 380/430/700/900 and it now stays between 8 and 11px instead of falling
+to 4.
+
+**Stats stack one per row below 560.** Two 148px cards fit arithmetically and not practically — the
+numbers inside them are the point, and they truncate first.
+
 ## The setup wizard shapes the app
 
 Three questions with nested children, Corey's wording verbatim. **No question names a tab** — asserted

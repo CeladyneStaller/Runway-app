@@ -413,7 +413,17 @@
      rule the profile menu ended up below the fold on a phone — present in the DOM, invisible in
      practice, which is exactly how it was reported. */
   .topbar{align-items:center}
-  .statuspill{flex:1;min-width:0}
+  /* ⚠️ `min-width:0` LETS THE PILL SHRINK; IT DOES NOT MAKE ITS CONTENTS FIT. The pill is a flex row
+     of label, number, separator, status and the speculative flag — five items that at 380px need more
+     than the width available, so they overflowed the card rather than the card clipping them.
+     Wrapping is the honest fix: the runway number stays whole and the qualifiers move below it. */
+  .statuspill{flex:1;min-width:0;flex-wrap:wrap;row-gap:2px}
+  /* The separator before the status reads as a divider between columns; on a wrapped row it is a
+     stray line at the start of the second line. */
+  .statuspill em{padding-left:0;margin-left:0;border-left:none}
+  /* ⚠️ THE SPECULATIVE FLAG IS THE LONGEST ITEM AND THE LEAST URGENT. It takes the whole second line
+     rather than being the thing that pushes the number off screen. */
+  .statuspill .specflag{flex-basis:100%;margin-top:1px}
   /* Anchored to the right edge rather than to the avatar, which is now flush with it. */
   .pdrop{right:0;left:auto;max-width:calc(100vw - 32px)}
   .stats{grid-template-columns:repeat(2,1fr)}
@@ -1881,3 +1891,52 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .shape-n.sub{font-weight:500;font-size:12px}
 .shape-w{font-size:11px;color:var(--muted);margin-top:2px;display:block}
 .shape-kids{margin:4px 0 0 26px;padding-top:5px;border-top:1px solid var(--line-2)}
+
+
+/* ---- mobile: tables and rows that cannot shrink ----
+   ⚠️ `.panel` IS `overflow:hidden` FOR ITS 16px CORNER, which means a wide table inside it is CLIPPED
+   rather than scrollable — no scrollbar, no hint, and the last columns simply unreachable. Cash flow,
+   Sales, Payroll and Projects all put a `.tbl` directly inside a `.panel`.
+
+   Scrolling the TABLE rather than the panel keeps the corner intact and keeps the header and any
+   surrounding prose still. **A panel that scrolls sideways as a whole moves its own title off screen**,
+   which is worse than the clipping it fixes. */
+@media (max-width:900px){
+  .panel > .tbl,
+  .panel .tbl{
+    display:block;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    /* A minimum keeps columns legible instead of crushing six of them into 380px — the scroll is the
+       honest answer, not a squeeze that makes every cell unreadable. */
+    min-width:100%;
+  }
+  .panel .tbl thead,.panel .tbl tbody{display:table;width:100%;min-width:520px}
+
+  /* Stat rows: `auto-fill` already wraps them, but the minimum was set for a desktop column. */
+  .stats{grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}
+}
+
+@media (max-width:560px){
+  /* ⚠️ ONE STAT PER ROW BELOW 560. Two 148px cards plus the gap is 310px of content in a 380px
+     viewport minus 36px of panel inset — technically fitting and practically unreadable, because the
+     numbers inside them are the point and they truncate first. */
+  .stats{grid-template-columns:1fr}
+  .panel .tbl thead,.panel .tbl tbody{min-width:460px}
+}
+
+/* ---- mobile: chart text ----
+   ⚠️ AN SVG `viewBox` SCALES AS A UNIT, so a chart in a 344px panel renders at 0.48 and its 8.5px tick
+   text becomes 4.1px. **No amount of CSS on the page fixes this** — the text is inside the scaled
+   coordinate system, so it has to be made bigger IN THAT SYSTEM to come out the same size on screen.
+   Roughly doubling at phone widths lands the ticks near 8px rendered, which is small but legible. */
+@media (max-width:560px){
+  .ch-svg .ch-t{font-size:17px}
+  .ch-svg .ch-axt{font-size:19px}
+  .ch-legend{font-size:12px}
+  .svgc .gr,.svgc text.gr{font-size:17px}
+}
+@media (min-width:561px) and (max-width:900px){
+  .ch-svg .ch-t{font-size:12px}
+  .ch-svg .ch-axt{font-size:13px}
+}
