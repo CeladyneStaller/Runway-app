@@ -1777,6 +1777,25 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### ⚠️ THE RAIL GREW ON SHORT PAGES — `min-height:100vh` WITH NO ROW SIZING
+
+Corey measured it: 107px on tabs with sub-tabs, **288px on Milestones, Commitments and Scenarios.**
+
+`.shell` is `min-height:100vh`. On desktop it is `212px 1fr` — two COLUMNS, so the rail's height is the
+viewport either way and the constraint is invisible. Stacked on a phone it becomes two ROWS **with no
+`grid-template-rows`, so the leftover height is split between them** — and a short page gives the rail
+more of it.
+
+`grid-template-rows:auto 1fr`. **The rail's height is a property of the rail, not of how much content
+happens to sit under it**, and `1fr` on the content is what `min-height:100vh` was for in the first
+place.
+
+**⚠️ AND I COULD NOT FIND THIS FROM THE CODE.** I spent five calls on the wrong element and made a
+prediction that was backwards — that tabs WITH sub-tabs would have more space. **The measurement found
+it in one step.** Worth recording as the method: for a layout fault, two computed heights from the
+inspector beat any amount of reading, and I should ask for them earlier rather than narrowing by
+inference.
+
 ### Triage instead of two view trees — Corey's call, and the right one
 
 Two fixes rather than a mobile tree. **The risk I flagged was real enough that he pulled back, and the

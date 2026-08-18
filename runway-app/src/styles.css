@@ -390,7 +390,14 @@
 .basehint b{font-weight:600}
 
 @media (max-width:900px){
-  .shell{grid-template-columns:1fr}
+  /* ⚠️ `min-height:100vh` WITH TWO ROWS AND NO `grid-template-rows` SPLITS THE LEFTOVER HEIGHT BETWEEN
+     THEM. On desktop that is invisible — the rail is a column beside the content and its height is the
+     viewport either way. Stacked on a phone the rail becomes a ROW that grows to absorb slack, so a
+     SHORT page gives it more: 107px on a tab with sub-tabs, 288px on Milestones, Commitments and
+     Scenarios, which have less below them.
+     **The rail's height is a property of the rail, not of how much content happens to be under it.**
+     `auto 1fr` says so: the rail takes what it needs and the content takes the rest. */
+  .shell{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   /* ONE SCROLLING ROW, NOT THREE WRAPPED ONES. Ten items measure roughly 950px of buttons across a
      328px screen, so `flex-wrap:wrap` spent about a fifth of a phone screen on navigation before any
      content appeared. Scrolling is the familiar phone pattern and costs nothing above the fold.
@@ -401,8 +408,9 @@
   .rail::-webkit-scrollbar{display:none}
   .rail > *{flex:none;scroll-snap-align:start}
   /* The brand was `width:100%`, which forced a wrap on its own and defeated the row. */
-  .brand{width:auto}
-  .brand{padding:2px 8px 2px 4px}
+  /* One rule, not two — they were adjacent and the second silently dropped the first's `width:auto`
+     from being visible in review, which is how the duplicates in this file keep accumulating. */
+  .brand{width:auto;padding:2px 8px 2px 4px}
   /* The footer holds the name field and the export buttons, which are gone — but COMPANY SETTINGS is
      in the rail now and must survive. Hiding the whole footer took the settings button with it, which
      is why it could not be reached on a phone at all. */
