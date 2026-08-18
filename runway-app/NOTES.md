@@ -1898,6 +1898,25 @@ pinning the button to the bottom made the gap the main feature. The button now f
 three facts fill the space — **five minutes, no card, build or import — which are the objections, not
 filler.**
 
+### The advisor demo opened Ridgeline — a writer with no reader, again
+
+`openDemo` set `advisorHomeWanted` in `App`. **The flag that actually routes is `advisorHome` in
+`DocumentHost`, and nothing connected them** — so the advisor demo installed its account API, seeded the
+first archetype as a placeholder document, and then rendered that document.
+
+**⚠️ THIS IS THE FAULT THIS CODEBASE PRODUCES MOST OFTEN**, and the fifth instance recorded: `dimOthers`
+had a reader and no writer, `p.team` had readers and no writer, `prefs.subs` had a reader and no writing
+UI, `parts.rows` had a reader that did not exist. **A flag set in one component and read in another is
+only a feature when something joins them.**
+
+**⚠️ AND SEEDING ALONE WOULD HAVE FIXED ONLY HALF OF IT.** `useState(init)` reads its argument once, at
+mount. From the landing screen `DocumentHost` mounts and the seed works; **switching from a company demo
+to the advisor demo it is already mounted, so the seed would be ignored and the portfolio would never
+appear.** Both a seed and an effect — the seed for the mount, the effect for every change after.
+
+`mayPortfolio` is seeded too: it is a permission check against a server that is not there, and a demo
+advisor may see the portfolio by definition.
+
 ### The marketing site hand-off
 
 **`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**

@@ -1163,7 +1163,7 @@ const isDefaultName = (n) => !n || !String(n).trim() || String(n).trim() === "Un
  *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
-function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = null, demoId = null, onEnterDemoClient = null}) {
+function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = null, demoId = null, onEnterDemoClient = null, demoAdvisorHome = false}) {
   // An invitation is answered BEFORE the model loads. Somebody arriving on a link is not here to look
   // at their own numbers, and dropping them into a dashboard with a banner would bury the decision.
   const [termsRequired, setTermsRequired] = useState(null);
@@ -1193,10 +1193,26 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // entry points can open different places and a link can name one.
   const [showAccount, setShowAccount] = useState(null);
   // Advisors land here. Set once the profile says so, and cleared when they enter a client.
-  const [advisorHome, setAdvisorHome] = useState(false);
+  // ⚠️ SEEDED FROM THE PROP. The advisor demo sets `advisorHomeWanted` in `App`, and this is the flag
+  // that actually routes — **the two were never connected, so the demo landed on the first client's
+  // document instead of the portfolio.** A writer with no reader, which is the fault this codebase
+  // produces most often.
+  const [advisorHome, setAdvisorHome] = useState(!!demoAdvisorHome);
   // Whether the portfolio exists for this person at all — an advisor screen, blocked for everybody
   // else rather than merely hidden.
-  const [mayPortfolio, setMayPortfolio] = useState(false);
+  // The demo advisor may see the portfolio by definition — the permission check it would otherwise
+  // do runs against a server that is not there.
+  const [mayPortfolio, setMayPortfolio] = useState(!!demoAdvisorHome);
+
+  // ⚠️ `useState(init)` READS ITS ARGUMENT ONCE, AT MOUNT. Coming from the landing screen
+  // `DocumentHost` mounts and the seed works; **switching from a company demo to the advisor demo it is
+  // already mounted, so the seed would be ignored and the portfolio would never appear.**
+  // A seeded state that must also respond to later changes needs both.
+  useEffect(() => {
+    if (!demoAdvisorHome) return;
+    setAdvisorHome(true);
+    setMayPortfolio(true);
+  }, [demoAdvisorHome]);
   const [landingCompany, setLandingCompany] = useState(null);
   const [enterView, setEnterView] = useState(null);
   const [err, setErr] = useState(null);
@@ -1867,7 +1883,8 @@ export default function App() {
   if (demo) return (
     <>
       {pickerOverlay}
-      <DocumentHost demo demoId={demoId} onKeepDemo={keepDemo}
+      <DocumentHost demo demoId={demoId} demoAdvisorHome={advisorHomeWanted}
+                    onKeepDemo={keepDemo}
                     onEnterDemoClient={(id) => {
                       // Returns true when it handled the entry, so `DocumentHost` knows to stop.
                       const clientDoc = demoAdvisor ? demoClientDoc(id) : null;
