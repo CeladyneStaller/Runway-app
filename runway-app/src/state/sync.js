@@ -17,7 +17,16 @@ let _auth = null;
 let _account = null;
 export const getSessionProvider = () => _session;
 export const getAuthAdapter = () => _auth;
-export const getAccountApi = () => _account;
+/** ⚠️ ONE OVERRIDE, READ BY EVERY CALLER. `getAccountApi()` is called from a dozen places — the
+ *  portfolio, scenarios, plans, members. Patching each to check "am I in the advisor demo" would be
+ *  twelve chances to miss one, and **the one missed would silently fall through to the real API and
+ *  show a demo visitor an empty portfolio or an error.**
+ *
+ *  The demo installs its API here and every surface gets it, including ones added later.
+ */
+let _demoAccount = null;
+export const setDemoAccountApi = (api) => { _demoAccount = api || null; };
+export const getAccountApi = () => _demoAccount || _account;
 
 /**
  * @param getSession  () => Promise<{ access_token } | null>  — from the Supabase SDK

@@ -100,3 +100,47 @@ describe("⚠️ the landing page opens a company directly", () => {
     expect(archetypeById("not-a-company")).toBeNull();
   });
 });
+
+describe("⚠️ the advisor demo is the real advisor experience", () => {
+  it("its clients ARE the four archetypes", async () => {
+    // **Not a fifth sample company** — the portfolio is the four documents that already exist, so
+    // anything an advisor clicks into genuinely models what the row claims.
+    const { createDemoAdvisorApi } = await import("../../src/state/demoadvisor.js");
+    const clients = await createDemoAdvisorApi().listAdvisedCompanies();
+    expect(clients).toHaveLength(ARCHETYPES.length);
+    expect(clients.map(c => c.name)).toEqual(ARCHETYPES.map(a => a.company));
+  });
+
+  it("⚠️ OPENING A CLIENT LOADS THAT ARCHETYPE'S REAL DOCUMENT", async () => {
+    // This is the line that makes the advisor demo the product rather than a screenshot of it —
+    // scenarios, charts and every tab behave as they would for a real client.
+    const { createDemoAdvisorApi, demoClientDoc } = await import("../../src/state/demoadvisor.js");
+    const clients = await createDemoAdvisorApi().listAdvisedCompanies();
+    for (const c of clients) {
+      const doc = demoClientDoc(c.company_id);
+      expect(doc, c.company_id).toBeTruthy();
+      expect(doc.name).toBe(c.name);
+      expect(doc.employees.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not show a demo advisor a paywall", async () => {
+    // Showing them the one part of the product they have not agreed to buy yet is the wrong first
+    // impression.
+    const { createDemoAdvisorApi } = await import("../../src/state/demoadvisor.js");
+    const usage = await createDemoAdvisorApi().advisorUsage();
+    expect(usage.allowed).toBeGreaterThan(usage.used);
+  });
+
+  it("⚠️ THE DEMO API OVERRIDES CENTRALLY, so no caller can miss it", async () => {
+    // `getAccountApi()` is called from a dozen places. Patching each would be twelve chances to miss
+    // one, and **the missed one falls through to the real API and shows an empty portfolio.**
+    const sync = await import("../../src/state/sync.js");
+    const { createDemoAdvisorApi } = await import("../../src/state/demoadvisor.js");
+    const api = createDemoAdvisorApi();
+    sync.setDemoAccountApi(api);
+    expect(sync.getAccountApi()).toBe(api);
+    sync.setDemoAccountApi(null);
+    expect(sync.getAccountApi()).not.toBe(api);
+  });
+});

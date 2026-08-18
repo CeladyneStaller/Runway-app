@@ -1839,6 +1839,31 @@ exists BEFORE writing a rule for it**, which costs one grep and has now cost fou
 is the same fault as the `agreed` test two turns ago. Comments have to be stripped before any negative
 or counting assertion against source.
 
+## The advisor demo, and two icon faults
+
+**⚠️ THE LIVE LANDING PAGE HAD THE WRONG ICON AND NO FOOTER MARK.** I imported
+`assets/waterline-icon.svg` when Corey had specified `icon-192` — **different crops of the same duck**,
+so the header showed a mark that did not match what a phone puts on a home screen. Both now come from
+`public/`, which is the same file the manifest serves.
+
+### The advisor demo is a MODE, not a fifth company
+
+An advisor evaluating Waterline is not asking whether it models THEIR runway — **they are asking whether
+it makes four other people's runways legible on a Tuesday morning.** So the demo seeds no document of
+its own: it installs an account API whose clients ARE the four archetypes.
+
+**⚠️ AND OPENING A CLIENT LOADS THAT ARCHETYPE'S REAL DOCUMENT.** Scenarios, charts, every tab — all
+working on real model data. **A portfolio of mock rows would demo the screen and not the product**, and
+it is the difference Corey asked for explicitly.
+
+**The override is central, in `sync.js`.** `getAccountApi()` is called from a dozen surfaces — the
+portfolio, scenarios, plans, members. **Patching each to ask "am I in the advisor demo" would be twelve
+chances to miss one, and the missed one falls through to the real API and shows a demo visitor an empty
+portfolio.** One variable, read by every caller including ones added later.
+
+**No paywall in the demo** — `advisorUsage` returns seats above the client count. Showing a demo advisor
+the one part of the product they have not agreed to buy yet is the wrong first impression.
+
 ## The landing page
 
 Built to the mockup. **The shipped `waterline-icon.svg`, not a redrawn one** — a landing page with its

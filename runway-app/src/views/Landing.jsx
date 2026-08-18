@@ -1,5 +1,10 @@
 import { ARCHETYPES } from "../state/archetypes";
-import icon from "../assets/waterline-icon.svg";
+// ⚠️ `/icon-192.png` FROM `public/`, NOT THE SVG IN `assets/`. They are different crops of the same
+// duck — the SVG has its own padding and rounding, so the header showed a mark that did not match the
+// one a phone puts on a home screen. **Two versions of a logo is one too many.**
+// A public path rather than an import: it is the same file the manifest serves, already cached.
+const ICON = "/icon-192.png";
+const MARK = "/icon-512.png";
 
 /** The front door.
  *
@@ -19,7 +24,7 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
           <div className="brandrow">
             {/* The shipped app icon, not a redrawn one — a landing page with its own version of the
                 logo is a second mark nobody maintains. */}
-            <img src={icon} width="36" height="36" alt="" className="land-icon" />
+            <img src={ICON} width="36" height="36" alt="" className="land-icon" />
             <span className="land-name">Waterline</span>
           </div>
           <button className="linkbtn" onClick={onSignIn}>Sign in</button>
@@ -140,6 +145,12 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
         </div>
 
         <div className="land-foot">
+          {/* The footer had no mark at all. It is the last thing on the page and the one place a
+              visitor looks for who made this. */}
+          <span className="land-footmark">
+            <img src={MARK} width="20" height="20" alt="" />
+            Waterline
+          </span>
           <span>Already have an account?{" "}
             <button className="linkbtn" onClick={onSignIn}>Sign in</button></span>
           <span>
@@ -148,6 +159,26 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
           </span>
         </div>
       </div>
+
+          {/* ⚠️ ADVISORS ARE A DIFFERENT BUYER, NOT A DIFFERENT PLAN. Somebody managing four clients is
+              not asking whether Waterline models THEIR runway — they are asking whether it makes four
+              other people's runways legible on a Tuesday morning. **The demo they need is the
+              portfolio**, which is why this tile has its own button rather than sharing the four. */}
+          <div className="way way-adv">
+            <div className="way-t">Advise on several companies</div>
+            <div className="way-s">One place for every client model you have been invited to, sorted by
+              who needs you first.</div>
+            <button className="btn-adv" onClick={onCreate}>Get started as an advisor</button>
+            <button className="btn-demo btn-demo-adv" onClick={() => onDemo("advisor")}>
+              <span className="d-t">Open the advisor demo</span>
+              <span className="d-s">See how Waterline can help manage your portfolio — four sample
+                clients, two of them tight</span>
+            </button>
+            <ul className="way-facts">
+              <li>Priced per advisor, not per client</li>
+              <li>Clients invite you; you never hold their data</li>
+            </ul>
+          </div>
     </div>
   );
 }

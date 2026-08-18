@@ -1,7 +1,8 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { hiddenFromAnswers } from "./engine/setupshape";
-import { archetypeById } from "./state/archetypes";
+import { archetypeById, ARCHETYPES } from "./state/archetypes";
+import { createDemoAdvisorApi, isAdvisorDemo, demoClientDoc } from "./state/demoadvisor";
 import { subtabsOf } from "./state/tabprefs";
 import { readOpts, writeOpts, horizonOf } from "./engine/dashopts";
 import { DashOptions } from "./views/chrome/DashOptions";
@@ -24,7 +25,7 @@ import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, p
          demoExpired, demoRemainingMs, stashPromotion, pendingPromotion, clearPromotion,
          markDemoReset, takeDemoReset, switchCompany,
          LOAD_OK, LOAD_STALE, LOAD_FAILED, LOAD_WRONG_COMPANY, clearActiveCompany } from "./state/storage";
-import { getSessionProvider, getAccountApi, getAuthAdapter } from "./state/sync";
+import { getSessionProvider, getAccountApi, getAuthAdapter , setDemoAccountApi} from "./state/sync";
 import { AcceptInvite } from "./views/chrome/Members";
 import { AdvisorScenarios } from "./views/chrome/AdvisorScenarios";
 import { StaleProjects } from "./views/chrome/StaleProjects";
@@ -1162,7 +1163,7 @@ const isDefaultName = (n) => !n || !String(n).trim() || String(n).trim() === "Un
  *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
-function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = null, demoId = null}) {
+function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = null, demoId = null, onEnterDemoClient = null}) {
   // An invitation is answered BEFORE the model loads. Somebody arriving on a link is not here to look
   // at their own numbers, and dropping them into a dashboard with a banner would bury the decision.
   const [termsRequired, setTermsRequired] = useState(null);
@@ -1581,6 +1582,11 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
       account={getAccountApi()}
       onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
       onEnterCompany={async (id, view) => {
+        // ⚠️ IN THE ADVISOR DEMO, ENTERING A CLIENT SWAPS THE DOCUMENT RATHER THAN CALLING THE SERVER.
+        // There is no server here — but the document it loads is that archetype's REAL one, so
+        // scenarios, charts and every tab behave exactly as they would for a real client.
+        // **This is the line that makes the advisor demo the product rather than a screenshot of it.**
+        if (onEnterDemoClient?.(id)) return;
         try {
           const r = await switchCompany(getAuthAdapter(), id);
           if (r?.doc) setDoc(r.doc);
@@ -1732,6 +1738,24 @@ export default function App() {
   // this session with `upBand`, and it is invisible to lint because the reference is legal.
   const openDemo = (which) => {
     setDemoId(which);
+    // ⚠️ THE ADVISOR DEMO IS A MODE, NOT A DOCUMENT. It seeds no company of its own — it installs an
+    // account API whose clients ARE the four archetypes, so opening one loads that archetype's real
+    // document and every advisor surface (portfolio, scenarios, a client's own tabs) works on real
+    // model data. **A portfolio of mock rows would demo the screen and not the product.**
+    if (isAdvisorDemo(which)) {
+      const api = createDemoAdvisorApi();
+      setDemoAdvisor(api);
+      setDemoAccountApi(api);
+      activateDemoBackend(demoDoc(ARCHETYPES[0].id), { replace: true });
+      window.location.hash = "#demo=advisor";
+      setDemo(true);
+      setAdvisorHomeWanted(true);
+      setPicking(null);
+      return;
+    }
+    setDemoAdvisor(null);
+    setDemoAccountApi(null);
+    setAdvisorHomeWanted(false);
     // ⚠️ `replace: true` — WITHOUT IT THE BACKEND KEEPS THE DOCUMENT IT ALREADY HAS. The guard that
     // protects a refresh from re-seeding also blocked a deliberate switch, so the archetype changed and
     // the screen did not.
@@ -1752,6 +1776,10 @@ export default function App() {
   // components down — reaching it would mean threading it up through everything in between for one
   // string. The picker sets it and the picker reads it, so the two cannot disagree.
   const [demoId, setDemoId] = useState(null);
+  // The demo's account API, when the advisor demo is running. Null the rest of the time, so every
+  // advisor surface either gets the real API or this one — never a half-populated mix.
+  const [demoAdvisor, setDemoAdvisor] = useState(null);
+  const [advisorHomeWanted, setAdvisorHomeWanted] = useState(false);
   // ⚠️ THE HASH CAN NAME A COMPANY: `#demo=grant-startup`. The marketing site cannot open a modal in
   // the app — different origin, different build — so the honest hand-off is a link that carries the
   // intent. `#demo` alone still shows the picker, which is what a generic "walk through a demo" wants.
@@ -1840,6 +1868,15 @@ export default function App() {
     <>
       {pickerOverlay}
       <DocumentHost demo demoId={demoId} onKeepDemo={keepDemo}
+                    onEnterDemoClient={(id) => {
+                      // Returns true when it handled the entry, so `DocumentHost` knows to stop.
+                      const clientDoc = demoAdvisor ? demoClientDoc(id) : null;
+                      if (!clientDoc) return false;
+                      activateDemoBackend(clientDoc, { replace: true });
+                      setDemoId(`advisor:${id}`);
+                      setAdvisorHomeWanted(false);
+                      return true;
+                    }}
                     onSwitchDemo={() => setPicking("switch")}
                     onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />
     </>

@@ -1987,9 +1987,9 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .land-icon{border-radius:9px;display:block}
 .land-name{font-family:var(--fd);font-size:16px;font-weight:600;letter-spacing:-.01em}
 
-.land-hero{position:relative;z-index:2;padding:26px 34px 0;display:grid;
-  grid-template-columns:1fr 400px;gap:38px;align-items:center}
-.land-h{font-family:var(--fd);font-size:40px;line-height:1.06;font-weight:700;margin:0 0 14px;
+.land-hero{position:relative;z-index:2;padding:44px 34px 8px;display:grid;
+  grid-template-columns:1fr 470px;gap:44px;align-items:center}
+.land-h{font-family:var(--fd);font-size:46px;line-height:1.06;font-weight:700;margin:0 0 14px;
   letter-spacing:-.025em}
 .land-h em{font-style:normal;color:var(--signal-ink)}
 .land-lead{font-family:var(--fs,Georgia,serif);font-size:16px;line-height:1.6;margin:0 0 8px;max-width:46ch}
@@ -2005,8 +2005,8 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .land-viz-f{display:flex;gap:14px;margin-top:9px;font-size:10px;color:var(--on-dark-mute);flex-wrap:wrap}
 .land-viz-f i{display:inline-block;width:9px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
 
-.ways{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1.35fr;gap:14px;
-  padding:30px 34px 0}
+.ways{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:14px;
+  padding:34px 34px 0}
 .way{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px 19px;
   display:flex;flex-direction:column}
 .way-t{font-family:var(--fd);font-size:15px;font-weight:600;line-height:1.25;margin-bottom:5px}
@@ -2040,6 +2040,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   border-top:1px solid rgba(12,26,34,.08)}
 .land-foot a{color:var(--muted)}
 
+@media (max-width:1080px){.ways{grid-template-columns:1fr 1fr}}
 @media (max-width:900px){
   .land-hero{grid-template-columns:1fr;gap:22px;padding:22px 20px 0}
   .land-h{font-size:30px}
@@ -2048,3 +2049,11 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   .land-top,.land-foot{padding-left:20px;padding-right:20px}
 }
 @media (max-width:560px){.demos{grid-template-columns:1fr}}
+.land-footmark{display:inline-flex;align-items:center;gap:8px;font-weight:600;color:var(--ink)}
+.land-footmark img{border-radius:5px;display:block}
+.way-adv{border-color:#C9D8DE;background:linear-gradient(180deg,#FBFDFD 0%,var(--card) 100%)}
+.btn-adv{font-family:var(--fd);font-size:14px;font-weight:600;padding:11px 20px;border-radius:11px;
+  border:1px solid var(--thrust);background:var(--thrust);color:#F2F8FA;cursor:pointer;
+  align-self:flex-start;margin-bottom:12px}
+.btn-demo-adv{padding:11px 13px}
+.btn-demo-adv:hover{border-color:var(--thrust);background:#F4F9FB}
