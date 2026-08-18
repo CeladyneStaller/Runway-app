@@ -81,3 +81,22 @@ describe("⚠️ four demo companies, and a canary that is not one of them", () 
     }
   });
 });
+
+describe("⚠️ the landing page opens a company directly", () => {
+  it("names every archetype with a label, company and blurb", async () => {
+    // The landing buttons read from `ARCHETYPES` rather than typing the four descriptions a fourth
+    // time — **a hand-written copy is a chance to describe Ridgeline differently from what it
+    // contains.**
+    for (const a of ARCHETYPES) {
+      expect(a.label, a.id).toBeTruthy();
+      expect(a.company, a.id).toBeTruthy();
+      expect(a.blurb.length, a.id).toBeGreaterThan(20);
+    }
+  });
+
+  it("⚠️ EVERY ARCHETYPE ID RESOLVES, so a link cannot land nowhere", () => {
+    // `#demo=grant-startup` is a URL the marketing site will hand out and never update again.
+    for (const a of ARCHETYPES) expect(archetypeById(a.id)?.id).toBe(a.id);
+    expect(archetypeById("not-a-company")).toBeNull();
+  });
+});

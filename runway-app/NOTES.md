@@ -1839,6 +1839,34 @@ exists BEFORE writing a rule for it**, which costs one grep and has now cost fou
 is the same fault as the `agreed` test two turns ago. Comments have to be stripped before any negative
 or counting assertion against source.
 
+## The landing page
+
+Built to the mockup. **The shipped `waterline-icon.svg`, not a redrawn one** — a landing page with its
+own version of the logo is a second mark nobody maintains.
+
+**⚠️ THE FOUR DEMOS ARE ON THE PAGE, AND THEY OPEN DIRECTLY.** A modal asking the question somebody has
+just answered is the app not listening. The picker stays for the banner switch, which is the only place
+the question is still open.
+
+**They read from `ARCHETYPES`.** These four are already described in the registry, the picker and the
+banner — **a fourth hand-written copy is a fourth chance to describe Ridgeline differently from what
+Ridgeline contains.**
+
+**The setup tile's empty space was `margin-top:auto` in a grid cell stretched by its neighbour.** The
+demo tile is tall because it holds four buttons; this one matched it with a third of the content, and
+pinning the button to the bottom made the gap the main feature. The button now follows its text, and
+three facts fill the space — **five minutes, no card, build or import — which are the objections, not
+filler.**
+
+### The marketing site hand-off
+
+**`#demo=grant-startup` opens that company; `#demo` alone shows the picker.**
+
+⚠️ **The site cannot open a modal in the app** — different origin, different build. The honest hand-off
+is a link that carries the intent, so "Walk through a demo" points at `#demo` and a grants page can
+point at `#demo=grant-startup`. **A test asserts every archetype id resolves**, because those are URLs
+the site will hand out and never update again.
+
 ## Four demo companies, and a canary kept out of reach
 
 `demoDoc(which)` builds one of four archetypes; **the original `Demo Company` survives as

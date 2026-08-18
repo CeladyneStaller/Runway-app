@@ -1,6 +1,7 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { hiddenFromAnswers } from "./engine/setupshape";
+import { archetypeById } from "./state/archetypes";
 import { subtabsOf } from "./state/tabprefs";
 import { readOpts, writeOpts, horizonOf } from "./engine/dashopts";
 import { DashOptions } from "./views/chrome/DashOptions";
@@ -1751,7 +1752,14 @@ export default function App() {
   // components down — reaching it would mean threading it up through everything in between for one
   // string. The picker sets it and the picker reads it, so the two cannot disagree.
   const [demoId, setDemoId] = useState(null);
-  const enterDemo = () => setPicking("enter");
+  // ⚠️ THE HASH CAN NAME A COMPANY: `#demo=grant-startup`. The marketing site cannot open a modal in
+  // the app — different origin, different build — so the honest hand-off is a link that carries the
+  // intent. `#demo` alone still shows the picker, which is what a generic "walk through a demo" wants.
+  const enterDemo = () => {
+    const named = /^#demo=([a-z-]+)$/.exec(window.location.hash || "");
+    if (named && archetypeById(named[1])) return openDemo(named[1]);
+    setPicking("enter");
+  };
 
 
   // ENV SAYS HOSTED BUT NOTHING REGISTERED. That combination is a misconfiguration, never a mode: it
@@ -1884,7 +1892,7 @@ export default function App() {
       <>
         {pickerOverlay}
         <LandedOnce />
-        <Landing onDemo={() => { void track("demo_started"); enterDemo(); }}
+        <Landing onDemo={(which) => { void track("demo_started"); openDemo(which); }}
                  onCreate={() => { void track("signup_started"); setEntry("create"); }}
                  onSignIn={() => setEntry("signin")} />
       </>
