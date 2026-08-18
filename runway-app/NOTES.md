@@ -2038,6 +2038,16 @@ return; the backend accepted the new seed but discarded it; the app kept the old
 nothing invalidated it. **Each fix was correct and none of them was sufficient alone** — which is what a
 data path with three hand-offs looks like when only the last one is observable.
 
+### One stale assertion — the gutter went 46 to 72
+
+I widened the right gutter for the axis TITLE two sessions of work ago and updated the engine without
+the test. **1474 of 1475 passed, which is the shape a stale assertion takes**: nothing else moved,
+because nothing else depended on the number.
+
+**Worth noting what the test now records**: not "the gutter is 72" but WHY — five tick labels need
+~30px and "Subscribers" needs ~62, and **sizing the gutter for the numbers while forgetting the word
+above them is the mistake the number exists to prevent repeating.**
+
 ### And switching kept the old document
 
     if (!existing && seed) put(KEY, { startedAt, doc: seed });

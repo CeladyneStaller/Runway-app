@@ -216,9 +216,10 @@ describe("⚠️ one set of padding rules, two bases", () => {
     // The gutter was 16px and a right axis needs about 44 — five tick labels plus a title — so on any
     // two-unit chart those labels were drawn past the edge of the viewBox. **"Cramped" was the visible
     // half of a clipping bug.**
-    // 44 for five tick labels and a title, plus 2 so the longest is not flush against the panel edge —
-    // the same clearance reasoning as the legend and the 16px corner.
-    expect(padFor({ rightAxis: true }).r).toBe(BASE_PAD.r + 46);
+    // ⚠️ 72, NOT 46 — AND THE REASON IS THE TITLE, NOT THE TICKS. Five tick labels need about 30px;
+    // "Subscribers" needs about 62. I sized this gutter for the numbers and forgot the word above
+    // them, so a chart with a NAMED right axis overflowed while its ticks fitted fine.
+    expect(padFor({ rightAxis: true }).r).toBe(BASE_PAD.r + 72);
     expect(padFor({}).r).toBe(BASE_PAD.r);
   });
 
