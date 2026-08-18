@@ -1777,6 +1777,23 @@ it were the whole** — so the number and the thing that changes it are now read
 **An employee who has left is flagged inline.** Their line stops at their end date and the total drops;
 **silently, that is a number changing for a reason nobody can see.**
 
+### ⚠️ I TURNED EVERY SUB-TAB BAR IN THE PRODUCT VERTICAL
+
+`.subtabs` already existed as the app's horizontal sub-tab row — Cash flow, Payroll and the rest use it.
+I redefined it globally for the settings screen's nested toggles, and **the second definition won.**
+
+**Third time this session a duplicate class has done exactly that**, after `.modal-h`, `.modal-body` and
+`.ch-legend`. The pattern is always the same: append a rule for a new component, reuse a name that
+sounds generic, and **the losing rule leaves no trace** — nothing errors, nothing warns, and the file
+reads as though the first declaration is in force.
+
+Scoped to `.tabrow .subtabs`. **The habit that would prevent this is checking whether a class name
+exists BEFORE writing a rule for it**, which costs one grep and has now cost four fixes.
+
+**And my check for it was wrong too** — it counted the mention inside my own explanatory comment, which
+is the same fault as the `agreed` test two turns ago. Comments have to be stripped before any negative
+or counting assertion against source.
+
 ## Mobile: four overflows, three different causes
 
 **The runway tile.** `.statuspill` had `min-width:0` at 900px — **which lets a flex box SHRINK and does
