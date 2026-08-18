@@ -1963,6 +1963,27 @@ company does not show". **Safe only because no view id contains a colon — asse
 hiding Fringe company-wide and a person hiding Prioritization for themselves both mean it. **Making one
 win would silently undo the other's choice.**
 
+### ⚠️ AND THEN THE PICKER BLANKED THE SCREEN — `Cannot access 'l' before initialization`
+
+Moving the return above the early returns put it above `openDemo`'s declaration too. **`const` is
+hoisted but not initialised**, so referencing it fifteen lines early threw at render.
+
+**Thematic placement is not dependency order.** This is the same fault as `upBand` earlier in this
+session, and it is invisible to lint because the reference is perfectly legal — **the only signal is a
+blank screen.**
+
+Fixed by declaring `openDemo` immediately after the state it uses, before the return.
+
+**Two fixes in two turns for one feature, and both were placement rather than logic**: a return below
+the branch that preempts it, then a reference above the declaration it needs. **Moving a block in a
+component means checking BOTH what returns before it and what it depends on** — I checked one each
+time.
+
+**⚠️ AND MY SCAN FOR OTHER INSTANCES OVER-REPORTED THREE TIMES** — crossing function boundaries, then
+matching props against unrelated locals, then failing to brace-count JSX. **A scan that cannot parse
+scope cannot answer a scope question**, and the direct check on the one known fault was worth more than
+all three.
+
 ### Where to tell somebody they can change it
 
 **Under the rail entry, as a subtitle**: "Plan, tabs, people, connections". Naming TABS specifically is

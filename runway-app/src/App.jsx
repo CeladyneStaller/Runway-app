@@ -1720,6 +1720,20 @@ export default function App() {
   // ⚠️ THE PICKER IS THE ENTRY POINT NOW, not a direct load. Both doors — the landing screen and the
   // sign-in link — go through `enterDemo`, so hooking it here covers both without a second code path.
   const [picking, setPicking] = useState(null);   // null | "enter" | "switch"
+  // ⚠️ DECLARED BEFORE THE RETURN THAT USES IT. `const` is hoisted but NOT initialised, so the picker
+  // block referencing `openDemo` fifteen lines above its declaration threw "Cannot access before
+  // initialization" and blanked the screen.
+  //
+  // **Thematic placement is not dependency order** — the same fault that blanked the app earlier in
+  // this session with `upBand`, and it is invisible to lint because the reference is legal.
+  const openDemo = (which) => {
+    setDemoId(which);
+    activateDemoBackend(demoDoc(which));
+    window.location.hash = "#demo";
+    setDemo(true);
+    setPicking(null);
+  };
+
   // ⚠️ ABOVE EVERY OTHER RETURN, WHICH IS WHY THE BUTTON DID NOTHING. `if (gated && user === null)`
   // returns the Landing screen ~15 lines earlier, so `setPicking("enter")` set the state and the render
   // never reached the check — **the click worked and nothing appeared.**
@@ -1741,13 +1755,6 @@ export default function App() {
   const enterDemo = () => setPicking("enter");
 
 
-  const openDemo = (which) => {
-    setDemoId(which);
-    activateDemoBackend(demoDoc(which));
-    window.location.hash = "#demo";
-    setDemo(true);
-    setPicking(null);
-  };
   // ENV SAYS HOSTED BUT NOTHING REGISTERED. That combination is a misconfiguration, never a mode: it
   // means enableHostedSync() was not called (most often because the bootstrap in src/main.jsx is
   // commented out), and the app has silently fallen back to local-first — handing out access with no
