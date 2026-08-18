@@ -2019,6 +2019,25 @@ and before every branch that preempts it; **an overlay has neither constraint.**
 satisfying rules that only applied because of a decision I never examined — **the fix for the bug was to
 question the shape, not to keep moving the block.**
 
+### And the switch still did nothing — the load effect never re-ran
+
+Two causes, one behind the other. The first was the backend's re-seed guard, fixed last turn. **The
+second was that nothing asked the backend for the new document.**
+
+    }, [demo]);
+
+**`demo` is already `true` when somebody switches**, so the effect that calls `load()` never fired
+again. The backend held Larkspur and the app kept rendering Ridgeline — **the state was correct and
+nothing read it.**
+
+`demoId` joins the dependency array and is threaded into `DocumentHost` as a prop. Verified that both
+paths fire: mount, first open (`demo` and `demoId` both change), and switch (`demoId` alone).
+
+**⚠️ THREE TURNS, THREE DIFFERENT LAYERS, ONE SYMPTOM.** The picker rendered but was a full-screen
+return; the backend accepted the new seed but discarded it; the app kept the old document because
+nothing invalidated it. **Each fix was correct and none of them was sufficient alone** — which is what a
+data path with three hand-offs looks like when only the last one is observable.
+
 ### And switching kept the old document
 
     if (!existing && seed) put(KEY, { startedAt, doc: seed });

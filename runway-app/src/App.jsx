@@ -1161,7 +1161,7 @@ const isDefaultName = (n) => !n || !String(n).trim() || String(n).trim() === "Un
  *  straight over the real one — which was a live bug, not a theoretical one, and is the exact failure
  *  a network makes routine (offline start, 500, expired session). "No document yet" and "couldn't
  *  read the document" must never take the same code path. */
-function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = null}) {
+function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = null, demoId = null}) {
   // An invitation is answered BEFORE the model loads. Somebody arriving on a link is not here to look
   // at their own numbers, and dropping them into a dashboard with a banner would bury the decision.
   const [termsRequired, setTermsRequired] = useState(null);
@@ -1330,7 +1330,10 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
     // `demo` is a prop that is constant for the life of this component (entering or leaving demo mode
     // reloads the page), so declaring it cannot cause a re-load — but declaring it is still right:
     // the effect reads it, and an undeclared read is how three stale-memo bugs got in.
-  }, [demo]);
+  // ⚠️ `demoId` IS IN HERE BECAUSE `demo` DOES NOT CHANGE ON A SWITCH. It is already `true`, so the
+  // load effect never re-ran — **the backend held the new company and the app never asked it for one.**
+  // That is why the modal closed and the screen did not change.
+  }, [demo, demoId]);
 
   useEffect(() => {
     // ⚠️ THE SAVE GUARD MUST ALLOW `LOAD_WRONG_COMPANY` TOO, or the fresh document the recovery creates
@@ -1828,7 +1831,7 @@ export default function App() {
   if (demo) return (
     <>
       {pickerOverlay}
-      <DocumentHost demo onKeepDemo={keepDemo}
+      <DocumentHost demo demoId={demoId} onKeepDemo={keepDemo}
                     onSwitchDemo={() => setPicking("switch")}
                     onLeaveDemo={() => { clearDemo(); window.location.hash = ""; window.location.reload(); }} />
     </>
