@@ -4,7 +4,9 @@ import { ARCHETYPES } from "../state/archetypes";
 // one a phone puts on a home screen. **Two versions of a logo is one too many.**
 // A public path rather than an import: it is the same file the manifest serves, already cached.
 const ICON = "/icon-192.png";
-const MARK = "/icon-512.png";
+// ⚠️ IMPORTED, NOT A LITERAL PATH. The hashed filename in `dist` changes every build — hard-coding
+// `/assets/waterline-mark-F8R1RrQe.svg` would work exactly until the next deploy.
+import mark from "../assets/waterline-mark.svg";
 
 /** The front door.
  *
@@ -27,7 +29,7 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
             <img src={ICON} width="36" height="36" alt="" className="land-icon" />
             <span className="land-name">Waterline</span>
           </div>
-          <button className="linkbtn" onClick={onSignIn}>Sign in</button>
+          <button className="land-signin" onClick={onSignIn}>Sign in</button>
         </div>
 
         <div className="land-hero">
@@ -53,20 +55,20 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
               <span className="land-viz-l">Runway</span>
               <span className="land-viz-n">8.4 <span className="mo">mo</span></span>
             </div>
-            <svg viewBox="0 0 360 168" role="img"
+            <svg viewBox="0 0 360 210" role="img"
                  aria-label="A cash balance line inside a confidence band, crossing zero.">
-              <path d="M14 40 L120 52 L230 70 L346 92 L346 118 L230 96 L120 76 L14 58 Z"
+              <path d="M14 48 L120 64 L230 90 L346 118 L346 150 L230 122 L120 92 L14 68 Z"
                     fill="var(--caution)" opacity=".14" />
-              <path d="M14 44 L120 66 L230 96 L316 126 L346 142 L346 152 L316 138 L230 108 L120 78 L14 56 Z"
+              <path d="M14 54 L120 84 L230 122 L316 160 L346 180 L346 192 L316 176 L230 136 L120 98 L14 68 Z"
                     fill="var(--signal)" opacity=".22" />
-              <line x1="14" y1="150" x2="346" y2="150" stroke="var(--danger)" strokeWidth="1.2"
+              <line x1="14" y1="190" x2="346" y2="190" stroke="var(--danger)" strokeWidth="1.2"
                     strokeDasharray="3 4" />
-              <text x="16" y="163" className="land-viz-t" fill="var(--danger)">out of cash</text>
-              <path d="M14 50 L70 60 L120 72" fill="none" stroke="#fff" strokeWidth="2.6" />
-              <path d="M120 72 L230 102 L316 132 L344 147" fill="none" stroke="var(--signal-2)"
+              <text x="16" y="204" className="land-viz-t" fill="var(--danger)">out of cash</text>
+              <path d="M14 62 L70 76 L120 90" fill="none" stroke="#fff" strokeWidth="2.6" />
+              <path d="M120 90 L230 130 L316 166 L344 186" fill="none" stroke="var(--signal-2)"
                     strokeWidth="2.6" strokeDasharray="6 5" />
-              <circle cx="120" cy="72" r="3.4" fill="#fff" />
-              <text x="126" y="66" className="land-viz-t">today</text>
+              <circle cx="120" cy="90" r="3.4" fill="#fff" />
+              <text x="126" y="82" className="land-viz-t">today</text>
             </svg>
             <div className="land-viz-f">
               <span><i style={{ background: "#fff" }} />recorded</span>
@@ -168,8 +170,7 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
           {/* The footer had no mark at all. It is the last thing on the page and the one place a
               visitor looks for who made this. */}
           <span className="land-footmark">
-            <img src={MARK} width="20" height="20" alt="" />
-            Waterline
+            <img src={mark} alt="Waterline" width="100" />
           </span>
           <span>Already have an account?{" "}
             <button className="linkbtn" onClick={onSignIn}>Sign in</button></span>
