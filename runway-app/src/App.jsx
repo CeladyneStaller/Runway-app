@@ -541,6 +541,7 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
           where={{ view, subtab: routeTab }}
           who={{ plan: planName, companyName: doc?.name || null }}
           onSend={sendFeedbackNow}
+          getEmail={() => getAuthAdapter?.()?.userEmail?.() ?? Promise.resolve(null)}
           onClose={() => setFeedback(false)} />
       )}
       <UnpaidBar onOpenAccount={onOpenAccount} />
@@ -1656,10 +1657,19 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   if (advisorHome && mayPortfolio) return (
     <>
     {advisorFeedback && (
-      <FeedbackModal where={{ view: "portfolio" }} who={{ plan: null, companyName: null }}
+      // ⚠️ THE SAME COMPONENT, SO IT SHOULD BE GIVEN THE SAME KIND OF INFORMATION. Passing nulls made
+      // the session block render "— · — · —" and drop its company line, which reads as a broken modal
+      // rather than a different one. **A shared component looks inconsistent when its callers are.**
+      //
+      // An advisor genuinely has no company and no company plan here — so the context says "advisor
+      // portfolio" instead of leaving three dashes, which is the true statement rather than an absent
+      // one.
+      <FeedbackModal where={{ view: "portfolio" }}
+                     who={{ plan: "advisor", companyName: null, scope: "Advisor portfolio" }}
                      onSend={async (payload) => sendFeedback(payload, {
                        url: import.meta.env?.VITE_SUPABASE_URL,
                        anonKey: import.meta.env?.VITE_SUPABASE_ANON_KEY })}
+                     getEmail={() => getAuthAdapter?.()?.userEmail?.() ?? Promise.resolve(null)}
                      onClose={() => setAdvisorFeedback(false)} />
     )}
     <AdvisorHome

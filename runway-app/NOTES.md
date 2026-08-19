@@ -1931,6 +1931,36 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+### Prefilling the email, without making it a decision
+
+`userEmail()` on the auth adapter, beside the `userId()` that already reads the session the same way.
+**An accessor rather than a prop threaded through two components** — `RunwayApp` and the advisor
+portfolio both need it, neither receives it, and adding it to both signatures means two more parameters
+carried through everything in between for one string.
+
+**⚠️ IT CANNOT BE AN INITIAL STATE VALUE BECAUSE IT IS ASYNC**, so it arrives in an effect — and that
+creates a race worth guarding: somebody who unticks the box or starts typing before it resolves must
+not have the field filled in underneath them. `setEmail(prev => prev || v)` and **the effect never
+touches `withEmail` at all.**
+
+**Prefilling is a convenience, not a decision.** Unticking still sends null, and Send still requires
+nothing but a message.
+
+### The advisor modal looked broken because its caller passed nulls
+
+Same component, both times. The advisor call sent `plan: null, companyName: null`, so the session block
+rendered `— · — · —` with "no company" beneath it, while the company view showed four real values.
+
+**A shared component looks inconsistent when its CALLERS are**, and the fault is invisible from inside
+the component — it rendered exactly what it was given.
+
+An advisor genuinely has no company here, so the fix is not to invent one: the context now says
+**"Advisor portfolio"**, which is a true statement rather than an absent one. **"No company" describes
+an absence and reads as a fault; naming the scope costs the same words.**
+
+**Checked both call sites for other gaps** — they now pass the same prop set, and neither passes an
+email, so the reply box starts blank in both. Consistent, if not yet prefilled.
+
 ### The advisor view has a rail — I put the button in its topbar
 
 I wrote "the advisor screen has no rail" in a comment and built around it. **It has one, with a

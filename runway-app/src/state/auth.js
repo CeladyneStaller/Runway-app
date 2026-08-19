@@ -96,6 +96,17 @@ export function createSupabaseAuth({ url, anonKey, getSession, fetchImpl, compan
       try { return (await getSession())?.user?.id ?? null; } catch { return null; }
     },
 
+    /** The signed-in address, or null.
+     *
+     *  ⚠️ AN ACCESSOR RATHER THAN A PROP THREADED THROUGH TWO COMPONENTS. `RunwayApp` and the advisor
+     *  portfolio both need it and neither receives it, and adding it to both signatures would mean two
+     *  more parameters carried through everything in between for one string. The adapter is already
+     *  global and already answers `userId()` this exact way.
+     */
+    async userEmail() {
+      try { return (await getSession())?.user?.email ?? null; } catch { return null; }
+    },
+
     /** Point this device at a different company. Returns nothing: the CALLER is responsible for
      *  flushing pending writes and reloading, because a write in flight belongs to the company you were
      *  in and landing it afterwards files your numbers against the wrong one. */

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TAB_REGISTRY, subtabsOf } from "../../state/tabprefs";
 import { FEEDBACK_KINDS, hintFor, collectContext } from "../../state/feedback";
 
@@ -8,13 +8,23 @@ import { FEEDBACK_KINDS, hintFor, collectContext } from "../../state/feedback";
  *  report actionable are offered already ticked — **ticked and visible is consent; unticked is a field
  *  most people never find.**
  */
-export function FeedbackModal({ where = {}, who = {}, onSend, onClose }) {
+export function FeedbackModal({ where = {}, who = {}, onSend, onClose, getEmail = null }) {
   const [kind, setKind] = useState("broken");
   const [tab, setTab] = useState(where.view || "");
   const [subtab, setSubtab] = useState(where.subtab || "");
   const [body, setBody] = useState("");
   const [withEmail, setWithEmail] = useState(true);
   const [email, setEmail] = useState(who.email || "");
+
+  // ⚠️ FETCHED, NOT THREADED — and it cannot be an initial state value because it is async. The tick
+  // stays independently controlled: **prefilling is a convenience, not a decision.** Somebody who
+  // unticks it before this resolves must not have the box re-tick itself underneath them.
+  useEffect(() => {
+    if (who.email || !getEmail) return;
+    let alive = true;
+    getEmail().then(v => { if (alive && v) setEmail(prev => prev || v); }).catch(() => {});
+    return () => { alive = false; };
+  }, [who.email, getEmail]);
   const [withContext, setWithContext] = useState(true);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -135,8 +145,12 @@ export function FeedbackModal({ where = {}, who = {}, onSend, onClose }) {
                 <div className="ctx">
                   tab: {ctx.tab || "—"} · sub-tab: {ctx.subtab || "—"} · plan: {ctx.plan || "—"}<br />
                   app {ctx.app} · {ctx.viewport || "—"}<br />
-                  {ctx.company ? <>company: {ctx.company} <span className="dim">(name only)</span></>
-                                : <span className="dim">no company</span>}
+                  {ctx.company
+                    ? <>company: {ctx.company} <span className="dim">(name only)</span></>
+                    /* ⚠️ WHAT IT IS, NOT WHAT IT LACKS. "no company" describes an absence and reads as
+                       a fault; an advisor portfolio genuinely has no company and saying so plainly is
+                       the same number of words. */
+                    : <span className="dim">{who.scope || "no company"}</span>}
                 </div>
                 <div className="tickfine">No figures from your model are ever sent.</div>
               </div>
