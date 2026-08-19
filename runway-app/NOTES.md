@@ -1931,6 +1931,17 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+### The advisor view has a rail — I put the button in its topbar
+
+I wrote "the advisor screen has no rail" in a comment and built around it. **It has one, with a
+`railfoot`, at line 256.** The button now sits there, using the same classes as the company rail, so
+somebody moving between the two finds it where they left it.
+
+**A wrong assumption written confidently into a comment is worse than an unexamined one**, because it
+tells the next reader not to check.
+
+The orphaned `.adv-fb` rule went with it.
+
 ### ⚠️ THREE ROUNDS ON PERMISSIONS, AND THE PATTERN WAS ALREADY IN THE SCHEMA
 
 `grep -c "security definer" supabase/migrations/*.sql` -> **127.** Every write in this codebase goes

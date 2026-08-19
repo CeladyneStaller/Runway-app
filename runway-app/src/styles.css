@@ -2121,4 +2121,3 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .fb-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 18px;
   border-top:1px solid var(--line-2);background:var(--paper);flex-wrap:wrap}
 @media (max-width:600px){.fb-kinds{grid-template-columns:1fr}.fb-row2{grid-template-columns:1fr}}
-.adv-fb{font-size:12px}

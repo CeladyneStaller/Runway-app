@@ -254,6 +254,15 @@ export function AdvisorHome({ account, onEnterCompany, onOpenSettings, banner = 
         )}
 
         <div className="railfoot">
+          {/* ⚠️ THE ADVISOR VIEW HAS A RAIL AND I DID NOT LOOK — I put this in the topbar on the
+              assumption it had none. Same component, same class, same place as the company views, so
+              somebody moving between the two finds it where they left it. */}
+          {onFeedback && (
+            <button className="nav navset railset" onClick={onFeedback}>
+              <span aria-hidden="true">✉</span>
+              <span className="railset-t">Send feedback</span>
+            </button>
+          )}
           <div className="railmeta">
             {trimmed
               ? `${rows.length - railRows.length} more in your portfolio`
@@ -289,11 +298,6 @@ export function AdvisorHome({ account, onEnterCompany, onOpenSettings, banner = 
             )}
             {/* ⚠️ NO PROFILE IN THE DEMO. There is no account behind it — every item in that menu
                 either does nothing or offers to change settings for a person who does not exist. */}
-            {/* ⚠️ THE ADVISOR SCREEN HAS NO RAIL, so the rail's feedback button never reached it —
-                and an advisor is the person most likely to have an opinion about a portfolio view. */}
-            {onFeedback && (
-              <button className="linkbtn adv-fb" onClick={onFeedback}>Send feedback</button>
-            )}
             {!banner && <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />}
           </div>
         </div>
