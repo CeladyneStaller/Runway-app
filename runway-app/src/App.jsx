@@ -1784,13 +1784,24 @@ export default function App() {
     // effect runs after that — so the first read would go to the real backend and fail, showing
     // "Couldn't open your model" at somebody you were trying to sell to. A useState initialiser runs
     // during render, before any child exists.
-    if (wanted) activateDemoBackend(demoDoc());
+    // ⚠️ A BARE `#demo` MUST NOT SEED A COMPANY. It means "show me the picker" — the marketing site's
+    // "Walk through a demo" sends exactly that — and seeding `demoDoc()` with no argument defaulted to
+    // the first archetype, **so every visitor from the site landed in Ridgeline having chosen
+    // nothing.** It also meant the SaaS demo was reachable from nowhere on the site.
+    //
+    // `#demo=<id>` still seeds that company directly; only the bare form waits for a choice.
+    const named = hashDemoId();
+    if (wanted && named) activateDemoBackend(demoDoc(named));
     return wanted;
   });
 
   // ⚠️ THE PICKER IS THE ENTRY POINT NOW, not a direct load. Both doors — the landing screen and the
   // sign-in link — go through `enterDemo`, so hooking it here covers both without a second code path.
-  const [picking, setPicking] = useState(null);   // null | "enter" | "switch"
+  // ⚠️ SEEDED FROM THE URL. Arriving on `#demo` with no company named means the visitor asked to
+  // choose — the marketing site's "Walk through a demo" is exactly that link. Without this the app
+  // entered demo mode holding whatever document happened to be seeded.
+  const [picking, setPicking] = useState(() =>
+    (typeof window !== "undefined" && window.location.hash === "#demo") ? "enter" : null);
   // ⚠️ DECLARED BEFORE THE RETURN THAT USES IT. `const` is hoisted but NOT initialised, so the picker
   // block referencing `openDemo` fifteen lines above its declaration threw "Cannot access before
   // initialization" and blanked the screen.

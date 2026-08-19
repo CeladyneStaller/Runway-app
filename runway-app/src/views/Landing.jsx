@@ -90,7 +90,7 @@ export function Landing({ onDemo, onCreate, onSignIn }) {
             </div>
             <button className="btn-go" onClick={onCreate}>Get started</button>
             <ul className="way-facts">
-              <li>About five minutes</li>
+              <li>About ten minutes</li>
               <li>No card needed</li>
               <li>Build or import a company</li>
             </ul>
