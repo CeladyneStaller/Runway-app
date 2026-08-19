@@ -1784,15 +1784,26 @@ export default function App() {
     // effect runs after that — so the first read would go to the real backend and fail, showing
     // "Couldn't open your model" at somebody you were trying to sell to. A useState initialiser runs
     // during render, before any child exists.
-    // ⚠️ A BARE `#demo` MUST NOT SEED A COMPANY. It means "show me the picker" — the marketing site's
-    // "Walk through a demo" sends exactly that — and seeding `demoDoc()` with no argument defaulted to
-    // the first archetype, **so every visitor from the site landed in Ridgeline having chosen
-    // nothing.** It also meant the SaaS demo was reachable from nowhere on the site.
+    // ⚠️ A BARE `#demo` IS NOT A DEMO YET — IT IS A REQUEST TO CHOOSE ONE.
     //
-    // `#demo=<id>` still seeds that company directly; only the bare form waits for a choice.
+    // Seeding `demoDoc()` with no argument defaulted to the first archetype, so every visitor from the
+    // marketing site landed in Ridgeline having picked nothing. But **returning `true` without seeding
+    // is worse**: the app enters demo mode, `DocumentHost` mounts, reads a backend nobody filled, and
+    // renders the empty-model shell — a screen new accounts are not even supposed to see any more.
+    //
+    // So a bare `#demo` enters NO demo at all. `picking` is seeded from the same hash and the picker
+    // renders in front of the landing screen; choosing a company calls `openDemo`, which seeds and
+    // enters properly. **The picker belongs before the app, not on top of it.**
+    // ⚠️ AND `demoInProgress()` MUST STILL RESUME WITHOUT A HASH. A demo already running has a seeded
+    // backend and needs no company named — **requiring a hash here would drop somebody out of a demo
+    // on refresh**, which is the fault this whole sequence started with.
+    //
+    // Only the BARE `#demo` case declines to enter: a hash with a company enters it, and an
+    // already-running demo continues.
     const named = hashDemoId();
+    const bareRequest = hashed && !named;
     if (wanted && named) activateDemoBackend(demoDoc(named));
-    return wanted;
+    return wanted && !bareRequest;
   });
 
   // ⚠️ THE PICKER IS THE ENTRY POINT NOW, not a direct load. Both doors — the landing screen and the

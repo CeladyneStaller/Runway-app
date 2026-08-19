@@ -2061,6 +2061,28 @@ advisor path first, so I carried that framing into a second report where it did 
 correction cost nothing here, but the same framing on a wider bug would have left it in production for
 every paying customer.**
 
+### A bare `#demo` entered demo mode with no document
+
+My previous fix stopped `demoDoc()` defaulting to Ridgeline — **and returned `true` anyway.** So the app
+entered demo mode, `DocumentHost` mounted, read a backend nobody had seeded, and rendered the
+empty-model shell: **a screen new accounts are not supposed to reach at all.**
+
+**Half a fix is its own bug.** I removed the seeding without removing the entry, and the two are one
+decision: **either this is a demo and it has a document, or it is a request to choose one and it is not
+a demo yet.**
+
+A bare `#demo` now enters no demo. `picking` seeds from the same hash, the picker renders in front of
+the landing screen, and choosing calls `openDemo` — **the picker belongs BEFORE the app, not on top of
+it.**
+
+**⚠️ AND THE FIRST VERSION OF THIS FIX BROKE RESUME.** `return wanted && !!named` meant a demo already
+running had to have a hash, so a refresh mid-demo would drop out — **the exact fault this sequence
+began with, reintroduced while fixing its sibling.** Only the BARE request declines now; a named hash
+enters, an in-progress demo continues.
+
+Six paths simulated before packaging: fresh with each hash form, no hash, and in-progress with and
+without one.
+
 ### The advisor chart plotted every balance one month early
 
 Corey found it precisely: **September's cash on hand drawn under August.** The runway number and the
