@@ -146,7 +146,16 @@ async function handle(req: Request): Promise<Response> {
     // `SUPABASE_SERVICE_ROLE_KEY` is the ANON key: non-empty, so the env guard passes, and powerless.
     const hint =
       error.code === "42P01" ? "— migration 047_feedback.sql has not been applied"
-      : error.code === "42501" ? `— RLS refused, so this did not run as service_role. Key length ${SERVICE_KEY.length}; the anon and service keys are different lengths, and the service one is longer.`
+      // ⚠️ 42501 IS TWO DIFFERENT FAULTS AND THE MESSAGE IS WHAT SEPARATES THEM. I read the code and
+      // guessed, and guessed wrong:
+      //   "permission denied for table X"                  -> a missing GRANT
+      //   "new row violates row-level security policy ..."  -> an RLS policy refusal
+      // The first is fixed in SQL, the second in the policy. **Reading the code without the message
+      // sent me to the wrong file.**
+      : error.code === "42501"
+        ? (/permission denied/i.test(error.message)
+            ? "— missing GRANT, not RLS. Re-run 047_feedback.sql; it now grants insert explicitly."
+            : "— RLS policy refused the row; check the with-check clause in 047_feedback.sql.")
       : error.code === "23503" ? "— a foreign key: user_id or company_id points at no row"
       : "";
     console.error("[feedback] insert failed:", error.code, error.message, hint);

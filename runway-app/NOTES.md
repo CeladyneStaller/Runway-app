@@ -1931,6 +1931,26 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+### ⚠️ I READ THE CODE AND NOT THE MESSAGE — 42501 IS TWO FAULTS
+
+    permission denied for table feedback              -> a missing GRANT
+    new row violates row-level security policy ...    -> an RLS policy refusal
+
+**Same code, different file to fix.** I saw 42501, concluded RLS, rewrote the policy and wrote a
+confident hint about service-role keys — **and the message in the very error I was reading said
+"permission denied", which is the other one.**
+
+The policy rewrite was still correct on its own merits, and the explicit `grant insert` I added in the
+same turn is the actual fix. **But I reached the right change through the wrong reasoning**, which is
+luck rather than diagnosis, and the hint I shipped would have sent the next reader after a key that is
+fine.
+
+**Key length 41 is a NEW-format Supabase key** (`sb_secret_…`), not a legacy JWT of ~218 characters —
+so the length test I invented was also useless. Both formats are short; the length distinguishes
+nothing.
+
+The function now branches on the message rather than the code.
+
 ### 42501 — my own policy rejected every signed-in report
 
     with check ((user_id is null) or (user_id = auth.uid()))
