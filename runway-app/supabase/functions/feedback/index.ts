@@ -141,8 +141,15 @@ async function handle(req: Request): Promise<Response> {
     // guess between "table missing", "RLS refused" and "column mismatch" — three very different
     // afternoons. Postgres codes: 42P01 undefined_table, 42703 undefined_column, 42501 insufficient
     // privilege.
-    console.error("[feedback] insert failed:", error.code, error.message,
-      error.code === "42P01" ? "— migration 047_feedback.sql has not been applied" : "");
+    // ⚠️ 42501 IS AN RLS REFUSAL, NOT A MISSING GRANT — and it means this insert did NOT run as the
+    // service role, because service role bypasses RLS entirely. The usual cause is that the key in
+    // `SUPABASE_SERVICE_ROLE_KEY` is the ANON key: non-empty, so the env guard passes, and powerless.
+    const hint =
+      error.code === "42P01" ? "— migration 047_feedback.sql has not been applied"
+      : error.code === "42501" ? `— RLS refused, so this did not run as service_role. Key length ${SERVICE_KEY.length}; the anon and service keys are different lengths, and the service one is longer.`
+      : error.code === "23503" ? "— a foreign key: user_id or company_id points at no row"
+      : "";
+    console.error("[feedback] insert failed:", error.code, error.message, hint);
     return new Response(JSON.stringify({ error: "not_recorded", code: error.code ?? null }),
       { status: 500, headers: { ...head, "Content-Type": "application/json" } });
   }

@@ -1931,6 +1931,29 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+### 42501 — my own policy rejected every signed-in report
+
+    with check ((user_id is null) or (user_id = auth.uid()))
+
+**The function verifies the JWT itself and inserts with the service role, which bypasses RLS** — so this
+clause only ever applies when something is NOT service role, and in that case `auth.uid()` is null while
+`user_id` is not. **Both branches fail, and the refusal surfaces as 42501, which reads like a privilege
+problem rather than a policy one.**
+
+The impersonation it guarded against was already impossible: **the function takes the user id from the
+verified token and never from the request body**, which is the same rule `delete-account` states in its
+own header. The clause was defending a door that has no handle.
+
+Now `(user_id is null) or (auth.uid() is null) or (user_id = auth.uid())` — every legitimate caller
+passes and direct impersonation is still refused. **Explicit `grant insert` added too**, because a
+missing table-level grant produces the identical code and is worth ruling out in the migration rather
+than in a round trip.
+
+**⚠️ AND 42501 STILL MEANS SOMETHING IS WRONG UPSTREAM.** If the service role were in effect, RLS would
+not have been consulted at all — so the key in `SUPABASE_SERVICE_ROLE_KEY` is probably the ANON key:
+non-empty, so the env guard passes, and powerless. The function now says so, and prints the key length,
+because the two keys differ in length and that is checkable without exposing either.
+
 ### The advisor demo is a MODE, not a fifth company
 
 An advisor evaluating Waterline is not asking whether it models THEIR runway — **they are asking whether

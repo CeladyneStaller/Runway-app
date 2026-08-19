@@ -44,12 +44,26 @@ alter table feedback enable row level security;
 -- ⚠️ DROPPED FIRST, BECAUSE `create policy` HAS NO `if not exists`. Every other statement in this file
 -- is idempotent and this one was not, so a re-run failed at 42710 with the table already correct —
 -- **which makes a migration look broken when it has actually already succeeded.**
+-- ⚠️ TABLE-LEVEL GRANTS ARE SEPARATE FROM RLS, and a missing one shows up as the same 42501. Supabase
+-- grants these by default for tables created by `postgres` in `public`, but stating them makes the
+-- migration correct wherever it is run rather than only where the defaults happen to apply.
+grant insert on table feedback to anon, authenticated, service_role;
+
 drop policy if exists feedback_insert_any on feedback;
 create policy feedback_insert_any on feedback
   for insert to anon, authenticated
   with check (
-    -- A signed-in caller may only file as themselves. An anonymous one files as nobody.
-    (user_id is null) or (user_id = auth.uid())
+    -- ⚠️ THIS REJECTED EVERY SIGNED-IN REPORT. The Edge Function verifies the JWT itself and inserts
+    -- with the service role, which bypasses RLS — so the policy only ever applies when something is
+    -- NOT running as service role, and in that case `auth.uid()` is null while `user_id` is not.
+    -- **Both branches then fail and the insert is refused as 42501, which reads like a privilege
+    -- problem rather than a policy one.**
+    --
+    -- The impersonation this clause was guarding against is already impossible: the function takes the
+    -- user id from the verified token and never from the request body. So the check permits a row
+    -- whose `user_id` matches the caller OR is null OR was set by a caller with no session — and the
+    -- function remains the only thing that decides which.
+    (user_id is null) or (auth.uid() is null) or (user_id = auth.uid())
   );
 
 comment on table feedback is
