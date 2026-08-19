@@ -47,24 +47,61 @@ alter table feedback enable row level security;
 -- ⚠️ TABLE-LEVEL GRANTS ARE SEPARATE FROM RLS, and a missing one shows up as the same 42501. Supabase
 -- grants these by default for tables created by `postgres` in `public`, but stating them makes the
 -- migration correct wherever it is run rather than only where the defaults happen to apply.
-grant insert on table feedback to anon, authenticated, service_role;
+-- ⚠️ NOBODY INSERTS DIRECTLY. Every other write in this schema goes through a `security definer`
+-- function — there are 127 of them — and I wrote a direct table insert instead, which is why this has
+-- spent three rounds on grants and policies. **The pattern was already here and I did not look.**
+--
+-- A definer function runs as its OWNER, so it does not care which role the caller has, whether the
+-- Edge Function received a service key or a publishable one, or what the table grants say. The
+-- permission question stops existing rather than being answered.
+revoke all on table feedback from anon, authenticated;
 
+-- RLS stays ON with NO policies at all, which is the strongest available statement: nothing reaches
+-- this table except through `submit_feedback`, and nothing reads it except the service role.
 drop policy if exists feedback_insert_any on feedback;
-create policy feedback_insert_any on feedback
-  for insert to anon, authenticated
-  with check (
-    -- ⚠️ THIS REJECTED EVERY SIGNED-IN REPORT. The Edge Function verifies the JWT itself and inserts
-    -- with the service role, which bypasses RLS — so the policy only ever applies when something is
-    -- NOT running as service role, and in that case `auth.uid()` is null while `user_id` is not.
-    -- **Both branches then fail and the insert is refused as 42501, which reads like a privilege
-    -- problem rather than a policy one.**
-    --
-    -- The impersonation this clause was guarding against is already impossible: the function takes the
-    -- user id from the verified token and never from the request body. So the check permits a row
-    -- whose `user_id` matches the caller OR is null OR was set by a caller with no session — and the
-    -- function remains the only thing that decides which.
-    (user_id is null) or (auth.uid() is null) or (user_id = auth.uid())
-  );
+
+create or replace function submit_feedback(
+  p_kind        text,
+  p_body        text,
+  p_tab         text default null,
+  p_subtab      text default null,
+  p_reply_email text default null,
+  p_context     jsonb default '{}'::jsonb,
+  p_company_id  uuid  default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  if p_kind not in ('broken', 'suggestion', 'question') then
+    raise exception 'bad kind';
+  end if;
+  if p_body is null or length(btrim(p_body)) = 0 or length(p_body) > 4000 then
+    raise exception 'bad body';
+  end if;
+
+  -- ⚠️ THE USER COMES FROM THE SESSION, NEVER FROM AN ARGUMENT. `auth.uid()` is null for an anonymous
+  -- caller, which is exactly what should be recorded — and it cannot be spoofed by somebody editing
+  -- the request, because there is no parameter to edit.
+  insert into feedback (user_id, company_id, kind, tab, subtab, body, reply_email, context)
+  values (auth.uid(), p_company_id, p_kind,
+          nullif(btrim(coalesce(p_tab, '')), ''),
+          nullif(btrim(coalesce(p_subtab, '')), ''),
+          btrim(p_body),
+          nullif(btrim(coalesce(p_reply_email, '')), ''),
+          coalesce(p_context, '{}'::jsonb))
+  returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
+grant execute on function submit_feedback(text, text, text, text, text, jsonb, uuid)
+  to anon, authenticated;
+
 
 comment on table feedback is
   'Product feedback. Insert-only by design; there is no select policy. Service-role reads only.';

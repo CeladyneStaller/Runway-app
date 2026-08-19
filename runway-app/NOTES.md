@@ -1931,6 +1931,26 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+### ⚠️ THREE ROUNDS ON PERMISSIONS, AND THE PATTERN WAS ALREADY IN THE SCHEMA
+
+`grep -c "security definer" supabase/migrations/*.sql` -> **127.** Every write in this codebase goes
+through a definer function; `account.js` calls `rpc()` for all of them. **I wrote a direct table
+insert.**
+
+A definer function runs as its OWNER, so it does not care which role the caller has, whether the Edge
+Function received a service key or a publishable one, or what the table grants say. **The permission
+question stops existing rather than being answered** — and I spent three deploy cycles answering it.
+
+`submit_feedback(...)` now owns the write. RLS stays on with NO policies at all, which is the strongest
+available statement: nothing reaches the table except through that function, and nothing reads it except
+the service role. `auth.uid()` is taken inside the function, so **there is no parameter for a caller to
+edit.**
+
+**The lesson is not about Postgres.** Three separate times in this feature I wrote a second, weaker
+version of something the codebase already had — `.inp` instead of reading it, conditional
+`Authorization` instead of copying `account.js`, and now a direct insert instead of an RPC. **Each cost
+a round trip, and each was one grep away.**
+
 ### ⚠️ I READ THE CODE AND NOT THE MESSAGE — 42501 IS TWO FAULTS
 
     permission denied for table feedback              -> a missing GRANT

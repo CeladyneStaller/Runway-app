@@ -121,47 +121,30 @@ async function handle(req: Request): Promise<Response> {
   // ⚠️ CHECKED, NOT ASSUMED. An empty service key does not throw at `createClient` — it fails at the
   // insert with a permission error that reads like an RLS problem, sending the reader to the wrong
   // file. Naming the missing variable costs three lines and saves an afternoon.
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    console.error("[feedback] missing env:",
-      !SUPABASE_URL ? "SUPABASE_URL " : "", !SERVICE_KEY ? "SUPABASE_SERVICE_ROLE_KEY" : "");
+  if (!SUPABASE_URL) {
+    console.error("[feedback] missing env: SUPABASE_URL");
     return new Response(JSON.stringify({ error: "not_configured", code: "env" }),
       { status: 500, headers: { ...head, "Content-Type": "application/json" } });
   }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
   // ── 1 · record it ───────────────────────────────────────────────────────────────────────────────
-  const { data: row, error } = await admin.from("feedback")
-    .insert({ user_id: userId, company_id: companyId, kind, tab, subtab,
-              body, reply_email: replyEmail, context })
-    .select("id").single();
+  // ⚠️ AN RPC, NOT A TABLE INSERT. `submit_feedback` is `security definer`, so it runs as its owner
+  // and the caller's role stops mattering — which is what every other write in this schema already
+  // does. **Three rounds of grant-and-policy debugging were spent because I did not follow the
+  // pattern that was already here.**
+  //
+  // The caller's token is forwarded so `auth.uid()` inside the function sees the signed-in user; an
+  // anonymous caller records a null, which is correct rather than a failure.
+  const caller = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+    global: { headers: { Authorization: auth || `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}` } },
+    auth: { persistSession: false },
+  });
 
-  if (error) {
-    // ⚠️ THE REASON GOES IN THE LOG AND THE CODE GOES TO THE CALLER. A bare 500 makes the deployer
-    // guess between "table missing", "RLS refused" and "column mismatch" — three very different
-    // afternoons. Postgres codes: 42P01 undefined_table, 42703 undefined_column, 42501 insufficient
-    // privilege.
-    // ⚠️ 42501 IS AN RLS REFUSAL, NOT A MISSING GRANT — and it means this insert did NOT run as the
-    // service role, because service role bypasses RLS entirely. The usual cause is that the key in
-    // `SUPABASE_SERVICE_ROLE_KEY` is the ANON key: non-empty, so the env guard passes, and powerless.
-    const hint =
-      error.code === "42P01" ? "— migration 047_feedback.sql has not been applied"
-      // ⚠️ 42501 IS TWO DIFFERENT FAULTS AND THE MESSAGE IS WHAT SEPARATES THEM. I read the code and
-      // guessed, and guessed wrong:
-      //   "permission denied for table X"                  -> a missing GRANT
-      //   "new row violates row-level security policy ..."  -> an RLS policy refusal
-      // The first is fixed in SQL, the second in the policy. **Reading the code without the message
-      // sent me to the wrong file.**
-      : error.code === "42501"
-        ? (/permission denied/i.test(error.message)
-            ? "— missing GRANT, not RLS. Re-run 047_feedback.sql; it now grants insert explicitly."
-            : "— RLS policy refused the row; check the with-check clause in 047_feedback.sql.")
-      : error.code === "23503" ? "— a foreign key: user_id or company_id points at no row"
-      : "";
-    console.error("[feedback] insert failed:", error.code, error.message, hint);
-    return new Response(JSON.stringify({ error: "not_recorded", code: error.code ?? null }),
-      { status: 500, headers: { ...head, "Content-Type": "application/json" } });
-  }
+  const { data: newId, error } = await caller.rpc("submit_feedback", {
+    p_kind: kind, p_body: body, p_tab: tab, p_subtab: subtab,
+    p_reply_email: replyEmail, p_context: context, p_company_id: companyId,
+  });
 
   // ── 2 · tell somebody ───────────────────────────────────────────────────────────────────────────
   // ⚠️ A FAILURE HERE IS NOT A FAILURE OF THE REQUEST. The message is already safe in the table, so
@@ -195,6 +178,6 @@ async function handle(req: Request): Promise<Response> {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, id: row.id }),
+  return new Response(JSON.stringify({ ok: true, id: newId }),
     { status: 200, headers: { ...head, "Content-Type": "application/json" } });
 }
