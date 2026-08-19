@@ -1863,6 +1863,28 @@ is exactly who we want to hear from. That makes the rate limit load-bearing rath
 - `{!demo && (…)}` takes ONE element and I added a sibling — **which reads as though the comment above
   is to blame, and that is where I looked first.**
 
+### The feedback form borrowed the money input
+
+`.inp` is `width:96px`, monospace, `text-align:right` — **the cash-amount field.** I used it for a
+message box and an email address because the name reads as generic. Every symptom Corey reported was
+that one rule: 96px wide, text running to the right edge, and no amount of dragging widening it because
+`resize` cannot beat an explicit width.
+
+**⚠️ A CLASS NAME THAT READS AS GENERIC IS NOT A GENERIC CLASS**, and this is the second time this
+session — `.subtabs` was the first. **One grep before using a name would have caught both.**
+
+`.fb-text` now: full width, left aligned, the interface font rather than the mono one.
+
+**The button was below Company settings and inside the `!demo` gate.** Feedback is something you DO and
+settings is somewhere you go; and hiding the footer in demos took feedback with it — **somebody
+evaluating the product who hits a wall is exactly who we most want to hear from.** The advisor screen
+renders its own chrome and had no rail at all, so it needed its own entry.
+
+**The 500 is the migration.** The function returns it from exactly one place, and `047_feedback.sql`
+has not been applied. **It now logs the Postgres code and names the migration when it sees 42P01** — a
+bare 500 makes the deployer guess between "table missing", "RLS refused" and "column mismatch", which
+are three very different afternoons.
+
 ## The advisor demo, and two icon faults
 
 **⚠️ THE LIVE LANDING PAGE HAD THE WRONG ICON AND NO FOOTER MARK.** I imported

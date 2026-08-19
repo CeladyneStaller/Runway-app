@@ -114,8 +114,13 @@ Deno.serve(async (req) => {
     .select("id").single();
 
   if (error) {
-    console.error("[feedback] insert failed:", error.message);
-    return new Response(JSON.stringify({ error: "not_recorded" }),
+    // ⚠️ THE REASON GOES IN THE LOG AND THE CODE GOES TO THE CALLER. A bare 500 makes the deployer
+    // guess between "table missing", "RLS refused" and "column mismatch" — three very different
+    // afternoons. Postgres codes: 42P01 undefined_table, 42703 undefined_column, 42501 insufficient
+    // privilege.
+    console.error("[feedback] insert failed:", error.code, error.message,
+      error.code === "42P01" ? "— migration 047_feedback.sql has not been applied" : "");
+    return new Response(JSON.stringify({ error: "not_recorded", code: error.code ?? null }),
       { status: 500, headers: { ...head, "Content-Type": "application/json" } });
   }
 

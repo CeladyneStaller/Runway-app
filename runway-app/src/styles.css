@@ -2081,7 +2081,9 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 /* ---- feedback ----
    Class names and measurements taken from the mockup, which was treated as the contract. Every number
    here appeared there; none was re-guessed at build time. */
-.fb-card{max-width:520px}
+/* Wider than the default 440px modal: three topic buttons and two side-by-side selects
+   do not fit in it. */
+.fb-card{max-width:560px}
 .modal-s{font-size:10.5px;color:var(--muted-2);margin-top:2px;display:block}
 .opt{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted-2)}
 .fieldhint{font-size:10.5px;color:var(--muted-2);margin-top:5px}
@@ -2094,7 +2096,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .fb-kind.on{border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal);background:#F5FBF9;
   font-weight:600}
 .fb-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.fb-body{min-height:92px;resize:vertical}
+.fb-body{min-height:92px;resize:vertical;line-height:1.5}
 /* One indent constant, so the checkbox column and everything beneath it line up by arithmetic rather
    than by eye: 15px box + 9px gap = 24px. */
 .tickblock{margin-top:16px}
@@ -2102,7 +2104,14 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .tickrow{display:flex;gap:9px;align-items:center;font-size:12.5px;cursor:pointer}
 .tickrow input{width:15px;height:15px;accent-color:var(--signal);flex:none;margin:0}
 .tickbody{margin:8px 0 0 24px}
-.inp-sm{font-size:12px;padding:7px 10px;max-width:320px}
+/* ⚠️ ITS OWN CLASS, BECAUSE `.inp` IS THE MONEY FIELD — 96px wide, monospace, right-aligned. Correct
+   for a cash amount and wrong for every field in this form: the message box was 96px and its text ran
+   to the right edge. **A class name that reads as generic is not a generic class.** */
+.fb-text{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+  font-family:var(--fb);font-size:13px;text-align:left;background:var(--card);color:var(--ink);
+  display:block}
+.fb-text:focus{outline:2px solid var(--signal);outline-offset:-1px;border-color:var(--signal)}
+.fb-text::placeholder{color:var(--muted-2)}
 .ctx{background:var(--paper);border-radius:9px;padding:10px 12px;font-family:var(--fm);
   font-size:10.5px;color:var(--muted);line-height:1.65;margin:0}
 .tickfine{font-size:10.5px;color:var(--muted-2);margin-top:6px}
@@ -2112,3 +2121,4 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .fb-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 18px;
   border-top:1px solid var(--line-2);background:var(--paper);flex-wrap:wrap}
 @media (max-width:600px){.fb-kinds{grid-template-columns:1fr}.fb-row2{grid-template-columns:1fr}}
+.adv-fb{font-size:12px}

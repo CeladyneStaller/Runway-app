@@ -571,8 +571,18 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
             {/* ⚠️ A FRAGMENT, BECAUSE THERE ARE TWO BUTTONS NOW. `{cond && (<a/>)}` takes ONE element;
                 adding a sibling inside it is a syntax error that reads as though the comment above is
                 to blame — which is where I looked first. */}
-            {!demo && (<>
-              <button className="nav navset railset" onClick={() => onOpenSettings?.("company", "general")}>
+            {/* ⚠️ OUTSIDE THE `!demo` GATE. Company settings is meaningless in a demo, so the
+                footer was hidden wholesale — **which took feedback with it, and somebody evaluating the
+                product who hits a wall is exactly who we most want to hear from.** */}
+
+              {/* ⚠️ ABOVE COMPANY SETTINGS. Feedback is something you DO; settings is somewhere you go — and the
+                  thing people reach for should not sit below the thing they rarely open. A persistent widget in the corner of a
+                  financial model is a distraction on every screen to catch the few where it helps. */}
+              <button className="nav navset railset" onClick={() => setFeedback(true)}>
+                <span aria-hidden="true">✉</span>
+                <span className="railset-t">Send feedback</span>
+              </button>
+            {!demo && (<>              <button className="nav navset railset" onClick={() => onOpenSettings?.("company", "general")}>
                 <span aria-hidden="true">⚙</span>
                 <span className="railset-t">Company settings
                   {/* ⚠️ WHAT IS BEHIND IT, NOT JUST ITS NAME. Somebody who has hidden a tab — at setup
@@ -582,12 +592,6 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
                       therefore tells you nothing. */}
                   <span className="railset-s">Plan, tabs, people, connections</span>
                 </span>
-              </button>
-              {/* ⚠️ IN THE RAIL, NOT A FLOATING BUBBLE. A persistent widget in the corner of a
-                  financial model is a distraction on every screen to catch the few where it helps. */}
-              <button className="nav navset railset" onClick={() => setFeedback(true)}>
-                <span aria-hidden="true">✉</span>
-                <span className="railset-t">Send feedback</span>
               </button>
             </>)}
             {/* THE MODEL NAME IS GONE. Every company has a name; the model name was a SECOND string for the
@@ -1240,6 +1244,8 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // document instead of the portfolio.** A writer with no reader, which is the fault this codebase
   // produces most often.
   const [advisorHome, setAdvisorHome] = useState(!!demoAdvisorHome);
+  // The portfolio renders outside `RunwayApp`, so it needs its own handle on the modal.
+  const [advisorFeedback, setAdvisorFeedback] = useState(false);
   // Whether the portfolio exists for this person at all — an advisor screen, blocked for everybody
   // else rather than merely hidden.
   // The demo advisor may see the portfolio by definition — the permission check it would otherwise
@@ -1646,8 +1652,17 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // list of them. Entering a client hands over to the ordinary app — same tabs, same permission rules,
   // no second implementation of anything — and `advisorHome` is how they get back.
   if (advisorHome && mayPortfolio) return (
+    <>
+    {advisorFeedback && (
+      <FeedbackModal where={{ view: "portfolio" }} who={{ plan: null, companyName: null }}
+                     onSend={async (payload) => sendFeedback(payload, {
+                       url: import.meta.env?.VITE_SUPABASE_URL,
+                       anonKey: import.meta.env?.VITE_SUPABASE_ANON_KEY })}
+                     onClose={() => setAdvisorFeedback(false)} />
+    )}
     <AdvisorHome
       banner={demo ? <DemoPill advisor onLeave={onLeaveDemo} /> : null}
+      onFeedback={() => setAdvisorFeedback(true)}
       account={getAccountApi()}
       onOpenSettings={(scope, page) => setShowAccount({ scope, page })}
       onEnterCompany={async (id, view) => {
@@ -1676,6 +1691,7 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
         } catch (e) { setErr?.(e?.message || String(e)); }
       }}
     />
+    </>
   );
 
   if (showAccount) return (

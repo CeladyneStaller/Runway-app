@@ -101,7 +101,7 @@ export function FeedbackModal({ where = {}, who = {}, onSend, onClose }) {
           <div className="fieldhint">Sub-tab follows the tab you pick.</div>
 
           <span className="fieldlab fieldlab-gap">Tell us</span>
-          <textarea className="inp fb-body" value={body} placeholder={hintFor(kind)}
+          <textarea className="fb-text fb-body" value={body} placeholder={hintFor(kind)}
                     onChange={e => setBody(e.target.value)} />
 
           <div className="tickblock">
@@ -112,7 +112,7 @@ export function FeedbackModal({ where = {}, who = {}, onSend, onClose }) {
             </label>
             {withEmail && (
               <div className="tickbody">
-                <input className="inp inp-sm" type="email" value={email}
+                <input className="fb-text" type="email" value={email}
                        placeholder="you@example.com"
                        onChange={e => setEmail(e.target.value)} />
               </div>

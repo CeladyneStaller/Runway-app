@@ -198,7 +198,8 @@ function Portfolio({ rows, onOpen }) {
   );
 }
 
-export function AdvisorHome({ account, onEnterCompany, onOpenSettings , banner = null}) {
+export function AdvisorHome({ account, onEnterCompany, onOpenSettings, banner = null,
+                             onFeedback = null }) {
   const { rows, loading, err } = useClients(account);
   const [at, setAt] = useState("portfolio");        // "portfolio" | a company id
 
@@ -288,6 +289,11 @@ export function AdvisorHome({ account, onEnterCompany, onOpenSettings , banner =
             )}
             {/* ⚠️ NO PROFILE IN THE DEMO. There is no account behind it — every item in that menu
                 either does nothing or offers to change settings for a person who does not exist. */}
+            {/* ⚠️ THE ADVISOR SCREEN HAS NO RAIL, so the rail's feedback button never reached it —
+                and an advisor is the person most likely to have an opinion about a portfolio view. */}
+            {onFeedback && (
+              <button className="linkbtn adv-fb" onClick={onFeedback}>Send feedback</button>
+            )}
             {!banner && <ProfileMenu onGo={(page) => onOpenSettings?.("profile", page)} />}
           </div>
         </div>
