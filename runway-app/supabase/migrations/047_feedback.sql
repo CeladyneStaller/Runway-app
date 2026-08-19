@@ -41,6 +41,10 @@ alter table feedback enable row level security;
 -- competitor, a colleague or a frustration somebody would not want readable by their own teammates;
 -- **a table people can write to and nobody can read from is the only version that stays honest.**
 -- Reading is done with the service role, outside the app.
+-- ⚠️ DROPPED FIRST, BECAUSE `create policy` HAS NO `if not exists`. Every other statement in this file
+-- is idempotent and this one was not, so a re-run failed at 42710 with the table already correct —
+-- **which makes a migration look broken when it has actually already succeeded.**
+drop policy if exists feedback_insert_any on feedback;
 create policy feedback_insert_any on feedback
   for insert to anon, authenticated
   with check (

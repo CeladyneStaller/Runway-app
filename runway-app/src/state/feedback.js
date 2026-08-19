@@ -68,10 +68,16 @@ export async function sendFeedback(payload, { url, anonKey, token, fetchImpl = f
   try {
     const res = await fetchImpl(`${url}/functions/v1/feedback`, {
       method: "POST",
+      // ⚠️ `Authorization` IS ALWAYS SENT, FALLING BACK TO THE ANON KEY. Supabase's gateway checks it
+      // before the function runs, so omitting it on the anonymous path returns 401 and **the function
+      // never executes** — which is why the failure looked nothing like the code inside it.
+      //
+      // `account.js` has always sent both headers unconditionally. I wrote a second, weaker version
+      // instead of copying the one that works.
       headers: {
         "Content-Type": "application/json",
         ...(anonKey ? { apikey: anonKey } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token || anonKey || ""}`,
       },
       body: JSON.stringify(payload),
     });

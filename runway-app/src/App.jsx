@@ -99,7 +99,9 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
   const sendFeedbackNow = async (payload) => sendFeedback(payload, {
     url: import.meta.env?.VITE_SUPABASE_URL,
     anonKey: import.meta.env?.VITE_SUPABASE_ANON_KEY,
-    token: null,
+    // A signed-in caller sends their own token so the row records who filed it; anonymous callers
+    // fall back to the anon key inside `sendFeedback`.
+    token: await getAuthAdapter?.()?.getAccessToken?.().catch(() => null) ?? null,
   });
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });

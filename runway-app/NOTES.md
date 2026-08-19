@@ -1892,6 +1892,26 @@ are three very different afternoons.
 so the header showed a mark that did not match what a phone puts on a home screen. Both now come from
 `public/`, which is the same file the manifest serves.
 
+### 401, because `Authorization` was conditional
+
+Supabase's gateway checks the header **before the function runs**, so omitting it on the anonymous path
+returned 401 and **the function never executed** — which is why the failure looked nothing like anything
+in its code.
+
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),   // mine
+    Authorization: `Bearer ${await auth.getAccessToken()}`,   // account.js, always
+
+**⚠️ `account.js` HAS ALWAYS SENT BOTH HEADERS UNCONDITIONALLY. I wrote a second, weaker version
+instead of copying the one that works** — the same fault as reaching for `.inp` without reading it, one
+turn apart. Now falls back to the anon key, which the gateway accepts as a valid JWT.
+
+**And the migration was not re-runnable.** `create policy` has no `if not exists`, so a second run
+failed at 42710 with the table already correct — **which makes a migration look broken when it has
+actually already succeeded.** A `drop policy if exists` first; all seven statements are idempotent now.
+
+**Two failures in a row from not reading what already exists**, and both cost a deploy cycle each. The
+grep is always cheaper than the round trip.
+
 ### The advisor demo is a MODE, not a fifth company
 
 An advisor evaluating Waterline is not asking whether it models THEIR runway — **they are asking whether
