@@ -1839,6 +1839,30 @@ exists BEFORE writing a rule for it**, which costs one grep and has now cost fou
 is the same fault as the `agreed` test two turns ago. Comments have to be stripped before any negative
 or counting assertion against source.
 
+## Feedback: form, function, table
+
+Built to the mockup, which Corey framed as the contract — **so every class name and every measurement
+in the component came from it rather than being re-guessed at build time.** That framing also caught
+four inline `style=` attributes in the mockup that would not have survived translation.
+
+**`collectContext()` is the security boundary and the only part with a real test.** An ALLOW-LIST, never
+a redaction: copying the document and deleting sensitive keys is the version that leaks the field
+somebody adds next year. Nine keys, none from the model, and it never reads the document at all.
+
+**Insert first, email second.** If the mail provider is down the feedback is still recorded — the
+reverse loses it, and **a channel that silently drops messages is worse than none**, because the person
+believes they were heard.
+
+**`user_id` is nullable and anonymous calls are allowed**, because somebody in the demo who hits a wall
+is exactly who we want to hear from. That makes the rate limit load-bearing rather than decorative.
+
+**Three build faults, all placement rather than logic:**
+- A `python` assertion failed silently and I only noticed one edit had not applied when the SECOND
+  error appeared — **I read the error and not the exit status.**
+- An unterminated JSX comment swallowed the button below it.
+- `{!demo && (…)}` takes ONE element and I added a sibling — **which reads as though the comment above
+  is to blame, and that is where I looked first.**
+
 ## The advisor demo, and two icon faults
 
 **⚠️ THE LIVE LANDING PAGE HAD THE WRONG ICON AND NO FOOTER MARK.** I imported

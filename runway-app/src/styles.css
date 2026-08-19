@@ -2077,3 +2077,38 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .eyebrow-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .chip.ok{background:#DCEEE8;color:var(--signal-ink)}
 .chip.bad{background:#FBEAE7;color:var(--danger)}
+
+/* ---- feedback ----
+   Class names and measurements taken from the mockup, which was treated as the contract. Every number
+   here appeared there; none was re-guessed at build time. */
+.fb-card{max-width:520px}
+.modal-s{font-size:10.5px;color:var(--muted-2);margin-top:2px;display:block}
+.opt{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted-2)}
+.fieldhint{font-size:10.5px;color:var(--muted-2);margin-top:5px}
+.fieldlab-gap{margin-top:15px}
+.foot-btns{display:flex;gap:9px}
+.fb-kinds{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:16px}
+.fb-kind{font-family:var(--fb);font-size:12px;padding:9px 10px;border-radius:9px;
+  border:1px solid var(--line);background:var(--card);cursor:pointer;text-align:center;line-height:1.3;
+  color:var(--ink)}
+.fb-kind.on{border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal);background:#F5FBF9;
+  font-weight:600}
+.fb-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fb-body{min-height:92px;resize:vertical}
+/* One indent constant, so the checkbox column and everything beneath it line up by arithmetic rather
+   than by eye: 15px box + 9px gap = 24px. */
+.tickblock{margin-top:16px}
+.tickblock:first-of-type{margin-top:18px;padding-top:16px;border-top:1px solid var(--line-2)}
+.tickrow{display:flex;gap:9px;align-items:center;font-size:12.5px;cursor:pointer}
+.tickrow input{width:15px;height:15px;accent-color:var(--signal);flex:none;margin:0}
+.tickbody{margin:8px 0 0 24px}
+.inp-sm{font-size:12px;padding:7px 10px;max-width:320px}
+.ctx{background:var(--paper);border-radius:9px;padding:10px 12px;font-family:var(--fm);
+  font-size:10.5px;color:var(--muted);line-height:1.65;margin:0}
+.tickfine{font-size:10.5px;color:var(--muted-2);margin-top:6px}
+.dim{color:var(--muted-2)}
+.fb-sent{white-space:pre-wrap;font-family:var(--fb);font-size:12.5px;color:var(--ink)}
+.fb-err{margin-top:14px}
+.fb-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 18px;
+  border-top:1px solid var(--line-2);background:var(--paper);flex-wrap:wrap}
+@media (max-width:600px){.fb-kinds{grid-template-columns:1fr}.fb-row2{grid-template-columns:1fr}}

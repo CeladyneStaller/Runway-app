@@ -19,6 +19,8 @@ import { PLANS } from "./state/plans";
 // id -> display name, so the header says "Collaborative" rather than "collaborative".
 const PLAN_LABEL = Object.fromEntries(PLANS.map(p => [p.id, p.name]));
 import { AdvisorHome } from "./views/chrome/AdvisorHome";
+import { FeedbackModal } from "./views/chrome/FeedbackModal";
+import { sendFeedback, collectContext } from "./state/feedback";
 import { landingFor, portfolioAllowed, PORTFOLIO } from "./engine/landing";
 import { load, save, flush, status, subscribe, hasUnsavedWork, syncConfigured, peekLocal,
          adoptionDismissed, dismissAdoption, activateDemoBackend, clearDemo, demoInProgress, isDemo,
@@ -88,6 +90,17 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
                     companyName = null, tabPrefs, onSetup = null,
                     membership = null, companyHidden = [],
                     startView = null, onBackToPortfolio = null }) {
+  // ⚠️ ABOVE EVERY RETURN. An early return placed above a hook changes the hook count and React
+  // refuses — the fault that white-screened the demo picker three times in this session.
+  const [feedback, setFeedback] = useState(false);
+
+  // `sendFeedback` knows nothing about this app: it takes a URL and a token, which keeps the network
+  // shape testable without a browser.
+  const sendFeedbackNow = async (payload) => sendFeedback(payload, {
+    url: import.meta.env?.VITE_SUPABASE_URL,
+    anonKey: import.meta.env?.VITE_SUPABASE_ANON_KEY,
+    token: null,
+  });
   const startY = doc.startY;
   const setStartY = (v) => setDoc(d => { const nv = typeof v === "function" ? v(d.startY) : v; return { ...d, startY: nv }; });
   const startM = doc.startM;
@@ -521,6 +534,13 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
           be absent from the other five. Everything that is actually usable comes through here. */}
       <TermsGate version={termsRequired} onAccept={onAcceptTerms} onSignOut={onSignOutTerms} />
       <TrialBar companyId={getAuthAdapter()?.activeCompany?.()} onOpenSettings={onOpenSettings} />
+      {feedback && (
+        <FeedbackModal
+          where={{ view, subtab: routeTab }}
+          who={{ plan: planName, companyName: doc?.name || null }}
+          onSend={sendFeedbackNow}
+          onClose={() => setFeedback(false)} />
+      )}
       <UnpaidBar onOpenAccount={onOpenAccount} />
       {onSetup && isEmpty && <SetupBar onSetup={onSetup} onImport={doImport} />}
       <div className="shell">
@@ -548,7 +568,10 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
               the last tab while the meta line sat at the bottom. Markup order said "bottom"; the layout
               said otherwise. */}
           <div className="railfoot">
-            {!demo && (
+            {/* ⚠️ A FRAGMENT, BECAUSE THERE ARE TWO BUTTONS NOW. `{cond && (<a/>)}` takes ONE element;
+                adding a sibling inside it is a syntax error that reads as though the comment above is
+                to blame — which is where I looked first. */}
+            {!demo && (<>
               <button className="nav navset railset" onClick={() => onOpenSettings?.("company", "general")}>
                 <span aria-hidden="true">⚙</span>
                 <span className="railset-t">Company settings
@@ -560,7 +583,13 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
                   <span className="railset-s">Plan, tabs, people, connections</span>
                 </span>
               </button>
-            )}
+              {/* ⚠️ IN THE RAIL, NOT A FLOATING BUBBLE. A persistent widget in the corner of a
+                  financial model is a distraction on every screen to catch the few where it helps. */}
+              <button className="nav navset railset" onClick={() => setFeedback(true)}>
+                <span aria-hidden="true">✉</span>
+                <span className="railset-t">Send feedback</span>
+              </button>
+            </>)}
             {/* THE MODEL NAME IS GONE. Every company has a name; the model name was a SECOND string for the
                 same object, and the sidebar already fell back to the company name whenever it could.
                 Two names for one thing is a question nobody should have to answer. The field is
