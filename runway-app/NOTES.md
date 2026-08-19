@@ -1931,6 +1931,47 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+### The fonts did not match, and I did not look
+
+Corey asked. **I had checked the plan value and the tab picker and never compared the type** — the
+advisor modal was rendering in the browser default while the company one was in Hanken Grotesk.
+
+`.rw` carries the base family; `body` does not. The company modal sits inside `.rw`; **I mounted the
+advisor one as a sibling of `<AdvisorHome>`, which opens its own `.rw` at line 223** — so my modal was
+outside it and inherited nothing.
+
+**⚠️ A COMPONENT THAT ONLY LOOKS RIGHT IN ONE PLACE IN THE TREE IS NOT PORTABLE**, and this one mounts
+from two. Fixed on `.modal-scrim` rather than by moving the JSX, so ancestry stops mattering for every
+modal in the app.
+
+**And my first attempt appended a second `.modal-scrim` rule** — the fifth duplicate-class fault this
+session, caught this time by checking before packaging rather than after a bug report. Merged into the
+single existing definition.
+
+**Worth naming what Corey's question did.** I had looked at the two screenshots and found two real
+faults, so I stopped. **"Did you also check X" is a better question than it looks**, because the honest
+answer was no and the answer to "are they the same now" would have been yes.
+
+### The two modals, side by side — I had fixed the wrong one
+
+Corey's screenshots show it plainly:
+
+    company view   plan: —            <- the real value, missing
+    advisor view   plan: advisor      <- a string I hardcoded last turn
+
+**I made them consistent by giving one a literal, which is not the same as making both correct.**
+`planName` is null on a trial and in a demo — so the context read `plan: —` for exactly the people most
+likely to be sending feedback. It now uses the fallback the topbar has always used.
+
+**And the advisor modal contradicted itself on one screen.** "portfolio" is not in `TAB_REGISTRY`, so
+the select found no matching option and displayed "Choose a tab" — **directly above a context block
+saying `tab: portfolio`.** The picker is now hidden where there are no tabs: an advisor on the portfolio
+is already somewhere specific, and asking which tab they mean is a question with no true answer.
+
+**⚠️ THE PATTERN IS THE SAME ONE AS THE PERMISSIONS ROUND.** Last turn I saw two things differ, made
+them match, and called it fixed — **without checking whether either was right.** Matching is not
+correctness, and a screenshot of both together is what exposed it.
+
 ### Prefilling the email, without making it a decision
 
 `userEmail()` on the auth adapter, beside the `userId()` that already reads the session the same way.

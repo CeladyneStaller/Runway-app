@@ -32,6 +32,8 @@ export function FeedbackModal({ where = {}, who = {}, onSend, onClose, getEmail 
 
   const ctx = collectContext({ view: tab || where.view, subtab: subtab || where.subtab }, who);
   const subs = tab ? subtabsOf(tab) : [];
+  // Only offer the picker where the person is actually in the tabbed app.
+  const inTabs = !where.view || TAB_REGISTRY.some(t => t.view === where.view);
 
   // Changing the tab invalidates the sub-tab: keeping "Fringe" after switching to Sales would file a
   // report against a pair that does not exist.
@@ -98,6 +100,12 @@ export function FeedbackModal({ where = {}, who = {}, onSend, onClose, getEmail 
             ))}
           </div>
 
+          {/* ⚠️ HIDDEN WHERE THERE ARE NO TABS. The advisor portfolio is not in `TAB_REGISTRY`, so the
+              select had no matching option and fell back to "Choose a tab" — **while the context block
+              directly below it said `tab: portfolio`. The modal contradicted itself on one screen.**
+              An advisor on the portfolio is already somewhere specific; asking which tab they mean is
+              a question with no true answer. */}
+          {inTabs && (<>
           <span className="fieldlab">Where in the app? <span className="opt">— optional</span></span>
           <div className="fb-row2">
             <select className="sel" value={tab} onChange={e => pickTab(e.target.value)}>
@@ -112,6 +120,7 @@ export function FeedbackModal({ where = {}, who = {}, onSend, onClose, getEmail 
             </select>
           </div>
           <div className="fieldhint">Sub-tab follows the tab you pick.</div>
+          </>)}
 
           <span className="fieldlab fieldlab-gap">Tell us</span>
           <textarea className="fb-text fb-body" value={body} placeholder={hintFor(kind)}

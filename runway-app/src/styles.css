@@ -1717,8 +1717,13 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 @media(max-width:760px){.cb-ds-g{grid-template-columns:repeat(2,1fr)}}
 
 /* ---- dashboard chart options ---- */
+/* ⚠️ THE FONT IS SET HERE RATHER THAN INHERITED. `.rw` carries the base family and `body` does not, so
+   a modal rendered as a sibling of a view instead of inside it fell back to the browser default — the
+   advisor copy came out in Times while the company copy was in Hanken Grotesk.
+   **A component that only looks right in one place in the tree is not portable**, and this one mounts
+   from two. */
 .modal-scrim{position:fixed;inset:0;background:rgba(12,26,34,.35);display:flex;align-items:center;
-  justify-content:center;padding:22px;z-index:60}
+  justify-content:center;padding:22px;z-index:60;font-family:var(--fb);color:var(--ink-txt)}
 .modal-card{background:var(--card);border-radius:12px;max-width:440px;width:100%;
   box-shadow:0 18px 44px rgba(12,26,34,.22);overflow:hidden}
 /* ⚠️ THIS IS THE SECOND `.modal-h` IN THE FILE AND IT WAS WINNING FOR ALL FOURTEEN USERS.

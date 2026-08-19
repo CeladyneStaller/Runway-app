@@ -539,7 +539,13 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
       {feedback && (
         <FeedbackModal
           where={{ view, subtab: routeTab }}
-          who={{ plan: planName, companyName: doc?.name || null }}
+          // ⚠️ THE SAME FALLBACK THE TOPBAR ALREADY USES. `planName` is null on a trial and in a
+          // demo — so the context read `plan: —` for exactly the people most likely to be sending
+          // feedback, while the advisor modal I "fixed" last turn showed a real value.
+          // **I made the two consistent by giving one of them a hardcoded string, which is not the
+          // same as making both correct.**
+          who={{ plan: planName || (demo ? "Demo" : "Trial"),
+                 companyName: doc?.name || null }}
           onSend={sendFeedbackNow}
           getEmail={() => getAuthAdapter?.()?.userEmail?.() ?? Promise.resolve(null)}
           onClose={() => setFeedback(false)} />
