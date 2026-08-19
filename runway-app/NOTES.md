@@ -1912,6 +1912,25 @@ actually already succeeded.** A `drop policy if exists` first; all seven stateme
 **Two failures in a row from not reading what already exists**, and both cost a deploy cycle each. The
 grep is always cheaper than the round trip.
 
+### The 500's cause was in the response body and the client discarded it
+
+The function has put the Postgres code in its JSON since I added it. **`sendFeedback` returned
+`{ ok:false, error:"failed" }` and threw the rest away** — so two round trips were spent guessing at a
+failure whose cause was already on the wire.
+
+**⚠️ A DIAGNOSTIC THAT IS COLLECTED AND DISCARDED IS WORSE THAN ONE NEVER COLLECTED**, because it makes
+the failure look opaque when it is not. The code now reaches the console and the modal.
+
+Two more guards, both for the same reason:
+
+**An empty `SUPABASE_SERVICE_ROLE_KEY` does not throw at `createClient`** — it fails at the insert with
+a permission error that reads like RLS, sending the reader to the wrong file entirely. Named
+explicitly now.
+
+**And one outer try/catch.** An uncaught throw anywhere in the handler became a bare platform 500 with
+no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
+round trips.**
+
 ### The advisor demo is a MODE, not a fifth company
 
 An advisor evaluating Waterline is not asking whether it models THEIR runway — **they are asking whether

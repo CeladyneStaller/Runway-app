@@ -82,7 +82,16 @@ export async function sendFeedback(payload, { url, anonKey, token, fetchImpl = f
       body: JSON.stringify(payload),
     });
     if (res.status === 429) return { ok: false, error: "rate_limited" };
-    if (!res.ok) return { ok: false, error: "failed" };
+    if (!res.ok) {
+      // ⚠️ THE FUNCTION ALREADY PUTS THE POSTGRES CODE IN THE BODY AND I THREW IT AWAY. Two round
+      // trips were spent guessing at a 500 whose cause was in the response the whole time.
+      // **A diagnostic that is collected and discarded is worse than one never collected**, because
+      // it makes the failure look opaque when it is not.
+      let detail = null;
+      try { detail = (await res.json())?.code ?? null; } catch { /* not JSON */ }
+      console.error("[feedback] send failed:", res.status, detail || "(no code)");
+      return { ok: false, error: "failed", status: res.status, code: detail };
+    }
     return { ok: true };
   } catch {
     return { ok: false, error: "offline" };

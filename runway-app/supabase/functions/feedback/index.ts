@@ -52,6 +52,19 @@ const overLimit = (key: string) => {
 };
 
 Deno.serve(async (req) => {
+  // ⚠️ ONE OUTER CATCH. An uncaught throw anywhere below becomes a bare platform 500 with no body at
+  // all — indistinguishable from a database failure, which is exactly the ambiguity that cost two
+  // round trips here.
+  try {
+    return await handle(req);
+  } catch (e) {
+    console.error("[feedback] unhandled:", (e as Error)?.stack || e);
+    return new Response(JSON.stringify({ error: "unhandled", code: "throw" }),
+      { status: 500, headers: { ...cors(req.headers.get("origin")), "Content-Type": "application/json" } });
+  }
+});
+
+async function handle(req: Request): Promise<Response> {
   const origin = req.headers.get("origin");
   const head = cors(origin);
 
@@ -103,6 +116,16 @@ Deno.serve(async (req) => {
   if (overLimit(limitKey)) {
     return new Response(JSON.stringify({ error: "rate_limited" }),
       { status: 429, headers: { ...head, "Content-Type": "application/json" } });
+  }
+
+  // ⚠️ CHECKED, NOT ASSUMED. An empty service key does not throw at `createClient` — it fails at the
+  // insert with a permission error that reads like an RLS problem, sending the reader to the wrong
+  // file. Naming the missing variable costs three lines and saves an afternoon.
+  if (!SUPABASE_URL || !SERVICE_KEY) {
+    console.error("[feedback] missing env:",
+      !SUPABASE_URL ? "SUPABASE_URL " : "", !SERVICE_KEY ? "SUPABASE_SERVICE_ROLE_KEY" : "");
+    return new Response(JSON.stringify({ error: "not_configured", code: "env" }),
+      { status: 500, headers: { ...head, "Content-Type": "application/json" } });
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
@@ -158,4 +181,4 @@ Deno.serve(async (req) => {
 
   return new Response(JSON.stringify({ ok: true, id: row.id }),
     { status: 200, headers: { ...head, "Content-Type": "application/json" } });
-});
+}

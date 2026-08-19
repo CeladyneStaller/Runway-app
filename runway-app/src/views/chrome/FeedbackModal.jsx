@@ -39,9 +39,12 @@ export function FeedbackModal({ where = {}, who = {}, onSend, onClose }) {
     });
     setBusy(false);
     if (r?.ok) setDone(true);
-    else setFailed(r?.error === "rate_limited"
-      ? "That is a lot of feedback in one hour — try again shortly."
-      : "That did not send. Your message is still here; try again in a moment.");
+    else if (r?.error === "rate_limited")
+      setFailed("That is a lot of feedback in one hour — try again shortly.");
+    // The code is shown only when there is one: a person does not need it, but the person DEBUGGING
+    // it does, and today those are the same person.
+    else setFailed("That did not send. Your message is still here; try again in a moment."
+      + (r?.code ? ` (${r.code})` : ""));
   };
 
   // ⚠️ THE CONFIRMATION SHOWS WHAT WAS SENT. The failure mode of a form is silence, and silence reads
