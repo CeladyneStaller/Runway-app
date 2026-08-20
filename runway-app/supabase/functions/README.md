@@ -115,6 +115,22 @@ That URL is what you register in **Stripe → Developers → Webhooks**, subscri
 
 ---
 
+## hub-status
+
+Serves **Waterline HQ**, a separate Vercel project — not part of the customer app, and not shipped in
+its bundle.
+
+⚠️ **IT AUTHENTICATES WITH THE CALLER'S SESSION, NOT A SHARED SECRET.** An earlier version read
+`HUB_TOKEN` from a header, which meant anyone with the URL and the string was staff. It now reads the
+same `Authorization` header every other function here reads and calls `is_staff()` — so **revoking
+somebody is `delete from staff where user_id = ...`** rather than rotating a secret and telling
+everybody.
+
+`HUB_TOKEN` is no longer read by anything. Leave it or remove it.
+
+⚠️ **DEPLOY `048_is_staff.sql` FIRST.** The function calls that RPC on every request; without it, every
+call returns 401 and nothing in the response says why.
+
 ## Secrets
 
 Set once, in **Dashboard → Edge Functions → Secrets**, or:
@@ -168,6 +184,10 @@ PowerShell also does not take the backslash continuations above — put it on on
 | `STRIPE_PRICE_IDS` | checkout | the plan cannot be priced; checkout refuses |
 | `STRIPE_PRICE_MAP` | webhook | subscriptions silently land on `solo`, logged loudly |
 | `SITE_URL` | checkout, portal | also the CORS origin — see below |
+| `STRIPE_KEY` | hub-status | the hub's Stripe panel is empty |
+| `VERCEL_TOKEN` | hub-status | the hub's deploy panel is empty |
+| `VERCEL_PROJECT` | hub-status | as above |
+| `VERCEL_TEAM_ID` | hub-status | as above |
 | `ALLOWED_ORIGINS` | **delete-account** | **every browser call refused** — see below |
 
 **QuickBooks secrets** (Stage 5 of `QBO-PLAN.md`):

@@ -1,0 +1,2277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Waterline HQ</title>
+<!-- Favicon inlined so the hub stays a single file with no 404 for a sidecar asset. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M22.5 9.2c-3.6 0-6.4 2.5-6.9 5.8-2.9.9-5 3.4-5 6.4 0 .9.2 1.8.5 2.6h21.8c1.4-1.6 2.1-3.6 2.1-5.7 0-2.4-1-4.6-2.6-6.2l4.3-2.5-4.8-.4-1.1-3.4-2.6 2.9c-1.7-.9-3.6-1.4-5.7-1.4z' fill='%23121A17'/%3E%3Cpath d='M2 25.6h36' stroke='%23121A17' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#121A17">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.4.0/dist/tabler-icons.min.css">
+<style>
+/* ==========================================================================
+   WATERLINE HQ — personal link hub
+   Single file. No build step. No backend except one optional status proxy.
+   Palette and type follow the Waterline brand: pine-black, bone, sage, clay,
+   brown, brick / Spectral, Archivo, IBM Plex Mono.
+   ========================================================================== */
+
+:root {
+  /* Brand ground */
+  --pine-black: #121A17;
+  --pine-soft:  #1C2622;
+  --bone:       #EEEBE0;
+  --bone-warm:  #E6E2D5;
+  --sage:       #7C8F6F;
+  --clay:       #B06B3F;
+  --brown:      #5A4632;
+  --brick:      #9A3324;
+
+  /* Semantic roles — same names used across the Waterline codebase */
+  --signal:   var(--sage);
+  --signal-2: var(--clay);
+  --caution:  #A87A1E;
+  --danger:   var(--brick);
+  --muted:    #6F6C61;
+
+  /* Surfaces (light) */
+  --ground:      var(--bone);
+  --surface:     #F7F5EE;
+  --surface-sunk: var(--bone-warm);
+  --ink:         var(--pine-black);
+  --ink-soft:    #3D4642;
+  --rule:        #D6D1C2;
+  --rule-strong: #BEB8A6;
+
+  /* Type roles */
+  --fd: 'Spectral', Georgia, serif;              /* display  */
+  --fs: 'Archivo', -apple-system, sans-serif;    /* sans     */
+  --fm: 'IBM Plex Mono', 'SF Mono', monospace;   /* mono     */
+
+  --r:    6px;
+  --r-lg: 10px;
+  --gut:  clamp(18px, 4vw, 40px);
+}
+
+html[data-theme="dark"] {
+  --ground:      var(--pine-black);
+  --surface:     var(--pine-soft);
+  --surface-sunk: #161F1B;
+  --ink:         var(--bone);
+  --ink-soft:    #B7B3A5;
+  --rule:        #2C3833;
+  --rule-strong: #3E4C46;
+  --muted:       #8B877A;
+  --sage:        #9AAE8C;
+  --clay:        #C98A5C;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--fs);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--signal-2);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.mono { font-family: var(--fm); }
+.shell { max-width: 1180px; margin: 0 auto; padding: 0 var(--gut); }
+
+/* ---------- Masthead ---------------------------------------------------- */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0 18px;
+}
+
+.mark {
+  width: 38px; height: 38px;
+  flex: 0 0 38px;
+  display: block;
+}
+
+.wordmark {
+  font-family: var(--fd);
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.wordmark .sub {
+  display: block;
+  font-family: var(--fm);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.masthead-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 34px; height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 18px;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.icon-btn:hover { background: var(--surface); border-color: var(--rule); color: var(--ink); }
+.icon-btn[aria-pressed="true"] {
+  background: var(--signal-2);
+  border-color: var(--signal-2);
+  color: var(--bone);
+}
+
+/* ---------- Search ------------------------------------------------------ */
+
+.search-wrap { position: relative; margin-bottom: 22px; }
+.search-wrap > i {
+  position: absolute;
+  left: 13px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 17px;
+  pointer-events: none;
+}
+#search {
+  width: 100%;
+  padding: 11px 76px 11px 40px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  color: var(--ink);
+  font-family: var(--fs);
+  font-size: 14px;
+}
+#search::placeholder { color: var(--muted); }
+#search:focus { outline: none; border-color: var(--rule-strong); }
+.search-hint {
+  position: absolute;
+  right: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 2px 6px;
+  pointer-events: none;
+}
+#search:focus ~ .search-hint { opacity: 0; }
+
+/* ---------- The waterline ----------------------------------------------
+   Signature element. Live status markers ride the surface: healthy floats
+   above the line, trouble dips below into the water. The band below the
+   rule is the water.                                                       */
+
+/* ---------- Status cards ------------------------------------------------
+   Static by design. An earlier version had these ride a hairline and shift
+   vertically with health; the movement made steady numbers look unstable and
+   the line cut through them, so state is carried by an accent edge instead.  */
+
+/* Both status rows share a three-column grid so their vertical edges line up:
+   MRR spans two columns (it carries the plan breakdown), Deploy takes one, and
+   the feedback tiles sit directly beneath on the same tracks. */
+.status {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin: 2px 0 0;
+}
+.status-feedback { margin: 10px 0 30px; }
+.status-feedback:empty { display: none; }
+.card-wide { grid-column: span 2; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: var(--r-lg);
+  padding: 15px 16px;
+}
+.card.is-good { border-left-color: var(--signal); }
+.card.is-warn { border-left-color: var(--caution); }
+.card.is-bad  { border-left-color: var(--danger); }
+.card.is-idle { border-left-color: var(--rule-strong); opacity: .82; }
+
+.card-label {
+  font-family: var(--fm);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+.card-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.card-value {
+  font-family: var(--fd);
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+.card.is-bad  .card-value { color: var(--danger); }
+.card.is-warn .card-value { color: var(--caution); }
+.card-sub {
+  font-family: var(--fm);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.card-note {
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.card-note.is-caution { color: var(--caution); }
+
+/* Plan breakdown inside the MRR card */
+.plans {
+  margin-top: 14px;
+  padding-top: 11px;
+  border-top: 1px solid var(--rule);
+}
+.plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.plan-name { color: var(--ink-soft); }
+.plan-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+  opacity: .8;
+}
+.plan-n {
+  font-family: var(--fm);
+  font-size: 12.5px;
+  font-weight: 500;
+  min-width: 16px;
+  text-align: right;
+}
+.plan-row.is-zero .plan-name,
+.plan-row.is-zero .plan-n { color: var(--muted); }
+.plan-row.is-extra .plan-name { font-style: italic; }
+
+/* One accent per kind, inherited by everything inside the tile. */
+.k-bug      { --kc: var(--danger); }
+.k-idea     { --kc: var(--signal-2); }
+.k-question { --kc: var(--signal); }
+.k-other    { --kc: var(--rule-strong); }
+
+.card.kind-card { border-left-color: var(--kc); }
+.card.kind-card.is-clear { border-left-color: var(--rule-strong); }
+.card.kind-card .card-label { color: var(--kc); }
+.card.kind-card.is-clear .card-label { color: var(--muted); }
+
+.peek {
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.peek-item { display: flex; gap: 9px; align-items: flex-start; }
+.peek-body { flex: 1; min-width: 0; cursor: pointer; }
+.peek-text {
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+/* Long notes clip at three lines; clicking the text opens the whole thing. */
+.peek-body.is-open .peek-text { -webkit-line-clamp: unset; display: block; }
+.peek-meta {
+  font-family: var(--fm);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.peek-more {
+  font-family: var(--fm);
+  font-size: 10.5px;
+  color: var(--kc);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-align: left;
+  align-self: flex-start;
+}
+.peek-clear {
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--rule);
+}
+.peek-restore {
+  font-family: var(--fm);
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+.peek-restore button {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--fm); font-size: 10.5px;
+  color: var(--signal-2); text-decoration: underline;
+}
+
+.dismiss {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  flex: 0 0 24px;
+}
+.dismiss:hover { color: var(--kc); border-color: var(--kc); }
+.peek-item.is-gone { animation: fold .24s ease-in forwards; }
+@keyframes fold { to { opacity: 0; transform: translateX(-10px); } }
+@media (prefers-reduced-motion: reduce) { .peek-item.is-gone { animation: none; opacity: 0; } }
+
+.card-setup {
+  font-family: var(--fm);
+  font-size: 11.5px;
+  color: var(--muted);
+  background: none;
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  cursor: pointer;
+  text-align: left;
+}
+.card-setup:hover { color: var(--ink); border-color: var(--ink-soft); }
+
+/* ---------- Funnel ------------------------------------------------------
+   Stage bars sink as the funnel narrows, echoing the waterline: each stage
+   sits lower in the water than the one before it.                          */
+
+.funnel { margin: 0 0 34px; }
+
+.funnel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.funnel-title {
+  font-family: var(--fd);
+  font-size: 16px;
+  font-weight: 600;
+}
+.funnel-sub {
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+}
+.funnel-toggle {
+  margin-left: auto;
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.funnel-toggle button {
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 0;
+  border-right: 1px solid var(--rule);
+  font-family: var(--fm);
+  font-size: 10.5px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.funnel-toggle button:last-child { border-right: 0; }
+.funnel-toggle button[aria-pressed="true"] { background: var(--pine-black); color: var(--bone); }
+html[data-theme="dark"] .funnel-toggle button[aria-pressed="true"] { background: var(--bone); color: var(--pine-black); }
+
+.funnel-stages {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  /* Top-aligned, not bottom-aligned: stages have different numbers of text
+     lines beneath the bar (the first has no "% of prev"), so aligning bottoms
+     put the bars on different floors. */
+  align-items: start;
+}
+
+.stage { display: flex; flex-direction: column; }
+
+/* Bars size against this fixed box, not against the whole column. Sizing them
+   against the column made the label text part of the scale, so flexbox clamped
+   every bar to roughly the same height and the funnel read as flat. */
+.stage-plot {
+  height: 76px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.stage-bar {
+  width: 100%;
+  background: color-mix(in srgb, var(--sage) 34%, var(--ground));
+  border: 1px solid color-mix(in srgb, var(--sage) 58%, var(--ground));
+  border-bottom: 0;
+  border-radius: var(--r) var(--r) 0 0;
+  min-height: 4px;
+  transition: height .45s cubic-bezier(.2,.7,.3,1);
+}
+.stage:last-child .stage-bar {
+  background: color-mix(in srgb, var(--clay) 32%, var(--ground));
+  border-color: color-mix(in srgb, var(--clay) 58%, var(--ground));
+}
+
+.stage-floor { height: 1px; background: var(--rule-strong); }
+
+.stage-meta { padding-top: 8px; }
+.stage-count {
+  font-family: var(--fd);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.stage-name {
+  font-family: var(--fm);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.stage-rate {
+  font-family: var(--fm);
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.stage-rate.is-weak { color: var(--caution); }
+
+.funnel-tail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 14px;
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+}
+.funnel-tail b { font-weight: 500; color: var(--ink-soft); }
+
+.funnel-error {
+  font-family: var(--fm);
+  font-size: 11.5px;
+  color: var(--danger);
+  padding: 10px 0;
+}
+
+@media (max-width: 620px) {
+  .funnel-stages { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .stage-plot { height: 54px; }
+  .stage-count { font-size: 14px; }
+  .stage-name { font-size: 8px; letter-spacing: .06em; }
+  .stage-rate { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) { .stage-bar { transition: none; } }
+
+/* ---------- Sections ---------------------------------------------------- */
+
+.section { margin-bottom: 34px; }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0 0 12px;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 16px;
+}
+.section-name {
+  font-family: var(--fd);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.section-count {
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+}
+.section-chev {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 16px;
+  transition: transform .15s;
+}
+.section.is-collapsed .section-chev { transform: rotate(-90deg); }
+.section.is-collapsed .grid { display: none; }
+
+/* ---------- Tiles ------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: 10px;
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 84px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  transition: border-color .12s, transform .12s;
+}
+.tile:hover {
+  border-color: var(--rule-strong);
+  transform: translateY(-1px);
+}
+.tile:focus-visible { outline-offset: 3px; }
+
+.tile-icon {
+  width: 36px; height: 36px;
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  font-size: 18px;
+}
+
+.tile-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tile-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The address gets its own line in mono — it's data, and it's what you scan
+   for when two tiles have similar names. */
+.tile-host {
+  font-family: var(--fm);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-note {
+  font-family: var(--fm);
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-host.is-empty { color: var(--muted); font-style: italic; }
+
+.tile-edit {
+  position: absolute;
+  top: 6px; right: 6px;
+  display: none;
+  gap: 2px;
+}
+body.is-editing .tile-edit { display: flex; }
+body.is-editing .tile { cursor: grab; }
+body.is-editing .tile.is-dragging { opacity: .4; }
+body.is-editing .tile.is-over { border-color: var(--signal-2); }
+
+.mini-btn {
+  width: 24px; height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+}
+.mini-btn:hover { border-color: var(--rule-strong); color: var(--ink); }
+.mini-btn.is-danger:hover { color: var(--danger); border-color: var(--danger); }
+
+.tile-add {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: none;
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  min-height: 62px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+body.is-editing .tile-add { display: flex; }
+.tile-add:hover { color: var(--ink); border-color: var(--ink-soft); }
+
+/* ---------- Edit banner ------------------------------------------------- */
+
+.edit-banner {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--signal-2) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--signal-2) 40%, var(--rule));
+  border-radius: var(--r);
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+body.is-editing .edit-banner { display: flex; }
+
+/* ---------- Empty state ------------------------------------------------- */
+
+.empty {
+  padding: 44px 0;
+  text-align: center;
+  color: var(--muted);
+}
+.empty-title {
+  font-family: var(--fd);
+  font-size: 17px;
+  color: var(--ink);
+  margin-bottom: 5px;
+}
+
+/* ---------- Drawer ------------------------------------------------------ */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(18,26,23,.42);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s;
+  z-index: 40;
+}
+.scrim.is-open { opacity: 1; pointer-events: auto; }
+
+.drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(420px, 100%);
+  background: var(--ground);
+  border-left: 1px solid var(--rule);
+  transform: translateX(100%);
+  transition: transform .2s cubic-bezier(.2,.7,.3,1);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.drawer.is-open { transform: translateX(0); }
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.drawer-head h2 {
+  font-family: var(--fd);
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+.drawer-head .icon-btn { margin-left: auto; }
+
+.drawer-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+.dsection { margin-bottom: 26px; }
+.dsection-head {
+  font-family: var(--fm);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.field { display: block; margin-bottom: 13px; }
+.field > span {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+.field-help {
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+  line-height: 1.45;
+}
+.field input, .field select, .field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  color: var(--ink);
+  font-family: var(--fs);
+  font-size: 13.5px;
+}
+.field input.mono, .field textarea { font-family: var(--fm); font-size: 12.5px; }
+.field textarea { resize: vertical; min-height: 90px; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--rule-strong);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 15px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.btn:hover { border-color: var(--rule-strong); }
+.btn-primary {
+  background: var(--pine-black);
+  border-color: var(--pine-black);
+  color: var(--bone);
+}
+html[data-theme="dark"] .btn-primary {
+  background: var(--bone);
+  border-color: var(--bone);
+  color: var(--pine-black);
+}
+.btn-primary:hover { opacity: .88; }
+.btn-danger { color: var(--danger); }
+.btn-danger:hover { border-color: var(--danger); }
+.btn-block { width: 100%; }
+.btn-row { display: flex; gap: 8px; }
+.btn-row > .btn { flex: 1; }
+
+.seg { display: flex; gap: 0; border: 1px solid var(--rule); border-radius: var(--r); overflow: hidden; }
+.seg button {
+  flex: 1;
+  padding: 8px;
+  background: var(--surface);
+  border: 0;
+  border-right: 1px solid var(--rule);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--pine-black); color: var(--bone); }
+html[data-theme="dark"] .seg button[aria-pressed="true"] { background: var(--bone); color: var(--pine-black); }
+
+/* ---------- Modal ------------------------------------------------------- */
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(18,26,23,.42);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 60;
+}
+.modal-scrim.is-open { display: flex; }
+
+.modal {
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  width: min(460px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 22px;
+}
+.modal h3 {
+  font-family: var(--fd);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.icon-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 5px;
+  max-height: 132px;
+  overflow-y: auto;
+  padding: 7px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+}
+.icon-opt {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 16px;
+}
+.icon-opt:hover { background: var(--surface-sunk); }
+.icon-opt[aria-pressed="true"] {
+  border-color: var(--signal-2);
+  color: var(--signal-2);
+  background: var(--surface-sunk);
+}
+
+/* ---------- Toast ------------------------------------------------------- */
+
+.toasts {
+  position: fixed;
+  bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 70;
+}
+.toast {
+  background: var(--pine-black);
+  color: var(--bone);
+  border-radius: var(--r);
+  padding: 10px 16px;
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(18,26,23,.2);
+  animation: rise .2s ease-out;
+}
+html[data-theme="dark"] .toast { background: var(--bone); color: var(--pine-black); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* ---------- Responsive -------------------------------------------------- */
+
+@media (max-width: 620px) {
+  .wordmark { font-size: 20px; }
+  .grid { grid-template-columns: 1fr; }
+  .search-hint { display: none; }
+  .status { grid-template-columns: 1fr; }
+  .card-wide { grid-column: span 1; }
+}
+
+footer {
+  padding: 10px 0 40px;
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="masthead">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <!-- Wood duck riding its own waterline. Swap for waterline-mark.svg any time. -->
+      <path d="M22.5 9.2c-3.6 0-6.4 2.5-6.9 5.8-2.9.9-5 3.4-5 6.4 0 .9.2 1.8.5 2.6h21.8c1.4-1.6 2.1-3.6 2.1-5.7 0-2.4-1-4.6-2.6-6.2l4.3-2.5-4.8-.4-1.1-3.4-2.6 2.9c-1.7-.9-3.6-1.4-5.7-1.4z" fill="currentColor" opacity=".92"/>
+      <circle cx="26.4" cy="14.1" r="1.05" fill="var(--ground)"/>
+      <path d="M2 25.6h36" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M11.1 24c-.3-.8-.5-1.7-.5-2.6 0-.4 0-.8.1-1.2" stroke="currentColor" stroke-width="1.1" opacity=".5"/>
+      <path d="M6.5 30.4c1.9 0 1.9-1.6 3.8-1.6s1.9 1.6 3.8 1.6 1.9-1.6 3.8-1.6 1.9 1.6 3.8 1.6 1.9-1.6 3.8-1.6 1.9 1.6 3.8 1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".38"/>
+    </svg>
+    <div class="wordmark">
+      Waterline
+      <span class="sub" id="today">—</span>
+    </div>
+    <div class="masthead-tools">
+      <button class="icon-btn" id="btn-refresh" title="Refresh status" aria-label="Refresh status"><i class="ti ti-refresh"></i></button>
+      <button class="icon-btn" id="btn-edit" title="Edit tiles" aria-label="Edit tiles" aria-pressed="false"><i class="ti ti-pencil"></i></button>
+      <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings"><i class="ti ti-settings"></i></button>
+    </div>
+  </header>
+
+  <div class="search-wrap">
+    <i class="ti ti-search"></i>
+    <input type="text" id="search" placeholder="Search links" autocomplete="off" spellcheck="false">
+    <span class="search-hint">/</span>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="status status-feedback" id="feedback-row"></div>
+
+  <section class="funnel" id="funnel" hidden>
+    <div class="funnel-head">
+      <span class="funnel-title">Funnel</span>
+      <span class="funnel-sub" id="funnel-sub">&mdash;</span>
+      <div class="funnel-toggle" id="funnel-toggle">
+        <button data-days="30" aria-pressed="true">30d</button>
+        <button data-days="90" aria-pressed="false">90d</button>
+        <button data-days="0"  aria-pressed="false">All</button>
+      </div>
+    </div>
+    <div class="funnel-stages" id="funnel-stages"></div>
+    <div class="funnel-tail" id="funnel-tail"></div>
+  </section>
+
+  <div class="edit-banner">
+    <i class="ti ti-pencil"></i>
+    <span>Editing. Drag tiles to reorder, or use the buttons on each tile.</span>
+    <button class="btn" id="btn-edit-done" style="margin-left:auto;padding:5px 12px;">Done</button>
+  </div>
+
+  <main id="sections"></main>
+
+  <footer>
+    <span id="foot-count">—</span>
+    <span>Local to this browser</span>
+  </footer>
+
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<aside class="drawer" id="drawer" aria-label="Settings" aria-hidden="true">
+  <div class="drawer-head">
+    <h2>Settings</h2>
+    <button class="icon-btn" id="btn-drawer-close" aria-label="Close settings"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="drawer-body">
+
+    <div class="dsection">
+      <div class="dsection-head">Appearance</div>
+      <div class="seg" id="theme-seg">
+        <button data-theme-val="light" aria-pressed="false">Light</button>
+        <button data-theme-val="dark" aria-pressed="false">Dark</button>
+        <button data-theme-val="auto" aria-pressed="false">Auto</button>
+      </div>
+    </div>
+
+    <div class="dsection">
+      <div class="dsection-head">Live status</div>
+
+      <label class="field">
+        <span>Status proxy URL</span>
+        <input type="text" id="cfg-proxy-url" class="mono" placeholder="https://xxxx.supabase.co/functions/v1/hub-status" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Status proxy token</span>
+        <!-- ⚠️ NO TOKEN FIELD. Authentication is the signed-in account, so there is nothing to paste
+             and nothing left in localStorage on a shared machine. -->
+        <div id="who" class="mono">Not signed in</div>
+        <button id="btn-signin" type="button">Sign in with Waterline</button>
+        <button id="btn-signout" type="button" hidden>Sign out</button>
+        <span class="field-help">Stripe and Vercel keys live in the Edge Function, never in this file. This token only unlocks the proxy.</span>
+      </label>
+
+      <button class="btn btn-block" id="btn-save-status">Save and refresh</button>
+    </div>
+
+    <div class="dsection">
+      <div class="dsection-head">Your tiles</div>
+      <div class="btn-row" style="margin-bottom:8px;">
+        <button class="btn" id="btn-export">Export JSON</button>
+        <button class="btn" id="btn-import">Import JSON</button>
+      </div>
+      <button class="btn btn-block btn-danger" id="btn-reset">Reset to starter set</button>
+      <div class="field-help" style="margin-top:8px;">
+        Tiles are saved in this browser's local storage. Export before you move machines or change how you open the file.
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+<div class="modal-scrim" id="modal-scrim">
+  <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   1. CONSTANTS
+   ========================================================================== */
+
+<script>
+window.WATERLINE_ANON_KEY = "sb_publishable_aCKlwnqix0M3mnI81bhBfw_6wV-CYQn";
+</script>
+
+const LS = {
+  tiles:     "wl.hub.tiles.v1",
+  collapsed: "wl.hub.collapsed.v1",
+  theme:     "wl.hub.theme.v1",
+  status:    "wl.hub.status.v1"
+};
+
+const GROUPS = [
+  { id: "product", name: "Product & infrastructure" },
+  { id: "market",  name: "Marketing & brand" },
+  { id: "legal",   name: "Legal & corporate" },
+  { id: "money",   name: "Banking, accounting & tax" }
+];
+
+/* Starter tiles. Root URLs only — deep links change and go stale, so edit
+   these to the exact pages you actually land on. */
+const SEED = [
+  { name: "Waterline app",        url: "https://app.waterline-runway.com",     group: "product", icon: "browser",          note: "app.waterline-runway.com" },
+  { name: "Supabase",             url: "https://supabase.com/dashboard",       group: "product", icon: "database",         note: "Postgres, RLS, Edge Functions" },
+  { name: "Vercel",               url: "https://vercel.com/dashboard",         group: "product", icon: "triangle",         note: "Deploys and domains" },
+  { name: "Stripe",               url: "https://dashboard.stripe.com",         group: "product", icon: "credit-card",      note: "Subscriptions and payouts" },
+  { name: "GitHub",               url: "https://github.com",                   group: "product", icon: "brand-github",     note: "Repos and actions" },
+  { name: "Sentry",               url: "https://sentry.io",                    group: "product", icon: "bug",              note: "Errors from the app" },
+
+  { name: "Marketing site",       url: "https://www.waterline-runway.com",     group: "market",  icon: "world",            note: "www.waterline-runway.com" },
+  { name: "Brand assets",         url: "",                                     group: "market",  icon: "palette",          note: "Mark, palette, type — add link" },
+  { name: "Product docs",         url: "",                                     group: "market",  icon: "book",             note: "Add link" },
+
+  { name: "Idaho SOS filings",    url: "https://sosbiz.idaho.gov",             group: "legal",   icon: "building-bank",     note: "Annual report, entity record" },
+  { name: "DMCA agent record",    url: "https://dmca.copyright.gov",           group: "legal",   icon: "shield-check",      note: "DMCA-1078019" },
+  { name: "Registered agent",     url: "",                                     group: "legal",   icon: "mail-forward",      note: "Add portal link" },
+  { name: "Corporate records",    url: "",                                     group: "legal",   icon: "folder",            note: "Bylaws, consents, RSPA" },
+
+  { name: "Business banking",     url: "",                                     group: "money",   icon: "building-bank",     note: "Add link once opened" },
+  { name: "Accounting",           url: "",                                     group: "money",   icon: "calculator",        note: "Add link" },
+  { name: "Idaho Tax Commission", url: "https://tax.idaho.gov",                group: "money",   icon: "receipt-tax",       note: "State filings" },
+  { name: "EFTPS",                url: "https://www.eftps.gov",                group: "money",   icon: "building-estate",   note: "Federal tax payments" }
+];
+
+const ICONS = [
+  "browser","world","database","triangle","credit-card","brand-github","bug","cloud",
+  "server","terminal-2","chart-line","report-money","calculator","receipt-tax","cash",
+  "building-bank","building-estate","shield-check","scale","gavel","file-text","folder",
+  "book","notebook","mail","mail-forward","calendar","checklist","palette","brush",
+  "photo","link","key","lock","settings","users","user-circle","message","phone",
+  "rocket","flag","target","bulb","seeding","droplet","anchor"
+];
+
+/* ==========================================================================
+   2. STORAGE
+   ========================================================================== */
+
+function read(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : JSON.parse(raw);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function write(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (_) {
+    toast("Couldn't save — local storage is unavailable");
+    return false;
+  }
+}
+
+function uid() {
+  return "t" + Math.random().toString(36).slice(2, 9);
+}
+
+/* ==========================================================================
+   3. STATE
+   ========================================================================== */
+
+let tiles     = read(LS.tiles, null) || SEED.map(t => ({ ...t, id: uid() }));
+let collapsed = new Set(read(LS.collapsed, []));
+// ⚠️ NO `proxyToken` IN LOCAL STORAGE. The URL is a preference; the credential was the problem, and it
+// is gone rather than moved somewhere quieter.
+let statusCfg = read(LS.status, { proxyUrl: "" });
+let session = null;
+
+// ── Auth ────────────────────────────────────────────────────────────────────────────────────────
+//
+// ⚠️ THE SAME SUPABASE PROJECT AS THE APP, which is the whole point of running this as a second Vercel
+// project rather than a page inside the product: **it shares the identity without shipping staff
+// tooling in the customer bundle.** Every visitor to the app downloads the app; nobody downloads this
+// unless they open it.
+//
+// The magic-link flow is used rather than a password: staff are few, sign in rarely, and **a password
+// on an internal tool is one more credential to leak for no gain.**
+const SUPABASE_URL  = "https://qsgiahskhrgnwhrfbgqt.supabase.co";
+const SUPABASE_ANON = window.WATERLINE_ANON_KEY || "";   // set by a one-line inline script or env
+
+async function sbFetch(path, opts = {}) {
+  return fetch(`${SUPABASE_URL}${path}`, {
+    ...opts,
+    headers: { apikey: SUPABASE_ANON, "Content-Type": "application/json", ...(opts.headers || {}) },
+  });
+}
+
+function restoreSession() {
+  // Supabase's own storage key, so signing in on the app or the hub is one session.
+  try {
+    const raw = localStorage.getItem(`sb-${SUPABASE_URL.split("//")[1].split(".")[0]}-auth-token`);
+    session = raw ? JSON.parse(raw) : null;
+  } catch { session = null; }
+  paintAuth();
+}
+
+// ⚠️ THE PAGE SHOWS WHO YOU ARE, NOT WHETHER A TOKEN IS SET. A hub that cannot say whose credentials
+// it is using is a hub somebody eventually uses with the wrong ones.
+function paintAuth() {
+  const who = $("#who"), inBtn = $("#btn-signin"), outBtn = $("#btn-signout");
+  if (!who) return;
+  const email = session?.user?.email;
+  who.textContent = email ? `Signed in as ${email}` : "Not signed in";
+  if (inBtn) inBtn.hidden = !!email;
+  if (outBtn) outBtn.hidden = !email;
+}
+
+async function signIn() {
+  const email = prompt("Waterline staff email");
+  if (!email) return;
+  const r = await sbFetch("/auth/v1/otp", {
+    method: "POST",
+    body: JSON.stringify({ email, create_user: false }),
+  });
+  alert(r.ok
+    ? "Check your email for a sign-in link."
+    // ⚠️ `create_user: false` MEANS AN UNKNOWN ADDRESS FAILS RATHER THAN SILENTLY CREATING AN ACCOUNT.
+    : "That did not send. The address may not have an account.");
+}
+
+function signOut() {
+  try { localStorage.removeItem(`sb-${SUPABASE_URL.split("//")[1].split(".")[0]}-auth-token`); } catch {}
+  session = null;
+  paintAuth();
+}
+let editing   = false;
+let query     = "";
+
+function saveTiles() {
+  write(LS.tiles, tiles);
+  renderFooter();
+}
+
+/* ==========================================================================
+   4. UTILITIES
+   ========================================================================== */
+
+const $  = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+function toast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ""); }
+  catch (_) { return ""; }
+}
+
+function normaliseUrl(raw) {
+  const v = String(raw || "").trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return "https://" + v;
+}
+
+function money(cents, currency) {
+  const n = (Number(cents) || 0) / 100;
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: (currency || "usd").toUpperCase(),
+      maximumFractionDigits: n >= 1000 ? 0 : 2
+    }).format(n);
+  } catch (_) {
+    return "$" + n.toFixed(0);
+  }
+}
+
+function ago(ts) {
+  const secs = Math.floor((Date.now() - ts) / 1000);
+  if (secs < 60)    return secs + "s ago";
+  if (secs < 3600)  return Math.floor(secs / 60) + "m ago";
+  if (secs < 86400) return Math.floor(secs / 3600) + "h ago";
+  return Math.floor(secs / 86400) + "d ago";
+}
+
+/* ==========================================================================
+   5. THEME
+   ========================================================================== */
+
+function applyTheme() {
+  const pref = read(LS.theme, "auto");
+  const dark = pref === "dark" ||
+    (pref === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  $$("#theme-seg button").forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.themeVal === pref));
+  });
+}
+
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+
+/* ==========================================================================
+   6. TILE RENDERING
+   ========================================================================== */
+
+function matches(tile) {
+  if (!query) return true;
+  const hay = (tile.name + " " + (tile.note || "") + " " + (tile.url || "")).toLowerCase();
+  return hay.includes(query);
+}
+
+function renderSections() {
+  const host = $("#sections");
+  host.innerHTML = "";
+
+  let shown = 0;
+
+  GROUPS.forEach(group => {
+    const all     = tiles.filter(t => t.group === group.id);
+    const visible = all.filter(matches);
+
+    // While searching, hide groups with no hits entirely.
+    if (query && visible.length === 0) return;
+    if (!query && all.length === 0 && !editing) return;
+
+    shown += visible.length;
+
+    const isShut = collapsed.has(group.id) && !query;
+
+    const sec = document.createElement("section");
+    sec.className = "section" + (isShut ? " is-collapsed" : "");
+
+    const head = document.createElement("button");
+    head.className = "section-head";
+    head.setAttribute("aria-expanded", String(!isShut));
+    head.innerHTML =
+      '<span class="section-name">' + esc(group.name) + "</span>" +
+      '<span class="section-count">' + visible.length + "</span>" +
+      '<i class="ti ti-chevron-down section-chev"></i>';
+    head.addEventListener("click", () => {
+      if (query) return;
+      collapsed.has(group.id) ? collapsed.delete(group.id) : collapsed.add(group.id);
+      write(LS.collapsed, Array.from(collapsed));
+      renderSections();
+    });
+    sec.appendChild(head);
+
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    visible.forEach(t => grid.appendChild(renderTile(t)));
+
+    if (!query) {
+      const add = document.createElement("button");
+      add.className = "tile-add";
+      add.innerHTML = '<i class="ti ti-plus"></i><span>Add link</span>';
+      add.addEventListener("click", () => openTileModal(null, group.id));
+      grid.appendChild(add);
+    }
+
+    sec.appendChild(grid);
+    host.appendChild(sec);
+  });
+
+  if (shown === 0) {
+    host.innerHTML =
+      '<div class="empty"><div class="empty-title">' +
+      (query ? "Nothing matches that" : "No links yet") +
+      "</div><div>" +
+      (query ? "Try a shorter search." : "Turn on editing to add your first link.") +
+      "</div></div>";
+  }
+
+  renderFooter();
+}
+
+function renderTile(t) {
+  const hasUrl = Boolean(t.url);
+  const el = document.createElement(hasUrl ? "a" : "div");
+  el.className = "tile";
+  el.dataset.id = t.id;
+
+  if (hasUrl) {
+    el.href = t.url;
+    el.target = "_blank";
+    el.rel = "noopener noreferrer";
+  }
+
+  // Line 2 is always the address when there is one, so tiles read consistently;
+  // the note only earns line 3 when it says something the domain doesn't.
+  const host = hostOf(t.url);
+  const note = t.note && t.note !== host ? t.note : "";
+
+  el.innerHTML =
+    '<span class="tile-icon"><i class="ti ti-' + esc(t.icon || "link") + '"></i></span>' +
+    '<span class="tile-body">' +
+      '<span class="tile-name">' + esc(t.name) + "</span>" +
+      (host
+        ? '<span class="tile-host">' + esc(host) + "</span>"
+        : '<span class="tile-host is-empty">No link yet</span>') +
+      (note ? '<span class="tile-note">' + esc(note) + "</span>" : "") +
+    "</span>" +
+    '<span class="tile-edit">' +
+      '<button class="mini-btn" data-act="edit" title="Edit"><i class="ti ti-pencil"></i></button>' +
+      '<button class="mini-btn is-danger" data-act="del" title="Remove"><i class="ti ti-trash"></i></button>' +
+    "</span>";
+
+  el.querySelector('[data-act="edit"]').addEventListener("click", e => {
+    e.preventDefault(); e.stopPropagation();
+    openTileModal(t, t.group);
+  });
+  el.querySelector('[data-act="del"]').addEventListener("click", e => {
+    e.preventDefault(); e.stopPropagation();
+    tiles = tiles.filter(x => x.id !== t.id);
+    saveTiles();
+    renderSections();
+    toast("Removed " + t.name);
+  });
+
+  // In edit mode a tile is a drag handle rather than a link.
+  el.addEventListener("click", e => { if (editing) e.preventDefault(); });
+
+  el.draggable = false;
+  if (editing) attachDrag(el, t);
+
+  return el;
+}
+
+function renderFooter() {
+  const withUrl = tiles.filter(t => t.url).length;
+  $("#foot-count").textContent =
+    tiles.length + " tiles · " + (tiles.length - withUrl) + " still need a link";
+}
+
+/* ==========================================================================
+   7. DRAG TO REORDER
+   ========================================================================== */
+
+let dragId = null;
+
+function attachDrag(el, tile) {
+  el.draggable = true;
+
+  el.addEventListener("dragstart", e => {
+    dragId = tile.id;
+    el.classList.add("is-dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", tile.id); } catch (_) {}
+  });
+
+  el.addEventListener("dragend", () => {
+    dragId = null;
+    el.classList.remove("is-dragging");
+    $$(".tile").forEach(x => x.classList.remove("is-over"));
+  });
+
+  el.addEventListener("dragover", e => {
+    if (!dragId || dragId === tile.id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    el.classList.add("is-over");
+  });
+
+  el.addEventListener("dragleave", () => el.classList.remove("is-over"));
+
+  el.addEventListener("drop", e => {
+    e.preventDefault();
+    el.classList.remove("is-over");
+    if (!dragId || dragId === tile.id) return;
+
+    const from = tiles.findIndex(x => x.id === dragId);
+    const to   = tiles.findIndex(x => x.id === tile.id);
+    if (from < 0 || to < 0) return;
+
+    const [moved] = tiles.splice(from, 1);
+    moved.group = tile.group;           // dropping across groups re-homes the tile
+    tiles.splice(to, 0, moved);
+
+    saveTiles();
+    renderSections();
+  });
+}
+
+/* ==========================================================================
+   8. TILE EDITOR MODAL
+   ========================================================================== */
+
+function openModal(html) {
+  $("#modal").innerHTML = html;
+  $("#modal-scrim").classList.add("is-open");
+}
+
+function closeModal() {
+  $("#modal-scrim").classList.remove("is-open");
+  $("#modal").innerHTML = "";
+}
+
+function openTileModal(tile, groupId) {
+  const t = tile || { name: "", url: "", note: "", icon: "link", group: groupId };
+
+  openModal(
+    "<h3>" + (tile ? "Edit link" : "Add link") + "</h3>" +
+    '<label class="field"><span>Name</span>' +
+      '<input type="text" id="m-name" value="' + esc(t.name) + '" autocomplete="off"></label>' +
+    '<label class="field"><span>URL</span>' +
+      '<input type="text" id="m-url" class="mono" value="' + esc(t.url) + '" placeholder="https://" autocomplete="off"></label>' +
+    '<label class="field"><span>Note</span>' +
+      '<input type="text" id="m-note" value="' + esc(t.note || "") + '" placeholder="Optional" autocomplete="off"></label>' +
+    '<label class="field"><span>Section</span><select id="m-group">' +
+      GROUPS.map(g =>
+        '<option value="' + g.id + '"' + (g.id === t.group ? " selected" : "") + ">" + esc(g.name) + "</option>"
+      ).join("") +
+    "</select></label>" +
+    '<div class="field"><span>Icon</span><div class="icon-picker" id="m-icons">' +
+      ICONS.map(ic =>
+        '<button type="button" class="icon-opt" data-icon="' + ic + '" aria-pressed="' +
+        (ic === t.icon ? "true" : "false") + '"><i class="ti ti-' + ic + '"></i></button>'
+      ).join("") +
+    "</div></div>" +
+    '<div class="btn-row" style="margin-top:18px;">' +
+      '<button class="btn" id="m-cancel">Cancel</button>' +
+      '<button class="btn btn-primary" id="m-save">Save</button>' +
+    "</div>"
+  );
+
+  let icon = t.icon || "link";
+  $("#m-icons").addEventListener("click", e => {
+    const b = e.target.closest(".icon-opt");
+    if (!b) return;
+    icon = b.dataset.icon;
+    $$("#m-icons .icon-opt").forEach(x =>
+      x.setAttribute("aria-pressed", String(x === b))
+    );
+  });
+
+  $("#m-cancel").addEventListener("click", closeModal);
+
+  $("#m-save").addEventListener("click", () => {
+    const name = $("#m-name").value.trim();
+    if (!name) { $("#m-name").focus(); return; }
+
+    const next = {
+      name: name,
+      url:  normaliseUrl($("#m-url").value),
+      note: $("#m-note").value.trim(),
+      group: $("#m-group").value,
+      icon: icon
+    };
+
+    if (tile) {
+      Object.assign(tile, next);
+    } else {
+      tiles.push({ ...next, id: uid() });
+    }
+
+    saveTiles();
+    renderSections();
+    closeModal();
+    toast(tile ? "Saved" : "Added " + name);
+  });
+
+  // Deferred so the modal is painted first. The modal may already be gone by
+  // then (fast save, Escape, double-click), so this has to tolerate null.
+  setTimeout(() => {
+    const nameField = $("#m-name");
+    if (nameField) nameField.focus();
+  }, 30);
+}
+
+/* ==========================================================================
+   9. LIVE STATUS
+   ==========================================================================
+   Supabase is checked straight from the page: the publishable key is built
+   for client-side use and RLS gates the data.
+
+   Stripe and Vercel are not. Both need secret credentials, and Stripe's
+   secret-key endpoints reject browser calls outright. Those two go through
+   the hub-status Edge Function, which holds the keys server-side and
+   returns a small summary. If no proxy is configured, their floats simply
+   don't appear.
+   ========================================================================== */
+
+/* The funnel doubles as the database health check: if these numbers come back,
+   Postgres answered. That replaces the old /rest/v1/ probe, which could never
+   have worked from a browser — that endpoint returns the schema and now
+   requires a secret key, which must never live in a page. */
+
+let funnelDays = 30;
+let lastFunnel = null;
+
+const STAGES = [
+  { key: "visitors",  name: "Visitors"  },
+  { key: "signups",   name: "Signed up" },
+  { key: "companies", name: "Companies" },
+  { key: "modelled",  name: "Modelled"  },
+  { key: "paying",    name: "Paying"    }
+];
+
+function renderFunnel(data) {
+  const host = $("#funnel");
+  const stagesEl = $("#funnel-stages");
+  const tailEl = $("#funnel-tail");
+
+  if (!data) { host.hidden = true; return; }
+  host.hidden = false;
+
+  if (data.error) {
+    stagesEl.innerHTML = "";
+    tailEl.innerHTML = '<span class="funnel-error">Funnel unavailable — ' + esc(data.error) + "</span>";
+    $("#funnel-sub").textContent = "";
+    return;
+  }
+
+  lastFunnel = data;
+  const bucket = funnelDays === 0 ? data.all_time : data.window;
+
+  const counts = STAGES.map(st => Number(bucket[st.key] ?? data.all_time[st.key] ?? 0));
+  const top = Math.max(...counts, 1);
+
+  stagesEl.innerHTML = STAGES.map((st, i) => {
+    const n = counts[i];
+    const prev = i > 0 ? counts[i - 1] : null;
+    const pct = prev ? (prev === 0 ? 0 : Math.round((n / prev) * 100)) : null;
+    // Compressed scale: linear would make later stages invisible once the top
+    // stage is orders of magnitude larger, but sqrt flattens small funnels into
+    // near-equal bars. 0.7 keeps both readable. The % labels carry the precision.
+    const h = Math.max(4, Math.round(Math.pow(n / top, 0.7) * 100));
+    return (
+      '<div class="stage">' +
+        '<div class="stage-plot"><div class="stage-bar" style="height:' + h + '%"></div></div>' +
+        '<div class="stage-floor"></div>' +
+        '<div class="stage-meta">' +
+          '<div class="stage-count">' + n.toLocaleString() + "</div>" +
+          '<div class="stage-name">' + esc(st.name) + "</div>" +
+          (pct === null ? "" :
+            '<div class="stage-rate' + (pct < 25 ? " is-weak" : "") + '">' + pct + "% of prev</div>") +
+        "</div>" +
+      "</div>"
+    );
+  }).join("");
+
+  const t = data.trials || {};
+  const h = data.housekeeping || {};
+  const parts = [];
+  if (data.all_time) parts.push("<b>" + data.all_time.paying + "</b> paying all-time");
+  if (data.all_time && data.all_time.advisors) parts.push("<b>" + data.all_time.advisors + "</b> advisors");
+  if (t.active != null) parts.push("<b>" + t.active + "</b> trials live");
+  if (t.expired) parts.push("<b>" + t.expired + "</b> trials expired");
+  if (h.open_feedback) parts.push("<b>" + h.open_feedback + "</b> feedback open");
+  if (h.pending_invites) parts.push("<b>" + h.pending_invites + "</b> invites pending");
+  if (h.deleted_companies) parts.push("<b>" + h.deleted_companies + "</b> deleted");
+  tailEl.innerHTML = parts.join("");
+
+  $("#funnel-sub").textContent =
+    funnelDays === 0 ? "all time" : "last " + data.window_days + " days";
+}
+
+/* ==========================================================================
+   FEEDBACK
+   ==========================================================================
+   Marking something addressed now writes back: the hub POSTs to hub-status,
+   which sets feedback.handled_at through a locked-down RPC. The server is
+   therefore the only source of truth — an addressed item stops being returned,
+   so it is gone from every device rather than just this browser.
+
+   The local set below is optimistic UI only, held in memory and never
+   persisted. It hides an item between the click and the next refresh, and is
+   rolled back if the write fails, so a failed save can never look like a
+   success. The old wl.hub.addressed.v1 key is cleared on boot.
+   ========================================================================== */
+
+const KINDS = [
+  { key: "bug",      label: "Bugs",      empty: "No open bugs"      },
+  { key: "idea",     label: "Ideas",     empty: "No open ideas"     },
+  { key: "question", label: "Questions", empty: "No open questions" },
+  { key: "other",    label: "Other",     empty: "Nothing else"      }
+];
+
+const PEEK = 2;
+
+// id -> item, for things addressed in this session. In memory by design.
+const pending = new Map();
+const expandedKinds = new Set();
+const openItems = new Set();
+let lastFeedback = null;
+
+function pendingCount(kind) {
+  let n = 0;
+  pending.forEach(i => { if (i.kind === kind) n++; });
+  return n;
+}
+
+/* POST an action to the proxy. The proxy validates the action name against a
+   fixed map, so nothing here can name an arbitrary database function. */
+async function sendAction(action, id) {
+  const res = await fetch(statusCfg.proxyUrl, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + (session?.access_token || ""),
+      apikey: SUPABASE_ANON,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ action: action, id: id })
+  });
+
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* fall through to status */ }
+
+  if (!res.ok || (data && data.ok === false)) {
+    throw new Error((data && (data.error || data.reason)) || "HTTP " + res.status);
+  }
+  return data;
+}
+
+async function addressItem(item, el) {
+  if (el) el.classList.add("is-gone");
+  pending.set(String(item.id), item);
+  setTimeout(() => renderFeedback(lastFeedback), 220);
+
+  try {
+    await sendAction("address", item.id);
+  } catch (err) {
+    // Roll back rather than leave it hidden on a write that never landed.
+    pending.delete(String(item.id));
+    renderFeedback(lastFeedback);
+    toast("Couldn't save — " + err.message);
+  }
+}
+
+async function undoKind(kind) {
+  const ids = [];
+  pending.forEach((item, id) => { if (item.kind === kind) ids.push(id); });
+
+  for (const id of ids) {
+    try {
+      await sendAction("unaddress", id);
+      pending.delete(id);
+    } catch (err) {
+      toast("Couldn't undo — " + err.message);
+      break;
+    }
+  }
+  renderFeedback(lastFeedback);
+}
+
+function whenFrom(iso) {
+  const t = Date.parse(iso);
+  return isNaN(t) ? "" : ago(t);
+}
+
+function renderFeedback(fb) {
+  const host = $("#feedback-row");
+  lastFeedback = fb;
+
+  if (!fb || fb.error) {
+    host.innerHTML = fb && fb.error
+      ? '<div class="card is-bad card-wide"><div class="card-label">Feedback</div>' +
+        '<div class="card-headline"><span class="card-value">—</span>' +
+        '<span class="card-sub">' + esc(fb.error) + "</span></div></div>"
+      : "";
+    return;
+  }
+
+  const items  = Array.isArray(fb.items) ? fb.items : [];
+  const counts = fb.counts || {};
+
+  // Once the server stops returning an id, the optimistic entry has done its
+  // job — the write landed and the row is gone from the feed. Leaving it in
+  // would subtract from the count a second time and show one fewer than is
+  // actually open.
+  if (Array.isArray(fb.open_ids)) {
+    const live = new Set(fb.open_ids.map(String));
+    pending.forEach((_, id) => { if (!live.has(id)) pending.delete(id); });
+  }
+
+  // Only show "Other" if something actually landed there.
+  const kinds = KINDS.filter(k => k.key !== "other" || (counts.other || 0) > 0);
+
+  host.innerHTML = kinds.map(k => {
+    const mine   = items.filter(i => i.kind === k.key && !pending.has(String(i.id)));
+    const total  = Math.max(0, (Number(counts[k.key]) || 0) - pendingCount(k.key));
+    const isOpen = expandedKinds.has(k.key);
+    const shown  = isOpen ? mine : mine.slice(0, PEEK);
+    const hidden = total - mine.length;   // beyond the 30-item detail cap
+    const undone = pendingCount(k.key);
+
+    return '<div class="card kind-card k-' + k.key + (total ? "" : " is-clear") + '">' +
+      '<div class="card-label">' + esc(k.label) + "</div>" +
+      '<div class="card-headline">' +
+        '<span class="card-value">' + total + "</span>" +
+        '<span class="card-sub">' + (total ? "open" : "all clear") + "</span>" +
+      "</div>" +
+      (mine.length
+        ? '<div class="peek">' +
+            shown.map(i => {
+              const where = [i.tab, i.subtab].filter(Boolean).join(" \u203A ");
+              // Show the app's own label when it didn't map to a known bucket,
+              // so an unexpected kind is visible rather than just "Other".
+              const raw   = k.key === "other" && i.kind_raw ? i.kind_raw : "";
+              const meta  = [raw, where, i.company, whenFrom(i.created_at)]
+                              .filter(Boolean).join(" \u00B7 ");
+              return '<div class="peek-item" data-id="' + esc(i.id) + '">' +
+                '<span class="peek-body' + (openItems.has(String(i.id)) ? " is-open" : "") + '">' +
+                  '<span class="peek-text">' + esc(i.body) + (i.truncated ? "…" : "") + "</span>" +
+                  '<span class="peek-meta">' + esc(meta) + "</span>" +
+                "</span>" +
+                '<button class="dismiss" title="Mark addressed"><i class="ti ti-check"></i></button>' +
+              "</div>";
+            }).join("") +
+            (mine.length > PEEK
+              ? '<button class="peek-more" data-expand="' + k.key + '">' +
+                (isOpen ? "Show fewer" : "Show all " + mine.length) + "</button>"
+              : "") +
+            (hidden > 0
+              ? '<div class="peek-meta">' + hidden + " older not loaded</div>"
+              : "") +
+          "</div>"
+        : '<div class="peek-clear">' + esc(k.empty) + "</div>") +
+      (undone
+        ? '<div class="peek-restore">' + undone + " addressed · " +
+          '<button data-undo="' + k.key + '">undo</button></div>'
+        : "") +
+    "</div>";
+  }).join("");
+
+  host.querySelectorAll("[data-expand]").forEach(b =>
+    b.addEventListener("click", () => {
+      const k = b.dataset.expand;
+      expandedKinds.has(k) ? expandedKinds.delete(k) : expandedKinds.add(k);
+      renderFeedback(fb);
+    }));
+
+  host.querySelectorAll("[data-undo]").forEach(b =>
+    b.addEventListener("click", () => undoKind(b.dataset.undo)));
+
+  host.querySelectorAll(".peek-item").forEach(el => {
+    const id = el.dataset.id;
+    const item = items.find(i => String(i.id) === id);
+
+    el.querySelector(".peek-body").addEventListener("click", () => {
+      openItems.has(id) ? openItems.delete(id) : openItems.add(id);
+      renderFeedback(fb);
+    });
+
+    el.querySelector(".dismiss").addEventListener("click", e => {
+      e.stopPropagation();
+      if (item) addressItem(item, el);
+    });
+  });
+}
+
+/* The five Waterline plans, in pricing order. Matching is loose — a slug of
+   "advisor_unlimited", "Advisor Unlimited" or "advisor-unlimited" all land on
+   the same row — and anything the database returns that doesn't match is shown
+   anyway rather than silently dropped, so a renamed plan is visible instead of
+   quietly counting zero. */
+const PLANS = [
+  { key: "solo",              name: "Solo" },
+  { key: "collaborative",     name: "Collaborative" },
+  { key: "connected",         name: "Connected" },
+  { key: "advisor",           name: "Advisor" },
+  { key: "advisor_unlimited", name: "Advisor Unlimited" }
+];
+
+const PAYING_STATUSES = ["active", "trialing"];
+
+function planKey(raw) {
+  return String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function titleCase(raw) {
+  return String(raw || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/* Collapse the plan rows into one count per plan, keeping only paying
+   statuses. Returns the canonical five plus any unrecognised extras. */
+function tallyPlans(rows) {
+  const counts = new Map();
+
+  (rows || []).forEach(r => {
+    if (!PAYING_STATUSES.includes(String(r.status || "").toLowerCase())) return;
+    const k = planKey(r.plan);
+    if (!k) return;
+    counts.set(k, (counts.get(k) || 0) + (Number(r.n) || 0));
+  });
+
+  const out = PLANS.map(p => {
+    // Tolerate underscore differences ("advisorunlimited" vs "advisor_unlimited")
+    const flat = p.key.replace(/_/g, "");
+    let n = 0;
+    counts.forEach((v, k) => {
+      if (k === p.key || k.replace(/_/g, "") === flat) n += v;
+    });
+    return { name: p.name, n: n, extra: false };
+  });
+
+  const known = new Set(PLANS.flatMap(p => [p.key, p.key.replace(/_/g, "")]));
+  counts.forEach((v, k) => {
+    if (!known.has(k) && !known.has(k.replace(/_/g, ""))) {
+      out.push({ name: titleCase(k), n: v, extra: true });
+    }
+  });
+
+  return out;
+}
+
+function cardEl(opts) {
+  const el = document.createElement("div");
+  el.className = "card is-" + (opts.state || "idle") + (opts.wide ? " card-wide" : "");
+
+  let html =
+    '<div class="card-label">' + esc(opts.label) + "</div>" +
+    '<div class="card-headline">' +
+      '<span class="card-value">' + esc(opts.value) + "</span>" +
+      (opts.sub ? '<span class="card-sub">' + esc(opts.sub) + "</span>" : "") +
+    "</div>";
+
+  if (opts.note) {
+    html += '<div class="card-note' + (opts.noteCaution ? " is-caution" : "") + '">' +
+            esc(opts.note) + "</div>";
+  }
+
+  if (opts.plans && opts.plans.length) {
+    html += '<div class="plans">' + opts.plans.map(p =>
+      '<div class="plan-row' + (p.n ? "" : " is-zero") + (p.extra ? " is-extra" : "") + '">' +
+        '<span class="plan-name">' + esc(p.name) + "</span>" +
+        '<span class="plan-rule"></span>' +
+        '<span class="plan-n">' + p.n + "</span>" +
+      "</div>"
+    ).join("") + "</div>";
+  }
+
+  el.innerHTML = html;
+  return el;
+}
+
+async function checkProxy() {
+  if (!statusCfg.proxyUrl) return [];
+
+  const url = statusCfg.proxyUrl + (statusCfg.proxyUrl.includes("?") ? "&" : "?") +
+    "days=" + (funnelDays === 0 ? 3650 : funnelDays);
+
+  let data;
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: "Bearer " + (session?.access_token || ""),
+                 apikey: SUPABASE_ANON },
+      cache: "no-store"
+    });
+    if (res.status === 401 || res.status === 403) {
+      renderFunnel(null); renderFeedback(null);
+      return [cardEl({ wide: true, label: "Status proxy", value: "Rejected", sub: "check token", state: "bad" })];
+    }
+    if (!res.ok) {
+      renderFunnel(null); renderFeedback(null);
+      return [cardEl({ wide: true, label: "Status proxy", value: "HTTP " + res.status, state: "bad" })];
+    }
+    data = await res.json();
+  } catch (_) {
+    renderFunnel(null); renderFeedback(null);
+    return [cardEl({ wide: true, label: "Status proxy", value: "Unreachable", sub: "network", state: "bad" })];
+  }
+
+  renderFunnel(data.funnel || null);
+  renderFeedback(data.funnel && !data.funnel.error ? data.funnel.feedback : null);
+
+  const out = [];
+
+  // ---- MRR, with the plan mix underneath ----------------------------------
+  if (data.stripe) {
+    if (data.stripe.error) {
+      out.push(cardEl({ wide: true, label: "MRR", value: "—", sub: "stripe error", state: "warn" }));
+    } else {
+      const subs = Number(data.stripe.activeCount) || 0;
+      const plans = tallyPlans(data.funnel && !data.funnel.error ? data.funnel.plans : []);
+      const planned = plans.reduce((t, p) => t + p.n, 0);
+
+      // Stripe is the source of truth for money; the database is the source for
+      // which plan someone is on. If they disagree a webhook has been missed, and
+      // that is worth seeing rather than quietly reconciling.
+      const drift = planned !== subs && (planned > 0 || subs > 0);
+
+      out.push(cardEl({
+        wide: true,
+        label: "MRR",
+        value: money(data.stripe.mrrCents, data.stripe.currency),
+        sub: subs === 1 ? "1 subscriber" : subs + " subscribers",
+        state: subs > 0 ? "good" : "idle",
+        note: drift ? "Stripe " + subs + " · database " + planned + " — check webhooks" : "",
+        noteCaution: drift,
+        plans: plans
+      }));
+    }
+  }
+
+  // ---- Latest deploy -------------------------------------------------------
+  if (data.vercel) {
+    if (data.vercel.error) {
+      out.push(cardEl({ label: "Deploy", value: "—", sub: "vercel error", state: "warn" }));
+    } else {
+      const state = String(data.vercel.state || "").toUpperCase();
+      const bucket =
+        state === "READY"                         ? "good" :
+        state === "ERROR" || state === "CANCELED" ? "bad"  :
+        "warn";
+      const label =
+        state === "READY" ? "Live" :
+        state.charAt(0) + state.slice(1).toLowerCase();
+      out.push(cardEl({
+        label: "Deploy",
+        value: label,
+        sub: data.vercel.name || "",
+        state: bucket,
+        note: data.vercel.createdAt ? ago(data.vercel.createdAt) : ""
+      }));
+    }
+  }
+
+  return out;
+}
+
+async function refreshStatus() {
+  const host = $("#status");
+  host.innerHTML = "";
+
+  if (!statusCfg.proxyUrl) {
+    renderFunnel(null);
+    renderFeedback(null);
+    const b = document.createElement("button");
+    b.className = "card-setup card-wide";
+    b.innerHTML = '<i class="ti ti-plug"></i> Connect live status';
+    b.addEventListener("click", openDrawer);
+    host.appendChild(b);
+    return;
+  }
+
+  host.appendChild(cardEl({ wide: true, label: "Status", value: "Checking", state: "idle" }));
+
+  const cards = await checkProxy();
+
+  host.innerHTML = "";
+  cards.forEach(el => host.appendChild(el));
+
+  if (!host.children.length) {
+    host.appendChild(cardEl({ wide: true, label: "Status", value: "Nothing reported", state: "idle" }));
+  }
+}
+
+/* ==========================================================================
+   10. DRAWER
+   ========================================================================== */
+
+function openDrawer() {
+  $("#drawer").classList.add("is-open");
+  $("#drawer").setAttribute("aria-hidden", "false");
+  $("#scrim").classList.add("is-open");
+
+  $("#cfg-proxy-url").value   = statusCfg.proxyUrl || "";
+}
+
+function closeDrawer() {
+  $("#drawer").classList.remove("is-open");
+  $("#drawer").setAttribute("aria-hidden", "true");
+  $("#scrim").classList.remove("is-open");
+}
+
+/* ==========================================================================
+   11. EXPORT / IMPORT
+   ========================================================================== */
+
+function exportTiles() {
+  const blob = new Blob(
+    [JSON.stringify({ version: 1, exported: new Date().toISOString(), tiles: tiles }, null, 2)],
+    { type: "application/json" }
+  );
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "waterline-hub-tiles.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast("Exported");
+}
+
+function importTiles() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const list = Array.isArray(parsed) ? parsed : parsed.tiles;
+        if (!Array.isArray(list)) throw new Error("no tiles array");
+
+        tiles = list
+          .filter(t => t && t.name)
+          .map(t => ({
+            id:    t.id || uid(),
+            name:  String(t.name),
+            url:   normaliseUrl(t.url),
+            note:  t.note ? String(t.note) : "",
+            icon:  t.icon ? String(t.icon) : "link",
+            group: GROUPS.some(g => g.id === t.group) ? t.group : GROUPS[0].id
+          }));
+
+        saveTiles();
+        renderSections();
+        toast("Imported " + tiles.length + " tiles");
+      } catch (_) {
+        toast("That file isn't a hub export");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  input.click();
+}
+
+/* ==========================================================================
+   12. WIRING
+   ========================================================================== */
+
+function setEditing(on) {
+  editing = on;
+  document.body.classList.toggle("is-editing", on);
+  $("#btn-edit").setAttribute("aria-pressed", String(on));
+  renderSections();
+}
+
+$("#btn-edit").addEventListener("click", () => setEditing(!editing));
+$("#btn-edit-done").addEventListener("click", () => setEditing(false));
+$("#btn-refresh").addEventListener("click", () => { refreshStatus(); toast("Refreshing"); });
+$("#btn-settings").addEventListener("click", openDrawer);
+$("#btn-drawer-close").addEventListener("click", closeDrawer);
+$("#scrim").addEventListener("click", closeDrawer);
+
+$("#modal-scrim").addEventListener("click", e => {
+  if (e.target === $("#modal-scrim")) closeModal();
+});
+
+$("#search").addEventListener("input", e => {
+  query = e.target.value.trim().toLowerCase();
+  renderSections();
+});
+
+$("#search").addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    e.target.value = "";
+    query = "";
+    renderSections();
+    e.target.blur();
+    return;
+  }
+  if (e.key === "Enter") {
+    const first = $("#sections .tile[href]");
+    if (first) window.open(first.href, "_blank", "noopener");
+  }
+});
+
+$("#theme-seg").addEventListener("click", e => {
+  const b = e.target.closest("[data-theme-val]");
+  if (!b) return;
+  write(LS.theme, b.dataset.themeVal);
+  applyTheme();
+});
+
+// ⚠️ RESTORED BEFORE ANYTHING ASKS THE PROXY. A refresh that forgets who you are looks identical to
+// being signed out, and the first symptom would be an unexplained 401.
+$("#btn-signin")?.addEventListener("click", signIn);
+$("#btn-signout")?.addEventListener("click", signOut);
+restoreSession();
+
+$("#btn-save-status").addEventListener("click", () => {
+  statusCfg = { proxyUrl: $("#cfg-proxy-url").value.trim() };
+  write(LS.status, statusCfg);
+  closeDrawer();
+  refreshStatus();
+  toast("Saved");
+});
+
+$("#funnel-toggle").addEventListener("click", e => {
+  const b = e.target.closest("[data-days]");
+  if (!b) return;
+  funnelDays = Number(b.dataset.days);
+  $$("#funnel-toggle button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  if (lastFunnel) renderFunnel(lastFunnel);
+  refreshStatus();
+});
+
+$("#btn-export").addEventListener("click", exportTiles);
+$("#btn-import").addEventListener("click", importTiles);
+
+$("#btn-reset").addEventListener("click", () => {
+  openModal(
+    "<h3>Reset tiles?</h3>" +
+    "<p style='margin:0 0 18px;font-size:13.5px;color:var(--ink-soft);'>" +
+    "This replaces your tiles with the starter set. Export first if you want them back.</p>" +
+    '<div class="btn-row">' +
+      '<button class="btn" id="r-cancel">Keep mine</button>' +
+      '<button class="btn btn-primary" id="r-go">Reset</button>' +
+    "</div>"
+  );
+  $("#r-cancel").addEventListener("click", closeModal);
+  $("#r-go").addEventListener("click", () => {
+    tiles = SEED.map(t => ({ ...t, id: uid() }));
+    saveTiles();
+    renderSections();
+    closeModal();
+    closeDrawer();
+    toast("Reset to starter set");
+  });
+});
+
+document.addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+
+  if (e.key === "/" && !typing) {
+    e.preventDefault();
+    $("#search").focus();
+    return;
+  }
+  if (e.key === "e" && !typing && !e.metaKey && !e.ctrlKey) {
+    setEditing(!editing);
+    return;
+  }
+  if (e.key === "Escape") {
+    if ($("#modal-scrim").classList.contains("is-open")) return closeModal();
+    if ($("#drawer").classList.contains("is-open"))      return closeDrawer();
+    if (editing) setEditing(false);
+  }
+});
+
+/* ==========================================================================
+   13. BOOT
+   ========================================================================== */
+
+$("#today").textContent = new Date().toLocaleDateString("en-US", {
+  weekday: "long", month: "long", day: "numeric"
+});
+
+// Earlier versions kept dismissed feedback ids here. Addressed state lives in
+// the database now, so this key is dead — clear it rather than leave stale
+// local state that no longer means anything.
+try { localStorage.removeItem("wl.hub.addressed.v1"); } catch (_) {}
+
+// The old version stored a Supabase key here. It is no longer used or needed,
+// so clear it rather than leave a credential sitting in localStorage.
+if (statusCfg.sbKey || statusCfg.sbUrl) {
+  delete statusCfg.sbKey;
+  delete statusCfg.sbUrl;
+  write(LS.status, statusCfg);
+}
+
+applyTheme();
+renderSections();
+refreshStatus();
+
+// Keep status honest without hammering anything.
+setInterval(refreshStatus, 5 * 60 * 1000);
+</script>
+</body>
+</html>

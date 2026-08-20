@@ -1,0 +1,10 @@
+supabase/
+node_modules/
+*.sql
+.git/
+.github/
+runway-app/
+site/
+package-lock.json
+package.json
+*tar.gz
