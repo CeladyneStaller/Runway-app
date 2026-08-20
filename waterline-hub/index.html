@@ -1215,7 +1215,9 @@ let session = null;
 // The magic-link flow is used rather than a password: staff are few, sign in rarely, and **a password
 // on an internal tool is one more credential to leak for no gain.**
 const SUPABASE_URL  = "https://qsgiahskhrgnwhrfbgqt.supabase.co";
-const SUPABASE_ANON = window.WATERLINE_ANON_KEY || "";   // set in /config.js, which patches never touch
+const SUPABASE_ANON = window.WATERLINE_ANON_KEY || "";
+// Supabase's own key, so the hub and the app share one session.
+const AUTH_KEY = AUTH_KEY;   // set in /config.js, which patches never touch
 
 async function sbFetch(path, opts = {}) {
   return fetch(`${SUPABASE_URL}${path}`, {
@@ -1224,10 +1226,40 @@ async function sbFetch(path, opts = {}) {
   });
 }
 
+// ⚠️ ACCESS TOKENS EXPIRE — ABOUT AN HOUR — AND I NEVER WROTE A REFRESH. The stored session carries a
+// `refresh_token` that nothing used, so the hub worked immediately after signing in and 401'd on every
+// call after that. **"It works, then later it does not" is the shape of a missing refresh**, and I read
+// it as a key problem twice.
+//
+// Refreshed BEFORE use rather than on a 401, because two calls fire on load and a retry-on-failure
+// path would race them.
+async function freshToken() {
+  if (!session) return null;
+  const exp = Number(session.expires_at || 0) * 1000;
+  // A minute of margin: a token that expires mid-flight fails the same way an expired one does.
+  if (exp && Date.now() < exp - 60_000) return session.access_token;
+  if (!session.refresh_token) return session.access_token || null;
+
+  const r = await sbFetch("/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    body: JSON.stringify({ refresh_token: session.refresh_token }),
+  });
+  if (!r.ok) {
+    // ⚠️ A DEAD REFRESH TOKEN MEANS SIGNED OUT, NOT "NOT STAFF". Clearing it here is what makes the
+    // gate say "Staff sign-in" rather than accusing somebody of lacking access they have.
+    session = null;
+    try { localStorage.removeItem(AUTH_KEY); } catch { /* nothing to remove */ }
+    return null;
+  }
+  session = await r.json();
+  try { localStorage.setItem(AUTH_KEY, JSON.stringify(session)); } catch { /* memory-only is fine */ }
+  return session.access_token;
+}
+
 async function restoreSession() {
   // Supabase's own storage key, so signing in on the app or the hub is one session.
   try {
-    const raw = localStorage.getItem(`sb-${SUPABASE_URL.split("//")[1].split(".")[0]}-auth-token`);
+    const raw = localStorage.getItem(AUTH_KEY);
     session = raw ? JSON.parse(raw) : null;
   } catch { session = null; }
   paintAuth();
@@ -1252,10 +1284,14 @@ async function restoreSession() {
 async function checkStaff() {
   if (!session?.access_token) return { ok: false, why: "signed-out" };
   if (!SUPABASE_ANON) return { ok: false, why: "no-key" };
+  // ⚠️ REFRESHED BEFORE THE CALL, NOT AFTER A FAILURE. `freshToken` returns null when the refresh
+  // token is dead too, and that is "signed out" rather than "not staff".
+  const token = await freshToken();
+  if (!token) return { ok: false, why: "signed-out" };
   try {
     const r = await sbFetch("/rest/v1/rpc/is_staff", {
       method: "POST",
-      headers: { Authorization: "Bearer " + session.access_token },
+      headers: { Authorization: "Bearer " + token },
       body: "{}",
     });
     if (!r.ok) return { ok: false, why: "call-failed", status: r.status };
@@ -1281,8 +1317,17 @@ async function applyGate() {
         ? "config.js did not load, so the hub cannot reach Supabase. This is a deploy problem, not an "
           + "account problem."
       : res.why === "call-failed"
-        ? `The staff check could not run (${res.status}). A 401 means the publishable key is wrong; `
-          + `a 404 means 048_is_staff.sql has not been applied.`
+        // ⚠️ I ASSERTED "401 MEANS THE KEY IS WRONG" AND IT DID NOT — it meant the access token had
+        // expired, which is now refreshed before every call. **Three times in this feature I have put
+        // a confident cause in an error message and been wrong**, so this one lists rather than
+        // decides.
+        ? `The staff check could not run (${res.status}). `
+          + (res.status === 401
+              ? "The session may have expired — sign out and back in. If that does not help, the "
+                + "publishable key in config.js may be wrong."
+              : res.status === 404
+                ? "048_is_staff.sql has not been applied."
+                : "Check the console for the response.")
       : res.why === "offline"
         ? "Could not reach Supabase. Check the network and try again."
       : session?.user?.email
@@ -1330,7 +1375,7 @@ async function signIn() {
 
   session = body;
   try {
-    localStorage.setItem(`sb-${SUPABASE_URL.split("//")[1].split(".")[0]}-auth-token`,
+    localStorage.setItem(AUTH_KEY,
                          JSON.stringify(body));
   } catch { /* a session that lives only for this tab still works */ }
   paintAuth();
@@ -1354,7 +1399,7 @@ async function signInWithLink() {
     : (body.error_description || body.msg || "That address may not have an account."));
 }
 function signOut() {
-  try { localStorage.removeItem(`sb-${SUPABASE_URL.split("//")[1].split(".")[0]}-auth-token`); } catch {}
+  try { localStorage.removeItem(AUTH_KEY); } catch {}
   session = null;
   paintAuth();
   // ⚠️ SIGNING OUT RE-GATES RATHER THAN RELOADING. A reload would work and would also throw away any
@@ -1835,7 +1880,9 @@ async function sendAction(action, id) {
   const res = await fetch(statusCfg.proxyUrl, {
     method: "POST",
     headers: {
-      Authorization: "Bearer " + (session?.access_token || ""),
+      // ⚠️ REFRESHED, like the staff check. These two are the `hub-status` 401s in the console:
+      // the same expired token, sent from a different line.
+      Authorization: "Bearer " + ((await freshToken()) || ""),
       apikey: SUPABASE_ANON,
       "content-type": "application/json"
     },
@@ -2090,7 +2137,7 @@ async function checkProxy() {
   let data;
   try {
     const res = await fetch(url, {
-      headers: { Authorization: "Bearer " + (session?.access_token || ""),
+      headers: { Authorization: "Bearer " + ((await freshToken()) || ""),
                  apikey: SUPABASE_ANON },
       cache: "no-store"
     });
