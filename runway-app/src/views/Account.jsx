@@ -194,22 +194,21 @@ export function BillingSection({ account, companyId, onError }) {
 
           {PLANS.map(p => (
             <div className={"plancard" + (s.plan?.id === p.id ? " on" : "")} key={p.id}>
+              {/* ⚠️ THE PRICE LINE IS ONE ROW; THE BILLING DETAIL IS BENEATH IT.
+                  `.plancard-h` is `display:flex; justify-content:space-between` — a row of exactly two
+                  things. I put four in it, so the struck price and the annual total were squeezed into
+                  the right-hand half and wrapped into a column of collided fragments.
+                  **The advisor page never had this because its rows were already stacked**, which is
+                  why the same data looked fine there and broken here. */}
               <div className="plancard-h">
-                <b>{p.name}</b>
-                {/* ⚠️ THE PER-MONTH FIGURE WITH THE ANNUAL TOTAL BENEATH IT. "$480 a year" and "$40 a
-                    month" are the same offer and people compare the smaller number — but hiding the
-                    total is how a first bill becomes a refund request. **Checkout charges immediately**,
-                    so the total is not a footnote here, it is what the button is about to do. */}
+                <h4>{p.name}</h4>
                 <span className="plancard-price">${priceOn(p, cadence).perMonth}<em>/mo</em></span>
-                {cadence === "yearly" && priceOn(p, cadence).saves > 0 && (
-                  <span className="plancard-was">${priceOn(p, "monthly").perMonth} billed monthly</span>
-                )}
-                <span className="plancard-bill">
-                  {cadence === "yearly"
-                    ? <>${priceOn(p, cadence).billed.toLocaleString()} billed yearly · save $
-                        {priceOn(p, cadence).saves.toLocaleString()}</>
-                    : <>${priceOn(p, cadence).annual.toLocaleString()} a year, billed monthly</>}
-                </span>
+              </div>
+              <div className="plancard-bill">
+                {cadence === "yearly"
+                  ? <>${priceOn(p, cadence).billed.toLocaleString()} billed yearly · save $
+                      {priceOn(p, cadence).saves.toLocaleString()}</>
+                  : <>${priceOn(p, cadence).annual.toLocaleString()} a year, billed monthly</>}
               </div>
               <p>{p.blurb}</p>
               <ul>{p.features.map((f, i) => <li key={i}>{f}</li>)}</ul>

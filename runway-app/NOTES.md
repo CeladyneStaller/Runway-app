@@ -1981,6 +1981,27 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### The company plan cards broke; the advisor page did not
+
+Corey's screenshots, and the two faults are separate:
+
+**`.plancard-h` is `display:flex; justify-content:space-between` — a row of exactly two things.** I put
+four in it, so the struck price and the annual total were squeezed into the right-hand half and wrapped
+into a column of collided fragments. **The advisor page never had this because its rows were already
+stacked**, which is why identical data looked fine there and broken here.
+
+**And `.seg` is defined twice.** The second wins — `display:flex` with `.seg-b{flex:1}` — so the toggle
+stretched the full row and pushed the chip onto its own line, the orphaned "2 MONTHS FREE" floating
+below it. **Reusing `.seg` was meant to inherit the app's control style and inherited a full-width one
+instead.**
+
+Fixed with scoped overrides rather than a third definition, **because a third definition is how this
+file came to have two.**
+
+**The struck monthly price is gone.** Three numbers on one card is what collided, and the saving is
+already stated in words. The bill line now uses `.acct-row-s`'s treatment — monospace, 10.5px, muted —
+so **the two screens showing the same fact do not invent two ways to show it.**
+
 ### The confirm step, because billing is immediate
 
 `stripe-checkout` passes no `trial_period_days`, so the charge lands on click. **"Choose Connected" on
