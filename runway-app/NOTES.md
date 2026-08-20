@@ -1981,6 +1981,29 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### The "Nothing in the model yet" screen — found, and it was mine
+
+**Corey found it: a demo open when a patch deploys.** The page reloads on the new bundle, there is no
+hash any more, and `demoInProgress()` is still true.
+
+    const named = hashDemoId();                              // null on resume
+    if (wanted && named) activateDemoBackend(demoDoc(named)); // so this never ran
+    return wanted && !bareRequest;                           // but this returned TRUE
+
+**Demo mode ON with no demo backend.** Reads and writes went to the real backend, which answered
+`Not signed in`, the document came back empty, and the app rendered the empty-model shell.
+
+**⚠️ I VERIFIED THE RETURN VALUE OF THIS FUNCTION AND NOT ITS SIDE EFFECT** — and NOTES.md already
+carries the line "state restores the value; an effect restores the side effect" from the
+`advisorChecked` bug earlier in this same session. **I wrote the rule down and then broke it in the
+same file.**
+
+The invariant that would have caught it, and which is now checked across all five entry paths:
+**demo mode is true if and only if a demo backend is installed.**
+
+Three sessions of "cannot reproduce" because reproducing it needed a deploy DURING an open demo —
+**the one condition that never occurs while testing locally.**
+
 ### Chart label halo — one CSS rule, not sixty edits
 
 `paint-order: stroke` with a `--paper` stroke, scoped to `.rw svg text`. **60 `<text>` elements across

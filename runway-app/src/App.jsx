@@ -1870,9 +1870,21 @@ export default function App() {
     //
     // Only the BARE `#demo` case declines to enter: a hash with a company enters it, and an
     // already-running demo continues.
+    // ⚠️ A RESUMED DEMO STILL NEEDS ITS BACKEND INSTALLED. I made `activateDemoBackend` conditional on
+    // a NAMED hash, so refreshing mid-demo — or the page reloading after a deploy, which is how Corey
+    // hit it — entered demo mode with **no demo backend at all**. Reads and writes then went to the
+    // real backend, which answered "Not signed in", the document came back empty, and the app showed
+    // the empty-model shell.
+    //
+    // **I verified the RETURN VALUE of this function and not its SIDE EFFECT**, which is exactly the
+    // distinction the note about `advisorChecked` records two sections earlier in NOTES.md.
+    //
+    // The stored envelope holds the whole document, so a resume does not need to know which archetype:
+    // `createDemoBackend` prefers what is in storage over the seed unless `replace` is set.
     const named = hashDemoId();
     const bareRequest = hashed && !named;
     if (wanted && named) activateDemoBackend(demoDoc(named));
+    else if (wanted && !bareRequest) activateDemoBackend(demoDoc());
     return wanted && !bareRequest;
   });
 
