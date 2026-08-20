@@ -22,11 +22,21 @@ export const TRIAL_DAYS = 14;
 // was shown. **A version number kept anywhere other than next to its document will drift from it.**
 export { LEGAL_VERSION as TERMS_VERSION } from "../legal";
 
+/** ⚠️ `price` IS THE YEARLY RATE PER MONTH; `monthly` is what the same plan costs paid monthly.
+ *
+ *  Naming the yearly one `price` keeps every existing reader correct — it is what the app has always
+ *  shown and what the pricing pages quote. **Renaming it would have meant auditing every caller for a
+ *  cosmetic gain**, and the one missed would have quoted the wrong number.
+ *
+ *  Every plan is exactly two months free: `monthly * 10 / 12 === price`, asserted in a test rather than
+ *  trusted, because the saving is stated in three places per card and they must agree.
+ */
 export const PLANS = [
   {
     id: "solo",
     name: "Solo",
     price: 40,
+    monthly: 48,
     seats: 1,
     blurb: "One company. Everything the app does.",
     features: [
@@ -40,6 +50,7 @@ export const PLANS = [
     id: "collaborative",
     name: "Collaborative",
     price: 99,
+    monthly: 119,
     seats: 3,
     blurb: "You and two colleagues in the same model.",
     features: [
@@ -52,6 +63,7 @@ export const PLANS = [
     id: "connected",
     name: "Connected",
     price: 149,
+    monthly: 179,
     seats: 5,
     // NOT BUILT. Listed so the ladder is visible, and marked so nobody sells it by accident.
     comingSoon: true,
@@ -124,6 +136,7 @@ export const ADVISOR_PLANS = [
     id: "advisor",
     name: "Advisor",
     price: 99,
+    monthly: 119,
     companies: 3,
     blurb: "Up to three companies you advise.",
     features: [
@@ -136,6 +149,7 @@ export const ADVISOR_PLANS = [
     id: "advisor_unlimited",
     name: "Advisor Unlimited",
     price: 199,
+    monthly: 239,
     companies: Infinity,
     blurb: "Every company you advise.",
     features: [
@@ -161,4 +175,34 @@ export function advisorSummary({ plan, status, used = 0, allowed = 0, cancel_at_
     text: `${name}: ${used} of ${allowed} companies, ${left} left.` +
           (cancel_at_period_end ? " Ends at the close of this period and will not renew." : ""),
   };
+}
+
+
+/** What a plan costs per month on a cadence, and what that means over a year.
+ *
+ *  ⚠️ ONE SOURCE, BECAUSE THE SAVING APPEARS THREE TIMES PER CARD — the struck monthly price, the
+ *  annual total, and the dollar saving. **Computing them at three call sites is three chances to
+ *  disagree the first time a price changes**, and the disagreement would be on a page where people
+ *  decide whether to pay.
+ */
+export function priceOn(plan, cadence = "yearly") {
+  const perMonth = cadence === "monthly" ? (plan.monthly ?? plan.price) : plan.price;
+  const yearly = plan.price * 12;
+  const monthlyYear = (plan.monthly ?? plan.price) * 12;
+  return {
+    perMonth,
+    billed: cadence === "monthly" ? perMonth : yearly,   // what one charge is
+    annual: cadence === "monthly" ? monthlyYear : yearly, // what a year costs either way
+    saves: Math.max(0, monthlyYear - yearly),
+    altPerMonth: cadence === "monthly" ? plan.price : (plan.monthly ?? plan.price),
+  };
+}
+
+/** "2 months free", generated rather than written — so it cannot outlive the prices it describes. */
+export function savingLabel(plans = PLANS) {
+  const months = plans
+    .filter(p => p.monthly && p.price)
+    .map(p => Math.round((p.monthly * 12 - p.price * 12) / p.monthly));
+  const all = months.length && months.every(m => m === months[0]) ? months[0] : null;
+  return all ? `${all} months free` : "Save with yearly";
 }

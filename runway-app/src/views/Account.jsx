@@ -14,7 +14,8 @@ import { LandingSetting } from "./chrome/LandingSetting";
 import { Portfolio } from "./chrome/Portfolio";
 import { AdvisorBilling } from "./chrome/AdvisorBilling";
 import { TAB_REGISTRY, isLocked } from "../state/tabprefs";
-import { PLANS, planSummary, unpaidMessage, TRIAL_DAYS } from "../state/plans";
+import { ConfirmPlan } from "./chrome/ConfirmPlan";
+import { PLANS, planSummary, unpaidMessage, TRIAL_DAYS , priceOn, savingLabel} from "../state/plans";
 
 /** A date somebody can act on. `toLocaleDateString` and not a relative "in 12 days": the point of
  *  showing this is that the reader can put it in a calendar. */
@@ -112,6 +113,13 @@ function PasswordSection({ account, session, hasPassword, email, onChanged }) {
  *  only ever consulted OWNERS, and an advisor is invited as an admin. A person can now be in several
  *  companies on several plans, so this panel is scoped to the active one. */
 export function BillingSection({ account, companyId, onError }) {
+  // ⚠️ ABOVE EVERY RETURN. An early return placed above a hook changes the hook count and React
+  // refuses — the fault that white-screened the demo picker three times this session.
+  const [cadence, setCadence] = useState("yearly");
+  // ⚠️ THE PLAN BEING CONFIRMED, NOT A BOOLEAN. The screen needs to know WHICH plan to price, and a
+  // flag would mean a second piece of state that can disagree with it.
+  const [confirm, setConfirm] = useState(null);
+
   const [row, setRow] = useState(null);
   const [busy, setBusy] = useState(null);
 
@@ -158,11 +166,50 @@ export function BillingSection({ account, companyId, onError }) {
 
       {!staff && (
         <div className="plancards">
+          {/* ⚠️ ONE TOGGLE FOR ALL THE CARDS, NOT ONE PER CARD. Most people decide cadence first and
+              plan second, and asking the same question three times makes a short page feel like a
+              form. Yearly is the default because it is the better offer and the one being argued for. */}
+          {confirm && (
+            <ConfirmPlan plan={confirm} cadence={cadence} // ⚠️ THE NUMBER THIS PAGE ALREADY SHOWS, not a date parsed a second way. `s.daysLeft`
+                         // is what the trial banner above uses, so the two cannot disagree.
+                         trialDaysLeft={s.state === "trialing" ? s.daysLeft : null}
+                         busy={!!busy}
+                         onCadence={(c) => setCadence(c)}
+                         onCancel={() => setConfirm(null)}
+                         onConfirm={() => go(() => account.checkout(companyId, confirm.id, cadence),
+                                             confirm.id)} />
+          )}
+
+          <div className="cad-row">
+            <div className="seg cad-seg" role="tablist" aria-label="Billing cadence">
+              <button role="tab" aria-selected={cadence === "monthly"}
+                      className={"seg-b" + (cadence === "monthly" ? " on" : "")}
+                      onClick={() => setCadence("monthly")}>Monthly</button>
+              <button role="tab" aria-selected={cadence === "yearly"}
+                      className={"seg-b" + (cadence === "yearly" ? " on" : "")}
+                      onClick={() => setCadence("yearly")}>Yearly</button>
+            </div>
+            <span className="cad-chip">{savingLabel()}</span>
+          </div>
+
           {PLANS.map(p => (
             <div className={"plancard" + (s.plan?.id === p.id ? " on" : "")} key={p.id}>
               <div className="plancard-h">
                 <b>{p.name}</b>
-                <span className="plancard-price">${p.price}<em>/mo</em></span>
+                {/* ⚠️ THE PER-MONTH FIGURE WITH THE ANNUAL TOTAL BENEATH IT. "$480 a year" and "$40 a
+                    month" are the same offer and people compare the smaller number — but hiding the
+                    total is how a first bill becomes a refund request. **Checkout charges immediately**,
+                    so the total is not a footnote here, it is what the button is about to do. */}
+                <span className="plancard-price">${priceOn(p, cadence).perMonth}<em>/mo</em></span>
+                {cadence === "yearly" && priceOn(p, cadence).saves > 0 && (
+                  <span className="plancard-was">${priceOn(p, "monthly").perMonth} billed monthly</span>
+                )}
+                <span className="plancard-bill">
+                  {cadence === "yearly"
+                    ? <>${priceOn(p, cadence).billed.toLocaleString()} billed yearly · save $
+                        {priceOn(p, cadence).saves.toLocaleString()}</>
+                    : <>${priceOn(p, cadence).annual.toLocaleString()} a year, billed monthly</>}
+                </span>
               </div>
               <p>{p.blurb}</p>
               <ul>{p.features.map((f, i) => <li key={i}>{f}</li>)}</ul>
@@ -172,7 +219,7 @@ export function BillingSection({ account, companyId, onError }) {
                 <span className="plancard-soon">Your plan</span>
               ) : (
                 <button className="addbtn plancard-go" disabled={!!busy}
-                        onClick={() => go(() => account.checkout(companyId, p.id), p.id)}>
+                        onClick={() => setConfirm(p)}>
                   {busy === p.id ? "Opening…" : `Choose ${p.name}`}
                 </button>
               )}

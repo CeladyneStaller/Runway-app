@@ -1961,6 +1961,48 @@ log names the missing key and lists what the env does contain.
 Client defaults to `"yearly"` at both call sites, so nothing that does not pass a cadence changes
 behaviour.
 
+### The cadence toggle, on both plan surfaces
+
+`plans.js` gained `monthly` beside the existing `price`. **`price` still means the YEARLY rate per
+month** — renaming it would have meant auditing every caller for a cosmetic gain, and the one missed
+would have quoted the wrong number on a page where people decide to pay.
+
+**⚠️ `priceOn()` AND `savingLabel()` EXIST BECAUSE THE SAVING APPEARS THREE TIMES PER CARD** — the
+struck price, the annual total and the dollar figure. Computing them at three call sites is three
+chances to disagree the first time a price moves. The chip is generated, so **"2 months free" cannot
+outlive the prices it describes**, and a test asserts the arithmetic for all five plans.
+
+**One toggle above the cards, not one per card.** Most people decide cadence first and plan second, and
+asking three times makes a short page feel like a form.
+
+**The annual total sits under every price**, because checkout charges immediately — **it is not a
+footnote, it is what the button is about to do.**
+
+Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
+the control does not — **an advisor who has seen the company page already knows this one.**
+
+### The confirm step, because billing is immediate
+
+`stripe-checkout` passes no `trial_period_days`, so the charge lands on click. **"Choose Connected" on
+yearly moved $1,788 with no intermediate screen, from a card advertising "$149/mo".** That is the
+largest gap between expectation and event anywhere in the product.
+
+**The button states the amount** — `Pay $1,788`, not "Continue". **If the number makes somebody
+hesitate, that hesitation was going to be a refund request instead.**
+
+**The alternative cadence is offered at the moment of doubt**, which is when it is worth most: somebody
+hesitating at a year's payment either takes the smaller commitment or leaves, and one of those is a
+customer.
+
+**And the trial line answers the question this ordering creates.** The trial starts at company creation,
+so somebody paying on day three reasonably wonders whether they have thrown the rest away. They have
+not — checkout now sends a `trial_end`. **The count comes from the caller rather than being parsed
+again**, because the billing page already displays it and two derivations of one number on one screen
+is how they come to disagree.
+
+Wired at `go()`, which both surfaces already shared — **one seam, so the advisor page got it without a
+second implementation.**
+
 ## The portfolio shows two runways
 
 Corey's point, and the numbers prove it immediately:

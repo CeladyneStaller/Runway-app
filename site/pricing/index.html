@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pricing — Waterline</title>
-<meta name="description" content="Waterline is priced per company from $40 a month, with a separate advisor subscription from $99. Fourteen-day trial, no card.">
+<meta name="description" content="Waterline is priced per company from $40 a month billed yearly, or $48 monthly, with a separate advisor subscription from $99. Fourteen-day trial, no card.">
 <link rel="canonical" href="https://waterline-runway.com/pricing/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Waterline">
 <meta property="og:title" content="Pricing — Waterline">
-<meta property="og:description" content="Waterline is priced per company from $40 a month, with a separate advisor subscription from $99. Fourteen-day trial, no card.">
+<meta property="og:description" content="Waterline is priced per company from $40 a month billed yearly, or $48 monthly, with a separate advisor subscription from $99. Fourteen-day trial, no card.">
 <meta property="og:url" content="https://waterline-runway.com/pricing/">
 <meta property="og:image" content="https://waterline-runway.com/og.svg">
 <meta name="twitter:card" content="summary_large_image">
@@ -19,6 +19,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,200;0,300;0,400;1,300&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared.css">
+<style>
+.cadrow{display:flex;align-items:center;gap:12px;margin:0 0 28px;flex-wrap:wrap}
+.cadseg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;
+  background:var(--card)}
+.cadseg button{font:inherit;font-size:.85rem;padding:6px 18px;border-radius:999px;border:none;
+  background:none;color:var(--muted);cursor:pointer}
+.cadseg button.on{background:var(--pine);color:#fff;font-weight:600}
+.cadchip{font-family:var(--fm);font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;
+  background:rgba(16,135,107,.12);color:var(--pine);border-radius:999px;padding:3px 10px}
+</style>
 </head>
 <body>
 <header class="nav">
@@ -45,15 +55,26 @@
               letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 26px">
       For organizations · per company
       <span style="flex:1;height:1px;background:var(--hair)"></span></p>
+    <!-- ⚠️ ONE TOGGLE FOR EVERY CARD ON THE PAGE, company and advisor alike. Most people decide
+         cadence first and plan second, and a second toggle further down would let the two disagree —
+         somebody reading advisor prices in yearly while the company cards showed monthly. -->
+    <div class="cadrow">
+      <div class="cadseg" role="tablist" aria-label="Billing cadence">
+        <button type="button" role="tab" data-cad="monthly" aria-selected="false">Monthly</button>
+        <button type="button" role="tab" data-cad="yearly" aria-selected="true" class="on">Yearly</button>
+      </div>
+      <span class="cadchip">2 months free</span>
+    </div>
+
     <div class="grid3">
       
       <article class="card" style="display:flex;flex-direction:column;">
         <h3>Solo</h3>
         <p style="font-family:var(--fm);font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;
                   color:var(--muted);margin:8px 0 26px">1 seat</p>
-        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0">$40</p>
+        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0" data-price data-monthly="48" data-yearly="40">$40</p>
         <p style="font-family:var(--fm);font-size:.66rem;letter-spacing:.09em;color:var(--muted);
-                  margin:12px 0 26px">per company · per month</p>
+                  margin:12px 0 26px" data-bill data-unit="company">per company · per month</p>
         <ul style="list-style:none;padding:0;margin:0 0 30px"><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Full projection, scenarios and confidence bands</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">SF-424A import and export</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Ledger upload and reconciliation</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Export your model any time</li></ul>
         <a class="btn btn--line" style="margin-top:auto;justify-content:center" href="https://app.waterline-runway.com">Start with Solo</a>
       </article>
@@ -62,9 +83,9 @@
         <h3>Collaborative</h3>
         <p style="font-family:var(--fm);font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;
                   color:var(--muted);margin:8px 0 26px">3 seats</p>
-        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0">$99</p>
+        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0" data-price data-monthly="119" data-yearly="99">$99</p>
         <p style="font-family:var(--fm);font-size:.66rem;letter-spacing:.09em;color:var(--muted);
-                  margin:12px 0 26px">per company · per month</p>
+                  margin:12px 0 26px" data-bill data-unit="company">per company · per month</p>
         <ul style="list-style:none;padding:0;margin:0 0 30px"><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Everything in Solo</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Up to 3 people</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Invite colleagues to a company</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Shared scenarios across the team</li></ul>
         <a class="btn btn--fill" style="margin-top:auto;justify-content:center" href="https://app.waterline-runway.com">Start with Collaborative</a>
       </article>
@@ -73,9 +94,9 @@
         <h3>Connected</h3>
         <p style="font-family:var(--fm);font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;
                   color:var(--muted);margin:8px 0 26px">5 seats · QuickBooks</p>
-        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0">$149</p>
+        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0" data-price data-monthly="179" data-yearly="149">$149</p>
         <p style="font-family:var(--fm);font-size:.66rem;letter-spacing:.09em;color:var(--muted);
-                  margin:12px 0 26px">per company · per month</p>
+                  margin:12px 0 26px" data-bill data-unit="company">per company · per month</p>
         <ul style="list-style:none;padding:0;margin:0 0 30px"><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Everything in Collaborative</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Automatic ledger import</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Actuals reconciled without a CSV</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Unpaid bills as commitments</li></ul>
         <a class="btn btn--line" style="margin-top:auto;justify-content:center" href="https://app.waterline-runway.com">Start with Connected</a>
       </article>
@@ -91,9 +112,9 @@
         <h3>Advisor</h3>
         <p style="font-family:var(--fm);font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;
                   color:var(--muted);margin:8px 0 26px">up to 3 companies</p>
-        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0">$99</p>
+        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0" data-price data-monthly="119" data-yearly="99">$99</p>
         <p style="font-family:var(--fm);font-size:.66rem;letter-spacing:.09em;color:var(--muted);
-                  margin:12px 0 26px">per advisor · per month</p>
+                  margin:12px 0 26px" data-bill data-unit="advisor">per advisor · per month</p>
         <ul style="list-style:none;padding:0;margin:0 0 30px"><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Join client companies by invitation</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Portfolio ordered by who runs out first</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Your own scenario layer per client</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Never consumes a client's seat</li></ul>
         <a class="btn btn--line" style="margin-top:auto;justify-content:center" href="https://app.waterline-runway.com">Start a practice</a>
       </article>
@@ -102,9 +123,9 @@
         <h3>Advisor Unlimited</h3>
         <p style="font-family:var(--fm);font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;
                   color:var(--muted);margin:8px 0 26px">any number of companies</p>
-        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0">$199</p>
+        <p style="font-family:var(--display);font-weight:200;font-size:2.9rem;line-height:1;margin:0" data-price data-monthly="239" data-yearly="199">$199</p>
         <p style="font-family:var(--fm);font-size:.66rem;letter-spacing:.09em;color:var(--muted);
-                  margin:12px 0 26px">per advisor · per month</p>
+                  margin:12px 0 26px" data-bill data-unit="advisor">per advisor · per month</p>
         <ul style="list-style:none;padding:0;margin:0 0 30px"><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Everything in Advisor</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">Every company you advise</li><li style="font-size:.91rem;line-height:1.5;padding:11px 0;border-top:1px solid var(--hair);color:var(--ink-2)">For practices carrying a full book</li></ul>
         <a class="btn btn--line" style="margin-top:auto;justify-content:center" href="https://app.waterline-runway.com">Start unlimited</a>
       </article>
@@ -177,5 +198,61 @@
     <p class="foot__base">© 2026 Waterline · Cash runway modelling for grant-funded organizations</p>
   </div>
 </footer>
+
+<script>
+/* Billing cadence.
+ *
+ * ⚠️ NO BUILD STEP ON THIS SITE, so the prices live in `data-` attributes on the elements that show
+ * them rather than in a table this script owns. **A second copy of the numbers here would be the one
+ * that goes stale**, because it is the copy nobody looks at when a price changes.
+ *
+ * The page ships showing YEARLY, so somebody with JavaScript disabled sees the better offer and
+ * accurate prices rather than a dead control and a blank card.
+ */
+(function () {
+  var seg = document.querySelector(".cadseg");
+  if (!seg) return;
+
+  function apply(cad) {
+    document.querySelectorAll("[data-price]").forEach(function (el) {
+      var v = el.getAttribute(cad === "monthly" ? "data-monthly" : "data-yearly");
+      if (!v) return;
+      el.textContent = "$" + v;
+      var card = el.closest("article");
+      var bill = card && card.querySelector("[data-bill]");
+      if (!bill) return;
+      var mo = +el.getAttribute("data-monthly"), yr = +el.getAttribute("data-yearly");
+      /* ⚠️ THE ANNUAL TOTAL, ALWAYS. "$99 a month" and "$1,188 once a year" are the same offer and
+         people compare the smaller number — but checkout charges immediately, so the total is what
+         the button is about to do rather than a footnote. */
+      /* ⚠️ THE NOUN COMES FROM THE CARD. Advisor plans read "per advisor" and company plans "per
+         company" — **rewriting both to the same word would tell an advisor they are buying a
+         company**, which is the confusion "never billed per client" exists to prevent. */
+      var unit = "per " + (bill.getAttribute("data-unit") || "company");
+      bill.textContent = cad === "monthly"
+        ? unit + " · billed monthly · $" + (mo * 12).toLocaleString() + " a year"
+        : unit + " · $" + (yr * 12).toLocaleString() + " billed yearly · save $"
+          + ((mo - yr) * 12).toLocaleString();
+    });
+    seg.querySelectorAll("button").forEach(function (b) {
+      var on = b.getAttribute("data-cad") === cad;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    /* The choice travels to the app, which reads it at checkout. */
+    document.querySelectorAll('a[href*="app.waterline-runway.com"]').forEach(function (a) {
+      if (a.getAttribute("href").indexOf("#demo") !== -1) return;   // demo links are not signups
+      var base = a.getAttribute("href").split("?")[0].split("#")[0];
+      a.setAttribute("href", base + "?cadence=" + cad);
+    });
+  }
+
+  seg.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-cad]");
+    if (b) apply(b.getAttribute("data-cad"));
+  });
+  apply("yearly");
+})();
+</script>
 </body>
 </html>

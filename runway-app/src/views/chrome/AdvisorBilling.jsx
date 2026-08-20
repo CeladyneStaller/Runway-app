@@ -6,10 +6,14 @@
 // does this company pay" and "what do I pay" at once, and the reason 024 split the tables is that those
 // stopped being the same question.
 import React, { useCallback, useEffect, useState } from "react";
-import { ADVISOR_PLANS, advisorSummary } from "../../state/plans";
+import { ADVISOR_PLANS, advisorSummary , priceOn, savingLabel} from "../../state/plans";
 import { money } from "../../engine/money";
+import { ConfirmPlan } from "./ConfirmPlan";
 
 export function AdvisorBilling({ account, onError }) {
+  const [cadence, setCadence] = useState("yearly");
+  const [confirm, setConfirm] = useState(null);
+
   const [row, setRow] = useState(null);
   const [busy, setBusy] = useState(null);
 
@@ -66,15 +70,44 @@ export function AdvisorBilling({ account, onError }) {
       {/* THE OFFER IS ONLY SHOWN WHEN THERE IS SOMETHING TO CHANGE. Somebody already on Unlimited has
           nothing to buy, and a card marked "Your plan" beside one that is not is how a pricing page
           gets read as an upsell. */}
+      {confirm && (
+        <ConfirmPlan plan={confirm} cadence={cadence} busy={busy === confirm.id}
+                     onCadence={(c) => setCadence(c)}
+                     onCancel={() => setConfirm(null)}
+                     onConfirm={() => go(() => account.checkoutAdvisor(confirm.id, cadence),
+                                         confirm.id)} />
+      )}
+
+      {/* ⚠️ THE SAME CONTROL AS THE COMPANY PAGE, so an advisor who has seen one already knows this
+          one. The layout differs — rows here, cards there — but the question and its default do not. */}
+      <div className="cad-row">
+        <div className="seg cad-seg" role="tablist" aria-label="Billing cadence">
+          <button role="tab" aria-selected={cadence === "monthly"}
+                  className={"seg-b" + (cadence === "monthly" ? " on" : "")}
+                  onClick={() => setCadence("monthly")}>Monthly</button>
+          <button role="tab" aria-selected={cadence === "yearly"}
+                  className={"seg-b" + (cadence === "yearly" ? " on" : "")}
+                  onClick={() => setCadence("yearly")}>Yearly</button>
+        </div>
+        <span className="cad-chip">{savingLabel(ADVISOR_PLANS)}</span>
+      </div>
+
       {ADVISOR_PLANS.filter(p => p.id !== row.plan).map(p => (
         <div className="acct-row" key={p.id}>
           <div>
-            <div className="acct-row-t">{p.name} · {money(p.price)}/mo</div>
+            <div className="acct-row-t">{p.name} · {money(priceOn(p, cadence).perMonth)}/mo</div>
+            {/* The annual total, because checkout charges immediately and this is the number that
+                leaves the account today. */}
+            <div className="acct-row-s">
+              {cadence === "yearly"
+                ? `${money(priceOn(p, cadence).billed)} billed yearly · save ${money(priceOn(p, cadence).saves)}`
+                : `${money(priceOn(p, cadence).annual)} a year, billed monthly`}
+            </div>
             <div className="acct-row-s">{p.blurb}</div>
           </div>
           <div className="acct-row-a">
             <button className="addbtn ghost" disabled={busy === p.id}
-                    onClick={() => go(() => account.checkoutAdvisor(p.id), p.id)}>
+                    onClick={() => setConfirm(p)}>
               {busy === p.id ? "Opening…" : has ? `Switch to ${p.name}` : `Choose ${p.name}`}
             </button>
           </div>
