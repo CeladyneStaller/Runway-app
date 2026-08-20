@@ -89,7 +89,11 @@ export function AdvisorBilling({ account, onError }) {
                   className={"seg-b" + (cadence === "yearly" ? " on" : "")}
                   onClick={() => setCadence("yearly")}>Yearly</button>
         </div>
-        <span className="cad-chip">{savingLabel(ADVISOR_PLANS)}</span>
+        {/* ⚠️ ONLY ON YEARLY. The chip is an argument FOR the cadence being shown — beside a monthly
+            price it reads as a claim about what you are looking at, which is untrue, or as a
+            nag, which is worse. **A saving that does not apply to the selected option is
+            noise at the moment somebody is deciding.** */}
+        {cadence === "yearly" && <span className="cad-chip">{savingLabel(ADVISOR_PLANS)}</span>}
       </div>
 
       {ADVISOR_PLANS.filter(p => p.id !== row.plan).map(p => (

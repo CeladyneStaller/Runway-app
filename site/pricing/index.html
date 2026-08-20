@@ -234,6 +234,13 @@
         : unit + " · $" + (yr * 12).toLocaleString() + " billed yearly · save $"
           + ((mo - yr) * 12).toLocaleString();
     });
+    /* ⚠️ HIDDEN ON MONTHLY, AND SHIPPED VISIBLE. The chip argues FOR yearly — beside a monthly price
+       it reads as a claim about what you are looking at, which is untrue.
+       **It starts visible in the markup because the page ships showing yearly**, so somebody with
+       JavaScript disabled sees a true chip beside true prices rather than a hidden one. */
+    var chip = document.querySelector(".cadchip");
+    if (chip) chip.hidden = (cad !== "yearly");
+
     seg.querySelectorAll("button").forEach(function (b) {
       var on = b.getAttribute("data-cad") === cad;
       b.classList.toggle("on", on);

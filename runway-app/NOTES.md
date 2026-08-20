@@ -1981,6 +1981,19 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### The saving chip shows only on yearly
+
+All three surfaces. **The chip is an argument FOR the cadence being shown** — beside a monthly price it
+reads either as a claim about what you are looking at, which is untrue, or as a nag, which is worse.
+**A saving that does not apply to the selected option is noise at the moment somebody is deciding.**
+
+**On the site it ships VISIBLE and the script hides it**, rather than the reverse. The page loads
+showing yearly, so somebody with JavaScript disabled sees a true chip beside true prices — **hiding it
+in the markup would have made the no-JS case wrong to fix the JS one.**
+
+Checked that nothing sets `display` on `.cadchip`, since that would defeat the `hidden` attribute
+silently.
+
 ### Two rows — and the toggle was inside the grid
 
 The real cause of the 2+1 layout: **`.cad-row` was a child of `.plancards`**, so it became a grid cell
