@@ -32,7 +32,20 @@ export const GOAL_STATUS = { done: ["Done", "var(--signal-ink)", "rgba(16,135,10
 
 // A close date IS a critical date. Derive it rather than asking anyone to keep two copies in step —
 // move the close in Investment and the milestone, the chart marker and the balance all follow.
-export const roundMS = (rounds, START_Y, START_M) => (rounds || []).filter(r => r.kind === "equity" && r.status !== "closed" && r.closeMonth != null).map(r => {
+/** Milestones derived from rounds that have not closed yet.
+ *
+ *  ⚠️ EVERY INSTRUMENT, NOT JUST EQUITY. This filtered on `kind === "equity"`, so a SAFE or a note
+ *  closing in month 9 put cash into the projection with **no marker on the chart** — and a SAFE close
+ *  is as much a date to work toward as a priced round, usually the nearer one.
+ *
+ *  `status !== "closed"` stays: a milestone is a date you are working toward, and a closed round is
+ *  history. `closeMonth != null` stays too — there is no date to place without one.
+ *
+ *  ⚠️ THESE CARRY NO `target`, AND THAT IS CORRECT. `msTarget` returns 0 for them, so `msPass` is true
+ *  at any non-negative balance — they are dates, not cash thresholds. Widening the filter therefore
+ *  adds markers without changing what any threshold means.
+ */
+export const roundMS = (rounds, START_Y, START_M) => (rounds || []).filter(r => r.status !== "closed" && r.closeMonth != null).map(r => {
   const d = new Date(START_Y, START_M + clampM(r.closeMonth), 1);
   const y = d.getFullYear(), m = d.getMonth();
   return { id: `round-${r.id}`, label: `${r.name} close`, y, m, day: daysInMonth(y, m), fromRound: r.id };

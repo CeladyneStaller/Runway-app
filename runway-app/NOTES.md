@@ -1981,6 +1981,26 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### Round milestones now cover every instrument
+
+`roundMS` filtered on `kind === "equity"`, so **a SAFE or note closing in month 9 put cash into the
+projection with no marker on the chart.** Corey's call: it should be all investment.
+
+**Both of my cautions turned out to be wrong, and checking took two greps:**
+
+**No double-draw.** I said `charts.js:610` referenced `roundMS`. It does not — it reads `g.round` for
+the goals chart and only *matches* the month-end convention in a comment. **`roundMS` has exactly one
+call site.**
+
+**And widening it changes no threshold.** `msTarget`/`msPass`/`msGap` read `ms.target`, which derived
+milestones never set — so `msTarget` is 0 and `msPass` is true at any non-negative balance. **These are
+dates, not cash requirements**, which is precisely why adding more of them is safe.
+
+`status !== "closed"` and `closeMonth != null` both stay: a closed round is history, and an undated one
+has nowhere to sit.
+
+Ridgeline's Seed SAFE now appears on its runway chart, where it was previously invisible.
+
 ### "Continue with Google" removed — the provider was never configured
 
 The button existed and every click failed. **A control that cannot work is worse than a missing one**,
