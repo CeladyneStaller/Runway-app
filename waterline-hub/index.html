@@ -1338,7 +1338,13 @@ async function applyGate() {
         ? `${session.user.email} is not a Waterline staff account.`
         : "Staff sign-in.";
   }
-  if (ok) loadStatus?.();
+  // ⚠️ `refreshStatus`, NOT `loadStatus` — a name I invented and never checked. **`?.()` guards a null
+  // VALUE, not a missing BINDING**, so the optional call threw a ReferenceError rather than doing
+  // nothing, which is what I assumed it would do.
+  //
+  // Safe to call from here even though it is declared 900 lines below: `async function` declarations
+  // hoist, and this runs on an event rather than during evaluation.
+  if (ok) refreshStatus();
   return ok;
 }
 
@@ -2457,10 +2463,14 @@ if (statusCfg.sbKey || statusCfg.sbUrl) {
 
 applyTheme();
 renderSections();
-refreshStatus();
+// ⚠️ NOT AT LOAD. This fired before `restoreSession` had resolved, so it fetched with no token and
+// 401'd on every page open — **a console error on a working page, which is how people learn to ignore
+// the console.** `applyGate` calls it once the staff check passes, which is the only moment it can
+// succeed.
+
 
 // Keep status honest without hammering anything.
-setInterval(refreshStatus, 5 * 60 * 1000);
+setInterval(() => { if (session) refreshStatus(); }, 5 * 60 * 1000);
 </script>
 </body>
 </html>
