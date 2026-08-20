@@ -53,6 +53,15 @@ export function createSession(authClient) {
     },
 
     /** OAuth. The browser navigates away, so a resolved value here mostly means "redirect failed". */
+    /** ⚠️ NO CALLERS. The "Continue with Google" button was removed because the provider is not
+     *  configured in Supabase — the button existed and every click failed.
+     *
+     *  **Kept rather than deleted**, because this is the correct implementation and the reason it is
+     *  unused is a dashboard setting rather than a code problem. Deleting it would mean rewriting it
+     *  from scratch the day OAuth is turned on.
+     *
+     *  A function with no callers is normally a smell; this one is a documented pause.
+     */
     async signInWithProvider(provider, { redirectTo } = {}) {
       try {
         const { error } = await authClient.signInWithOAuth({

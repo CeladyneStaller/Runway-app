@@ -1981,6 +1981,18 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### "Continue with Google" removed — the provider was never configured
+
+The button existed and every click failed. **A control that cannot work is worse than a missing one**,
+because it costs a person their attempt before telling them anything.
+
+Only one surface had it: `SignIn.jsx`. The hub's Google matches were `fonts.googleapis.com`.
+
+**`session.signInWithProvider` is kept and marked**, not deleted. It is the correct implementation and
+the reason it is unused is a dashboard setting rather than a code problem — **deleting it would mean
+rewriting it from scratch the day OAuth is turned on.** A function with no callers is normally a smell;
+this one is a documented pause.
+
 ### Profile settings would not open from the advisor view
 
 `AdvisorHome` called `onOpenSettings` correctly and the state was set correctly. **The portfolio

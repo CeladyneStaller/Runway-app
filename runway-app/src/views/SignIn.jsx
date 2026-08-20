@@ -182,10 +182,6 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
     if (r?.ok) setNotice({ kind: "link", email });
   };
 
-  const google = async () => {
-    const r = await run("google", () => session.signInWithProvider("google", { redirectTo }));
-    if (r?.ok) setBusy("google");   // the browser should be navigating away
-  };
 
   return (
     <div className="rw"><div className="splash signin">
@@ -241,9 +237,7 @@ export function SignIn({ session, onDemo, initialMode = CREATE, onBack, banner =
       <button className="addbtn ghost signin-go" disabled={busy != null} onClick={magicLink}>
         {busy === "link" ? "Sending…" : "Email me a link instead"}
       </button>
-      <button className="addbtn ghost signin-go" disabled={busy != null} onClick={google}>
-        {busy === "google" ? "Opening…" : "Continue with Google"}
-      </button>
+
 
       <p className="signin-fine" style={{ marginTop: 16 }}>
         {creating
