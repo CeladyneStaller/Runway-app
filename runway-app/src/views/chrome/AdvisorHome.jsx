@@ -15,7 +15,7 @@ import mark from "../../assets/waterline-mark.svg";
 import { money } from "../../engine/money";
 import { runwayMonths } from "./docsummary";
 import { buildModelParts, buildModelFromDoc } from "../../engine/buildmodel";
-import { buildProjection } from "../../engine/projection";
+import { buildProjection , zeroInfo} from "../../engine/projection";
 import { alertsFor } from "../../engine/alerts";
 import { AdvisorCompany } from "./AdvisorCompany";
 import { ProfileMenu } from "./ProfileMenu";
@@ -57,13 +57,33 @@ function useClients(account) {
         }
         if (!alive) return;
 
-        let parts = null, months = null, cash = null, attention = 0;
+        let parts = null, months = null, floorMonths = null, cash = null, attention = 0;
         if (doc) {
           try {
             parts = buildModelParts(doc);
             const rows2 = buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {});
             parts = { ...parts, rows: rows2 };
-            months = clean(runwayMonths(doc));
+            // ⚠️ TWO RUNWAYS, NOT ONE. A single figure cannot answer an advisor's actual question,
+            // which is not "how long" but **"how much of this depends on money nobody has promised?"**
+            //
+            // The FLOOR counts committed AND expected income — everything except what the company is
+            // still chasing. The HEADLINE counts everything, speculative included.
+            //
+            // ⚠️ NONE OF THE FOUR DEMO COMPANIES DIFFER ON THIS PAIR, so the second line will not
+            // render for any of them today. That is a fact about the sample data rather than about the
+            // measure: **a real client pursuing a large unwon grant is exactly the case it exists for**,
+            // and Ridgeline's Phase III proposal does not move its FIRST crossing because the money
+            // arrives in month 18, after cash has already run out.
+            //
+            // **The gap between them IS the finding.** A client at 5 and 11 has a fundable plan and a
+            // deadline; a client at 5 and 5 has neither, and those two look identical on one number.
+            const model = buildModelFromDoc(doc);
+            const runwayAt = (toggles) => {
+              const z = zeroInfo(buildProjection(model, toggles), doc.startY, doc.startM);
+              return z ? clean(z.months) : null;      // null means it does not run out in the horizon
+            };
+            floorMonths = runwayAt({ committed: true, expected: true, speculative: false });
+            months = runwayAt(doc.settings?.toggles || { committed: true, expected: true, speculative: true });
             cash = clean(doc.cash);
             // ⚠️ THE WORST THING, NAMED — NOT A COUNT OF EVERYTHING.
             //
@@ -89,7 +109,7 @@ function useClients(account) {
           } catch (e) { failed = e?.message || "This model could not be read."; doc = null; }
         }
         setRows(prev => prev.map(r => (r.id === c.id
-          ? { ...r, doc, parts, months, cash, attention, failed,
+          ? { ...r, doc, parts, months, floorMonths, cash, attention, failed,
               state: failed ? "failed" : "ready" }
           : r)));
       }
@@ -105,7 +125,11 @@ const toneOf = (m) => (m == null ? "" : m < 6 ? "bad" : m < 12 ? "warn" : "");
 function Portfolio({ rows, onOpen }) {
   const ready = rows.filter(r => r.state === "ready");
   const pending = rows.filter(r => r.state === "loading").length;
-  const short = ready.filter(r => r.months != null && r.months < 6);
+  // ⚠️ JUDGED ON THE FLOOR, NOT THE HEADLINE. A client at six months on paper and three months on
+  // committed income is in trouble now — **counting the optimistic figure is how an advisor finds out
+  // late**, which is the failure this whole view exists to prevent.
+  const short = ready.filter(r => (r.floorMonths ?? r.months) != null
+                                  && (r.floorMonths ?? r.months) < 6);
   const shortest = ready.reduce((a, r) => (r.months != null && (a == null || r.months < a) ? r.months : a), null);
   // ⚠️ CLIENTS NEEDING ATTENTION, NOT ALERTS TOTALLED. `r.attention` became an object when the column
   // started naming the worst finding instead of counting everything — and `0 + {}` is the string
@@ -156,7 +180,7 @@ function Portfolio({ rows, onOpen }) {
         </div>
         <table className="tbl">
           <thead>
-            <tr><th>Company</th><th style={{ textAlign: "right" }}>Runway</th>
+            <tr><th>Company</th><th style={{ textAlign: "right" }}>Runway<span className="th-sub">with / without speculative</span></th>
               <th style={{ textAlign: "right" }}>Cash</th><th>Attention</th><th></th></tr>
           </thead>
           <tbody>
@@ -168,6 +192,15 @@ function Portfolio({ rows, onOpen }) {
                   {r.state === "loading" ? "…"
                     : r.state === "failed" ? "—"
                     : r.months == null ? "positive" : `${r.months.toFixed(1)} mo`}
+                  {/* ⚠️ THE FLOOR SITS UNDER THE HEADLINE FIGURE, and only when it differs. Printing
+                      "5.4 committed" beneath 5.4 is noise; printing it beneath 10.7 is the finding —
+                      **that client's runway is half real and half hoped for.** */}
+                  {r.state === "ready" && r.floorMonths != null
+                    && (r.months == null || Math.abs(r.floorMonths - r.months) >= 0.1) && (
+                    <span className="rw-floor">
+                      {r.floorMonths.toFixed(1)} without speculative
+                    </span>
+                  )}
                 </td>
                 <td style={{ textAlign: "right", fontFamily: "var(--fm)" }}>
                   {r.cash == null ? "" : money(r.cash)}

@@ -1931,6 +1931,45 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+## The portfolio shows two runways
+
+Corey's point, and the numbers prove it immediately:
+
+    Ridgeline    5.4 mo                      floor and headline agree
+    Kestrel     20.0 mo   18.7 committed     comfortable either way
+    Tidewater    6.5 mo                      no speculative income at all
+    Larkspur    10.7 mo    5.4 committed     **half its runway is hoped for**
+
+**A single figure cannot answer an advisor's actual question**, which is not "how long" but *how much of
+this depends on money nobody has promised*. Larkspur at 10.7 looked comfortable and is five months from
+zero on signed income.
+
+**⚠️ AND THE "NEEDS ATTENTION" COUNT NOW JUDGES ON THE FLOOR**, which changed it from 1 to 2. A client
+at six months on paper and three on committed income is in trouble now — **counting the optimistic
+figure is how an advisor finds out late**, which is the failure this view exists to prevent.
+
+**The floor is printed only when it differs.** "5.4 committed" beneath 5.4 is noise; beneath 10.7 it is
+the whole finding.
+
+### The floor is committed + expected, per Corey
+
+Changed as asked. **⚠️ AND NO DEMO COMPANY SHOWS A GAP ON THIS PAIR**, so the second line renders for
+none of them today.
+
+That is the sample data rather than the measure. Ridgeline's Phase III proposal has
+`assumeFunded: false`, **so it emits no income at all** — the speculative toggle has nothing to switch
+off and the two curves are byte-identical at every month. The attention count returns to 1.
+
+**Two things left open for Corey:**
+
+**Ridgeline probably wants `assumeFunded: true`.** The mockup promised "a proposal sitting in the model
+without inflating it", and with the flag off it is not in the model at all — **so the demo cannot
+demonstrate the thing this column exists to show.**
+
+**And the committed-only floor was the version that found something** — Larkspur 10.7 against 5.4.
+Committed + expected is the more standard reading and on this data it distinguishes nothing. Said so
+rather than quietly leaving the better-looking version in.
+
 ### The fonts did not match, and I did not look
 
 Corey asked. **I had checked the plan value and the tab picker and never compared the type** — the

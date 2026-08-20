@@ -2126,3 +2126,6 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .fb-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 18px;
   border-top:1px solid var(--line-2);background:var(--paper);flex-wrap:wrap}
 @media (max-width:600px){.fb-kinds{grid-template-columns:1fr}.fb-row2{grid-template-columns:1fr}}
+.rw-floor{display:block;font-family:var(--fm);font-size:10px;color:var(--muted-2);margin-top:1px}
+.th-sub{display:block;font-size:8.5px;font-weight:400;letter-spacing:.02em;text-transform:none;
+  color:var(--muted-2);margin-top:1px}
