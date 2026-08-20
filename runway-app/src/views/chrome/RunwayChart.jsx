@@ -225,7 +225,7 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
             <rect x={L} y={yb - 5} width={W - L - R} height={10} fill="var(--ink)" opacity="0.55"/>
             <line x1={L} x2={W - R} y1={yb} y2={yb} stroke="#fff" strokeOpacity="0.22" strokeDasharray="3 5"/>
             <path d={`M${L - 7} ${yb + 4} l9 -8 M${L - 2} ${yb + 4} l9 -8`} fill="none" stroke="var(--on-dark-mute)" strokeWidth="1.5" strokeOpacity="0.9" strokeLinecap="round"/>
-            <text x={W - R} y={yb - 9} textAnchor="end" fontSize="9.5" fontFamily="var(--fb)" letterSpacing="0.08em"
+            <text className="no-halo" x={W - R} y={yb - 9} textAnchor="end" fontSize="9.5" fontFamily="var(--fb)" letterSpacing="0.08em"
                   fill="var(--on-dark-mute)" opacity="0.7">SCALE BREAK · {money(breakAt)} TO {money(balMax)} COMPRESSED</text>
           </g>
         );
@@ -245,7 +245,7 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
           year on every one — but the SPACING is now the panel's adaptive sequence rather than this
           file's own `tickEvery`, so a 36-month window thins the same way here as everywhere else. */}
       {_f.ticks.map(t => (
-        <text key={"x" + t.i} x={x(t.i)} y={H - B + 22} textAnchor="middle" fontSize="11.5"
+        <text className="no-halo" key={"x" + t.i} x={x(t.i)} y={H - B + 22} textAnchor="middle" fontSize="11.5"
               fontFamily="var(--fm)" fill="var(--on-dark-mute)" opacity="0.75">{t.label}</text>
       ))}
 
@@ -289,7 +289,7 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
                     fill={stranded ? "none" : (pass ? "var(--signal-2)" : "var(--danger)")}
                     stroke={stranded ? "var(--danger)" : "none"} strokeWidth="1.6" />
             <g transform={`translate(${Math.min(lx, W - R - 96)}, ${ly})`}>
-              <text x="0" y="0" fontSize="11" fontFamily="var(--fb)" fontWeight="600" fill="var(--on-dark)">{ms.label}</text>
+              <text className="no-halo" x="0" y="0" fontSize="11" fontFamily="var(--fb)" fontWeight="600" fill="var(--on-dark)">{ms.label}</text>
               <text x="0" y="15" fontSize="11.5" fontFamily="var(--fm)" fill={stranded ? "var(--danger)" : pass ? "var(--signal-2)" : "var(--danger)"}>
                 {/* NAMED, not just marked. "Needs $90k" is the next thing to do; a cross is not. */}
                 {money(ms.bal, false)}{" "}

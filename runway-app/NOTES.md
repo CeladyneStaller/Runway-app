@@ -1981,6 +1981,26 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### Chart label halo — one CSS rule, not sixty edits
+
+`paint-order: stroke` with a `--paper` stroke, scoped to `.rw svg text`. **60 `<text>` elements across
+eight files inherit it; 3 were edited**, and those three only to opt OUT.
+
+**⚠️ THE ALTERNATIVE WAS TWO ATTRIBUTES ON SIXTY ELEMENTS, and the sixty-first — added next month —
+would not have them.** A rule that covers charts not yet written is the difference between a fix and a
+chore.
+
+`paint-order` is the load-bearing property: without it the stroke draws OVER the glyphs and the text
+becomes a smear. **The halo is invisible where nothing sits behind the label**, which is most labels
+most of the time — it only appears where it is needed.
+
+**The three opt-outs are light text on the dark hover chip.** A `--paper` halo there would draw a pale
+box around every letter. `.no-halo` exists so a site opts out once rather than every site remembering.
+
+**⚠️ THIS MOVES NOTHING.** A label crossing a curve still crosses it — the halo makes the label
+readable and leaves a small break in the line. **That is the right trade for ticks and captions and the
+reason the collision guard is separate, later work** rather than part of this.
+
 ### Round milestones now cover every instrument
 
 `roundMS` filtered on `kind === "equity"`, so **a SAFE or note closing in month 9 put cash into the

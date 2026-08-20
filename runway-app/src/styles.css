@@ -2170,3 +2170,34 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .cp-trial{font-size:11.5px;color:var(--muted);margin:12px 0 0;line-height:1.5}
 .cp-foot{display:flex;justify-content:flex-end;gap:9px;padding:13px 18px;
   border-top:1px solid var(--line-2);background:var(--paper)}
+
+/* ---- chart label halo ----
+   ⚠️ ONE RULE FOR EVERY CHART, INCLUDING ONES NOT WRITTEN YET. The alternative was adding two
+   attributes to ~60 `<text>` elements across five files — **and the sixty-first, added next month,
+   would not have them.**
+
+   `paint-order: stroke` draws the outline BEHIND the glyphs, so the label carves a gap out of whatever
+   it crosses instead of sitting on top of it. Without that property the stroke covers the letters and
+   the text becomes a smear.
+
+   The stroke colour is the chart's own background, so this is invisible where nothing is behind the
+   label — which is most labels, most of the time. It only shows where it is needed.
+
+   ⚠️ THIS DOES NOT MOVE ANYTHING. A label crossing a curve still crosses it; the halo makes the label
+   readable and leaves a small break in the line. That trade is right for axis ticks and captions and
+   is the reason the collision guard exists as a separate, later piece of work. */
+.rw svg text{
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+
+/* ⚠️ EXCEPTIONS, AND WHY. Text on a dark or filled surface must halo in THAT colour, not the page
+   colour — a bone halo on an ink chip draws a light box around every letter. Anything drawn on its own
+   background opts out here rather than each site remembering. */
+.rw svg text.no-halo,
+.rw svg foreignObject text{
+  paint-order: normal;
+  stroke: none;
+}
