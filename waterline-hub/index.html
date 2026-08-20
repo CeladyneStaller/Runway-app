@@ -1242,29 +1242,52 @@ async function restoreSession() {
 //
 // The proxy checks this too, on every request. This check is for the UI; that one is the security
 // boundary, and **a client-side gate is a courtesy rather than a control.**
+// ⚠️ THREE ANSWERS, NOT TWO. This returned a boolean, so **a call that could not run was
+// indistinguishable from a call that said no** — and the gate told Corey he was not staff when the
+// real cause was an empty publishable key.
+//
+// Same fault as the sign-in message that blamed a missing account for an SMTP failure. **A check that
+// collapses "denied" and "could not ask" reports the wrong one every time**, and it reports it
+// confidently.
 async function checkStaff() {
-  if (!session?.access_token) return false;
+  if (!session?.access_token) return { ok: false, why: "signed-out" };
+  if (!SUPABASE_ANON) return { ok: false, why: "no-key" };
   try {
     const r = await sbFetch("/rest/v1/rpc/is_staff", {
       method: "POST",
       headers: { Authorization: "Bearer " + session.access_token },
       body: "{}",
     });
-    return r.ok && (await r.json()) === true;
-  } catch { return false; }
+    if (!r.ok) return { ok: false, why: "call-failed", status: r.status };
+    return { ok: (await r.json()) === true, why: "answered" };
+  } catch (e) {
+    return { ok: false, why: "offline", detail: String(e?.message || e) };
+  }
 }
 
 async function applyGate() {
   const gate = $("#gate"), shell = $("#shell"), msg = $("#gate-msg");
-  const ok = await checkStaff();
+  const res = await checkStaff();
+  const ok = res.ok;
   if (gate) gate.hidden = ok;
   if (shell) shell.hidden = !ok;
   if (!ok && msg) {
     // ⚠️ THE TWO FAILURES READ DIFFERENTLY, because the remedies are different: one is "sign in", the
     // other is "ask to be added". Telling a signed-in non-staff visitor to sign in would loop them.
-    msg.textContent = session?.user?.email
-      ? `${session.user.email} is not a Waterline staff account.`
-      : "Staff sign-in.";
+    // ⚠️ EACH CAUSE GETS ITS OWN SENTENCE, because each has a different remedy: sign in, fix the
+    // deploy, retry, or ask to be added. **Telling somebody the wrong one costs them the afternoon.**
+    msg.textContent =
+      res.why === "no-key"
+        ? "config.js did not load, so the hub cannot reach Supabase. This is a deploy problem, not an "
+          + "account problem."
+      : res.why === "call-failed"
+        ? `The staff check could not run (${res.status}). A 401 means the publishable key is wrong; `
+          + `a 404 means 048_is_staff.sql has not been applied.`
+      : res.why === "offline"
+        ? "Could not reach Supabase. Check the network and try again."
+      : session?.user?.email
+        ? `${session.user.email} is not a Waterline staff account.`
+        : "Staff sign-in.";
   }
   if (ok) loadStatus?.();
   return ok;
