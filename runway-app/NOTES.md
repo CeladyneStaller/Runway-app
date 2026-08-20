@@ -1981,6 +1981,22 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### Profile settings would not open from the advisor view
+
+`AdvisorHome` called `onOpenSettings` correctly and the state was set correctly. **The portfolio
+returned at line 1593 and the account screen at 1645** — so clicking the profile menu changed a value
+nothing ever looked at.
+
+**Settings is a modal-shaped route: it should preempt every view, not sit after the ones added later.**
+Moved above the portfolio return. **Anything returning above that line is now, by definition, a view
+settings cannot be opened from** — currently invite, loading, load-failure and the setup wizard, which
+are all correct: settings should not open over a broken load.
+
+**⚠️ FOURTH INSTANCE OF THIS SHAPE THIS SESSION**, after the demo picker (three times) and the wizard
+step check. **A conditional return added to a component is placed relative to every other return,
+and "after the last one I read" is not a position** — it is where the file happened to end when the
+feature before it was written.
+
 ### The saving chip shows only on yearly
 
 All three surfaces. **The chip is an argument FOR the cadence being shown** — beside a monthly price it

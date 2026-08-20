@@ -1660,6 +1660,47 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
   // AN ADVISOR'S HOME IS THE PORTFOLIO. Everybody else signs in to one model; an advisor signs in to a
   // list of them. Entering a client hands over to the ordinary app — same tabs, same permission rules,
   // no second implementation of anything — and `advisorHome` is how they get back.
+  // ⚠️ ABOVE THE PORTFOLIO RETURN. `AdvisorHome` called `onOpenSettings` correctly and the state was
+  // set correctly — **but the portfolio returned first, so the screen that reads that state was never
+  // reached.** Clicking the profile menu changed a value nothing looked at.
+  //
+  // Settings is a modal-shaped route: it should preempt every view, not sit after the ones added
+  // later. Anything returning above this line is a view settings cannot be opened from.
+  if (showAccount) return (
+    <Account
+      doc={doc}
+      setDoc={setDoc}
+      // WHICH SETTINGS, not just "settings". The two entry points open different scopes and the page
+      // is part of the route so a link can land on one — "open your seat settings" in an email has to
+      // go somewhere, which a modal could not offer.
+      scope={showAccount.scope || "profile"}
+      page={showAccount.page || null}
+      onGo={(scope, page) => setShowAccount({ scope, page })}
+      onExport={exportDoc}
+      onImport={importDoc}
+      onClose={() => setShowAccount(null)}
+      // Adding a company opens the WIZARD, not a name box. Nothing is created until it finishes.
+      onNewCompany={() => { setShowAccount(null); setSetup("company"); }}
+      tabPrefs={tabPrefs}
+      onTabPrefs={applyTabPrefs}
+      onSwitched={(r) => {
+        // switchCompany() already flushed and reset the write buffer; adopt whatever it loaded
+        if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); setSeedName(!!r.isNew); }
+        // Switching to a company with an empty model offers the SAME wizard, deliberately — the second
+        // company deserves the same start as the first, and "just a name box" was how the old flow
+        // dumped people into an empty model. Emptiness rather than `isNew` for the reason given at the
+        // load effect, and the skip flag is honoured because `switchCompany` has already pointed
+        // `currentCompanyId()` at the company being switched TO: declining for one company must not
+        // answer for another, and re-asking on every switch would be nagging.
+        setSetup(!hasSubstance(r?.doc) && !setupSkipped(currentCompanyId()) ? "model" : null);
+        setStrandedLocal(null);   // a freshly created company is `isNew` by definition; offering to
+        setPromoting(null);       // fill it with a stale browser model would be actively wrong
+        setShowAccount(false);
+        loadCompanyName();        // a different company answers to a different name
+      }}
+    />
+  );
+
   if (advisorHome && mayPortfolio) return (
     <>
     {advisorFeedback && (
@@ -1712,40 +1753,6 @@ function DocumentHost({ demo = false, onLeaveDemo, onKeepDemo , onSwitchDemo = n
     </>
   );
 
-  if (showAccount) return (
-    <Account
-      doc={doc}
-      setDoc={setDoc}
-      // WHICH SETTINGS, not just "settings". The two entry points open different scopes and the page
-      // is part of the route so a link can land on one — "open your seat settings" in an email has to
-      // go somewhere, which a modal could not offer.
-      scope={showAccount.scope || "profile"}
-      page={showAccount.page || null}
-      onGo={(scope, page) => setShowAccount({ scope, page })}
-      onExport={exportDoc}
-      onImport={importDoc}
-      onClose={() => setShowAccount(null)}
-      // Adding a company opens the WIZARD, not a name box. Nothing is created until it finishes.
-      onNewCompany={() => { setShowAccount(null); setSetup("company"); }}
-      tabPrefs={tabPrefs}
-      onTabPrefs={applyTabPrefs}
-      onSwitched={(r) => {
-        // switchCompany() already flushed and reset the write buffer; adopt whatever it loaded
-        if (r?.state === LOAD_OK) { setDoc(r.doc); setLoadState(r.state); setSeedName(!!r.isNew); }
-        // Switching to a company with an empty model offers the SAME wizard, deliberately — the second
-        // company deserves the same start as the first, and "just a name box" was how the old flow
-        // dumped people into an empty model. Emptiness rather than `isNew` for the reason given at the
-        // load effect, and the skip flag is honoured because `switchCompany` has already pointed
-        // `currentCompanyId()` at the company being switched TO: declining for one company must not
-        // answer for another, and re-asking on every switch would be nagging.
-        setSetup(!hasSubstance(r?.doc) && !setupSkipped(currentCompanyId()) ? "model" : null);
-        setStrandedLocal(null);   // a freshly created company is `isNew` by definition; offering to
-        setPromoting(null);       // fill it with a stale browser model would be actively wrong
-        setShowAccount(false);
-        loadCompanyName();        // a different company answers to a different name
-      }}
-    />
-  );
 
   return <>
     <RunwayApp onSwitchDemo={onSwitchDemo} doc={doc} setDoc={setDoc} demo={demo}
