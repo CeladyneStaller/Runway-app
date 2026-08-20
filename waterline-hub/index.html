@@ -1217,7 +1217,11 @@ let session = null;
 const SUPABASE_URL  = "https://qsgiahskhrgnwhrfbgqt.supabase.co";
 const SUPABASE_ANON = window.WATERLINE_ANON_KEY || "";
 // Supabase's own key, so the hub and the app share one session.
-const AUTH_KEY = AUTH_KEY;   // set in /config.js, which patches never touch
+// ⚠️ THIS SAID `const AUTH_KEY = AUTH_KEY`. A regex meant to replace the storage-key expression at its
+// three USE sites also replaced it inside its own DECLARATION — so the script threw at evaluation and
+// **every line after it never ran, including the sign-in listener.** One broken line, two reported
+// symptoms.
+const AUTH_KEY = `sb-${SUPABASE_URL.split("//")[1].split(".")[0]}-auth-token`;
 
 async function sbFetch(path, opts = {}) {
   return fetch(`${SUPABASE_URL}${path}`, {
