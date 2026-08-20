@@ -164,11 +164,13 @@ export function BillingSection({ account, companyId, onError }) {
         <p className="signin-fine">{unpaidMessage(s)}</p>
       )}
 
-      {!staff && (
-        <div className="plancards">
-          {/* ⚠️ ONE TOGGLE FOR ALL THE CARDS, NOT ONE PER CARD. Most people decide cadence first and
-              plan second, and asking the same question three times makes a short page feel like a
-              form. Yearly is the default because it is the better offer and the one being argued for. */}
+      {/* ⚠️ A FRAGMENT, BECAUSE THIS BRANCH NOW HOLDS TWO ROWS. `{cond && (<a/>)}` takes ONE element,
+          and splitting the section into controls-then-tiles gave it a sibling. */}
+      {!staff && (<>
+        {/* ⚠️ ABOVE THE GRID, NOT INSIDE IT. The toggle was a child of `.plancards`, so it became a
+            grid cell competing with the tiles — which is why the row read as three items and one of
+            the plans was pushed onto a second line.
+            **Two rows means two elements, not one element containing both.** */}
           {confirm && (
             <ConfirmPlan plan={confirm} cadence={cadence} // ⚠️ THE NUMBER THIS PAGE ALREADY SHOWS, not a date parsed a second way. `s.daysLeft`
                          // is what the trial banner above uses, so the two cannot disagree.
@@ -192,6 +194,10 @@ export function BillingSection({ account, companyId, onError }) {
             <span className="cad-chip">{savingLabel()}</span>
           </div>
 
+        <div className="plancards">
+          {/* ⚠️ ONE TOGGLE FOR ALL THE CARDS, NOT ONE PER CARD. Most people decide cadence first and
+              plan second, and asking the same question three times makes a short page feel like a
+              form. Yearly is the default because it is the better offer and the one being argued for. */}
           {PLANS.map(p => (
             <div className={"plancard" + (s.plan?.id === p.id ? " on" : "")} key={p.id}>
               {/* ⚠️ THE PRICE LINE IS ONE ROW; THE BILLING DETAIL IS BENEATH IT.
@@ -225,7 +231,7 @@ export function BillingSection({ account, companyId, onError }) {
             </div>
           ))}
         </div>
-      )}
+      </>)}
 
       {(s.state === "active" || s.state === "past_due") && (
         <button className="linkbtn" disabled={!!busy}

@@ -1032,7 +1032,13 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
 .acct-optout input{accent-color:var(--signal);margin:0}
 
 /* ---- billing ---- */
-.plancards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:11px;margin:14px 0}
+/* ⚠️ THREE EQUAL COLUMNS, NOT `auto-fit`. With `minmax(200px,1fr)` the browser fits as many as will
+   go and wraps the rest — which is why three plans rendered as two on one line and one orphaned
+   beneath, in a panel narrow enough to trigger it. **`auto-fit` is right for a list of unknown length
+   and wrong for exactly three named plans.** */
+.plancards{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:0}
+@media (max-width:900px){.plancards{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:620px){.plancards{grid-template-columns:1fr}}
 .plancard{border:1px solid var(--line);border-radius:9px;padding:13px 14px;background:var(--card);
   display:flex;flex-direction:column;gap:8px}
 .plancard.on{border-color:var(--signal);box-shadow:0 0 0 1px var(--signal)}
@@ -2137,7 +2143,10 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
    **Reusing `.seg` was meant to inherit the app's control style and inherited a full-width one
    instead.** Scoped overrides here rather than a third definition, because a third definition is how
    this file got two. */
-.cad-row{display:flex;align-items:center;gap:11px;margin:2px 0 14px;flex-wrap:wrap}
+/* The two rows this section is: controls, then tiles. The margin lives here so the cards can sit at
+   zero and the gap between the rows is stated once. */
+.cad-row{display:flex;align-items:center;gap:11px;margin:14px 0 12px;flex-wrap:wrap;
+  padding-bottom:12px;border-bottom:1px solid var(--line-2)}
 .cad-seg{display:inline-flex;flex:0 0 auto;margin:0;width:auto}
 .cad-seg .seg-b{flex:0 0 auto;padding:7px 18px}
 .cad-chip{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.03em;

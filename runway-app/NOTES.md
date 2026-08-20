@@ -1981,6 +1981,22 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+### Two rows — and the toggle was inside the grid
+
+The real cause of the 2+1 layout: **`.cad-row` was a child of `.plancards`**, so it became a grid cell
+competing with the tiles. Three plans plus a toggle in a three-ish column grid is four items, and one
+plan got pushed to a second line.
+
+**Two rows means two elements, not one element containing both.**
+
+**And `.plancards` was `auto-fit, minmax(200px,1fr)`** — right for a list of unknown length, wrong for
+exactly three named plans, because the browser fits what it can and wraps the rest. Now
+`repeat(3,1fr)`, falling to two columns at 900 and one at 620.
+
+**Wrapping the branch in a fragment was needed too**: `{!staff && (…)}` takes ONE element and the split
+gave it a sibling — the same fault as the rail buttons, and the error again pointed at the line above
+rather than the cause.
+
 ### The company plan cards broke; the advisor page did not
 
 Corey's screenshots, and the two faults are separate:
