@@ -1931,6 +1931,36 @@ explicitly now.
 no body — **indistinguishable from a database failure, which is precisely the ambiguity that cost the
 round trips.**
 
+## Checkout: honouring the trial, and billing cadence
+
+### `trial_end`, because nothing ever cleared the trial
+
+`company_entitled` is an **OR** — `s.current_period_end > now() OR c.trial_ends_at > now()` — and the
+webhook writes only `subscriptions` and `companies`, never a trial column. **So somebody who subscribes
+on day three is entitled for the remaining eleven days whether or not they pay**, and Stripe was billing
+them immediately for days they already had.
+
+On monthly that is a rounding error. **On yearly Collaborative it is $1,188 charged today with eleven
+days of it already free.** Checkout now hands Stripe the date the app already knows, so the paid period
+starts where the free one stops. **Only when the date is genuinely in the future** — a past one makes
+Stripe reject the session, and an absent one means there is no trial to honour.
+
+**⚠️ AND I HAD ASSERTED THE OPPOSITE IN A MOCKUP.** I wrote "paying now does not shorten your trial" as
+a line to verify, and it turned out true — but the reason it was true was the bug.
+
+### Cadence
+
+`STRIPE_PRICE_IDS` is keyed on the pair now: `{"solo:yearly":"price_1","solo:monthly":"price_2"}`.
+**Bare `plan` keys still work and mean yearly**, so an env that has not been updated keeps selling
+exactly what it sold yesterday — no flag day.
+
+**⚠️ AN UNKNOWN PAIR REFUSES RATHER THAN FALLING BACK.** Charging somebody yearly because the monthly
+price id was missing is the worst available failure, and a silent fallback is how it would happen. The
+log names the missing key and lists what the env does contain.
+
+Client defaults to `"yearly"` at both call sites, so nothing that does not pass a cadence changes
+behaviour.
+
 ## The portfolio shows two runways
 
 Corey's point, and the numbers prove it immediately:

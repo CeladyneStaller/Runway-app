@@ -125,10 +125,10 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
      *  browser at all — the browser is told by a redirect it could fabricate — so it is recorded when
      *  the SUBSCRIPTION reads active, which only the webhook can cause. */
     /** Buy an ADVISOR plan — for yourself, so there is no company and no permission to check. */
-    async checkoutAdvisor(plan) {
+    async checkoutAdvisor(plan, cadence = "yearly") {
       const r = await doFetch(`${base}/functions/v1/stripe-checkout`, {
         method: "POST", headers: await headers(),
-        body: JSON.stringify({ plan, kind: "advisor" }),
+        body: JSON.stringify({ plan, kind: "advisor", cadence }),
       });
       if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `checkout failed (${r.status})`);
       void track("checkout_started");
@@ -170,9 +170,9 @@ export function createAccountApi({ url, anonKey, auth, fetchImpl }) {
       return unwrapOne(rows) || { companies: 0, allowed: 0 };
     },
 
-    async checkout(companyId, plan) {
+    async checkout(companyId, plan, cadence = "yearly") {
       const r = await doFetch(`${base}/functions/v1/stripe-checkout`, {
-        method: "POST", headers: await headers(), body: JSON.stringify({ plan, company_id: companyId }),
+        method: "POST", headers: await headers(), body: JSON.stringify({ plan, company_id: companyId , cadence }),
       });
       if (!r.ok) throw new BackendError(ERR_UNREACHABLE, `checkout failed (${r.status})`);
       void track("checkout_started");

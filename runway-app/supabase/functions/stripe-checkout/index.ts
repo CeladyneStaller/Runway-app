@@ -56,7 +56,12 @@ Deno.serve(async (req) => {
   const userId = await callerId(req);
   if (!userId) return new Response("unauthorized", { status: 401, headers: cors });
 
-  const { plan, company_id: companyId, kind = "company" } = await req.json().catch(() => ({}));
+  const { plan, company_id: companyId, kind = "company", cadence: rawCadence } =
+    await req.json().catch(() => ({}));
+
+  // Unix seconds, or null when there is no trial left to honour. Declared here so the advisor branch —
+  // which has no company and therefore no company trial — simply leaves it null.
+  let trialEnd: number | null = null;
   const advisor = kind === "advisor";
 
   // AN ADVISOR PLAN IS BOUGHT FOR YOURSELF, so there is no company and nothing to be permitted to do:
@@ -77,6 +82,30 @@ Deno.serve(async (req) => {
     if (!allowed.ok || (await allowed.json()) !== true) {
       return new Response("forbidden", { status: 403, headers: cors });
     }
+
+    // ⚠️ THE TRIAL DOES NOT END AT CHECKOUT, AND NOTHING EVER CLEARED IT. `company_entitled` is an OR
+    // — `s.current_period_end > now() OR c.trial_ends_at > now()` — so somebody who subscribes on day
+    // three is entitled for the remaining eleven days whether or not they pay.
+    //
+    // **Without a `trial_end`, Stripe bills immediately and the customer pays for days they already
+    // had.** On monthly that is a rounding error; on yearly Collaborative it is $1,188 charged today
+    // with eleven days of it already free.
+    //
+    // Handing Stripe the date the app already knows makes the paid period start where the free one
+    // stops. The customer is entitled throughout either way — this only decides who pays for the gap.
+    const row = await fetch(
+      `${SUPABASE_URL}/rest/v1/companies?id=eq.${companyId}&select=trial_ends_at`,
+      { headers: { apikey: ANON_KEY, Authorization: req.headers.get("Authorization")!,
+                   Accept: "application/json" } });
+    if (row.ok) {
+      const [company] = await row.json().catch(() => []);
+      const ends = company?.trial_ends_at ? Date.parse(company.trial_ends_at) : NaN;
+      // Only when it is genuinely in the future. A past date would make Stripe reject the session,
+      // and an absent one means this company has no trial to preserve.
+      if (Number.isFinite(ends) && ends > Date.now()) {
+        trialEnd = Math.floor(ends / 1000);
+      }
+    }
   }
 
   const priceMap = advisor ? ADVISOR_PRICE_MAP : PRICE_MAP;
@@ -88,8 +117,23 @@ Deno.serve(async (req) => {
                   "or empty — no plan can be priced");
     return new Response("not_configured", { status: 500, headers: cors });
   }
-  const price = priceMap[plan];
-  if (!price) return new Response("unknown plan", { status: 400, headers: cors });
+  // ⚠️ THE MAP IS KEYED ON THE PAIR NOW: `{"solo:yearly":"price_1","solo:monthly":"price_2"}`.
+  //
+  // **Bare `plan` keys still work and mean yearly**, which is what every existing deployment has — so
+  // this ships without a flag day and an env that has not been updated keeps selling exactly what it
+  // sold yesterday.
+  //
+  // An unknown PAIR fails the same way an unknown plan already did, rather than falling back to the
+  // other cadence: **charging somebody yearly because the monthly price id was missing is the worst
+  // available failure**, and silent fallbacks are how it would happen.
+  const cadence = rawCadence === "monthly" ? "monthly" : "yearly";
+  const price = priceMap[`${plan}:${cadence}`]
+    ?? (cadence === "yearly" ? priceMap[plan] : undefined);
+  if (!price) {
+    console.error(`[checkout] no price for ${plan}:${cadence} —`,
+      `known keys: ${Object.keys(priceMap).join(", ") || "(none)"}`);
+    return new Response("unknown plan", { status: 400, headers: cors });
+  }
 
   const form = new URLSearchParams({
     mode: "subscription",
@@ -110,6 +154,9 @@ Deno.serve(async (req) => {
     client_reference_id: advisor ? userId : companyId,
     ...(advisor ? {} : { "subscription_data[metadata][company_id]": companyId }),
     "subscription_data[metadata][user_id]": userId,
+    // ⚠️ ONLY WHEN THERE IS ONE. Sending an empty value here makes Stripe reject the session, so the
+    // key is omitted entirely rather than sent blank.
+    ...(trialEnd ? { "subscription_data[trial_end]": String(trialEnd) } : {}),
     // Lets Checkout collect a billing address, which Stripe Tax needs if it is ever switched on.
     billing_address_collection: "auto",
     allow_promotion_codes: "true",
