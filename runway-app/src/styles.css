@@ -2188,10 +2188,28 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
    is the reason the collision guard exists as a separate, later piece of work. */
 .rw svg text{
   paint-order: stroke;
-  stroke: var(--paper);
+  /* ⚠️ INHERITED, NOT FIXED. I hard-coded `--paper` and charts sit on THREE different surfaces:
+     `--paper` in the shell, `--card` inside a panel, `--ink` on the landing visual. **A bone halo on a
+     dark chart draws a white outline around every letter**, which is what Corey saw.
+
+     `--halo` is set by whichever container owns the background, so a chart moved between surfaces
+     stays correct without anybody remembering. The fallback is `--card`, because a chart inside a
+     panel is the common case. */
+  stroke: var(--halo, var(--card));
   stroke-width: 3.5px;
   stroke-linejoin: round;
 }
+
+/* Each surface declares its own colour once. Adding a surface means adding a line here, not auditing
+   every chart on it. */
+.rw{ --halo: var(--paper); }
+.panel{ --halo: var(--card); }
+/* ⚠️ EVERY DARK SURFACE THAT CAN CONTAIN A CHART. Missing one shows as a pale outline around every
+   letter — visible immediately, but only on that one screen, which is how it survives review. */
+.land-viz,
+.chartwrap,
+.stat.hero,
+.demobar{ --halo: var(--ink); }
 
 /* ⚠️ EXCEPTIONS, AND WHY. Text on a dark or filled surface must halo in THAT colour, not the page
    colour — a bone halo on an ink chip draws a light box around every letter. Anything drawn on its own
