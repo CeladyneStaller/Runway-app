@@ -1106,13 +1106,11 @@ footer {
 
 <div class="toasts" id="toasts"></div>
 
-<!-- ⚠️ BEFORE THE MAIN SCRIPT, BECAUSE THAT SCRIPT READS IT AT PARSE TIME. `const SUPABASE_ANON =
-     window.WATERLINE_ANON_KEY` runs as the block is evaluated — setting it afterwards assigns a
-     variable nothing reads again, and the symptom is a silent 401 rather than an error.
-
-     The PUBLISHABLE key. It is already in the customer app's bundle and is safe in client source;
-     **the service key never goes in this file.** -->
-<script>window.WATERLINE_ANON_KEY = "sb_publishable_aCKlwnqix0M3mnI81bhBfw_6wV-CYQn";</script>
+<!-- ⚠️ AN EXTERNAL FILE, SO PATCHES CANNOT CLOBBER IT. The key used to sit inline here, which meant
+     every rewrite of this page dropped it and it had to be re-added by hand.
+     Still before the main script: that script reads the value at parse time, so loading it afterwards
+     assigns a variable nothing reads again — and the symptom is a silent 401, not an error. -->
+<script src="/config.js"></script>
 
 <script>
 "use strict";
@@ -1217,7 +1215,7 @@ let session = null;
 // The magic-link flow is used rather than a password: staff are few, sign in rarely, and **a password
 // on an internal tool is one more credential to leak for no gain.**
 const SUPABASE_URL  = "https://qsgiahskhrgnwhrfbgqt.supabase.co";
-const SUPABASE_ANON = window.WATERLINE_ANON_KEY || "";   // set by a one-line inline script or env
+const SUPABASE_ANON = window.WATERLINE_ANON_KEY || "";   // set in /config.js, which patches never touch
 
 async function sbFetch(path, opts = {}) {
   return fetch(`${SUPABASE_URL}${path}`, {

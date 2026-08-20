@@ -6,6 +6,7 @@ shares the identity without shipping staff tooling in the customer bundle.
 ## What is here
 
     index.html    the whole hub. No build step.
+    config.js     the publishable key — yours, never overwritten by a patch
     assets/       favicon.svg, apple-touch-icon.png, icon-192.png
 
 ⚠️ **The assets are COPIES of the app's.** A separate Vercel project cannot import from another one's
@@ -32,17 +33,16 @@ Supabase project, and the one you edited would not be the one that deployed.
 4. Set `STRIPE_KEY`, `VERCEL_TOKEN`, `VERCEL_PROJECT`, `VERCEL_TEAM_ID`
 5. Deploy this folder to Vercel: no build command, output is this directory
 
-## The one edit this page needs
+## Configuration
 
-Line 1079 of `index.html`:
+`config.js` holds the publishable key and **is already filled in**. Nothing else needs editing.
 
-    <script>window.WATERLINE_ANON_KEY = "sb_publishable_REPLACE_ME";</script>
+⚠️ **THAT FILE IS YOURS.** It is separate from `index.html` so a patch rewriting the page cannot drop
+the key — which is exactly what used to happen when it lived inline. **Nothing shipped here will
+overwrite `config.js`.**
 
-Replace `sb_publishable_REPLACE_ME` with your publishable key. **That is the only edit** — the tag is
-already in place, above the main script, because the script reads the value at parse time.
-
-⚠️ The **anon/publishable** key, which is already in the customer app's bundle and safe in client
-source. **The service key never goes here.**
+The key is the **publishable** one, already public in the customer app's bundle. **The secret key must
+never go in this file**, because it would be served to every visitor of this page.
 
 ## Checking it works
 
