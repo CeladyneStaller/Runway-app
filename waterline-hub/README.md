@@ -6,6 +6,14 @@ shares the identity without shipping staff tooling in the customer bundle.
 ## What is here
 
     index.html    the whole hub. No build step.
+    assets/       favicon.svg, apple-touch-icon.png, icon-192.png
+
+⚠️ **The assets are COPIES of the app's.** A separate Vercel project cannot import from another one's
+`/public`, so **these three files must be re-copied when the brand changes** — from
+`runway-app/public/`. Three files is acceptable; the risk is forgetting this project exists.
+
+There is deliberately **no `og:image` and no manifest**. A staff tool with a rich link preview announces
+itself in every channel somebody pastes the URL into, and it does not need installing.
 
 ## What is NOT here, and where it lives
 
@@ -26,9 +34,12 @@ Supabase project, and the one you edited would not be the one that deployed.
 
 ## The one edit this page needs
 
-`index.html` reads `window.WATERLINE_ANON_KEY` and nothing sets it. Add before the main script:
+Line 1079 of `index.html`:
 
-    <script>window.WATERLINE_ANON_KEY = "sb_publishable_...";</script>
+    <script>window.WATERLINE_ANON_KEY = "sb_publishable_REPLACE_ME";</script>
+
+Replace `sb_publishable_REPLACE_ME` with your publishable key. **That is the only edit** — the tag is
+already in place, above the main script, because the script reads the value at parse time.
 
 ⚠️ The **anon/publishable** key, which is already in the customer app's bundle and safe in client
 source. **The service key never goes here.**
