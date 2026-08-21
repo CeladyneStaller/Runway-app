@@ -2017,6 +2017,21 @@ Every "zero revenue lines" result I reported early in this was measuring a field
 **and I used two of those results to justify code changes.** The reading was right by accident and the
 reasoning was worthless.
 
+### The hover was a month left of the cursor
+
+    const px = ((ev.clientX - r.left) / (r.width || 1)) * W;
+    const t  = Math.round(((px - L) / (W - L - R)) * tMax);
+
+**The handler is on a `<rect x={L}>`, not the `<svg>`.** That rect's bounding box already starts at the
+plot's left edge, so `r.left` IS x=L in page space — **scaling by the full `W` and then subtracting `L`
+removes the margin twice.** At the left edge it computed month -3; at the midpoint, 17 instead of 18.
+
+Mapping within the rect's own width needs no `L` term at all.
+
+**⚠️ `Hover.jsx` ALREADY DID IT CORRECTLY** — `* box.w` with `left: 0` — which is the same shape this
+now uses. **The right implementation was in the codebase and the wrong one was written beside it**,
+which is the fifth instance of that this session.
+
 ### The screenshots found three more, all in the app rather than the engine
 
 **`hasRange` was computed before anchoring and the anchored rows are what get drawn.** `band.js`

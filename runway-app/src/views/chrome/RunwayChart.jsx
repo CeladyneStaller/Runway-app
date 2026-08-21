@@ -173,10 +173,14 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
   const [hoverT, setHoverT] = React.useState(null);
   const hoverAt = (ev) => {
     const r = ev.currentTarget.getBoundingClientRect();
-    const px = ((ev.clientX - r.left) / (r.width || 1)) * W;
-    // NEAREST WHOLE MONTH on a continuous axis — the trace has a point per month, so a fractional
-    // position between them is a reading nobody can check against the numbers elsewhere in the app.
-    const t = Math.round(((px - L) / Math.max(1, W - L - R)) * tMax);
+    // ⚠️ THE HANDLER IS ON A `<rect x={L}>`, NOT THE `<svg>`. Its bounding box already starts at the
+    // plot's left edge, so `r.left` IS x=L in page space — scaling by the full `W` and then
+    // subtracting `L` removes the margin twice. **The cursor read about one month to the left of the
+    // line it drew**, which is exactly the offset Corey saw.
+    //
+    // Mapping within the rect's own width needs no `L` term at all.
+    const frac = (ev.clientX - r.left) / (r.width || 1);
+    const t = Math.round(frac * tMax);
     setHoverT(t >= 0 && t <= tMax ? t : null);
   };
   const at = (rws, t) => {
