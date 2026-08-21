@@ -138,12 +138,23 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   const ceilZero = zeroOf(ceilModel, ceilToggles, doc.startY, doc.startM);
 
   // how much of the spread is revenue vs cost — for the caption
-  const revenueDriven = expZero != null && floorZero != null ? Math.abs(expZero - floorZero) : null;
+  // ⚠️ A FOURTH READER, found only by grepping for the variable rather than by reading the diff.
+  // `Math.abs(object - object)` is NaN, silently — the caption that explains how much of the spread is
+  // revenue rather than cost has been meaningless since the change.
+  const revenueDriven = expZero != null && floorZero != null
+    ? Math.abs(expZero.months - floorZero.months) : null;
 
   // band width classification (for the "you depend on uncertain revenue" callout)
-  const finiteZeros = [floorZero, expZero, ceilZero].filter(z => z != null);
+  // ⚠️ `.months`, BECAUSE `zeroOf` RETURNS AN OBJECT NOW. I changed it to `{ months, fromNow }` and
+  // updated the three tier consumers below — **and missed these three, which do arithmetic on it.**
+  // `Math.max` over objects gives NaN, so `spread` was NaN and the "wide band" callout silently never
+  // fired.
+  //
+  // The same "a reader I did not update" shape NOTES.md records five times already; the difference is
+  // that a test caught this one, because it asserts a numeric property rather than a rendered string.
+  const finiteZeros = [floorZero, expZero, ceilZero].filter(z => z != null).map(z => z.months);
   const spread = finiteZeros.length >= 2 ? Math.max(...finiteZeros) - Math.min(...finiteZeros) : null;
-  const wide = spread != null && expZero != null && spread > Math.max(2, expZero * 0.4);
+  const wide = spread != null && expZero != null && spread > Math.max(2, expZero.months * 0.4);
 
   return {
     // ⚠️ WHETHER THERE IS A RANGE AT ALL, computed once here rather than inferred by each surface.

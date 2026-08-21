@@ -2017,6 +2017,27 @@ Every "zero revenue lines" result I reported early in this was measuring a field
 **and I used two of those results to justify code changes.** The reading was right by accident and the
 reasoning was worthless.
 
+### Four test failures — three were my tests, one was a real regression
+
+**⚠️ THE REAL ONE: `zeroOf` RETURNS AN OBJECT NOW AND FOUR READERS DID ARITHMETIC ON IT.** I changed it
+to `{ months, fromNow }` to fix the runway tile, updated the three tier consumers, and missed `spread`,
+`wide` and `revenueDriven`. `Math.max` over objects is NaN, silently — **the "you depend on uncertain
+revenue" callout has been dead since that change, and nothing rendered differently.**
+
+The same "reader I did not update" shape NOTES.md already records five times. **The difference is that a
+test caught this one**, because it asserts a numeric property rather than a rendered string.
+
+**The other three were bad tests I wrote:**
+
+- **Cadence** demanded `monthly * 10 === price * 12` exactly. Two months free from $119 is $99.17 and
+  the real price is $99 — **the assertion demanded arithmetic the prices were never going to satisfy.**
+- **Feedback** banned four-digit numbers and caught `2026`, `1024` and a timestamp. **It asserted the
+  absence of DIGITS, not the absence of DATA**, and would have failed on any wide screen. Now checks
+  which KEYS are allowed out, which is what the boundary controls.
+- **Charts** matched a regex over `charts.js` with a 40-character window; `monthsShown(doc)` pushed the
+  line to 50. **The test broke because the code got better** — and NOTES.md already lists source-text
+  assertions as an anti-pattern.
+
 ### Auditing the band maths — there is no Monte Carlo, deliberately
 
 `band.js` says so in its own header: per-line probabilities do not exist in the model, and a
