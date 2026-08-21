@@ -40,16 +40,28 @@ const IDX = /\[["']([a-z][A-Za-z0-9]{2,})["']\]/g;
 const DESTRUCT = /\{([^{}]*)\}\s*=/g;
 const WORD = /\b([a-z][A-Za-z0-9]{2,})\b/g;
 
-/** Files whose job is to AUTHOR documents. A key here is a claim that something consumes it. */
+/** Files whose job is to AUTHOR documents. A key here is a claim that something consumes it.
+ *
+ *  ⚠️ HELD AS POSIX-STYLE STRINGS FOR REPORTING, AND AS RESOLVED ABSOLUTE PATHS FOR COMPARING. Those are
+ *  two different jobs and conflating them broke this on Windows: the exclusion below was
+ *  `abs.endsWith("src/state/archetypes.js")`, and `path.join` on win32 produces
+ *  `C:\repo\src\state\archetypes.js`, which ends with no such thing. The authoring files were then
+ *  scanned as their own consumers, every authored key looked "touched", and the whole check returned an
+ *  empty list — silently on Linux, and as a confusing failure everywhere else.
+ */
 const DATA = ["src/state/archetypes.js", "src/state/document.js", "src/seed.js"];
 
 /** Authoring-only by design — consumed inside the data layer itself and never meant to leave it. */
 const INTENDED = new Set(["ledger", "ledgerMix", "schemaVersion", "demoId"]);
 
 export function oneDirectionFields() {
+  // Compare on resolved absolute paths, which `path.resolve` normalises to the platform's own
+  // separators on BOTH sides. Never on string suffixes.
+  const dataAbs = new Set(DATA.map((rel) => resolve(REPO, rel)));
+
   const authored = new Map();
   for (const rel of DATA) {
-    const s = strip(readFileSync(join(REPO, rel), "utf8"));
+    const s = strip(readFileSync(resolve(REPO, rel), "utf8"));
     for (const [, name] of s.matchAll(KEY)) {
       if (!authored.has(name)) authored.set(name, new Set());
       authored.get(name).add(rel);
@@ -61,7 +73,7 @@ export function oneDirectionFields() {
   // which the Investment and Sales views read. Consumption is consumption wherever it happens.
   const touched = new Set();
   for (const abs of walk(join(REPO, "src"))) {
-    if (DATA.some((rel) => abs.endsWith(rel.replace(/\//g, "/")))) continue;   // authoring is not consumption
+    if (dataAbs.has(resolve(abs))) continue;                     // authoring is not consumption
     const s = strip(readFileSync(abs, "utf8"));
     for (const [, n] of s.matchAll(DOT)) touched.add(n);
     for (const [, n] of s.matchAll(IDX)) touched.add(n);

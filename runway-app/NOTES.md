@@ -8759,3 +8759,60 @@ FIXED THREE WAYS:
    words rather than through a confusing diff.
 
 The CLI still works — `node scripts/one-direction.mjs` — and reintroducing `shipMonth` is still caught.
+
+## Still empty on Windows — a path compared as a string
+
+The guard I added last round did its job: instead of accusing the code of being fixed, it said "the scan
+returned nothing; it did not run". That was true, and it pointed straight at the cause.
+
+`walk()` builds paths with `path.join`. The exclusion that keeps the AUTHORING files out of the CONSUMER
+scan was `abs.endsWith("src/state/archetypes.js")`. On win32 `path.join` produces
+`C:\repo\src\state\archetypes.js`, which ends with no such thing — so archetypes.js, document.js and
+seed.js were scanned as their own consumers, every authored key appeared "touched", and the dead list
+came back EMPTY.
+
+⚠️ AND IT PASSED ON LINUX, WHICH IS THE WHOLE PROBLEM. Separator-dependent code is correct on the
+author's machine by construction. I verified this one from three working DIRECTORIES last round and
+still missed the platform, because cwd and separator are different axes and I only varied one.
+
+FIXED by comparing RESOLVED ABSOLUTE PATHS on both sides — `path.resolve` normalises to the platform's
+own separators, string suffixes do not. Two path jobs that were conflated are now separate: POSIX-style
+strings for REPORTING (`authoredIn`, stable across platforms), resolved absolute paths for COMPARING.
+
+NEW TEST asserts the comparison under BOTH `path.win32` and `path.posix` in one process, because the
+platform that breaks it is the one the author is not using. Also verified the detector still catches a
+reintroduced `shipMonth`.
+
+⚠️ THE PATTERN, THIRD TIME IN THIS ONE TOOL. A value produced in one place and consumed in another, with
+the two ends agreeing only under conditions the author happened to have: relative paths agreeing only at
+one cwd, then path strings agreeing only on one separator. The tool was written to find exactly this
+class of defect and kept committing it.
+
+## Every recorded cost now resolves to a project or to overhead
+
+All four demos shipped `codeMap: {}` while their ledgers used codes 6000 and 5000, so **100% of recorded
+spend was unattributed**. `resolveLine` returns a projectId, OVERHEAD, or NULL, and null means the money
+sits in the baseline belonging to nothing — plan-against-actual had nothing to compare per project and
+variance-by-code had nothing to name. The canary maps all four of its codes; the demos mapped none.
+
+⚠️ AND ONE BUCKET WAS NOT MERELY UNMAPPED, IT WAS UNCODED. `ledgerMonth` gave its third line `code: ""`.
+`codesInLedger` skips falsy codes, so that line was INVISIBLE to `unmappedCodes` — a fifth of every
+month's spend resolved to nothing and no mapping report would ever have mentioned it. Now `7000`.
+
+    6000  payroll                    -> OVERHEAD
+    5000  direct costs               -> the archetype's main project
+    7000  facilities and overhead    -> OVERHEAD
+
+5000 pointing at real work is what makes the attribution charts say anything:
+    grant-startup -> SBIR Phase II    hardware-vc -> Meridian build
+    nonprofit     -> Coastal restoration    saas -> Platform rebuild
+
+Each archetype hoists `const mainProject = uid()` so the project id exists before `codeMap` references
+it — the same shape as binding `staff` before the grant budgets that allocate against them.
+
+TWO GUARDS, because one cannot see what the other misses:
+  - no archetype ships an unmapped ledger CODE
+  - ⚠️ no ledger LINE resolves to null — which catches the uncoded case `unmappedCodes` structurally
+    cannot, since a blank code never reaches the list of codes to map
+
+18 ledger lines per demo, 0 unresolved. 40 assertions, both timezones, 0 failures.

@@ -230,13 +230,21 @@ const shiftEnd = (v) => (v == null ? v : v + DEMO_BACKFILL);
 const shiftDated = (v) => (v == null ? v : v + DEMO_BACKFILL);
 const shiftLines = (ls) => (ls || []).map(l => ({ ...l, start: shiftStart(l.start), end: shiftEnd(l.end) }));
 
-/** A recorded month, split across the codes the ledger view expects. */
+/** A recorded month, split across the codes the ledger view expects.
+ *
+ *  ⚠️ EVERY LINE CARRIES A REAL CODE. The third bucket used `code: ""`, and an empty code resolves to
+ *  NOTHING — `resolveLine` returns null, so the spend lands in the baseline attributed to no project and
+ *  no overhead, and `codesInLedger` does not even list it for mapping. Uncoded money is money nobody can
+ *  account for, which is the opposite of what a ledger demo should show.
+ *
+ *  6000 payroll · 5000 direct costs · 7000 facilities and overhead. Each archetype maps all three.
+ */
 const ledgerMonth = (month, total, mix) => ({
   month,
   lines: [
     { code: "6000", amount: Math.round(total * mix[0]), note: "payroll" },
     { code: "5000", amount: Math.round(total * mix[1]), note: "direct costs" },
-    { code: "", amount: total - Math.round(total * mix[0]) - Math.round(total * mix[1]), note: "rent, software, insurance" },
+    { code: "7000", amount: total - Math.round(total * mix[0]) - Math.round(total * mix[1]), note: "rent, software, insurance" },
   ],
 });
 

@@ -46,6 +46,23 @@ describe("⚠️ fields authored but never read", () => {
     expect(gone, `these are fixed; remove them from KNOWN: ${gone.join(", ")}`).toEqual([]);
   });
 
+  it("⚠️ COMPARES PATHS, NOT PATH-SHAPED STRINGS", async () => {
+    // THE BUG THIS SHIPPED WITH, TWICE. The detector excluded the authoring files from the consumer scan
+    // with `abs.endsWith("src/state/archetypes.js")` — and on Windows `path.join` produces
+    // `C:\repo\src\state\archetypes.js`, which ends with no such thing. The authoring files were then
+    // scanned as their own consumers, every authored key looked "touched", and the check returned an
+    // empty list. Green on Linux, confusing everywhere else.
+    //
+    // Asserted against BOTH path flavours in one process, because the platform that breaks it is the one
+    // the author is not using. `path.resolve` normalises both sides; string suffixes do not.
+    const { win32, posix } = await import("node:path");
+    for (const [flavour, P, repo] of [["posix", posix, "/repo"], ["win32", win32, "C:\\repo"]]) {
+      const dataAbs = new Set(["src/state/archetypes.js", "src/seed.js"].map((r) => P.resolve(repo, r)));
+      const walked = P.join(repo, "src", "state", "archetypes.js");
+      expect(dataAbs.has(P.resolve(walked)), `${flavour}: ${walked} was not recognised`).toBe(true);
+    }
+  });
+
   it("reports where each field is authored, so it can be found", () => {
     // A name with no location is a name somebody has to grep for. The detector carries the file.
     for (const d of oneDirectionFields()) {

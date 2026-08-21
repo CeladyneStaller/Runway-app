@@ -13,6 +13,7 @@
 // cannot survive.
 
 import { uid } from "../engine/time";
+import { OVERHEAD } from "../engine/coding";
 
 const emp = (name, title, amount, start = 0, end = null) =>
   ({ id: uid(), name, title, basis: "annual", amount, start, end, raises: [] });
@@ -57,6 +58,7 @@ const RIDGELINE = () => {
   // a `rate` here would be overwritten anyway. A first draft keyed `byPeriod` as an object and read the
   // hours as monthly, which compiled a $66,268 award instead of a $398,343 one.
   const onGrant = (e, hrs) => ({ id: uid(), name: e.name, employeeId: e.id, byPeriod: [{ hrs }] });
+  const mainProject = uid();   // referenced by `codeMap` below, so the id has to exist first
 
   return {
   name: "Ridgeline Catalysis",
@@ -72,6 +74,11 @@ const RIDGELINE = () => {
   // hardware-vc a first draft added $61,175 a month and cut its runway from 19.97 to 15.30 months.
   ledger: [78000, 118000, 84000, 90000, 79000, 87000],
   ledgerMix: [0.63, 0.24],
+  // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
+  // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
+  // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
+  // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
   employees: staff,
   lines: [
     line("Rent and utilities", 9200, "cost", "recurring", 0, 35),
@@ -80,7 +87,7 @@ const RIDGELINE = () => {
   ],
   projects: [
     {
-      id: uid(), type: "grant", name: "SBIR Phase II — catalyst durability",
+      id: mainProject, type: "grant", name: "SBIR Phase II — catalyst durability",
       budget: 1150000, start: 0, end: 23, lines: [],
       grant: {
         funder: "Department of Energy",
@@ -191,6 +198,7 @@ const RIDGELINE = () => {
 // Shows: the capital stack after a conversion, orders whose cash lands months after delivery, a
 // deposit arriving early, and a fulfilment project where cost and revenue move together.
 const KESTREL = () => {
+  const mainProject = uid();   // referenced by `codeMap`, so the id has to exist first
   const staff = [
     emp("Dana Whitfield", "CEO", 190000), emp("Marcus Oyelaran", "CTO", 185000),
     emp("Yuki Tanaka", "VP Engineering", 172000), emp("Rosa Delgado", "Hardware Lead", 158000),
@@ -208,6 +216,11 @@ const KESTREL = () => {
   // the visible half. cv lands near 0.10.
   ledger: [205000, 296000, 212000, 228000, 208000, 224000],
   ledgerMix: [0.55, 0.34],
+  // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
+  // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
+  // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
+  // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
   employees: staff,
 
   lines: [
@@ -217,7 +230,7 @@ const KESTREL = () => {
     line("Certification testing", 65000, "cost", "onetime", 6, 6),
   ],
   projects: [{
-    id: uid(), type: "fulfillment", name: "Meridian build", budget: 420000, start: 0, end: 5,
+    id: mainProject, type: "fulfillment", name: "Meridian build", budget: 420000, start: 0, end: 5,
     lines: [
       line("Components and BOM", 48000, "cost", "recurring", 0, 5),
       line("Contract assembly", 90000, "cost", "onetime", 4, 4),
@@ -285,6 +298,7 @@ const KESTREL = () => {
 // beside Ridgeline's wide band it shows what the band actually measures**: not risk in general, but how
 // much of your runway depends on money nobody has promised.
 const TIDEWATER = () => {
+  const mainProject = uid();   // referenced by `codeMap`, so the id has to exist first
   const staff = [
     emp("Grace Amadi", "Executive Director", 118000), emp("Peter Lund", "Programme Director", 104000),
     emp("Aisha Rahman", "Field Lead", 88000), emp("Diego Serrano", "Restoration Ecologist", 82000),
@@ -304,6 +318,11 @@ const TIDEWATER = () => {
   // useful reading of the band.
   ledger: [89000, 121000, 91000, 96000, 90000, 94000],
   ledgerMix: [0.71, 0.16],
+  // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
+  // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
+  // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
+  // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
   employees: staff,
   lines: [
     line("Office and field station", 6800, "cost", "recurring", 0, 35),
@@ -315,7 +334,7 @@ const TIDEWATER = () => {
   ],
   projects: [
     {
-      id: uid(), type: "grant", name: "Coastal restoration — federal", budget: 1800000, start: 0, end: 35,
+      id: mainProject, type: "grant", name: "Coastal restoration — federal", budget: 1800000, start: 0, end: 35,
       lines: [],
       grant: {
         // ⚠️ FALSE FOR A MILESTONE-BILLED GRANT. With it true, `computeGrant` emits ONE committed lump
@@ -398,6 +417,7 @@ const TIDEWATER = () => {
 // Shows: churn against acquisition, three plans at very different prices, and an internal project
 // absorbing labor with nothing coming back.
 const LARKSPUR = () => {
+  const mainProject = uid();   // referenced by `codeMap`, so the id has to exist first
   const staff = [
     emp("Rowan Vasquez", "Founder", 96000), emp("Kit Osei", "Engineer", 128000),
     emp("Mira Solberg", "Engineer", 124000), emp("Jae-won Park", "Design and Support", 98000),
@@ -409,6 +429,11 @@ const LARKSPUR = () => {
   // 0.08 — its band width should still be dominated by the revenue tiers, not by spend.
   ledger: [30000, 44000, 31000, 34000, 30000, 33000],
   ledgerMix: [0.68, 0.19],
+  // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
+  // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
+  // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
+  // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
   employees: staff,
 
   lines: [
@@ -418,7 +443,7 @@ const LARKSPUR = () => {
   ],
   projects: [{
     // Labor only, no revenue — the case that makes the allocation view worth opening.
-    id: uid(), type: "internal", name: "Platform rebuild", budget: 180000, start: 1, end: 10,
+    id: mainProject, type: "internal", name: "Platform rebuild", budget: 180000, start: 1, end: 10,
     // ⚠️ `labor: []` IS A FOURTH ALLOCATION MECHANISM AND NOTHING READS IT — `teamLoad` reads `lines`
     // with `isLabor`, so an internal project's effort has to live there or it is invisible to both the
     // Allocation tab and the team-load chart. Hours only: the salaries are already in payroll, and

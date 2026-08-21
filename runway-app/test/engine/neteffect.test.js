@@ -236,3 +236,41 @@ describe("⚠️ milestones must not duplicate what roundMS derives", () => {
     }
   });
 });
+
+describe("⚠️ every recorded cost resolves to a project or to overhead", () => {
+  it("no demo ships an unmapped ledger code", async () => {
+    // `resolveLine` returns a projectId, OVERHEAD, or NULL — and null means the spend sits in the
+    // baseline attributed to nothing. Every archetype shipped with `codeMap: {}` while its ledger used
+    // 6000 and 5000, so 100% of recorded spend was unattributed: plan-against-actual had nothing to
+    // compare per project, and variance-by-code had nothing to name.
+    const { codesInLedger, unmappedCodes } = await import("../../src/engine/coding.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      expect(codesInLedger(doc.history || []).length, `${a.id} has no ledger codes`).toBeGreaterThan(0);
+      const unmapped = unmappedCodes(doc.history || [], doc.codeMap);
+      expect(unmapped, `${a.id}: unmapped ledger codes ${unmapped.join(", ")}`).toEqual([]);
+    }
+  });
+
+  it("⚠️ AND NO LEDGER LINE IS UNCODED, which `unmappedCodes` cannot see", async () => {
+    // `codesInLedger` skips falsy codes, so a line with `code: ""` is not merely unmapped — it is
+    // INVISIBLE to the mapping check. The demo generator used an empty code for its third bucket, so a
+    // fifth of every month's spend resolved to nothing and no mapping report would ever mention it.
+    // Checking `resolveLine` per LINE catches what checking codes cannot.
+    const { resolveLine } = await import("../../src/engine/coding.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const maps = { codeMap: doc.codeMap, customerMap: doc.customerMap };
+      for (const month of doc.history || []) {
+        for (const l of month.lines || []) {
+          expect(resolveLine(l, maps), `${a.id} month ${month.month}: "${l.note || l.code}" resolves to nothing`)
+            .not.toBeNull();
+        }
+      }
+    }
+  });
+});
