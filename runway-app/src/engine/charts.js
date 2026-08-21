@@ -19,7 +19,7 @@ import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, monthRevenue, isCost, lineAmount, lineCode, resolveLine, OVERHEAD } from "./coding.js";
 import { instConf, roundMS } from "./capital.js";
-import { teamLoad } from "./projects.js";
+import { teamLoad, elapsedPctOf } from "./projects.js";
 import { HRS_YR } from "./payroll.js";
 import { commitmentPressure } from "./commitments.js";
 import { spentToDate } from "./summary.js";
@@ -109,13 +109,6 @@ const clean = (n) => (Number.isFinite(n) ? n : 0);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /** How far through its period a project is, when it does not carry the figure itself. */
-const elapsedShare = (p, doc) => {
-  const start = clean(p.startM), end = clean(p.endM ?? p.months);
-  if (!(end > start)) return 0;
-  const now = clean(doc?.nowM ?? 0);
-  return Math.max(0, Math.min(1, (now - start) / (end - start)));
-};
-
 /** Ticks for a month-indexed axis: one per month, LABELLED AT CALENDAR QUARTER STARTS.
  *
  *  Standard quarters — Jan, Apr, Jul, Oct — not quarters counted from whenever the model happens to
@@ -444,7 +437,7 @@ const projPace = (doc, parts) => {
   const rows = rProjects.slice(0, 6).map(p => {
     const budget = clean(p.budget);
     const spent = clean(spentToDate(p.actuals));
-    const elapsedPct = clean(p.elapsedPct ?? elapsedShare(p, doc));
+    const elapsedPct = elapsedPctOf(p, doc);
     const spentPct = budget ? spent / budget : 0;
     return {
       id: p.id, label: p.name, spent: spentPct, elapsed: elapsedPct,

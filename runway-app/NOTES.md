@@ -9034,3 +9034,48 @@ confidently. What catches them is asking every chart the same questions at once:
     bug here, but most of the current entries are honest, so demanding zero would be wrong
 
 243 assertions per timezone.
+
+## The AST pass — what it took, and what it found
+
+⚠️ IT NEEDS A PARSER, AND THAT IS THE WHOLE REASON IT COULD NOT BE A GREP. A shorthand property
+`{ derivedBurn }` and a destructuring read `{ derivedBurn } = x` are TEXTUALLY IDENTICAL and
+structurally different — ObjectExpression vs ObjectPattern. Nothing short of a parse can separate them,
+which is why the regex version flagged 628 of 1,178 names and was worth nothing.
+
+`scripts/field-directions.mjs` classifies three ways, and the last two are what make it readable:
+  WRITE  object property, assignment target, class field, and ⚠️ JSX ATTRIBUTE — a prop passed is a
+         field written into the child's props object. Missing this left every `on*`/`set*`/`can*`
+         callback looking read-only: 200-odd names of pure noise.
+  CALL   a MemberExpression that is the CALLEE of a CallExpression. `x.filter()` is a method, and every
+         builtin is read-never-written. Excluding calls took 418 -> 312.
+  READ   everything else.
+
+    raw bidirectional scan          628 of 1,178   unusable
+    + method calls excluded         312
+    + JSX attributes counted         76
+    + scoped to engine/state, DOM/env stoplist    31   <- reviewable by a person
+
+⚠️ ACORN IS NOT A DEPENDENCY OF THE APP, deliberately — an audit tool should not widen the production
+surface. `npm i -D acorn acorn-jsx` where you run it. Not wired into the test suite for the same reason;
+it is a periodic sweep, not a gate.
+
+### It found a real bug on its first run: `p.elapsedPct`
+
+Three readers, no writer. `charts.js` read it with a fallback — `p.elapsedPct ?? elapsedShare(p, doc)` —
+and got the right answer. `advisor.js` and `alerts.js` read it BARE, so `clean(undefined)` was 0 and
+both compared spend against ZERO elapsed time:
+
+    "ahead of pace" fired for ANY project more than 15% spent, whatever month it was in,
+    and printed "…with 0% of its period elapsed" while doing it.
+
+⚠️ A FALLBACK IN ONE OF THREE READERS IS NOT A FALLBACK — it is one reader that happens to work, and it
+HID the bug by making the chart look right while two other surfaces were wrong. Fixed by moving
+`elapsedShare` into projects.js and adding `elapsedPctOf(p, doc)` as the single resolution, now used by
+all three. Verified: a project 20% spent at 50% elapsed no longer fires; one 90% spent at 50% still
+does, and now says so.
+
+### The other 30 need judgement, not a fix
+
+Most are optional parameters (`tipW`, `tipH`, `includeZero`), alternate spellings behind a `??`
+(`valuation` behind `r.post`), or fields consumed only by views. `out` (advisor.js) and `team`
+(alerts.js) are the last two known dead readers. The list is a review queue, not a defect count.

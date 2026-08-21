@@ -50,6 +50,28 @@ export const syncFulfilStage = (projects, pos) => projects.map(p => {
 
 // Who is committed to what, month by month, across grants and fulfillment work. This is the payoff of
 // linking labour to people: capacity is finite, and two projects can quietly claim the same engineer.
+/** How far through its period a project is — 0 at the start, 1 at the end.
+ *
+ *  ⚠️ THE ONLY PLACE THIS RULE LIVES, because `p.elapsedPct` IS A FIELD NOTHING WRITES. `charts.js` read
+ *  it with a fallback — `p.elapsedPct ?? elapsedShare(p, doc)` — and got the right answer. `advisor.js`
+ *  and `alerts.js` read it BARE, so `clean(undefined)` was 0 and both compared spend against ZERO
+ *  elapsed time: the "ahead of pace" alert fired for any project more than 15% spent, whatever month it
+ *  was in, and said "…with 0% of its period elapsed" while doing it.
+ *
+ *  A fallback in one of three readers is not a fallback; it is one reader that happens to work.
+ */
+export const elapsedShare = (p, doc) => {
+  const start = Number(p?.startM) || 0;
+  const end = Number(p?.endM ?? p?.months) || 0;
+  if (!(end > start)) return 0;
+  const now = Number(doc?.nowM) || 0;
+  return Math.max(0, Math.min(1, (now - start) / (end - start)));
+};
+
+/** `p.elapsedPct` when something wrote one, the derived share otherwise. */
+export const elapsedPctOf = (p, doc) =>
+  (Number.isFinite(Number(p?.elapsedPct)) ? Number(p.elapsedPct) : elapsedShare(p, doc));
+
 export const teamLoad = (rProjects, toggles = { committed: true, expected: true, speculative: true }, doc = null) => {
   const byEmp = {};
   const push = (id, project, label, hrs, s, e) => {

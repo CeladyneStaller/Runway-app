@@ -13,6 +13,7 @@
 // finish the sentence "so you should…" does not belong here.
 
 import { buildProjection, zeroInfo, amountAt } from "./projection.js";
+import { elapsedPctOf } from "./projects.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, isCost, lineAmount, unmappedCodes, unresolvedLines } from "./coding.js";
 import { spentToDate } from "./summary.js";
@@ -171,7 +172,7 @@ const aheadOfPace = (doc, parts) => {
     .filter(p => p.stage !== "prospective" && clean(p.budget) > 0)
     .map(p => {
       const spent = clean(spentToDate(p.actuals)) / clean(p.budget);
-      const elapsed = clean(p.elapsedPct);
+      const elapsed = elapsedPctOf(p, doc);   // bare `p.elapsedPct` was always 0 — see projects.js
       return { name: p.name, spent, elapsed, gap: spent - elapsed };
     })
     .filter(p => p.gap > 0.15)

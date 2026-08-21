@@ -14,6 +14,7 @@
 // does, and the tiles are free once it has.
 
 import { buildProjection, zeroInfo } from "./projection.js";
+import { elapsedPctOf } from "./projects.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { spentToDate } from "./summary.js";
 import { saasSeries } from "./saas.js";
@@ -74,7 +75,7 @@ const projTile = (doc, parts) => {
   const unspent = sum(rp.map(p => Math.max(0, clean(p.budget) - clean(spentToDate(p.actuals)))));
   const ahead = rp.filter(p => {
     const b = clean(p.budget);
-    return b > 0 && (clean(spentToDate(p.actuals)) / b) > clean(p.elapsedPct) + 0.15;
+    return b > 0 && (clean(spentToDate(p.actuals)) / b) > elapsedPctOf(p, doc) + 0.15;   // was > 0 + 0.15
   }).length;
   return {
     value: rp.length, format: "count", unit: rp.length === 1 ? "project" : "projects",
