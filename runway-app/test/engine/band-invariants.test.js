@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { confidenceBand, burnVariance } from "../../src/engine/band.js";
-import { demoDoc } from "../../src/state/document.js";
+import { demoDoc, canaryDoc } from "../../src/state/document.js";
+import { buildProjection, zeroInfo, anchorToActuals, forecastFrom } from "../../src/engine/projection.js";
+import { buildModelFromDoc } from "../../src/engine/buildmodel.js";
 import { ARCHETYPES } from "../../src/state/archetypes.js";
 
 const ALL = { committed: true, expected: true, speculative: true };
@@ -43,6 +45,62 @@ describe("⚠️ confidence band invariants", () => {
     // With speculative off the ceiling must not include speculative money.
     const narrow = confidenceBand(doc, undefined, { ...ALL, speculative: false });
     expect(spread(narrow)).toBeLessThan(spread(wide));
+  });
+
+  it("⚠️ ZEROS COME FROM THE ROWS IT RETURNS, not a second projection", () => {
+    // This is the whole of flag 1. `zeroOf` used to call `buildProjection` AGAIN, so a band cost six
+    // projections and discarded three — and the three it discarded were the only ones its dates saw.
+    // The caller anchored the three it KEPT and drew those. Same document, two derivations: the tile
+    // read 3.8 months above a "1.9 - 2.7" range, and on a past-start model "3.0" above "0.0 - 0.0".
+    const doc = canaryDoc();
+    const b = confidenceBand(doc, undefined, ALL,
+      { cashActuals: doc.cashActuals, anchorActuals: true, from: forecastFrom(doc) });
+    for (const curve of ["floor", "expected", "ceiling"]) {
+      const direct = zeroInfo(b[curve].rows, doc.startY, doc.startM, forecastFrom(doc));
+      // A curve that never crosses inside the horizon is a real answer, not a missing one — the
+      // ceiling with every tier on usually stays solvent. Assert the two agree on THAT too.
+      expect(b[curve].zeroNull, `${curve} zeroNull`).toBe(direct == null);
+      if (direct) expect(b[curve].zeroFromNow, curve).toBeCloseTo(direct.fromNow, 9);
+    }
+  });
+
+  it("⚠️ THE RANGE CONTAINS THE HEADLINE, on a model that started in the past", () => {
+    // The shape that made this visible. A model started five months back with recorded actuals showed
+    // "3.0 mo" above a range of "0.0 - 0.0", because the un-anchored crossing lay in the past and
+    // `monthsFromNow` clamped to zero. Test it where it broke, not on a doc starting today.
+    const now = new Date();
+    const base = canaryDoc();
+    const doc = { ...base, startY: now.getFullYear(), startM: now.getMonth() - 5,
+      cashActuals: { 0: { cash: 560000 }, 1: { cash: 505000 }, 2: { cash: 441000 },
+                     3: { cash: 372000 }, 4: { cash: 300000 }, 5: { cash: 245000 } } };
+    const from = forecastFrom(doc);
+    const opts = { cashActuals: doc.cashActuals, anchorActuals: true, from };
+    const rows = anchorToActuals(buildProjection(buildModelFromDoc(doc), doc.settings.toggles),
+      doc.cashActuals, true);
+    const headline = zeroInfo(rows, doc.startY, doc.startM, from);
+    const b = confidenceBand(doc, undefined, doc.settings.toggles, opts);
+    expect(b.floor.zeroFromNow).toBeLessThanOrEqual(headline.fromNow + 1e-9);
+    expect(b.ceiling.zeroFromNow).toBeGreaterThanOrEqual(headline.fromNow - 1e-9);
+  });
+
+  it("⚠️ THE UPSIDE BAND'S CLAMP SURVIVES ANCHORING", () => {
+    // `RunwayChart` clamps the orange band's FLOOR up to the green band's CEILING, so two translucent
+    // fills never overlap into a third colour that means nothing. That clamp is the ONE place two
+    // independent `confidenceBand` calls get compared numerically — if one is anchored and the other
+    // is not, it compares curves measured from different baselines and the polygon can invert.
+    //
+    // ⚠️ THE CANARY CANNOT CATCH A REGRESSION HERE. Its speculative revenue puts the orange ceiling
+    // ~$2.1M above the green one, which swamps any anchoring offset. This asserts the invariant; it
+    // does not prove the fixture is adversarial enough. A doc where the two bands run close together
+    // is still wanted.
+    const doc = canaryDoc();
+    const opts = { cashActuals: doc.cashActuals, anchorActuals: true, from: forecastFrom(doc) };
+    const green = confidenceBand(doc, undefined, { committed: true, expected: true, speculative: false }, opts);
+    const orange = confidenceBand(doc, undefined, ALL, opts);
+    green.floor.rows.forEach((_, m) => {
+      const bottom = Math.max(green.ceiling.rows[m].start, orange.floor.rows[m].start);
+      expect(orange.ceiling.rows[m].start, `month ${m}`).toBeGreaterThanOrEqual(bottom - 0.5);
+    });
   });
 
   it("⚠️ RETURNS EXACTLY THESE FIELDS, so a new one cannot arrive without a reader", () => {

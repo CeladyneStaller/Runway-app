@@ -438,6 +438,30 @@ describe("solvency — cash crosses zero and comes back", () => {
     m, start: m === 0 ? 100 : ends[m - 1], end, net: 0, in: 0, out: 0, cost: 0,
   }));
 
+  it("⚠️ IGNORES A HOLE THE COMPANY ALREADY CROSSED", async () => {
+    // Without a window this scanned from month 0, so a dip four months back that the company SURVIVED
+    // came back as the upcoming crossing — and every milestone got judged `stranded` against a date
+    // already behind it. It also let the dashboard print TWO zero dates from ONE row set: the headline
+    // passed a window to `zeroInfo`, this did not.
+    //
+    // Recorded cash already reflects the survival. Counting the hole here counts it twice.
+    const { solvency } = await import("../../src/engine/projection.js");
+    const rows = rowsOf([-40, -20, 60, 50, 40, 30]);      // underwater early, recovered by month 2
+    expect(solvency(rows, 2026, 0)).not.toBeNull();        // default: still sees it, unchanged
+    expect(solvency(rows, 2026, 0, 3)).toBeNull();         // windowed past it: nothing ahead
+  });
+
+  it("⚠️ BOUNDS THE BRIDGE TO WHAT THE CHART ACTUALLY DRAWS", async () => {
+    // `deepest` is the number someone reads as "what I need to raise". On a committed-only line the
+    // deficit grows without bound, so the deepest point drifts to the horizon and describes a month no
+    // chart draws — $3,230,627 at month 36 on the canary, against an 18-month plot. A figure nobody can
+    // see on the screen that produced it is not a figure to raise against.
+    const { solvency } = await import("../../src/engine/projection.js");
+    const rows = rowsOf([-10, -50, -90, -400]);
+    expect(solvency(rows, 2026, 0).deepest).toBe(400);           // unbounded: the off-screen trough
+    expect(solvency(rows, 2026, 0, 0, 2).deepest).toBe(90);      // bounded: the worst you can see
+  });
+
   it("returns null when the balance never goes negative", async () => {
     // The common case, and the one where this must cost nothing and change nothing.
     const { solvency } = await import("../../src/engine/projection.js");

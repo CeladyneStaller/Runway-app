@@ -96,10 +96,28 @@ export function zeroInfo(rows, startY, startM, from = 0) {
  *  Returns null when the balance never goes negative — the common case, and the one where this must
  *  cost nothing and change nothing.
  */
-export function solvency(rows, startY, startM) {
+/** @param {number} from    First month to consider. Elapsed months are history, not forecast.
+ *  @param {number} through Last month to consider. Bounds the bridge to what a chart actually draws.
+ *
+ *  ⚠️ BOTH ENDS MATTER, FOR DIFFERENT REASONS.
+ *
+ *  `from` — a hole the company already crossed is not a hole it faces. Without this, a model that
+ *  dipped negative four months ago and recovered reports that crossing as the upcoming one, and every
+ *  milestone gets judged `stranded` against a date already survived. It also let the dashboard show
+ *  TWO zero dates from ONE row set: the headline passed a window to `zeroInfo` and this did not.
+ *  Recorded cash already reflects the survival, so counting it here counts it twice.
+ *
+ *  `through` — `deepest` is a bridge figure, the money someone reads as "what I need to raise". On a
+ *  committed-only line the deficit grows without bound, so the deepest point drifts to the horizon and
+ *  describes a month no chart draws: $3,230,627 at month 36 on the canary, against an 18-month plot.
+ *  A number nobody can see on the screen that produced it is not a number to raise against.
+ *
+ *  Both default to the full range, so every existing caller behaves exactly as before.
+ */
+export function solvency(rows, startY, startM, from = 0, through = Infinity) {
   if (!Array.isArray(rows) || !rows.length) return null;
 
-  const zero = zeroInfo(rows, startY, startM);
+  const zero = zeroInfo(rows, startY, startM, from);
   if (!zero) return null;
 
   // Every stretch below zero, not just the first: a model can cross, recover and cross again, and the
@@ -107,6 +125,7 @@ export function solvency(rows, startY, startM) {
   const holes = [];
   let open = null;
   rows.forEach((r, i) => {
+    if (i < from || i > through) return;
     const low = Math.min(r.start, r.end);
     if (low < 0) {
       if (!open) open = { fromT: i, deepest: 0, deepestT: i };

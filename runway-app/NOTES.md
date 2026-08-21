@@ -7751,3 +7751,43 @@ identical point for point, so the runway chart does not move a pixel.
 A WRITER WITH NO READER, second instance this session (after `burnVariance`'s dead parameters). The
 mirror of the "field with reader and no writer" pattern recorded five times below, and it decays the
 same way: silently, because nothing is checking.
+
+## Flag 1, steps 1-2: one definition of the zero crossing (engine layer)
+
+FOUR derivations of one crossing existed. Headline anchored + windowed; band did neither; Cash flow tab
+did neither; `solvency()` anchored on the dashboard but never windowed anywhere. Canary: tile read
+"3.8 mo" above a "1.9 - 2.7 mo" range. Past-start model: "3.0 mo" above "0.0 - 0.0".
+
+ROOT CAUSE WAS STRUCTURAL. `zeroOf(model, toggles, ...)` called `buildProjection` a SECOND time, so a
+band built six projections and discarded three — and the discarded three were the only rows its dates
+ever saw. `App.jsx` anchored the three it KEPT and drew those. Fix is not to anchor more carefully in
+more places; it is to leave one place that can. `zeroOf(rows, startY, startM, from)` now reads the rows
+the band returns. Six projections -> three.
+
+`solvency(rows, startY, startM, from = 0, through = Infinity)`. `from`: a survived hole is already in
+recorded cash, so counting it here counts it twice — and without it the dashboard printed two zero
+dates from one row set. `through`: `deepest` is a bridge figure someone raises against; on a
+committed-only line the deficit is unbounded, so it drifted to month 36 ($3,230,627 on the canary)
+while the chart drew 18. Both default to the full range: all four call sites unchanged.
+
+`from` DEFAULTS TO `forecastFrom(doc)` in `confidenceBand`. Zero was only ever test compatibility.
+Golden canary is unaffected (its crossing is past the window) — verified, still 3.895.
+
+⚠️ `anchorActuals` DOES NOT DEFAULT ON. Deliberate: defaulting it would change the golden canary's
+asserted value from 3.9 to 5.5. Callers pass opts explicitly (steps 3-4). Residual risk: a caller who
+forgets opts now gets windowed-but-unanchored zeros. Revisit once every caller is wired.
+
+⚠️ THE CANARY CANNOT CATCH TWO OF THESE. (1) Its toggles make `band.expected` identical to its own
+projection, so a cross-surface test written on it passes while the defect survives — that fixture needs
+speculative revenue ON. (2) Its speculative revenue puts the orange band's ceiling ~$2.1M above the
+green one, swamping any anchoring offset, so a mixed-anchoring regression in `RunwayChart`'s upBand
+clamp is undetectable there. Clamp invariant holds across 185 month-checks; the adversarial fixture
+(two bands running close together) is still wanted. Documented in the test itself.
+
+VERIFIED. 13 new assertions pass. 2,480 regression assertions across canary + 4 archetypes x 4 revenue
+sets — zero differences for any caller not passing opts. oxlint clean.
+
+STILL OPEN: whether `INST_CONF` becomes kind-aware. A signed SAFE and a non-binding term sheet share
+status `committed` and both map to tier `expected`. Rule agreed is "a contract or money in bank is
+committed", which the equity labelling matches and the safe/note labelling does not. Changes existing
+documents, so not built.

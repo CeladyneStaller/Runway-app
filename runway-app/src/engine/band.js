@@ -16,7 +16,7 @@
 
 import { HORIZON } from "./time.js";
 import { buildModelFromDoc } from "./buildmodel.js";
-import { buildProjection, zeroInfo } from "./projection.js";
+import { buildProjection, zeroInfo, anchorToActuals, forecastFrom } from "./projection.js";
 import { monthTotal } from "./coding.js";
 
 // The coefficient of variation of measured monthly burn. IMPORTANT: this uses the RAW monthly totals,
@@ -61,12 +61,19 @@ function scaleCosts(model, factor) {
     l.kind === "revenue" ? l : { ...l, amount: (Number(l.amount) || 0) * (1 + factor) }) };
 }
 
-const zeroOf = (model, toggles, startY, startM) => {
+const zeroOf = (rows, startY, startM, from) => {
+  // ⚠️ ROWS, NOT (model, toggles). This used to call `buildProjection` a SECOND time — so a band cost
+  // six projections and threw three away, and the three it discarded were the only ones its zero dates
+  // ever saw. `App.jsx` anchored the three it KEPT and drew those, leaving the dates measured against
+  // curves nobody rendered. On the canary the tile read 3.8 months above a "1.9 – 2.7" range; on a
+  // model started five months back it read 3.0 months above "0.0 – 0.0". Same document, two
+  // derivations. One set of rows in, one set of dates out, and the seam cannot reopen.
+  //
   // ⚠️ THE START DATE, WITHOUT WHICH `fromNow` CANNOT EXIST. `zeroInfo` derives it by turning the month
   // index into a real date and measuring from today — with no start it has no date to measure, so
   // `fromNow` came back undefined and fell back to `months`. **The tile showed 4.8 months and a
   // "5.4 – 5.4" range underneath: the same event, counted from two different days.**
-  const z = zeroInfo(buildProjection(model, toggles), startY, startM);
+  const z = zeroInfo(rows, startY, startM, from);
   // ⚠️ BOTH, BECAUSE THEY MEASURE FROM DIFFERENT ORIGINS. `months` counts from the projection start;
   // `fromNow` counts from today. The runway tile shows `fromNow` in its headline and was showing
   // `months` in its range, so **the range did not contain the number above it** — which reads as an
@@ -93,7 +100,19 @@ const zeroOf = (model, toggles, startY, startM) => {
  *
  * The default is unchanged so every existing caller and test behaves exactly as before.
  */
-export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
+export function confidenceBand(doc, horizon = HORIZON, revenue = null, opts = {}) {
+  // ⚠️ ANCHOR HERE, NOT IN THE CALLER. Every surface that draws this band was re-anchoring the rows on
+  // its way to the screen while the zero dates stayed measured against the un-anchored originals. The
+  // fix is not to anchor more carefully in more places — it is to leave exactly one place that can.
+  //
+  // `from` DEFAULTS TO THE CURRENT MONTH, because a crossing in a month already elapsed is not runway.
+  // Zero was only ever defensible as test compatibility.
+  const {
+    cashActuals = null,
+    anchorActuals = false,
+    from = forecastFrom(doc),
+  } = opts;
+  const anchor = (rs) => (anchorActuals && cashActuals) ? anchorToActuals(rs, cashActuals, true) : rs;
   const financing = !!doc.settings?.toggles?.financing;   // orthogonal — shifts all curves, not part of the band
   const T = (committed, expected, speculative) => ({ committed, expected, speculative, financing });
 
@@ -132,9 +151,9 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   const ceilModel = scaleCosts(baseModel, -cv);
   const ceilToggles = allow(true, true, true);
 
-  const floorRows = buildProjection(floorModel, floorToggles);
-  const expRows = buildProjection(expModel, expToggles);
-  const ceilRowsRaw = buildProjection(ceilModel, ceilToggles);
+  const floorRows = anchor(buildProjection(floorModel, floorToggles));
+  const expRows = anchor(buildProjection(expModel, expToggles));
+  const ceilRowsRaw = anchor(buildProjection(ceilModel, ceilToggles));
 
   // ⚠️ THE ORDERING IS AN INVARIANT, NOT AN OUTCOME. Each tier adds revenue, so the ceiling is normally
   // above the floor — **but a NEGATIVE speculative line (a planned repayment, refund or clawback) makes
@@ -149,9 +168,9 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
     ? { ...r, start: floorRows[i].start, end: Math.max(r.end, floorRows[i].end) }
     : r));
 
-  const floorZero = zeroOf(floorModel, floorToggles, doc.startY, doc.startM);
-  const expZero = zeroOf(expModel, expToggles, doc.startY, doc.startM);
-  const ceilZero = zeroOf(ceilModel, ceilToggles, doc.startY, doc.startM);
+  const floorZero = zeroOf(floorRows, doc.startY, doc.startM, from);
+  const expZero = zeroOf(expRows, doc.startY, doc.startM, from);
+  const ceilZero = zeroOf(ceilRows, doc.startY, doc.startM, from);
 
   // ⚠️ `revenueDriven` WAS HERE AND IS GONE. It reported `|expZero − floorZero|` as "how much of the
   // spread is revenue rather than cost" — but floor differs from expected in BOTH the revenue tier AND
