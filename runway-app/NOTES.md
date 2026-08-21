@@ -8734,3 +8734,28 @@ and nothing checks them afterwards. The engine already knew the rule and had wri
 the data without reading the code that consumes it.
 
 59 assertions, both timezones, 0 failures.
+
+## The one-direction test failed for a reason worth more than the test
+
+It reported all five known fields as "fixed". They were not — the scan returned NOTHING.
+
+The test spawned the detector with `execFileSync("node", ["scripts/one-direction.mjs"])`, and the script
+read `src/...` by RELATIVE path. Run from anywhere other than the repo root it finds no files, prints
+nothing, and the test's regex extracts an empty list. An empty list then sails through `added` (nothing
+new) and trips `gone` (everything missing) — so it failed loudly, for entirely the wrong reason.
+
+⚠️ A TEST THAT FEEDS AN EMPTY RESULT INTO A COMPARISON MEANT FOR A FULL ONE IS WORSE THAN NO TEST. Half
+its assertions pass vacuously and the other half accuses the code of something it did not do. I built
+exactly the failure this file exists to catch: a value produced in one place and consumed in another,
+correct on my machine, with nothing checking that it arrived.
+
+FIXED THREE WAYS:
+1. `oneDirectionFields()` is now EXPORTED and resolves paths from `import.meta.url`, so it answers the
+   same wherever it is called from. Verified from three working directories.
+2. The test IMPORTS it instead of spawning it. No subprocess, no cwd, no output parsing — the failure
+   mode is gone rather than handled.
+3. ⚠️ THE TEST NOW ASSERTS THE SCAN RAN: `expect(found.length).toBeGreaterThan(0)` before either
+   comparison. An empty result is a broken check, not a clean codebase, and it should say so in those
+   words rather than through a confusing diff.
+
+The CLI still works — `node scripts/one-direction.mjs` — and reintroducing `shipMonth` is still caught.
