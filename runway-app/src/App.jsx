@@ -694,9 +694,9 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
                   <div className="big">{zero ? `${(zero.fromNow ?? zero.months).toFixed(1)} mo` : `${HORIZON}+ mo`}</div>
                   {showBand && band && (band.floor.zero != null || band.ceiling.zero != null) && (
                     <div className="meta band-range">
-                      {band.floor.zeroNull ? `${HORIZON}+` : band.floor.zero.toFixed(1)}
+                      {band.floor.zeroNull ? `${HORIZON}+` : (band.floor.zeroFromNow ?? band.floor.zero).toFixed(1)}
                       <span className="band-dash">–</span>
-                      {band.ceiling.zeroNull ? `${HORIZON}+` : band.ceiling.zero.toFixed(1)} mo range
+                      {band.ceiling.zeroNull ? `${HORIZON}+` : (band.ceiling.zeroFromNow ?? band.ceiling.zero).toFixed(1)} mo range
                     </div>
                   )}
                   <div className="meta">{zero ? `zero on ${dateShort(zero.date)}` : "cash-flow positive"}</div>
@@ -830,7 +830,7 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
                 {showBand && band && (band.floor.zero != null || band.ceiling.zero != null) && (
                   <div className="band-caption">
                     <div className="band-caption-line">
-                      Runway range <b className="num">{band.floor.zeroNull ? `${HORIZON}+` : band.floor.zero.toFixed(1)}</b>–<b className="num">{band.ceiling.zeroNull ? `${HORIZON}+` : band.ceiling.zero.toFixed(1)} mo</b>.
+                      Runway range <b className="num">{band.floor.zeroNull ? `${HORIZON}+` : (band.floor.zeroFromNow ?? band.floor.zero).toFixed(1)}</b>–<b className="num">{band.ceiling.zeroNull ? `${HORIZON}+` : (band.ceiling.zeroFromNow ?? band.ceiling.zero).toFixed(1)} mo</b>.
                       {band.wide
                         ? <span className="band-warn"> Your runway depends heavily on uncertain revenue.</span>
                         : <span className="band-ok"> Your runway is fairly robust to revenue assumptions.</span>}

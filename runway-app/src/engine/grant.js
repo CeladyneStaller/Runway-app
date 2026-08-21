@@ -19,7 +19,13 @@ export const isMsBilled = (g) => (g?.reimburseTiming || "arrears") === "mileston
 
 export const TIMING_LABEL = { arrears: "In arrears (period end)", monthly: "Monthly (as incurred)", advance: "Advance (period start)", milestone: "On milestone delivery" };
 
-export function computeGrant(g, H = HORIZON) {
+/** @param stage the PROJECT's stage — "prospective" means the award is not yet made.
+ *
+ *  ⚠️ PASSED IN RATHER THAN READ FROM `g`, because the stage lives on the project and the grant object
+ *  is a child of it. The alternative was duplicating the stage onto every grant, which is a second
+ *  copy of one fact.
+ */
+export function computeGrant(g, H = HORIZON, stage = null) {
   const P = g.periods || [], C = g.categories || {};
   const per = P.map((p, i) => {
     const hrsRate = (l) => ((l.byPeriod?.[i]?.hrs) || 0) * ((l.byPeriod?.[i]?.rate) || 0);
@@ -48,6 +54,13 @@ export function computeGrant(g, H = HORIZON) {
   });
   const grand = {}; ["personnel", "personnelAlloc", "fringe", "travel", "equipment", "supplies", "contractual", "construction", "other", "direct", "indirect", "indirectAlloc", "total", "allocated", "federal", "costShare"].forEach(k => grand[k] = per.reduce((a, x) => a + x[k], 0));
 
+  // ⚠️ ONE TIER FOR EVERY DRAWDOWN PATH. There are four — monthly, advance, quarterly and arrears —
+  // and none of them passed a confidence, so all four defaulted to "committed". **A grant still in
+  // committee counted exactly like a signed award on every timing option.**
+  //
+  // `assumeFunded` answers "model this money?"; `stage` answers "how sure are we?". They are separate
+  // questions and the code was only asking the first.
+  const tier = stage === "prospective" ? "expected" : "committed";
   const lines = [];
   // conf defaults to "committed" so every existing caller is unchanged. floorM (not clampM) on start:
   // a payment past the horizon must fall off, not slide back onto month 18 — same trap as F8.
@@ -72,7 +85,15 @@ export function computeGrant(g, H = HORIZON) {
   const lag = g.reimburseLagMonths || 0;
   if (isMsBilled(g)) {
     const totalPay = (g.milestones || []).reduce((a, m) => a + (m.payment || 0), 0);
-    if (g.assumeFunded) { const s = P[0]?.start ?? 0, e = P[P.length - 1]?.end ?? HORIZON; push("revenue", totalPay / Math.max(1, e - s + 1), s, e, "Award (assumed funded)"); }
+    if (g.assumeFunded) { const s = P[0]?.start ?? 0, e = P[P.length - 1]?.end ?? HORIZON; push("revenue", totalPay / Math.max(1, e - s + 1), s, e, "Award (assumed funded)",
+        // ⚠️ THE STAGE DECIDES THE TIER. This passed no `conf`, so it defaulted to "committed" and
+        // **a grant still in committee counted exactly like a signed award** — the floor and the
+        // ceiling saw the same money and the confidence band had no width at all.
+        //
+        // `assumeFunded` answers "model this money?"; `stage` answers "how sure are we?". Conflating
+        // them meant a company could only ever have a band from a venture round, which is the wrong
+        // shape for most of this product's customers.
+        stage === "prospective" ? "expected" : "committed"); }
     else (g.milestones || []).forEach(m => {
       if (msPaid(m)) return; // already in the bank — see cashActuals
       push("revenue", m.payment, (m.month || 0) + lag, null, m.label || "Milestone payment", msTier(m));
@@ -81,11 +102,11 @@ export function computeGrant(g, H = HORIZON) {
     const timing = g.reimburseTiming || "arrears";
     P.forEach((p, i) => {
       const t = per[i], n = nMon(p);
-      if (timing === "monthly") for (let m = p.start; m <= periodEnd(p); m++) push("revenue", t.federal / n, m + lag, null, `BP${i + 1} reimbursement`);
-      else if (timing === "advance") push("revenue", t.federal, p.start + lag, null, `BP${i + 1} advance`);
+      if (timing === "monthly") for (let m = p.start; m <= periodEnd(p); m++) push("revenue", t.federal / n, m + lag, null, `BP${i + 1} reimbursement`, tier);
+      else if (timing === "advance") push("revenue", t.federal, p.start + lag, null, `BP${i + 1} advance`, tier);
       // Reimbursement in arrears follows the period END, so an extension delays the money too — which
       // is the half of an NCE people forget: more time to spend, and later cash.
-      else push("revenue", t.federal, periodEnd(p) + lag, null, `BP${i + 1} reimbursement`);
+      else push("revenue", t.federal, periodEnd(p) + lag, null, `BP${i + 1} reimbursement`, tier);
     });
   }
   return { per, grand, lines };

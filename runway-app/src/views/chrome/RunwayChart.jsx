@@ -206,6 +206,16 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
       {upBandArea && (
         <path d={upBandArea} fill="var(--caution)" opacity="0.13" stroke="none"/>
       )}
+      {/* ⚠️ THE NOTE FOR WHEN THERE IS NOTHING TO DRAW. A zero-width band renders as nothing, which is
+          indistinguishable from the band being switched off — **and a runway with no range is a fact
+          worth stating, not an absence to leave unexplained.** It means every input is committed,
+          which is either genuinely true or a model nobody has finished filling in. */}
+      {band && band.hasRange === false && (
+        <text className="no-halo" x={L} y={T - 8} fontSize="10" fontFamily="var(--fm)"
+              letterSpacing="0.06em" fill="var(--muted-2)">
+          NO RANGE · EVERY INPUT IS COMMITTED
+        </text>
+      )}
       {bandArea && (
         <>
           <path d={bandArea} fill="var(--signal-2)" opacity="0.10" stroke="none"/>

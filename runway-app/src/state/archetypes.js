@@ -158,7 +158,11 @@ const TIDEWATER = () => ({
       id: uid(), type: "grant", name: "Coastal restoration — federal", budget: 1800000, start: 0, end: 35,
       lines: [],
       grant: {
-        funder: "NOAA", assumeFunded: true,
+        // ⚠️ FALSE FOR A MILESTONE-BILLED GRANT. With it true, `computeGrant` emits ONE committed lump
+        // and ignores the milestones entirely — so a survey already accepted and a report not yet
+        // written counted identically. **The milestones carry the confidence; `assumeFunded` overrides
+        // it with certainty the organisation does not have.**
+        funder: "NOAA", assumeFunded: false,
         // ⚠️ MILESTONE BILLING. Under arrears, slow work means slow claims and cash roughly tracks.
         // Under milestone billing **a deliverable that slips by a month delays a whole payment.**
         reimburseTiming: "milestone", reimburseLagMonths: 1,
@@ -166,10 +170,15 @@ const TIDEWATER = () => ({
         periods: [{ id: uid(), start: 0, end: 11 }, { id: uid(), start: 12, end: 23 },
                   { id: uid(), start: 24, end: 35 }],
         milestones: [
-          { id: uid(), name: "Baseline survey complete", month: 5, amount: 240000, status: "delivered" },
-          { id: uid(), name: "Phase 1 planting", month: 13, amount: 520000, status: "planned" },
-          { id: uid(), name: "Year 2 monitoring report", month: 23, amount: 480000, status: "planned" },
-          { id: uid(), name: "Final report", month: 34, amount: 560000, status: "planned" },
+          // ⚠️ ACCEPTED, NOT MERELY DELIVERED. `msTier` maps accepted -> committed and everything else
+          // -> expected, so a grant whose milestones are ALL planned has no floor at all: the
+          // committed curve sees none of the money and the two curves diverge by the whole award.
+          // **One accepted milestone is what makes the floor meaningful** — this funder has paid
+          // for work already signed off, and the rest is real but not yet earned.
+          { id: uid(), name: "Baseline survey complete", month: 5, payment: 240000, status: "accepted" },
+          { id: uid(), name: "Phase 1 planting", month: 13, payment: 520000, status: "planned" },
+          { id: uid(), name: "Year 2 monitoring report", month: 23, payment: 480000, status: "planned" },
+          { id: uid(), name: "Final report", month: 34, payment: 560000, status: "planned" },
         ],
         categories: null,
       },

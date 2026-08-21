@@ -1981,6 +1981,42 @@ footnote, it is what the button is about to do.**
 Both surfaces default to yearly. `AdvisorBilling` uses rows rather than cards, so the layout differs and
 the control does not — **an advisor who has seen the company page already knows this one.**
 
+## Confidence bands: the tile, the note, and four demos that finally have one
+
+### The runway tile's range measured from a different origin than its headline
+
+`zeroOf` returned `z.months` and discarded `z.fromNow`. The headline showed `fromNow` (from today), the
+range showed `months` (from the projection start) — **so the range did not contain the number above
+it.** `zeroInfo`'s own comment says "`fromNow` is what a person should be shown" and the function above
+it threw it away. The band now carries both; all four range figures read `zeroFromNow`.
+
+### "NO RANGE · EVERY INPUT IS COMMITTED"
+
+`band.hasRange`, computed once. **A zero-width band and a switched-off band were visually identical**,
+which cost a long debugging session with the code in front of us.
+
+### ⚠️ THE DEMO GRANTS MOVED NO CASH AT ALL — THREE SEPARATE FAULTS
+
+Tidewater had three funders and $2.45M of budget and emitted **zero revenue lines**. Three causes,
+found one at a time:
+
+1. **Milestones wrote `amount`; the engine reads `payment`.** The UI writes `payment` too — **the demo
+   data was the only thing using the wrong name.** Four milestones, silently worth nothing.
+2. **`assumeFunded: true` on a milestone-billed grant emits ONE committed lump** and ignores the
+   milestones entirely, so a survey already accepted and a report not yet written counted identically.
+3. **`computeGrant` passed no confidence on any of its four drawdown paths**, so every assumed-funded
+   grant was "committed" regardless of stage. Fixed by threading the project's stage.
+
+Tidewater's runway moved 6.5 -> 9.1 months once the money actually flowed, and it now has a $1.56M band:
+one accepted milestone on the floor, three planned ones on the ceiling. **Three funders, three billing
+timings — milestone, advance and arrears — which is the archetype's whole point.**
+
+### ⚠️ I READ `m.lines` FOR SIX CHECKS AND THE FIELD IS `m.lineItems`
+
+Every "zero revenue lines" result I reported early in this was measuring a field that does not exist,
+**and I used two of those results to justify code changes.** The reading was right by accident and the
+reasoning was worthless.
+
 ### The "Nothing in the model yet" screen — found, and it was mine
 
 **Corey found it: a demo open when a patch deploys.** The page reloads on the new bundle, there is no

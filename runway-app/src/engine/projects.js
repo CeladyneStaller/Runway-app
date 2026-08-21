@@ -91,7 +91,8 @@ export const teamLoad = (rProjects, toggles = { committed: true, expected: true,
   return byEmp;
 };
 
-export const compileProject = (p) => p.type === "grant" ? computeGrant(p.grant).lines : (p.lines || []).filter(l => !l.isLabor);
+// The project's stage travels with the grant so a prospective award compiles as "expected".
+export const compileProject = (p) => p.type === "grant" ? computeGrant(p.grant, undefined, p.stage).lines : (p.lines || []).filter(l => !l.isLabor);
 
 export const blankGrant = () => ({ funder: "Funder", assumeFunded: false, costShareType: "cash", costSharePct: 0.2,
   reimburseTiming: "arrears", reimburseLagMonths: 1, milestones: [], periods: [{ id: uid(), start: 0, end: 5 }],

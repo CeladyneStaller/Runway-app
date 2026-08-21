@@ -53,7 +53,14 @@ function scaleCosts(model, factor) {
 
 const zeroOf = (model, toggles) => {
   const z = zeroInfo(buildProjection(model, toggles));
-  return z ? z.months : null;                            // null = doesn't run out within horizon
+  // ⚠️ BOTH, BECAUSE THEY MEASURE FROM DIFFERENT ORIGINS. `months` counts from the projection start;
+  // `fromNow` counts from today. The runway tile shows `fromNow` in its headline and was showing
+  // `months` in its range, so **the range did not contain the number above it** — which reads as an
+  // error and, for a model whose start is months in the past, is one.
+  //
+  // `zeroInfo`'s own comment says "`fromNow` is what a person should be shown". This function dropped
+  // it, so no consumer could show it even if it wanted to.
+  return z ? { months: z.months, fromNow: z.fromNow ?? z.months } : null;
 };
 
 // The full band. Returns three curves (floor/expected/ceiling) as row arrays for shading, their three
@@ -115,9 +122,16 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   const wide = spread != null && expZero != null && spread > Math.max(2, expZero * 0.4);
 
   return {
-    floor: { rows: floorRows, zero: floorZero, zeroNull: floorZero == null },
-    expected: { rows: expRows, zero: expZero, zeroNull: expZero == null },
-    ceiling: { rows: ceilRows, zero: ceilZero, zeroNull: ceilZero == null },
+    // ⚠️ WHETHER THERE IS A RANGE AT ALL, computed once here rather than inferred by each surface.
+    // **A zero-width band and a switched-off band look identical — both are nothing** — and that
+    // ambiguity cost a long debugging session with the code in front of us.
+    //
+    // Zero width means every input is committed: no prospective project, no line below full
+    // confidence, no burn history to vary. That is a finding about the model, not an absence.
+    hasRange: floorRows.some((r, i) => Math.abs(ceilRows[i].start - r.start) > 1),
+    floor: { rows: floorRows, zero: floorZero?.months ?? null, zeroFromNow: floorZero?.fromNow ?? null, zeroNull: floorZero == null },
+    expected: { rows: expRows, zero: expZero?.months ?? null, zeroFromNow: expZero?.fromNow ?? null, zeroNull: expZero == null },
+    ceiling: { rows: ceilRows, zero: ceilZero?.months ?? null, zeroFromNow: ceilZero?.fromNow ?? null, zeroNull: ceilZero == null },
     burnCV: cv,
     spread,
     wide,
