@@ -185,48 +185,39 @@ describe("⚠️ the two flags that silently produce nothing", () => {
 });
 
 describe("⚠️ a shipped demo must actually demonstrate reimbursement", () => {
-  it("at least one archetype compiles a real grant line set", async () => {
-    // ⚠️ THIS PASSES, ON EXACTLY ONE GRANT, AND THAT IS THE WHOLE STORY.
+  it("every archetype carrying grants compiles at least one reimbursement", async () => {
+    // ⚠️ MEASURED THROUGH `buildModelFromDoc`, NOT BY CALLING `computeGrant` DIRECTLY — and the first
+    // version of this guard got that wrong. `resolveProjectRates` fills each personnel line's hourly
+    // `rate` from the employee it points at, and it runs INSIDE the model build. Call `computeGrant` on
+    // a raw project and every employee-linked budget reads as $0, so a working grant reports as inert.
+    // That is exactly what happened: this guard called the SBIR award dead while the app was compiling
+    // $398,340 of reimbursement from it.
     //
-    // `nonprofit` · "Coastal restoration — federal" is milestone-billed, and the milestone branch of
-    // `computeGrant` reads `g.milestones` rather than `g.categories` — so it compiles four reimbursement
-    // lines despite `categories: null`, tiered by milestone status (accepted -> committed, planned ->
-    // expected). One working demonstration of the reimbursement lag exists in the whole fixture set.
-    //
-    // ⚠️ ALL THREE GRANTS IN `grant-startup` COMPILE NOTHING. `categories: null` plus, on two of them,
-    // `assumeFunded: true`. That archetype's model is nine cost lines and one instrument revenue line,
-    // and NOT ONE comes from a grant — so the flagship fixture for reimbursement-financed organisations
-    // demonstrates no reimbursement, and its runway is ordinary burn against ordinary cost lines.
-    //
-    // This guard is deliberately the WEAK form the brief asked for: at least one archetype, somewhere,
-    // produces a reimbursement. The strong form — every archetype that HAS grant projects has at least
-    // one that compiles — fails on `grant-startup` today. Writing it here would land a red suite for a
-    // demo-data problem, and fixing that data changes the archetype's published runway, which is a
-    // product decision rather than an engine one. The failure list is in the message below so the
-    // strong form is one line away when that decision is made.
-
+    // Measure what the app actually builds, or the guard tests a code path nobody runs.
     const { ARCHETYPES } = await import("../../src/state/archetypes.js");
     const { demoDoc } = await import("../../src/state/document.js");
-    const { computeGrant } = await import("../../src/engine/grant.js");
+    const { buildModelFromDoc } = await import("../../src/engine/buildmodel.js");
 
-    const counts = ARCHETYPES.flatMap(a => {
+    const summary = ARCHETYPES.map((a) => {
       const doc = demoDoc(a.id);
-      return (doc.projects || []).filter(p => p.type === "grant").map(p => ({
+      const grantIds = new Set((doc.projects || []).filter((p) => p.type === "grant").map((p) => p.id));
+      if (!grantIds.size) return null;
+      const lines = buildModelFromDoc(doc).lineItems.filter((l) => grantIds.has(l.projectId));
+      return {
         archetype: a.id,
-        name: p.name,
-        lines: computeGrant(p.grant, undefined, p.stage).lines.length,
-        reimbursements: computeGrant(p.grant, undefined, p.stage).lines
-          .filter(l => l.kind === "revenue").length,
-      }));
-    });
+        grants: grantIds.size,
+        reimbursements: lines.filter((l) => l.kind === "revenue").length,
+      };
+    }).filter(Boolean);
 
-    // A grant that compiles nothing is a grant nobody can see the point of.
-    const inert = counts.filter(c => c.lines === 0).map(c => `${c.archetype} · ${c.name}`);
-    expect(counts.some(c => c.reimbursements > 0),
-      `no archetype grant produces a reimbursement line:\n${JSON.stringify(counts, null, 2)}`).toBe(true);
-
-    // Recorded, not asserted. If this list ever shrinks to empty the strong form becomes free; if it
-    // grows, someone has added another grant nobody can see.
-    expect(inert.length, `inert grants (compile no lines): ${inert.join(", ")}`).toBeLessThanOrEqual(5);
+    // ⚠️ THE STRONG FORM. An archetype that models grants and produces no reimbursement is
+    // demonstrating the opposite of what this product is for. It shipped that way: all three
+    // grant-startup awards compiled nothing, so the flagship fixture for reimbursement-financed
+    // organisations showed no reimbursement at all.
+    for (const s of summary) {
+      expect(s.reimbursements, `${s.archetype} carries ${s.grants} grants and compiles none`)
+        .toBeGreaterThan(0);
+    }
+    expect(summary.length, "no archetype models a grant at all").toBeGreaterThan(0);
   });
 });

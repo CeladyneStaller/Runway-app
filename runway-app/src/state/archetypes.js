@@ -185,6 +185,11 @@ const KESTREL = () => ({
   pos: [
     // ⚠️ NET 60 ON A MONTH-5 DELIVERY LANDS IN MONTH 7 — and because terms round UP to whole months,
     // net 45 would land there too. Nothing in the interface says so.
+    // ⚠️ SPECULATIVE, AND DATED BEFORE THE CROSSING — the only way a tier toggle can do anything. An
+    // order landing after you are out cannot change when you get there, which is exactly how Ridgeline's
+    // Seed SAFE sat inert at month 9 while the company crossed zero at month 8.
+    { id: uid(), customer: "Halden Marine", ref: "RFQ-2210", amount: 1600000,
+      bookedMonth: 9, shipMonth: 13, deliveryMonth: 13, termsDays: 60, depositPct: 0.15, confidence: "speculative" },
     { id: uid(), customer: "Meridian Freight", ref: "PO-4417", amount: 840000,
       bookedMonth: 0, shipMonth: 5, termsDays: 60, depositPct: 0, confidence: "committed" },
     { id: uid(), customer: "Bay Terminal Authority", ref: "PO-2209", amount: 310000,
@@ -196,6 +201,18 @@ const KESTREL = () => ({
     { id: uid(), kind: "priced", name: "Series A", status: "closed", amount: 6000000, closeMonth: -4,
       capType: "post", cap: 32000000, discount: 0, confAuto: true, goals: [] },
   ],
+  // ⚠️ BACK-SOLVED FOR THE FOUR RECORDED MONTHS — BOTH FIELDS, NOT JUST THE POPULATION. `compileSaas`
+  // runs from month 0 regardless of the document's start, so backdating gives the subscription base four
+  // extra months to grow. Correcting `startCustomers` alone is NOT enough: `newPerMonth` compounds at
+  // `newGrowthPct` from month 0 too, so by today the model was acquiring 8% faster than authored and the
+  // revenue curve pulled steadily ahead — 22/23/25/26/28 became 22/24/26/28/30, worth two months of
+  // runway by the crossing.
+  //
+  // Divided back by (1 + growth)^4, both fields land on their authored values TODAY: 210/64/7 customers
+  // and 14/6/0.5 a month. Fractional counts are fine — `newPerMonth: 0.5` already was one.
+  //
+  // The real fix is a `startM` on saas products so `compileSaas` shifts like everything else. Until
+  // then this is arithmetic, not a fudge, and it is exact.
   saas: [],
 });
 
@@ -226,6 +243,9 @@ const TIDEWATER = () => ({
     line("Office and field station", 6800, "cost", "recurring", 0, 35),
     line("Vehicles and fuel", 3900, "cost", "recurring", 0, 35),
     line("Insurance and audit", 2400, "cost", "recurring", 0, 35),
+    // ⚠️ SPECULATIVE, AND BEFORE THE CROSSING. A named gift in conversation but not signed — the tier
+    // this organisation most needs to switch off and watch the date move.
+    line("Bequest — Hartnell estate", 550000, "revenue", "onetime", 7, null, { confidence: "speculative" }),
   ],
   projects: [
     {
@@ -315,15 +335,22 @@ const LARKSPUR = () => ({
   saas: [
     // ⚠️ THE SOLO PLAN IS ROUGHLY FLAT AND SHRINKS IF YOU TOUCH IT. 3.2% monthly churn against 14 new
     // is nearly balanced — **a SaaS demo where every plan grows teaches nothing about what churn does.**
-    { id: uid(), name: "Solo", startCustomers: 176, arpu: 29, churnPct: 3.2,
-      newPerMonth: 14, newGrowthPct: 2, include: true },
-    { id: uid(), name: "Team", startCustomers: 41, arpu: 149, churnPct: 1.8,
-      newPerMonth: 6, newGrowthPct: 5, include: true },
-    { id: uid(), name: "Enterprise", startCustomers: 5, arpu: 890, churnPct: 0.5,
-      newPerMonth: 0.5, newGrowthPct: 8, include: true },
+    { id: uid(), name: "Solo", startCustomers: 181.27, arpu: 29, churnPct: 3.2,
+      newPerMonth: 12.934, newGrowthPct: 2, include: true },
+    { id: uid(), name: "Team", startCustomers: 46.53, arpu: 149, churnPct: 1.8,
+      newPerMonth: 4.936, newGrowthPct: 5, include: true },
+    { id: uid(), name: "Enterprise", startCustomers: 5.46, arpu: 890, churnPct: 0.5,
+      newPerMonth: 0.368, newGrowthPct: 8, include: true },
   ],
-  rounds: [{ id: uid(), kind: "safe", name: "Pre-seed SAFE", status: "closed", amount: 500000,
-             closeMonth: -6, capType: "post", cap: 6000000, discount: 0.2, confAuto: true, goals: [] }],
+  rounds: [
+    // ⚠️ `status: "raising"` MAPS TO SPECULATIVE through INST_CONF, so this is the tier toggle's
+    // demonstration here — the status spine already says how sure it is, no separate field needed. And
+    // it closes at month 6, comfortably before the crossing, because a round landing after you are out
+    // cannot move the date.
+    { id: uid(), kind: "equity", name: "Seed round", status: "raising", amount: 2200000,
+      closeMonth: 6, capType: "post", preMoney: 9000000, cap: 0, discount: 0, confAuto: true, goals: [] },
+    { id: uid(), kind: "safe", name: "Pre-seed SAFE", status: "closed", amount: 500000,
+      closeMonth: -6, capType: "post", cap: 6000000, discount: 0.2, confAuto: true, goals: [] }],
   pos: [],
 });
 

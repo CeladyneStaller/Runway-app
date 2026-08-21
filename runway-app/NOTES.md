@@ -8398,3 +8398,74 @@ written, and nothing tested it. The comment now states the numbers the archetype
 STILL OPEN: hardware-vc, nonprofit and saas have no speculative revenue at all, so the toggle is inert
 on those three. That is defensible — not every company has a raise in the pipeline — but if the toggle
 is meant to be discoverable from any demo, they need one. And the saas runway anomaly is unchanged.
+
+## The saas runway anomaly: SOLVED — it was the acquisition rate, not the population
+
+Backfilling four months gave `compileSaas` four extra months to run, and I corrected `startCustomers`
+so the customer COUNT matched at today. That was not enough: **`newPerMonth` compounds at
+`newGrowthPct` from month 0 too**, so by today the model was acquiring 8% faster than authored. The
+revenue curve pulled steadily ahead — 22/23/25/26/28 became 22/24/26/28/30 — and by the crossing that
+was worth two months.
+
+That is why tuning the population DOWN never fixed it, and why the earlier note said the curve proved
+the population was the wrong lever. Correct: it was one of two levers, and the other was untouched.
+
+Fix: divide EVERY compounding field back by (1 + growth)^4. `startCustomers` 210/64/7 -> 181.27/46.53/
+5.46 and `newPerMonth` 14/6/0.5 -> 12.934/4.936/0.368. Both then land on their authored values TODAY.
+No `arpuGrowthPct` on these products, so arpu is untouched. Fractional counts are fine — `newPerMonth:
+0.5` already was one.
+
+RESULT: runway 9.97 against a 10.03 baseline, and the calendar-aligned balance curves now match month
+for month (310 277 246 211 178 146 116 88 62 37 15 -6 -24 either way). Arithmetic, not a fudge.
+
+Still the RIGHT fix is a `startM` on saas products so `compileSaas` shifts like everything else.
+
+## Speculative revenue on the other three, so the tier toggle is discoverable everywhere
+
+    archetype        runway OFF -> ON     band with speculative on    wide
+    grant-startup      4.7 -> 24.6            4.4 - 26.4             true
+    hardware-vc       19.3 -> 25.8           16.9 - 27.6             true
+    nonprofit          8.4 -> 19.8            8.1 - 20.6             true
+    saas              10.0 -> never           4.3 - 36+              false
+
+- hardware-vc: a $1.6M RFQ from Halden Marine, delivering month 13, 15% deposit. ⚠️ AUTHORED WITH AN
+  EXPLICIT `deliveryMonth` — this archetype's other POs carry `shipMonth`, which `poPaidMonth` DOES NOT
+  READ (it uses `deliveryMonth || 0`), so they all pay at month 0 + terms. Worth fixing separately.
+- nonprofit: a $550k bequest under discussion, month 7.
+- saas: a $2.2M seed at `status: "raising"`, which INST_CONF maps to speculative — the status spine
+  already says how sure it is.
+
+Each is dated BEFORE its company's crossing, because that is the only way a tier toggle can move the
+date. That was Ridgeline's original defect and it would have been easy to repeat three more times.
+
+⚠️ SAAS DOES NOT FIRE `wide`, AND THAT IS CORRECT. `wide = spread > max(2, expected.months * 0.4)` —
+proportional, so a longer runway needs a proportionally wider band. saas has a 5.7-month spread on a
+14.7-month runway: 39%, just under the 40% threshold. Missing by 0.18 months is the threshold doing its
+job, not a demo defect. Do not widen the round to force it.
+
+## A process note worth keeping
+
+An edit script asserted on its LAST edit and threw before `write_text`, silently discarding two edits
+that had already "printed ok". I only noticed because the compiled lines came back empty. When a script
+makes several independent edits, WRITE AFTER EACH ONE — a partial success that reports success is worse
+than a clean failure.
+
+FINAL STATE, all four: cash exact, cv > 0, band drawn, baseline back-fill 0, no stray fields, window
+agrees with RunwayChart, flow line inside its band, and the speculative toggle moves the runway.
+32 assertions, TZ=UTC and TZ=America/Denver, 0 failures.
+
+## The grant guard was measuring a code path nobody runs — now strong, and passing
+
+It called `computeGrant(p.grant, ...)` directly on the raw project. `resolveProjectRates` fills each
+personnel line's hourly `rate` from the employee it points at, and it runs INSIDE `buildModelFromDoc` —
+so on a raw project every employee-linked budget reads as $0 and a WORKING grant reports as inert. The
+guard was calling the SBIR award dead while the app compiled $398,340 of reimbursement from it.
+
+Rewritten to count grant-derived line items through `buildModelFromDoc`, which is what the app runs.
+
+⚠️ AND UPGRADED TO THE STRONG FORM, which now passes: EVERY archetype carrying grants must compile at
+least one reimbursement, not merely one archetype somewhere.
+    grant-startup   3 grants -> 1 reimbursement   ($398,340 at m12)
+    nonprofit       3 grants -> 4 reimbursements  (milestone-billed)
+An archetype that models grants and produces no reimbursement demonstrates the opposite of what this
+product is for, and it shipped that way.
