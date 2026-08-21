@@ -7993,3 +7993,41 @@ Re-asserted against the no-setting case rather than a literal: the contract is "
 gets no special number of its own", not "an invalid override gets 18". Kept an explicit `not.toBe(2)`
 so the original intent — do not trust a nonsense setting — is still tested. `monthsShown(null)` still
 returns the flat default; there is no document there to fit.
+
+## test/engine/causality.test.js — perturb an input, check the runway moved right (or not at all)
+
+THE SUITE HAD TWO CAUSAL TESTS AND BOTH WERE DIRECTIONAL. `overhead.test.js` adds a cost and checks the
+runway moves the right way; `buildmodel.test.js` lowers cash and checks the same. NOTHING added revenue
+and followed it to a runway number, nothing checked the MAGNITUDE, and nothing checked that a change
+which should move nothing moves NOTHING.
+
+That last gap is the one that mattered. Every recent defect was something moving that should not have:
+`indexedLines` charged a royalty on excluded revenue; `flowRunway` drew a line the toggles could not
+move; the band's dates were measured against curves nobody drew. A directional test cannot tell "moved
+for the right reason" from "moved at all".
+
+⚠️ AND A NAIVE GATE TEST WOULD HAVE MISSED THE ROYALTY LEAK. The line gate ALWAYS worked — a speculative
+COST with speculative off was correctly ignored, and the mini-fixture proves it both before and after
+the fix. What leaked was a cost DERIVED from speculative revenue. The catcher is "add speculative
+REVENUE to the canary, assert the runway does not move".
+
+PROVED IT BITES. Reverted `indexedLines` to the pre-fix single-basis version in a throwaway copy:
+  canary runway 3.8950 -> 3.8202 on adding $1M of SPECULATIVE revenue with speculative OFF.
+  The test FAILS against the old code and passes against the new one. The mini-fixture version PASSES
+  against the old code, correctly — it has no royalty to leak, so it is not the catcher and should not
+  be credited as one.
+
+TWO FIXTURES, DELIBERATELY. `mini()` — $300k, $50k/month, no commitments, no cost share, no payroll,
+runway exactly 6.0 — so magnitude assertions mean something: adding $100k of cash shifts EVERY month by
+exactly $100,000, and $100k of revenue at month 2 buys exactly two months. The canary is the real thing,
+where $100k of revenue is worth $98,000 because a 2% royalty rides on it — asserted against the royalty
+RATE read off the document, not a magic constant, because demanding a clean $100,000 there would be
+asserting the absence of a feature.
+
+Also covers: revenue lands the month AFTER it is dated (r.start is the opening balance — the one-month
+offset fixed in five places); untagged costs count under every toggle combination; turning a tier ON
+does let the same probe through, so the zero-movement tests cannot pass by the input being ignored
+entirely; and add-then-remove returns the exact same series, which catches accumulation, identity
+caching and in-place mutation — worth having now that `monthsShown` memoises on the doc object.
+
+24 assertions, all passing.
