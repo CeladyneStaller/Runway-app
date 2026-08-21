@@ -148,3 +148,51 @@ describe("what the zeros are actually proving", () => {
       .toBe(buildChart("flow.runway", withAllOff).series[0].values[MONTH]);
   });
 });
+
+describe("⚠️ purchase-order timing — family B's PO half", () => {
+  it("cash never lands before the order that earns it", async () => {
+    // ⚠️ `poPaidMonth` IS `(po.deliveryMonth || 0) + poLag(po)`, AND `|| 0` IS A VALID MONTH. Two
+    // hardware-vc orders were authored with `shipMonth`, a field NOTHING reads — not the engine, not
+    // the editor, not the new-PO modal, not the factors registry. Both therefore delivered in "month
+    // zero": Bay Terminal booked in month 3 and was PAID IN MONTH 1, two months before the order
+    // existed. No error, no warning, just money arriving early.
+    //
+    // Paid-after-booked is the semantic invariant that catches it without the engine having to change
+    // how it reads an absent field on documents that already exist.
+    const { poPaidMonth } = await import("../../src/engine/sales.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      for (const po of demoDoc(a.id).pos || []) {
+        const who = `${a.id} · ${po.customer}`;
+        expect(Number.isFinite(po.deliveryMonth), `${who} has no deliveryMonth`).toBe(true);
+        expect(poPaidMonth(po), `${who} is paid before it is booked`)
+          .toBeGreaterThanOrEqual(po.bookedMonth ?? 0);
+        expect(poPaidMonth(po), `${who} is paid before it is delivered`)
+          .toBeGreaterThanOrEqual(po.deliveryMonth);
+      }
+    }
+  });
+
+  it("terms round UP to whole months, so net 45 and net 60 both land two months out", async () => {
+    // Stated in `poLag`'s own comment — `round()` let net-40 land at 30 days, and `ceil()` means the
+    // model never books money before the terms allow it. Conservative by construction.
+    const { poLag, poPaidMonth } = await import("../../src/engine/sales.js");
+    expect([0, 30, 31, 45, 60, 61, 90].map(poLag_ => poLag({ termsDays: poLag_ }))).toEqual([0, 1, 2, 2, 2, 3, 3]);
+    expect(poPaidMonth({ deliveryMonth: 5, termsDays: 45 })).toBe(7);
+    expect(poPaidMonth({ deliveryMonth: 5, termsDays: 60 })).toBe(7);
+    expect(poPaidMonth({ deliveryMonth: 5, termsDays: 61 })).toBe(8);
+  });
+
+  it("a deposit lands when the order is booked, the balance when it is paid", async () => {
+    // Two dates, two tiers of certainty in one row — and the deposit is the earlier of the two.
+    const { compilePO } = await import("../../src/engine/sales.js");
+    const lines = compilePO({ amount: 100000, depositPct: 0.3, bookedMonth: 2, deliveryMonth: 6,
+      termsDays: 30, confidence: "expected" });
+    const dep = lines.find(l => /Deposit/.test(l.label));
+    const bal = lines.find(l => /Balance/.test(l.label));
+    expect(dep).toMatchObject({ amount: 30000, start: 2, confidence: "expected" });
+    expect(bal).toMatchObject({ amount: 70000, start: 7, confidence: "expected" });
+    expect(dep.amount + bal.amount).toBe(100000);
+  });
+});

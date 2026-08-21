@@ -39,12 +39,18 @@ describe("the band brackets the runway", () => {
 
   it("the expected curve equals the base projection (golden-consistent)", () => {
     const b = confidenceBand(withToggles(demoDoc()));
-    // ⚠️ 3.9 -> 4.2, AND THE OLD NUMBER ENCODED A BUG. `indexedLines` charged the canary's 2% licence
-    // royalty against ALL revenue and tagged the cost `committed`, so with speculative switched OFF the
-    // model still paid $172,200 of royalty on $8.61M of speculative revenue it was not counting. The
-    // royalty is now split per tier, so the speculative share is excluded with the revenue that earned
-    // it, and the runway lengthens by exactly that cost. See NOTES.md.
-    expect(b.expected.zero).toBeCloseTo(4.2, 1);   // the CANARY's runway, not the seed's
+    // ⚠️ THIS NUMBER HAS MOVED TWICE, BOTH TIMES BECAUSE THE OLD ONE WAS MEASURING SOMETHING WRONG.
+    //
+    // 3.9 -> 4.2: `indexedLines` charged the canary's 2% licence royalty against ALL revenue and tagged
+    // the cost `committed`, so with speculative switched OFF the model still paid $172,200 of royalty on
+    // $8.61M of speculative revenue it was not counting. Split per tier, that share now drops out with
+    // the revenue that earned it.
+    //
+    // 4.2 -> 5.5: `confidenceBand` used to default `anchorActuals` OFF while every caller passed it ON —
+    // a default that existed only to keep this assertion still. The band now agrees with recorded cash
+    // unless a caller explicitly opts out, so this measures the anchored curve the app actually draws.
+    // See NOTES.md.
+    expect(b.expected.zero).toBeCloseTo(5.5, 1);   // the CANARY's runway, not the seed's
   });
 
   it("reports the spread between floor and ceiling", () => {

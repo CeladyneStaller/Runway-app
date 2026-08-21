@@ -185,15 +185,21 @@ const KESTREL = () => ({
   pos: [
     // ⚠️ NET 60 ON A MONTH-5 DELIVERY LANDS IN MONTH 7 — and because terms round UP to whole months,
     // net 45 would land there too. Nothing in the interface says so.
+    //
+    // ⚠️ `deliveryMonth`, NOT `shipMonth`. These two POs carried `shipMonth`, which NOTHING READS —
+    // `poPaidMonth` is `(po.deliveryMonth || 0) + poLag(po)`, and the editor, the new-PO modal and the
+    // factors registry all use `deliveryMonth` too. So both orders paid at month 0 plus terms whatever
+    // month they shipped: Bay Terminal booked in month 3 and was PAID IN MONTH 1, two months before the
+    // order existed. Silent, because `|| 0` is a valid month.
     // ⚠️ SPECULATIVE, AND DATED BEFORE THE CROSSING — the only way a tier toggle can do anything. An
     // order landing after you are out cannot change when you get there, which is exactly how Ridgeline's
     // Seed SAFE sat inert at month 9 while the company crossed zero at month 8.
     { id: uid(), customer: "Halden Marine", ref: "RFQ-2210", amount: 1600000,
-      bookedMonth: 9, shipMonth: 13, deliveryMonth: 13, termsDays: 60, depositPct: 0.15, confidence: "speculative" },
+      bookedMonth: 9, deliveryMonth: 13, termsDays: 60, depositPct: 0.15, confidence: "speculative" },
     { id: uid(), customer: "Meridian Freight", ref: "PO-4417", amount: 840000,
-      bookedMonth: 0, shipMonth: 5, termsDays: 60, depositPct: 0, confidence: "committed" },
+      bookedMonth: 0, deliveryMonth: 5, termsDays: 60, depositPct: 0, confidence: "committed" },
     { id: uid(), customer: "Bay Terminal Authority", ref: "PO-2209", amount: 310000,
-      bookedMonth: 3, shipMonth: 9, termsDays: 30, depositPct: 0.3, confidence: "expected" },
+      bookedMonth: 3, deliveryMonth: 9, termsDays: 30, depositPct: 0.3, confidence: "expected" },
   ],
   rounds: [
     { id: uid(), kind: "safe", name: "2024 SAFE", status: "closed", amount: 1200000, closeMonth: -18,

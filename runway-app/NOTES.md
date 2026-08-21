@@ -8469,3 +8469,46 @@ least one reimbursement, not merely one archetype somewhere.
     nonprofit       3 grants -> 4 reimbursements  (milestone-billed)
 An archetype that models grants and produces no reimbursement demonstrates the opposite of what this
 product is for, and it shipped that way.
+
+## Two engine fixes
+
+### 1. `shipMonth` was a field nothing reads
+
+Two hardware-vc POs carried `shipMonth`. `poPaidMonth` is `(po.deliveryMonth || 0) + poLag(po)`, and the
+editor, the new-PO modal and the factors registry all use `deliveryMonth` too — `shipMonth` appears
+NOWHERE outside archetypes.js. So both orders delivered in "month zero": Bay Terminal booked in month 3
+and was PAID IN MONTH 1, two months before the order existed. Silent, because `|| 0` is a valid month.
+
+FIXED IN THE DATA, NOT THE COMPILER. `deliveryMonth` is unambiguously canonical; teaching `poPaidMonth`
+to fall back to `shipMonth` would change how the engine reads an absent field on documents that already
+exist, to accommodate a typo in demo data.
+
+⚠️ THE RUNWAY DID NOT MOVE — 19.29 before and after — because hardware-vc's balance never dips before
+either payment date, so the first crossing depends on TOTAL cash rather than when it arrives. The CURVE
+was wrong and the headline was not, which is precisely the kind of defect a runway-only assertion cannot
+see. Money now arrives at m11/m14/m19 instead of m5/m6.
+
+NEW GUARD in neteffect.test.js, three tests: every archetype PO has a finite `deliveryMonth`, is paid
+no earlier than it is booked, and no earlier than it is delivered. Plus `poLag` ceiling behaviour
+(net 45 and net 60 both land two months out; net 61 lands three) and the deposit/balance split.
+
+### 2. `anchorActuals` now defaults from the document
+
+It defaulted to `false` while EVERY caller passed `true` — a default that existed only to keep two test
+assertions still. That is the same shape as the bug this whole change set was about: a caller who
+forgets the options gets a band measured against curves nobody draws. Recorded cash is a fact and
+agreeing with it should not be opt-in.
+
+    const { cashActuals = doc?.cashActuals || null,
+            anchorActuals = doc?.settings?.anchorActuals !== false,
+            from = forecastFrom(doc) } = opts;
+
+An explicit `anchorActuals: false` still un-anchors, which is what a "pure model, ignore the ledger"
+view would want — verified.
+
+⚠️ THE CANARY GOLDEN MOVES 4.2 -> 5.5, ITS SECOND MOVE THIS SESSION, AND BOTH WERE THE OLD NUMBER BEING
+WRONG. 3.9 -> 4.2 was the royalty leak; 4.2 -> 5.5 is this. Only `band.test.js` is affected —
+buildmodel.test.js and document.test.js read RAW projections, so their 4.2 stands. Ordering and
+bracketing invariants hold under the new default: 555 checks, 0 violations.
+
+Verified TZ=UTC and TZ=America/Denver: 40 assertions, 0 failures.

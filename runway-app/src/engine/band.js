@@ -107,9 +107,16 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null, opts = {}
   //
   // `from` DEFAULTS TO THE CURRENT MONTH, because a crossing in a month already elapsed is not runway.
   // Zero was only ever defensible as test compatibility.
+  // ⚠️ DEFAULTS COME FROM THE DOCUMENT NOW, NOT FROM `false`. `anchorActuals` defaulted OFF while every
+  // caller passed it ON, which is a default that exists only to keep two test assertions still. That is
+  // the shape of the bug this whole change set was about: a caller who forgets the options gets a band
+  // measured against curves nobody draws. Recorded cash is a fact; agreeing with it is not opt-in.
+  //
+  // A caller can still force it off explicitly — `anchorActuals: false` — which is what a "pure model,
+  // ignore the ledger" view would want.
   const {
-    cashActuals = null,
-    anchorActuals = false,
+    cashActuals = doc?.cashActuals || null,
+    anchorActuals = doc?.settings?.anchorActuals !== false,
     from = forecastFrom(doc),
   } = opts;
   const anchor = (rs) => (anchorActuals && cashActuals) ? anchorToActuals(rs, cashActuals, true) : rs;
