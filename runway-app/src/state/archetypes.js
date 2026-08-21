@@ -28,6 +28,17 @@ const line = (label, amount, kind, cadence, start, end, extra = {}) =>
 const RIDGELINE = () => ({
   name: "Ridgeline Catalysis",
   cash: 487000,
+  // Four recorded months, Apr-Jul. Burn runs ~$85k; the May and July figures carry a conference and a
+  // catalyst reorder. No single month is extreme — with four points `burnVariance` trims nothing, so an
+  // outlier would dominate the spread rather than reading as the one-off it is.
+  //
+  // ⚠️ AND THE LAST THREE MONTHS MUST AVERAGE AT OR BELOW `itemizedOpex`. `derivedBurn` is the TRAILING
+  // THREE-MONTH mean, and `baselineOpex = max(0, derivedBurn - itemizedOpex)` back-fills any excess as
+  // an extra recurring cost for the whole horizon — spend the ledger shows that nobody itemised. A
+  // ledger sitting above the itemised total therefore makes the demo silently more expensive: on
+  // hardware-vc a first draft added $61,175 a month and cut its runway from 19.97 to 15.30 months.
+  ledger: [76000, 90000, 79000, 86000],
+  ledgerMix: [0.63, 0.24],
   employees: [
     emp("Priya Raman", "CEO", 155000),
     emp("Tom Okonkwo", "Principal Investigator", 148000),
@@ -91,6 +102,11 @@ const RIDGELINE = () => ({
 const KESTREL = () => ({
   name: "Kestrel Systems",
   cash: 4120000,
+  // Hardware burn is lumpy by nature — tooling and long-lead parts land in whole months. Scatter is
+  // wider than the others on purpose, and it is the company where the cost half of the band should be
+  // the visible half. cv lands near 0.10.
+  ledger: [198000, 226000, 205000, 228000],
+  ledgerMix: [0.55, 0.34],
   employees: [
     emp("Dana Whitfield", "CEO", 190000), emp("Marcus Oyelaran", "CTO", 185000),
     emp("Yuki Tanaka", "VP Engineering", 172000), emp("Rosa Delgado", "Hardware Lead", 158000),
@@ -141,6 +157,11 @@ const KESTREL = () => ({
 const TIDEWATER = () => ({
   name: "Tidewater Restoration Alliance",
   cash: 612000,
+  // A programme budget held tightly: payroll-dominated, little discretionary spend, so the scatter is
+  // the narrowest of the four. cv near 0.04 — a demonstrably STEADY organisation, which is its own
+  // useful reading of the band.
+  ledger: [88000, 96000, 90000, 95000],
+  ledgerMix: [0.71, 0.16],
   employees: [
     emp("Grace Amadi", "Executive Director", 118000), emp("Peter Lund", "Programme Director", 104000),
     emp("Aisha Rahman", "Field Lead", 88000), emp("Diego Serrano", "Restoration Ecologist", 82000),
@@ -220,6 +241,10 @@ const TIDEWATER = () => ({
 const LARKSPUR = () => ({
   name: "Larkspur Analytics",
   cash: 310000,
+  // Small team, mostly salary and hosting, with one month carrying an annual software renewal. cv near
+  // 0.08 — its band width should still be dominated by the revenue tiers, not by spend.
+  ledger: [29000, 32000, 30000, 35000],
+  ledgerMix: [0.68, 0.19],
   employees: [
     emp("Rowan Vasquez", "Founder", 96000), emp("Kit Osei", "Engineer", 128000),
     emp("Mira Solberg", "Engineer", 124000), emp("Jae-won Park", "Design and Support", 98000),
@@ -237,11 +262,11 @@ const LARKSPUR = () => ({
   saas: [
     // ⚠️ THE SOLO PLAN IS ROUGHLY FLAT AND SHRINKS IF YOU TOUCH IT. 3.2% monthly churn against 14 new
     // is nearly balanced — **a SaaS demo where every plan grows teaches nothing about what churn does.**
-    { id: uid(), name: "Solo", startCustomers: 210, arpu: 29, churnPct: 3.2,
+    { id: uid(), name: "Solo", startCustomers: 176, arpu: 29, churnPct: 3.2,
       newPerMonth: 14, newGrowthPct: 2, include: true },
-    { id: uid(), name: "Team", startCustomers: 64, arpu: 149, churnPct: 1.8,
+    { id: uid(), name: "Team", startCustomers: 41, arpu: 149, churnPct: 1.8,
       newPerMonth: 6, newGrowthPct: 5, include: true },
-    { id: uid(), name: "Enterprise", startCustomers: 7, arpu: 890, churnPct: 0.5,
+    { id: uid(), name: "Enterprise", startCustomers: 5, arpu: 890, churnPct: 0.5,
       newPerMonth: 0.5, newGrowthPct: 8, include: true },
   ],
   rounds: [{ id: uid(), kind: "safe", name: "Pre-seed SAFE", status: "closed", amount: 500000,

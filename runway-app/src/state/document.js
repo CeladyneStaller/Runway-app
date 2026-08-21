@@ -191,17 +191,118 @@ export const canaryDoc = () => ({
  *  An unknown id falls back to the first rather than throwing: a bad link should show somebody a demo,
  *  not an error.
  */
+/** How many recorded months a demo carries BEFORE today.
+ *
+ *  ⚠️ A DEMO THAT STARTS TODAY CANNOT DEMONSTRATE THE BAND. Its width has two sources — which revenue
+ *  tiers are on, and how far recorded spend has scattered from its own mean. The second is measured
+ *  from `history`, and with no history it is 0.000 in every archetype, so the cost half of the band has
+ *  never appeared in a demo at all. Two of the four then had no tier spread either, so floor, expected
+ *  and ceiling landed on one number and the chart drew its "no range" note instead of a band.
+ *
+ *  Four is the number because it is what a real ledger looks like at this stage and because it keeps
+ *  every archetype's declared `cash` meaning "cash on hand TODAY" rather than at some notional start.
+ *
+ *  ⚠️ FOUR IS ALSO BELOW `burnVariance`'s TRIMMING THRESHOLD, which is five. With four points nothing is
+ *  discarded, so no month in a ledger below may be an outlier — one extreme figure would dominate the
+ *  variance instead of being trimmed as the equipment purchase it represents.
+ */
+const DEMO_BACKFILL = 4;
+
+/** Shift a month index that belongs to a DATED FUTURE EVENT.
+ *
+ *  ⚠️ NOT EVERYTHING MOVES, AND THAT IS THE WHOLE SUBTLETY. Backdating the start without re-indexing
+ *  pulls the entire future four months earlier; re-indexing everything uniformly leaves the four new
+ *  months empty, because the rent and the salaries move out of them too.
+ *
+ *  Month 0 means "already running" — rent, consumables, insurance and the existing staff were being
+ *  paid in April as much as in August, so they stay put. A start ABOVE zero is a dated plan — the sixth
+ *  hire, a round close, a delivery — and has to move so it lands on the same CALENDAR month it did
+ *  before. Ends always move, so a line that covered the horizon still covers it.
+ */
+const shiftStart = (v) => (v == null || v === 0 ? v : v + DEMO_BACKFILL);
+const shiftEnd = (v) => (v == null ? v : v + DEMO_BACKFILL);
+const shiftDated = (v) => (v == null ? v : v + DEMO_BACKFILL);
+const shiftLines = (ls) => (ls || []).map(l => ({ ...l, start: shiftStart(l.start), end: shiftEnd(l.end) }));
+
+/** A recorded month, split across the codes the ledger view expects. */
+const ledgerMonth = (month, total, mix) => ({
+  month,
+  lines: [
+    { code: "6000", amount: Math.round(total * mix[0]), note: "payroll" },
+    { code: "5000", amount: Math.round(total * mix[1]), note: "direct costs" },
+    { code: "", amount: total - Math.round(total * mix[0]) - Math.round(total * mix[1]), note: "rent, software, insurance" },
+  ],
+});
+
 export const demoDoc = (which = "grant-startup") => {
   const a = archetypeById(which) || ARCHETYPES[0];
   const built = a.build();
+
+  // Start `DEMO_BACKFILL` months back. Built through a Date so a January load wraps the year correctly
+  // rather than producing month -3.
   const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - DEMO_BACKFILL, 1);
+
+  const ledger = built.ledger || [];
+  const mix = built.ledgerMix || [0.63, 0.24];
+  const spent = ledger.reduce((x, v) => x + v, 0);
+
+  // ⚠️ OPENING CASH IS TODAY'S CASH PLUS EVERYTHING SPENT SINCE. That makes the arithmetic close on
+  // itself: walk the opening balance down by the ledger and the month that lands on `built.cash` is
+  // TODAY. An archetype still declares the one number a reader checks — what is in the bank now.
+  const openingCash = (built.cash || 0) + spent;
+
+  // Month-opening balances for every recorded month AND for today, because on the 21st you do know what
+  // you had on the 1st. Anchoring on today's figure is what makes "cash on hand" a recorded fact rather
+  // than a projection, and it is what puts the accumulated forecast error on screen.
+  const cashActuals = {};
+  let bal = openingCash;
+  for (let m = 0; m <= ledger.length; m++) {
+    cashActuals[m] = { cash: Math.round(bal), revenue: 0, additional: 0, grants: {} };
+    bal -= ledger[m] || 0;
+  }
+
+  const shifted = ledger.length ? {
+    lines: shiftLines(built.lines),
+    employees: (built.employees || []).map(e => ({ ...e, start: shiftStart(e.start), end: shiftEnd(e.end) })),
+    // ⚠️ `?? 0` ON DELIVERY, BECAUSE AN ABSENT DELIVERY MONTH IS NOT AN ABSENT DATE. `poPaidMonth` reads
+    // `(po.deliveryMonth || 0) + poLag(po)`, so an undefined delivery already MEANS month zero — and
+    // preserving the undefined through the shift left two hardware POs paying $1,057,000 into the
+    // recorded months, against a ledger that says the company only spent. That divergence dragged the
+    // anchored forecast down and cut the demo's runway from 19.97 months to 11.77.
+    pos: (built.pos || []).map(x => ({ ...x, bookedMonth: shiftDated(x.bookedMonth), deliveryMonth: shiftDated(x.deliveryMonth ?? 0) })),
+    // ⚠️ `shiftStart`, NOT `shiftDated`, AND THE DIFFERENCE IS $4M. `compileInstrument` treats a CLOSED
+    // round with `closeMonth <= 0` as already banked and emits no draw — that money is in `cash` on
+    // hand. Shifting a closed-at-zero round to month 4 made it "closing in the future", so the model
+    // paid the Series A into the balance a second time. Recorded cash then overrode the month, the
+    // anchor offset absorbed the phantom $4M, and the demo's runway fell from 19.97 to 15.30 months for
+    // no reason a reader could see. Month zero means "already true" for rounds exactly as it does for
+    // rent.
+    rounds: (built.rounds || []).map(r => ({ ...r, closeMonth: shiftStart(r.closeMonth) })),
+    commitments: (built.commitments || []).map(c => ({ ...c, signedMonth: shiftStart(c.signedMonth), payMonth: shiftDated(c.payMonth) })),
+    projects: (built.projects || []).map(pj => ({
+      ...pj,
+      startM: shiftStart(pj.startM), endM: shiftEnd(pj.endM),
+      lines: pj.lines ? shiftLines(pj.lines) : pj.lines,
+      grant: pj.grant ? {
+        ...pj.grant,
+        periods: (pj.grant.periods || []).map(x => ({ ...x, start: shiftStart(x.start), end: shiftEnd(x.end) })),
+        milestones: (pj.grant.milestones || []).map(x => ({ ...x, month: shiftDated(x.month) })),
+      } : pj.grant,
+    })),
+    cash: openingCash,
+    history: ledger.map((v, m) => ledgerMonth(m, v, mix)),
+    cashActuals,
+  } : {};
+
   return {
     ...emptyDoc(),
-    startY: now.getFullYear(), startM: now.getMonth(),
+    startY: start.getFullYear(), startM: start.getMonth(),
     // `it` marks the document as a demo for the banner and the save guard.
     it: "demo",
     demoId: a.id,
     ...built,
+    ...shifted,
   };
 };
 

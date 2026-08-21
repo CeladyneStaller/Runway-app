@@ -78,13 +78,20 @@ export const monthsShown = (doc) => {
   try {
     const model = buildModelFromDoc(doc);
     const T = doc.settings?.toggles || {};
+    // ⚠️ ANCHORED, BECAUSE THE DASHBOARD DRAWS ANCHORED CURVES. `RunwayChart` fits its window to the
+    // UPSIDE crossing, and the rows it is handed have already been anchored to recorded cash. Deriving
+    // the same window from the RAW projection gives a different crossing the moment a document has
+    // actuals — and it did: adding four recorded months to the demos made this read 18 where the chart
+    // drew 19. Invisible until then, because no fixture had a single recorded month.
+    const anchor = (rs) => anchorToActuals(rs, doc.cashActuals || {}, doc.settings?.anchorActuals !== false);
+    const rows = anchor(buildProjection(model, T));
     // The UPSIDE crossing, exactly as the dashboard uses: the window has to contain the date the
     // company is working toward, not just the one it is running from.
-    const up = buildProjection(model, { ...T, speculative: true });
+    const up = anchor(buildProjection(model, { ...T, speculative: true }));
     const zeroUp = zeroInfo(up, doc.startY, doc.startM, forecastFrom(doc));
     const ms = [...(doc.milestones || []), ...roundMS(doc.rounds, doc.startY, doc.startM)];
     const lastMsT = Math.max(0, ...ms.map((m) => {
-      const b = balanceAtDate(up, doc.startY, doc.startM, m.y, m.m, m.day);
+      const b = balanceAtDate(rows, doc.startY, doc.startM, m.y, m.m, m.day);
       return b ? b.t : 0;
     }));
     v = chartWindow({ rowCount: up.length, zeroUpT: zeroUp?.t || 0, lastMilestoneT: lastMsT, override });

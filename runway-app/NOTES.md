@@ -8218,3 +8218,106 @@ cannot be responsible.
 17 assertions, TZ=UTC and TZ=America/Denver.
 
 FAMILIES A-E COMPLETE. C is covered by neteffect.test.js (five surfaces from one perturbation).
+
+## Demo companies now carry four recorded months (DEMO_BACKFILL)
+
+Every archetype started in the month it was loaded, so month zero was always today and there was NO
+recorded past. `burnVariance` measures scatter from `history`, so it read 0.000 in all four — the COST
+half of the confidence band had never appeared in a demo. Two of the four had no tier spread either, so
+floor/expected/ceiling landed on one number and the chart drew its "no range" note instead of a band.
+
+`demoDoc` now starts `DEMO_BACKFILL = 4` months back (built through a Date so a January load wraps the
+year), attaches a per-archetype `ledger`, and derives `cashActuals` from it. Opening cash is
+`built.cash + sum(ledger)`, so walking the balance down by the ledger lands on the archetype's declared
+cash TODAY — every archetype still declares the one number a reader checks, and it is exact in all four.
+
+    archetype        cv      spread   runway   band drawn
+    grant-startup   0.067     0.69     4.74      yes  (was: no band at all)
+    hardware-vc     0.061     3.81    19.29      yes
+    nonprofit       0.036     0.66     8.42      yes  (was: no band at all)
+    saas            0.073     7.90    12.23      yes
+
+⚠️ THREE MONTH-INDEX RULES, EACH LEARNED BY BREAKING SOMETHING.
+
+1. NOT EVERYTHING SHIFTS. Month 0 means "already running" — rent, consumables, insurance and existing
+   staff were being paid in April too, so they stay. A start ABOVE zero is a dated plan and moves by 4
+   to hold its CALENDAR month. Shifting uniformly leaves the four new months empty; not shifting at all
+   pulls the whole future four months earlier.
+2. `deliveryMonth ?? 0` ON POs. `poPaidMonth` reads `(po.deliveryMonth || 0) + poLag`, so an ABSENT
+   delivery already means month zero. Preserving the undefined left two hardware POs paying $1,057,000
+   into the recorded months against a ledger that says the company only spent.
+3. `shiftStart`, NOT `shiftDated`, ON ROUND closeMonth. `compileInstrument` treats a closed round with
+   `closeMonth <= 0` as ALREADY BANKED and emits no draw. Shifting closed-at-zero to month 4 made it
+   "closing in the future" and paid the Series A in a second time.
+
+⚠️ AND THE LEDGER'S TRAILING-THREE MEAN MUST STAY AT OR BELOW `itemizedOpex`. `derivedBurn` is the
+trailing-3 mean and `baselineOpex = max(0, derivedBurn − itemizedOpex)` back-fills the excess as an
+extra recurring cost for the whole horizon. A first draft put hardware-vc's ledger above its itemised
+total and silently added $61,175/month, cutting its runway from 19.97 to 15.30. All four now back-fill 0.
+
+⚠️ I ALSO COMPARED THE WRONG TWO NUMBERS FOR AN HOUR. The "before" runways I was checking against
+(5.42 / 19.97 / 9.08 / 10.72) are `zero.months` — from MODEL START. The new figures are `fromNow` —
+from today, and it is the 21st. Measured like for like, grant-startup, hardware-vc and nonprofit are
+IDENTICAL before and after, same zero date to the day. Nothing regressed; I was reading two different
+measures off two different documents.
+
+⚠️ SAAS IS THE ONE GENUINE CHANGE AND IS NOT FINISHED. Its MRR compiles from month 0 regardless of the
+start, so backdating gave the population four extra months to grow. `startCustomers` back-solved to
+176/41/5 puts MRR today at $22,245 against $21,856 — 1.8% high, limited by Enterprise being 5 whole
+customers at $890. Runway reads 12.23.
+
+⚠️ TWO THINGS I GOT WRONG CHASING THIS, BOTH RECORDED SO THE NEXT ATTEMPT DOES NOT REPEAT THEM.
+
+1. I QUOTED 7.83 AS THE BASELINE. It was measured against the ALREADY-EDITED archetype (176/41/5), so
+   it was never the "before" number. The true no-backfill, authored-population figure is **10.03**.
+   Measuring a baseline after editing the thing you are baselining is worth naming as a mistake shape.
+
+2. I BLAMED THE MRR DRIFT, AND IT IS NOT THE CAUSE. Tuning the population DOWN until MRR sits BELOW
+   target still leaves the runway above baseline:
+
+       Solo/Team/Ent   MRR today   runway
+       176/41/5          22,245     12.23      (+1.8% MRR)
+       172/40/4          21,132     10.97      (-3.3% MRR)
+       168/39/4          20,892     10.81
+       160/37/4          20,411     10.45      (-6.6% MRR, still above the 10.03 baseline)
+
+   MRR 6.6% BELOW target still runs 0.4 months LONG. So a second cause is in there and I have not
+   isolated it. The saas ledger runs $4,148 hotter than the model over the four months, which should
+   SHORTEN the runway, not lengthen it — so it is not that either. Do not "fix" this by tuning the
+   population further; the curve says that is the wrong lever.
+
+NEXT STEP, AND IT IS A DIFFERENT LEVER: `saas` products already carry a `start` field AND an `actuals`
+map (`{ month: recorded MRR }`), and `saasBilled` tags months with actuals as `isActual` and forces them
+to `committed`. Recording actual MRR for the four backfilled months is the subscription equivalent of
+the cash ledger, and it makes the past RECORDED rather than derived — which is both more truthful and
+removes the population back-solve entirely. Whether `saasSeries` re-bases its population off the last
+actual needs checking first; if it does not, that is the change to make.
+
+STATE AS SHIPPED: 176/41/5, MRR +1.8%, runway 12.23 against a 10.03 baseline. The demo is coherent and
+the band is right — a wide band on a company near cash-positive is exactly what that archetype is for —
+but the runway figure is 2.2 months longer than before for a reason not yet established.
+
+## `monthsShown` was deriving the window from UNANCHORED curves
+
+The x-axis window test failed on saas: engine said 18, `RunwayChart` drew 19.
+
+`RunwayChart` fits its window to the UPSIDE crossing, and the rows App.jsx hands it are already anchored
+to recorded cash. `monthsShown` rebuilt the same projections from the doc and did NOT anchor them, so
+the two crossings differed the moment a document had actuals — and until the demo backfill landed, NO
+FIXTURE HAD A SINGLE RECORDED MONTH, so the bug had nothing to show itself against.
+
+Fixed by anchoring both projections inside `monthsShown`, using `doc.cashActuals` and
+`doc.settings.anchorActuals`. Also switched `lastMilestoneT` to read `balanceAtDate` off the MAIN rows
+rather than the upside rows, matching what App.jsx computes — `t` is date-derived so the value is the
+same, but the two copies now say the same thing.
+
+⚠️ THE DEMO CHANGE FOUND AN ENGINE BUG. The backfill was demo data only; it exposed a real disagreement
+between two derivations of one window that had been latent since `chartWindow` was extracted. Same
+shape as flag 1 — one number, two derivations — and the same lesson: a fixture with no recorded past
+cannot catch anything about anchoring.
+
+Windows after the fix: canary 12, grant-startup 16, hardware-vc 26, nonprofit 16, saas 19.
+
+Verified TZ=UTC and TZ=America/Denver: 55 assertions each (window equality, every forward-looking chart
+at that width, override still clamping) plus 14 regression assertions on flow.runway containment,
+wording, and headline-inside-range. 0 failures.
