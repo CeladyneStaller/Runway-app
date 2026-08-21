@@ -26,7 +26,17 @@ import { monthTotal } from "./coding.js";
 // freak month (a big one-time payment) doesn't dominate, but otherwise we keep the real scatter.
 // Returns a fraction (0.12 = spend scatters ±12% around its mean). Zero when there isn't enough
 // history to say anything — in which case the cost side adds no width, honestly.
-export function burnVariance(hist, expectedBurn, flagOverrides = {}, method = "trailing") {
+//
+// ⚠️ ONE PARAMETER, BECAUSE ONE IS ALL IT EVER READ. This took `expectedBurn`, `flagOverrides` and
+// `method` and used none of them — they are `burnStats`' arguments, carried over when this was split
+// out of it. Three dead parameters on an exported function are an INVITATION: the next reader assumes
+// they do something, and the obvious "fix" is to wire them up.
+//
+// **Wiring them up would be the bug this function was already fixed for once.** `flagOverrides` and
+// `method` exist to EXCLUDE outliers and stabilise a run-rate; the scatter they remove is exactly what
+// is being measured here (see NOTES.md, "DESIGN BUG the tests caught"). Passing them in is not an
+// improvement, it is the original defect returning through the signature.
+export function burnVariance(hist) {
   let totals = (hist || []).map(h => monthTotal(h)).filter(v => v > 0);
   if (totals.length < 3) return 0;                      // too few points to claim a variance
   // trim the single most extreme month when we have room, so one freak doesn't dominate the CV
@@ -90,10 +100,16 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   const baseModel = buildModelFromDoc(doc, horizon);
 
   // cost-variance factor from measured history
-  const employees = doc.employees || [];
-  const expectedBurn = employees.length
-    ? employees.reduce((a, e) => a + (Number(e.amount) || 0) / 12, 0) : 0;   // rough expected monthly
-  const cv = burnVariance(doc.history, expectedBurn, doc.flagOverrides || {}, doc.settings?.method || "trailing");
+  //
+  // ⚠️ `expectedBurn` WENT WITH THE PARAMETER IT FED, and deleting it rather than keeping it around was
+  // the point: it divided every salary by 12 without checking `e.basis`, so an hourly or monthly-basis
+  // employee was twelfthed a second time, and it counted neither fringe nor raises. `empMonthlyOf` and
+  // `empCostAt` in payroll.js are the resolution that gets those right, and this never used them.
+  //
+  // It never mattered because nothing read the result. **That is the argument for deleting it, not for
+  // keeping it** — a wrong number nobody consumes is one refactor away from being a wrong number
+  // somebody does.
+  const cv = burnVariance(doc.history);
 
   // floor: conservative revenue (committed only) AND historical overspend (costs * 1+cv)
   const floorModel = scaleCosts(baseModel, cv);
@@ -137,12 +153,35 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   const expZero = zeroOf(expModel, expToggles, doc.startY, doc.startM);
   const ceilZero = zeroOf(ceilModel, ceilToggles, doc.startY, doc.startM);
 
-  // how much of the spread is revenue vs cost — for the caption
-  // ⚠️ A FOURTH READER, found only by grepping for the variable rather than by reading the diff.
-  // `Math.abs(object - object)` is NaN, silently — the caption that explains how much of the spread is
-  // revenue rather than cost has been meaningless since the change.
-  const revenueDriven = expZero != null && floorZero != null
-    ? Math.abs(expZero.months - floorZero.months) : null;
+  // ⚠️ `revenueDriven` WAS HERE AND IS GONE. It reported `|expZero − floorZero|` as "how much of the
+  // spread is revenue rather than cost" — but floor differs from expected in BOTH the revenue tier AND
+  // the cost multiplier, so it measured the two together and named one of them. On the canary it read
+  // 0.350 months, which is exactly 0.215 of revenue plus 0.135 of cost.
+  //
+  // NOT REPAIRED, BECAUSE MONTHS CANNOT CARRY IT. An exact decomposition exists and is PATH DEPENDENT.
+  // On the canary with all three tiers on (spread 5.42): peel revenue first and it is 0.19 revenue +
+  // 5.23 cost; peel cost first and it is 0.29 cost + 5.13 revenue. Revenue is 3% or 95% of the SAME
+  // range depending only on the order you peel it in, because runway is a FIRST CROSSING and a shallow
+  // trough moves the date discontinuously. A Shapley average (2.66 / 2.76) describes neither world —
+  // the false precision this module's header refuses.
+  //
+  // **THE HONEST ATTRIBUTION IS IN DOLLARS**, where the balance is linear in both inputs, so it is
+  // exact and path-independent — and derivable from the rows above with no extra projection:
+  //
+  //     width(m) = Σ(ceil.rev − floor.rev)  +  Σ(floor.cost − ceil.cost)
+  //
+  // ⚠️ AND THE SUM STARTS AT THE LAST RECORDED ACTUAL, NOT AT MONTH 0. `anchorToActuals` gives each
+  // curve its OWN offset — the floor sits lower at the last actual, so it takes the larger shift — and
+  // it rewrites only `start`/`end`/`net`, leaving `rev` and `cost` holding raw flows. Summed from month
+  // 0 the identity therefore reconstructs the RAW width, not the drawn one, and misses by a constant
+  // (the raw width at the last actual: $158,168 on the canary) at every month. From the last actual
+  // forward it is exact to the cent, which is also the only range where it MEANS anything: the band has
+  // zero width across recorded months because all three curves are pinned to the same recorded cash.
+  //
+  // So the helper needs the anchor month, not just the band: `bandParts(band, fromMonth)`. That is a
+  // dependency on `cashActuals` this function does not take — the same one the zero-date fix needs —
+  // so build it with that change, not before it, and only once a surface actually reads it. A field
+  // with no reader is what let this one stay wrong.
 
   // band width classification (for the "you depend on uncertain revenue" callout)
   // ⚠️ `.months`, BECAUSE `zeroOf` RETURNS AN OBJECT NOW. I changed it to `{ months, fromNow }` and
@@ -170,6 +209,5 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
     burnCV: cv,
     spread,
     wide,
-    revenueDriven,
   };
 }

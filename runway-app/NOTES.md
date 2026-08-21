@@ -7687,3 +7687,67 @@ which pulls hist/maps from ActualsCtx). Tested in `test/views/projectchart.test.
 - Routing for the ~29 addressable places
 
 `split.py.reference` is the script that produced this from the artifact. Kept for archaeology only.
+
+## `burnVariance` signature narrowed to `(hist)` (dead parameters removed)
+
+`burnVariance(hist, expectedBurn, flagOverrides, method)` read only `hist`. The other three were
+`burnStats`' arguments, carried over when this was split out of it, and never referenced in the body.
+Narrowed to `burnVariance(hist)`; the eight test call sites drop their second argument.
+
+WHY DELETE RATHER THAN WIRE UP. Three dead parameters on an exported function read as capability. The
+obvious "fix" is to pass them through — and `flagOverrides`/`method` exist to EXCLUDE outliers and
+stabilise a run-rate, which is precisely the scatter this function measures. Connecting them would
+reintroduce the design bug the tests already caught once (see "Confidence bands", above). The comment
+now says so at the signature, so the next reader doesn't have to rediscover it.
+
+`expectedBurn` went with it. It divided every salary by 12 without checking `e.basis`, twelfthing an
+hourly or monthly-basis employee twice, and counted neither fringe nor raises — `empMonthlyOf` /
+`empCostAt` are the resolution that gets those right. It never mattered because nothing read the
+result, which is the argument for deleting it: a wrong number nobody consumes is one refactor away
+from being a wrong number somebody does.
+
+PURE SUBTRACTION, VERIFIED. Canary plus all four archetypes × four revenue sets: `burnCV`, `spread`,
+`wide`, `hasRange`, `revenueDriven`, all nine zero fields, and every month's `start` on all three
+curves — 2,500 assertions, zero differences. 16 of 16 canary figures unchanged. band.js 175 -> 172.
+
+A WRITER WITH NO READER — the mirror of the "field with reader and no writer" pattern recorded five
+times below. Same root cause (a change that updated one side of a pair), same detection method (grep
+for the identifier rather than read the diff), and it decays the same way: silently, because nothing
+is checking.
+
+## `revenueDriven` deleted from the confidence band (no reader, and not repairable in months)
+
+`confidenceBand` returned `revenueDriven = |expZero − floorZero|`, described as "how much of the spread
+is revenue vs cost". Two faults. It had NO READER anywhere in src/ or test/ — computed on every call,
+consumed by nothing. And it was wrong: floor differs from expected in the revenue TIER *and* the cost
+multiplier, so it measured both and named one. On the canary it read 0.350 months = 0.215 revenue +
+0.135 cost.
+
+NOT REPAIRED, BECAUSE MONTHS CANNOT CARRY THE ATTRIBUTION. An exact decomposition exists and is PATH
+DEPENDENT. Canary, all three tiers on, spread 5.42: peel revenue first -> 0.19 revenue + 5.23 cost;
+peel cost first -> 0.29 cost + 5.13 revenue. Revenue is 3% or 95% of the same range depending only on
+peel order, because runway is a FIRST CROSSING and a shallow trough moves the date discontinuously.
+Shapley average (2.66 / 2.76) describes neither world — the false precision band.js's header refuses.
+
+THE HONEST FORM IS DOLLARS, where balance is linear in both inputs:
+    width(m) = Σ(ceil.rev − floor.rev) + Σ(floor.cost − ceil.cost)
+⚠️ AND THE SUM STARTS AT THE LAST RECORDED ACTUAL. `anchorToActuals` gives each curve its own offset
+(the floor sits lower at the last actual, so it takes the larger shift) and rewrites only
+start/end/net — `rev`/`cost` still hold RAW flows. Summed from month 0 the identity rebuilds the raw
+width, missing the drawn width by a constant at every month (the raw width at the last actual;
+$158,168 on the canary). From the last actual forward it is exact to the cent. Verified both ways.
+So the helper is `bandParts(band, fromMonth)`, which needs `cashActuals` — the same dependency the
+zero-date fix needs. Build it WITH that change, not before, and only once a surface reads it.
+
+NEW GUARD: `band-invariants.test.js` now pins the exact returned key set. Adding a public field to the
+band is a decision rather than a drive-by — either wire it to a surface or don't return it. This is the
+test whose absence let `revenueDriven` live.
+
+PURE SUBTRACTION, VERIFIED. Canary + 4 archetypes × 4 revenue sets: `burnCV`, `spread`, `wide`,
+`hasRange`, all nine zero fields, and start/end/rev/cost on every month of all three curves —
+2,500 assertions, 0 differences. The anchored floor+ceiling rows forming the drawn polygon are
+identical point for point, so the runway chart does not move a pixel.
+
+A WRITER WITH NO READER, second instance this session (after `burnVariance`'s dead parameters). The
+mirror of the "field with reader and no writer" pattern recorded five times below, and it decays the
+same way: silently, because nothing is checking.

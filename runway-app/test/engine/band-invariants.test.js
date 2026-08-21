@@ -45,12 +45,27 @@ describe("⚠️ confidence band invariants", () => {
     expect(spread(narrow)).toBeLessThan(spread(wide));
   });
 
+  it("⚠️ RETURNS EXACTLY THESE FIELDS, so a new one cannot arrive without a reader", () => {
+    // `revenueDriven` sat here computed on every call, read by nothing, and wrong — it named the
+    // floor-to-expected gap "revenue" when that gap moves the cost multiplier too. Nothing failed,
+    // because nothing looked.
+    //
+    // Pinning the shape makes adding a public field a DECISION rather than a drive-by: if this fails,
+    // either wire the new field to a surface or do not return it. That is the whole guard.
+    const b = confidenceBand(demoDoc("grant-startup"), undefined, ALL);
+    expect(Object.keys(b).sort()).toEqual(
+      ["burnCV", "ceiling", "expected", "floor", "hasRange", "spread", "wide"]);
+    for (const c of ["floor", "expected", "ceiling"]) {
+      expect(Object.keys(b[c]).sort(), c).toEqual(["rows", "zero", "zeroFromNow", "zeroNull"]);
+    }
+  });
+
   it("burn variance is bounded and refuses to guess from too few points", () => {
     const H = (a) => a.map(v => ({ v }));
-    expect(burnVariance(H([100, 110]), 100)).toBe(0);          // two months is not a distribution
-    expect(burnVariance(H([100, 100, 100]), 100)).toBe(0);     // no variance
-    expect(burnVariance(H([0, 0, 0]), 100)).toBe(0);           // mean zero, no division by it
-    expect(burnVariance(H([-100, -110, -90]), 100)).toBe(0);   // credits only
-    expect(burnVariance(H([20, 300, 40, 280, 30, 290]), 100)).toBeLessThanOrEqual(0.4);  // capped
+    expect(burnVariance(H([100, 110]))).toBe(0);          // two months is not a distribution
+    expect(burnVariance(H([100, 100, 100]))).toBe(0);     // no variance
+    expect(burnVariance(H([0, 0, 0]))).toBe(0);           // mean zero, no division by it
+    expect(burnVariance(H([-100, -110, -90]))).toBe(0);   // credits only
+    expect(burnVariance(H([20, 300, 40, 280, 30, 290]))).toBeLessThanOrEqual(0.4);  // capped
   });
 });

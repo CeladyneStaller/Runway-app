@@ -9,7 +9,7 @@ function withToggles(d) { d.settings.toggles = { committed: true, expected: true
 
 describe("burnVariance is measured, not guessed", () => {
   it("returns 0 with too few months to claim a variance", () => {
-    expect(burnVariance([{ month: 0, lines: [{ code: "x", amount: 50000 }] }], 50000)).toBe(0);
+    expect(burnVariance([{ month: 0, lines: [{ code: "x", amount: 50000 }] }])).toBe(0);
   });
   it("is a positive fraction when burn scatters", () => {
     const hist = [
@@ -18,13 +18,13 @@ describe("burnVariance is measured, not guessed", () => {
       { month: 2, lines: [{ code: "x", amount: 50000 }] },
       { month: 3, lines: [{ code: "x", amount: 55000 }] },
     ];
-    const cv = burnVariance(hist, 50000);
+    const cv = burnVariance(hist);
     expect(cv).toBeGreaterThan(0);
     expect(cv).toBeLessThan(0.4);   // clamped
   });
   it("is ~0 when burn is flat", () => {
     const hist = Array.from({ length: 5 }, (_, m) => ({ month: m, lines: [{ code: "x", amount: 50000 }] }));
-    expect(burnVariance(hist, 50000)).toBeCloseTo(0, 3);
+    expect(burnVariance(hist)).toBeCloseTo(0, 3);
   });
 });
 
