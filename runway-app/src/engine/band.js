@@ -51,8 +51,12 @@ function scaleCosts(model, factor) {
     l.kind === "revenue" ? l : { ...l, amount: (Number(l.amount) || 0) * (1 + factor) }) };
 }
 
-const zeroOf = (model, toggles) => {
-  const z = zeroInfo(buildProjection(model, toggles));
+const zeroOf = (model, toggles, startY, startM) => {
+  // ⚠️ THE START DATE, WITHOUT WHICH `fromNow` CANNOT EXIST. `zeroInfo` derives it by turning the month
+  // index into a real date and measuring from today — with no start it has no date to measure, so
+  // `fromNow` came back undefined and fell back to `months`. **The tile showed 4.8 months and a
+  // "5.4 – 5.4" range underneath: the same event, counted from two different days.**
+  const z = zeroInfo(buildProjection(model, toggles), startY, startM);
   // ⚠️ BOTH, BECAUSE THEY MEASURE FROM DIFFERENT ORIGINS. `months` counts from the projection start;
   // `fromNow` counts from today. The runway tile shows `fromNow` in its headline and was showing
   // `months` in its range, so **the range did not contain the number above it** — which reads as an
@@ -116,9 +120,9 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   const expRows = buildProjection(expModel, expToggles);
   const ceilRows = buildProjection(ceilModel, ceilToggles);
 
-  const floorZero = zeroOf(floorModel, floorToggles);
-  const expZero = zeroOf(expModel, expToggles);
-  const ceilZero = zeroOf(ceilModel, ceilToggles);
+  const floorZero = zeroOf(floorModel, floorToggles, doc.startY, doc.startM);
+  const expZero = zeroOf(expModel, expToggles, doc.startY, doc.startM);
+  const ceilZero = zeroOf(ceilModel, ceilToggles, doc.startY, doc.startM);
 
   // how much of the spread is revenue vs cost — for the caption
   const revenueDriven = expZero != null && floorZero != null ? Math.abs(expZero - floorZero) : null;

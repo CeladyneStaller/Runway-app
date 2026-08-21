@@ -210,7 +210,11 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
           indistinguishable from the band being switched off — **and a runway with no range is a fact
           worth stating, not an absence to leave unexplained.** It means every input is committed,
           which is either genuinely true or a model nobody has finished filling in. */}
-      {band && band.hasRange === false && (
+      {/* ⚠️ NOT WHEN AN UPSIDE CURVE IS DRAWN. Ridgeline showed "NO RANGE · EVERY INPUT IS COMMITTED"
+          directly above a dashed speculative line and its shading — **the chart contradicting itself
+          in two places on one screen.** The confidence band and the speculative overlay are separate
+          things, and "no range" is only true when neither is present. */}
+      {band && band.hasRange === false && !upBandArea && (
         <text className="no-halo" x={L} y={T - 8} fontSize="10" fontFamily="var(--fm)"
               letterSpacing="0.06em" fill="var(--muted-2)">
           NO RANGE · EVERY INPUT IS COMMITTED

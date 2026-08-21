@@ -2017,6 +2017,25 @@ Every "zero revenue lines" result I reported early in this was measuring a field
 **and I used two of those results to justify code changes.** The reading was right by accident and the
 reasoning was worthless.
 
+### The screenshots found three more, all in the app rather than the engine
+
+**`hasRange` was computed before anchoring and the anchored rows are what get drawn.** `band.js`
+measured the raw projection; `App`'s memo then re-anchored every curve to recorded cash. **The flag and
+the polygon described two different sets of numbers.** Recomputed from the drawn rows.
+
+**`zeroOf` called `zeroInfo(rows)` with no start date.** Without one there is no date to measure from,
+so `fromNow` came back undefined and fell back to `months` — **the tile read "4.8 mo" above a
+"5.4 – 5.4" range: the same event counted from two different days.** Threading `doc.startY/startM`
+gives 4.74, which matches the headline.
+
+**And Ridgeline printed "NO RANGE · EVERY INPUT IS COMMITTED" directly above a dashed speculative curve
+and its shading.** The confidence band and the speculative overlay are separate things; "no range" is
+only true when neither is present.
+
+**⚠️ THE GREY UNDER TIDEWATER'S LINE IS NOT A BAND** — it is `areaPath`, the gradient between the curve
+and zero, and it has always been there. **It reads as a band because nothing else on that chart did**,
+which is worth remembering before "fixing" it.
+
 ### ⚠️ AND THE BAND WAS FLAT FOR EVERY COMPANY, ALWAYS — the demo data was never the cause
 
     const floorToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)

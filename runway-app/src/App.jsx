@@ -265,11 +265,17 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
     // so the band starts from the same real-cash baseline and its expected curve lands on the line
     // instead of sitting ~$18k off wherever the un-anchored projection happened to be.
     const anchor = (rs) => anchorToActuals(rs, cashActuals, anchorActuals);
+    const floorRows = anchor(b.floor.rows);
+    const ceilRows = anchor(b.ceiling.rows);
     return {
       ...b,
-      floor: { ...b.floor, rows: anchor(b.floor.rows) },
+      // ⚠️ RECOMPUTED FROM THE ANCHORED ROWS, because those are the ones drawn. `band.js` measures the
+      // raw projection; anchoring can pull the curves together, so **the flag and the polygon were
+      // describing two different sets of numbers.**
+      hasRange: floorRows.some((r, i) => Math.abs(ceilRows[i].start - r.start) > 1),
+      floor: { ...b.floor, rows: floorRows },
       expected: { ...b.expected, rows: anchor(b.expected.rows) },
-      ceiling: { ...b.ceiling, rows: anchor(b.ceiling.rows) },
+      ceiling: { ...b.ceiling, rows: ceilRows },
     };
   }, [doc, cashActuals, anchorActuals, toggles.committed, toggles.expected, toggles.speculative]);
 
