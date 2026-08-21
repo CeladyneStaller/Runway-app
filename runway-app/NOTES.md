@@ -8816,3 +8816,41 @@ TWO GUARDS, because one cannot see what the other misses:
     cannot, since a blank code never reaches the list of codes to map
 
 18 ledger lines per demo, 0 unresolved. 40 assertions, both timezones, 0 failures.
+
+## Family C — five surfaces, one crossing, read as DATES
+
+`neteffect.test.js` perturbs a PO and reads five surfaces at one MONTH. This reads the same five as
+RUNWAY FIGURES, which is a different question and the one flag 1 was about: a balance is LINEAR in its
+inputs and a crossing is NOT, so two surfaces can agree on every month's cash and still disagree about
+the date. That is exactly what shipped — "3.8 mo" above a range of "1.9 - 2.7".
+
+The chain, asserted on the canary and all four archetypes:
+
+    floor  <=  committed-only  <=  headline == band expected  <=  ceiling
+
+    fixture         floor  committed  headline  expected  ceiling
+    canary           3.42     3.52       3.81     3.81      4.03
+    grant-startup    4.42     4.71       4.71     4.71      5.00
+    hardware-vc     17.23    17.97      19.29    19.29     20.20
+    nonprofit        8.13     8.42       8.42     8.42      8.68
+    saas             4.39     4.65       9.73     9.73     11.77
+
+⚠️ `headline == expected` IS AN EQUALITY, NOT A TOLERANCE. Post-flag-1 they are the same computation over
+the same rows. A `toBeCloseTo` there would let them drift apart again and call it agreement, which is
+precisely how the tile came to sit outside its own range.
+
+PROVED IT BITES: reverting `anchorActuals` to default false in a throwaway copy gives headline 3.806
+against band expected 2.500 — caught immediately.
+
+PROPAGATION MATRIX, one probe, three tiers, five surfaces, read as dates:
+    committed   revenue moves  floor, committed, headline, expected, ceiling
+    expected    revenue moves  headline, expected, ceiling      (floor and Cash flow read ZERO)
+    speculative revenue moves  nothing                          (grant-startup runs speculative OFF, so
+                                                                 its own ceiling is narrowed too)
+Plus: the chain still holds after each perturbation — movement without ordering would be checking that
+something happened, not that it made sense.
+
+The Cash flow marker is asserted against the committed-only crossing TO ITS PRINTED PRECISION (one
+decimal). Tighter would test the formatter; looser would let the marker drift off the line it belongs to.
+
+43 assertions, both timezones, 0 failures. FAMILIES A-E COMPLETE.
