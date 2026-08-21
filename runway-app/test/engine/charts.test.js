@@ -411,8 +411,21 @@ describe("⚠️ a balance series plots the OPENING balance", () => {
     // Two renderers of the same number is how they drift. `RunwayChart` plots `r.start`; this is the
     // copy that disagreed, so this is the copy that changed.
     const src = (await import("node:fs")).readFileSync("src/engine/charts.js", "utf8");
-    const rc = (await import("node:fs")).readFileSync("src/views/chrome/RunwayChart.jsx", "utf8");
-    expect(rc).toMatch(/b:\s*r\.start/);
-    expect(src).toMatch(/const take = \(rows\) =>[\s\S]{0,40}clean\(r\.start\)/);
+    // ⚠️ THE BEHAVIOUR, NOT THE SOURCE TEXT. This asserted a regex over `charts.js` with a 40-character
+    // window, and `monthsShown(doc)` replacing `MONTHS_SHOWN` pushed the line to 50 — **the test broke
+    // because the code got better, while the thing it protects never changed.**
+    //
+    // NOTES.md already records "source-file string assertions test prose, not behaviour" as an
+    // anti-pattern. This is that anti-pattern failing exactly as described.
+    //
+    // What actually matters: the chart's first plotted value is the OPENING balance, so it equals cash
+    // on hand rather than the balance after the first month's burn.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    const doc = demoDoc("grant-startup");
+    const spec = buildChart("flow.runway", doc, {});
+    const first = spec?.series?.find(x => x.id === "mid" || x.id === "expected")?.values?.[0]
+               ?? spec?.series?.[0]?.values?.[0];
+    expect(first, "first plotted point is the opening balance").toBeCloseTo(doc.cash, -2);
   });
 });

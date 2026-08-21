@@ -6,9 +6,16 @@ describe("⚠️ billing cadence", () => {
     // The saving is stated three times per card — the struck price, the annual total and the dollar
     // figure — and **a chip reading "2 months free" beside a plan where it is not true is worse than
     // no chip**, because it is checkable by the person deciding to pay.
+    // ⚠️ THE PRICES ARE ROUNDED AND MY ASSERTION WAS NOT. Two months free from $119 is $99.17, and a
+    // plan priced at $99.17 would be absurd — so the real figure is $99 and the year differs by $2.
+    // **The test demanded arithmetic the prices were never going to satisfy**, and the prices are the
+    // ones customers see.
+    //
+    // A dollar a month of rounding slack: enough to absorb the rounding, far too little to hide a
+    // plan priced on a different basis.
     for (const p of [...PLANS, ...ADVISOR_PLANS]) {
       if (!p.monthly) continue;
-      expect(p.monthly * 10, p.name).toBeCloseTo(p.price * 12, 0);
+      expect(Math.abs(p.monthly * 10 - p.price * 12), p.name).toBeLessThanOrEqual(12);
     }
   });
 

@@ -18,7 +18,15 @@ describe("⚠️ collectContext is a security boundary", () => {
     // Enough for a reply to say which model, without the reply containing the model.
     const ctx = collectContext({}, { companyName: "Tidewater Restoration Alliance" });
     expect(ctx.company).toBe("Tidewater Restoration Alliance");
-    expect(JSON.stringify(ctx)).not.toMatch(/\d{4,}/);   // no figures anywhere in the payload
+
+    // ⚠️ MY FIRST VERSION BANNED FOUR-DIGIT NUMBERS AND CAUGHT THE YEAR. `2026`, `1024` and the
+    // timestamp are the app version, the viewport and the clock — **the test asserted the absence of
+    // DIGITS, not the absence of DATA**, and would have failed on any machine with a wide screen.
+    //
+    // The boundary is about which KEYS are allowed out, which is what `collectContext` actually
+    // controls. Every value is either a fixed set of strings or a number the app itself generated.
+    const allowed = ["tab", "subtab", "plan", "company", "app", "ua", "viewport", "lang", "at"];
+    expect(Object.keys(ctx).sort()).toEqual([...allowed].sort());
   });
 
   it("survives being called with nothing", () => {
