@@ -39,7 +39,12 @@ describe("the document", () => {
       .toBeCloseTo(5.6, 1);
     // The DEMO is shorter, because it carries five commitments the seed does not.
     const dz = zeroInfo(buildProjection(buildModelFromDoc(d), d.settings?.toggles || {}), d.startY, d.startM);
-    expect(dz.months).toBeCloseTo(3.9, 1);
+    // ⚠️ 3.9 -> 4.2, AND THE OLD NUMBER ENCODED A BUG. `indexedLines` charged the canary's 2% licence
+    // royalty against ALL revenue and tagged the cost `committed`, so with speculative switched OFF the
+    // model still paid $172,200 of royalty on $8.61M of speculative revenue it was not counting. The
+    // royalty is now split per tier, so the speculative share is excluded with the revenue that earned
+    // it, and the runway lengthens by exactly that cost. See NOTES.md.
+    expect(dz.months).toBeCloseTo(4.2, 1);
   });
 });
 

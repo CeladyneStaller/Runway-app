@@ -13,12 +13,12 @@
 // `empty` is a SENTENCE, not a flag. A chart with nothing to draw should say what is missing — "no
 // spend history yet" — rather than render an empty box that looks like a bug.
 
-import { buildProjection, zeroInfo, solvency, anchorToActuals, forecastFrom } from "./projection.js";
+import { buildProjection, zeroInfo, solvency, anchorToActuals, forecastFrom, balanceAtDate } from "./projection.js";
 import { accruedCostShare, outstandingDebt, windDownCost } from "./commitments.js";
 import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, monthRevenue, isCost, lineAmount, lineCode, resolveLine, OVERHEAD } from "./coding.js";
-import { instConf } from "./capital.js";
+import { instConf, roundMS } from "./capital.js";
 import { teamLoad } from "./projects.js";
 import { HRS_YR } from "./payroll.js";
 import { commitmentPressure } from "./commitments.js";
@@ -41,9 +41,60 @@ const MONTHS_SHOWN = 18;
  *
  *  So this reads the setting and falls back to 18 — it never fits.
  */
+/** The x-axis window, as ONE function.
+ *
+ *  ⚠️ `RunwayChart` HAD ITS OWN AND THE ENGINE HAD ANOTHER. The dashboard fitted its window to the
+ *  crossing and the last milestone; every other chart used a flat 18. On the canary that is 12 months
+ *  against 18 — so switching tabs changed the horizon under the reader, and two charts whose VALUES now
+ *  agree at every shared month still disagreed about how much of the future they were showing.
+ *
+ *  The dashboard's rule wins because it is the one people check against, and because it is the better
+ *  rule: a window that ends two months after the crossing shows the thing you opened the chart for.
+ *
+ *  Pure, and takes what it needs explicitly, so `RunwayChart` can call it with the values it already
+ *  has in hand rather than rebuilding a projection to ask the engine.
+ */
+export const chartWindow = ({ rowCount, zeroUpT = 0, lastMilestoneT = 0, override = null }) => (
+  Number.isFinite(override) && override >= 6
+    ? Math.min(rowCount, Math.min(36, Math.round(override)))
+    : Math.min(rowCount, Math.ceil(Math.max((zeroUpT || 0) + 2, (lastMilestoneT || 0) + 2, 12)))
+);
+
+// Deriving the window from a bare doc costs a projection, and `monthsShown` is called several times per
+// chart build. Cached on the doc object itself: documents are replaced rather than mutated here, so a
+// stale entry cannot outlive the doc it describes, and a doc that IS mutated in place simply misses the
+// benefit rather than reading a wrong number... except for `chartHorizon`, which is part of the key.
+const _winCache = new WeakMap();
+
+/** The window for a document, matching what `RunwayChart` will draw. */
 export const monthsShown = (doc) => {
-  const v = Number(doc?.settings?.chartHorizon);
-  return Number.isFinite(v) && v >= 6 ? Math.min(36, Math.round(v)) : MONTHS_SHOWN;
+  const override = Number(doc?.settings?.chartHorizon);
+  if (!doc || typeof doc !== "object") return MONTHS_SHOWN;
+  const key = Number.isFinite(override) ? `h${override}` : "fit";
+  const hit = _winCache.get(doc);
+  if (hit && hit.key === key) return hit.v;
+
+  let v;
+  try {
+    const model = buildModelFromDoc(doc);
+    const T = doc.settings?.toggles || {};
+    // The UPSIDE crossing, exactly as the dashboard uses: the window has to contain the date the
+    // company is working toward, not just the one it is running from.
+    const up = buildProjection(model, { ...T, speculative: true });
+    const zeroUp = zeroInfo(up, doc.startY, doc.startM, forecastFrom(doc));
+    const ms = [...(doc.milestones || []), ...roundMS(doc.rounds, doc.startY, doc.startM)];
+    const lastMsT = Math.max(0, ...ms.map((m) => {
+      const b = balanceAtDate(up, doc.startY, doc.startM, m.y, m.m, m.day);
+      return b ? b.t : 0;
+    }));
+    v = chartWindow({ rowCount: up.length, zeroUpT: zeroUp?.t || 0, lastMilestoneT: lastMsT, override });
+  } catch {
+    // A window is not worth throwing over. Fall back to the flat default rather than taking a chart
+    // down because a milestone had a bad date.
+    v = Number.isFinite(override) && override >= 6 ? Math.min(36, Math.round(override)) : MONTHS_SHOWN;
+  }
+  _winCache.set(doc, { key, v });
+  return v;
 };
 
 const sum = (xs) => xs.reduce((a, b) => a + (Number(b) || 0), 0);

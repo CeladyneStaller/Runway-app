@@ -19,7 +19,31 @@ export const STATUS_LABEL = {
 // diligence. `committed` means contractually obligated or already banked.
 export const INST_CONF = { planning: "speculative", raising: "speculative", committed: "expected", closed: "committed" };
 
-export const instConf = (x) => x.confAuto === false && x.confidence ? x.confidence : (INST_CONF[x.status] || "speculative");
+// ⚠️ ONE STATUS SPINE, FOUR KINDS, AND `committed` MEANS A DIFFERENT DOCUMENT IN EACH. Read the labels
+// in STATUS_LABEL above: at status `committed`, equity says "Term sheet", safe and note say "Signed",
+// and debt says "Commitment letter". Those are not the same promise, and mapping all four to `expected`
+// put a SIGNED CONTRACT in the same tier as a non-binding term sheet.
+//
+// The rule is: a contract or money in the bank is committed.
+//   safe / note — "Signed" is a binding contract. The counterparty owes the money. -> committed.
+//   equity      — a term sheet is non-binding and dies in diligence. UNCHANGED, -> expected.
+//   debt        — "Commitment letter" is deliberately left at `expected`. It binds the lender only
+//                 SUBJECT TO CONDITIONS PRECEDENT: no material adverse change, covenant compliance,
+//                 often a final diligence pass. That is more than a term sheet and less than money in
+//                 the bank, and the spine has no state for it. Leaving it at `expected` follows the
+//                 rule rather than making an exception to it — conditions you have not yet satisfied
+//                 are not a contract you can spend.
+//
+// Per-instrument override still wins: `confAuto === false` pins a tier by hand, and Investment.jsx
+// renders the click-to-pin control for exactly the cases this default gets wrong.
+const INST_CONF_BY_KIND = {
+  safe: { ...INST_CONF, committed: "committed" },
+  note: { ...INST_CONF, committed: "committed" },
+};
+
+export const instConf = (x) => x.confAuto === false && x.confidence
+  ? x.confidence
+  : ((INST_CONF_BY_KIND[x?.kind] || INST_CONF)[x?.status] || "speculative");
 
 export const instLabel = (x) => (STATUS_LABEL[x.kind] || STATUS_LABEL.equity)[x.status] || x.status;
 

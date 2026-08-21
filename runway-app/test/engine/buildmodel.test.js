@@ -20,14 +20,19 @@ describe("buildModelFromDoc reproduces the base pipeline", () => {
     const model = buildModelFromDoc(doc);
     const rows = buildProjection(model, doc.settings.toggles);
     const z = zeroInfo(rows);
-    expect(z.months).toBeCloseTo(3.9, 1);
+    // ⚠️ 3.9 -> 4.2, AND THE OLD NUMBER ENCODED A BUG. `indexedLines` charged the canary's 2% licence
+    // royalty against ALL revenue and tagged the cost `committed`, so with speculative switched OFF the
+    // model still paid $172,200 of royalty on $8.61M of speculative revenue it was not counting. The
+    // royalty is now split per tier, so the speculative share is excluded with the revenue that earned
+    // it, and the runway lengthens by exactly that cost. See NOTES.md.
+    expect(z.months).toBeCloseTo(4.2, 1);
   });
 
   it("responds to a cash change the way a scenario would", () => {
     const doc = demoDoc();
     doc.settings.toggles = { committed: true, expected: true, speculative: false, financing: false };
     const base = zeroInfo(buildProjection(buildModelFromDoc(doc), doc.settings.toggles));
-    expect(base.months).toBeCloseTo(3.9, 1);   // finite base runway
+    expect(base.months).toBeCloseTo(4.2, 1);   // finite base runway — 3.9 before the royalty tier split
     // LESS cash -> shorter runway (raising can go cash-positive/null, so lower to keep it finite)
     const leaner = { ...doc, cash: doc.cash - 200000 };
     const z2 = zeroInfo(buildProjection(buildModelFromDoc(leaner), leaner.settings.toggles));

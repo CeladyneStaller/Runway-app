@@ -7863,3 +7863,133 @@ and `Math.abs(NaN) < 1` is false but `expect` on NaN reads as a real failure —
 compares undefined can pass silently in other shapings. Asserted separately rather than left to luck.
 
 Verified under TZ=UTC and TZ=America/Denver, canary + 4 archetypes: 5 pass, 0 fail each.
+
+## Flag 1, step 7: one x-axis window
+
+TWO RULES EXISTED. `RunwayChart` fitted its window to the crossing and the last milestone; `charts.js`
+used a flat `MONTHS_SHOWN = 18`. On the canary that is 12 against 18 — so the values agreed at every
+shared month and the two tabs still disagreed about how much future they were showing.
+
+`chartWindow({ rowCount, zeroUpT, lastMilestoneT, override })` in charts.js is the single copy. Pure,
+and takes its inputs explicitly so `RunwayChart` passes the values it already holds rather than making
+the engine rebuild a projection to answer. `monthsShown(doc)` derives those inputs from a bare doc and
+calls the same function. THE DASHBOARD'S RULE WON because it is the one people check against and
+because it is the better rule: a window ending two months past the crossing shows the thing you opened
+the chart for.
+
+CACHED ON THE DOC via WeakMap, keyed by `chartHorizon`. `monthsShown` is called several times per chart
+build and now costs a projection. Docs here are replaced rather than mutated, so a stale entry cannot
+outlive its doc; a doc mutated in place misses the benefit rather than reading a wrong number.
+
+WRAPPED IN try/catch. A window is not worth throwing over — a milestone with a bad date falls back to
+the flat default instead of taking every chart down.
+
+⚠️ HISTORY CHARTS ARE EXCLUDED, AND THAT IS NOT AN EXEMPTION. `hist.planvsactual` draws 6 on the canary
+and `hist.rolling` draws 4, because they are bounded by RECORDED months (6 of history; the rolling
+window needs three to produce its first point). A backward-looking chart cannot show 12 months of a
+past that has 6. The rule is "one window for the future", not "one width for everything" — the test
+skips `hist.*` and says why, so nobody later "fixes" it into showing empty columns.
+
+Fitted windows: canary 12, grant-startup 12, hardware-vc 22, nonprofit 12, saas 13.
+
+VERIFIED under TZ=UTC and TZ=America/Denver: 60 assertions each, 0 failures — engine window equals the
+dashboard's on every fixture, every forward-looking month axis is that wide, `chartHorizon` still
+overrides and still clamps to 6..36, and the flow chart's own invariants (line inside band, marker on
+the drawn crossing) survive the new width.
+
+## `indexedLines` billed committed for revenue the gate excluded
+
+It summed EVERY revenue line into one basis and emitted the cost hardcoded `confidence: "committed"`.
+The tier GATE in projection.js worked perfectly and admitted a cost computed from revenue it had just
+excluded. Canary: a 2% licence royalty went $460 -> $8,460 the moment a TERM SHEET existed, and that
+$8,000 landed in a committed-only view whose revenue correctly left the term sheet out. projection.js
+already states the rule — "you never book the cost of a win you haven't counted".
+
+SPLIT, NOT FILTERED, and that is the whole design. `buildModelFromDoc` runs ONCE and `confidenceBand`
+projects that one model under THREE toggle sets, so there is no single set to filter toward. Emit one
+line per tier, let the existing gate admit the matching subset: no change to projection.js, band.js or
+any caller. This is what `syncFulfilStage` already does for fulfilment costs — derive the tier from the
+source rather than asserting one.
+
+- `of: "revenue"` — untagged revenue is SKIPPED, mirroring the gate (`toggles[undefined]` is falsy, so
+  it contributes nothing and must earn no royalty).
+- `of: "project"` — costs usually carry no tier and always count, so their share is emitted UNTIERED:
+  a line that always counts, from lines that always count.
+- `of: "profit"` — revenue by tier, costs by tier or untiered.
+
+⚠️ THE CLAMP IS NOW PER TIER and `max(0,a) + max(0,b) !== max(0,a+b)`. For revenue-indexed royalties
+this is identical in every real case (revenue tiers do not go negative) — verified, all six fixtures
+match the old single-basis total exactly under all tiers on. For `of: "profit"` a tier whose costs
+exceed its revenue used to net against the others and now clamps to zero alone, raising the total.
+Arguably more correct; still a change. `profit` is the one target the split cannot make exactly
+equivalent.
+
+⚠️ A SYMBOL SENTINEL THREW. `UNTIERED` was `Symbol("untiered")` — the obviously-safe choice for a key
+that must not collide with a real tier — and template literals REFUSE Symbols, so the id
+`ixl_${c.id}_${m}_${tier}` threw "Cannot convert a Symbol value to a string" the first time an untiered
+bucket appeared. Now the string `"__untiered"`; the tiers are committed/expected/speculative so a
+double-underscore name cannot collide. Caught by running the tests, not by reading the diff.
+
+Ids now carry the tier. `ixl_${c.id}_${m}` collided the moment one month emitted more than one line.
+
+## `INST_CONF` is kind-aware for safe and note
+
+At status `committed` the labels read: equity "Term sheet", safe/note "Signed", debt "Commitment
+letter". All four mapped to `expected`, putting a BINDING CONTRACT in the same tier as a non-binding
+term sheet. Rule: a contract or money in the bank is committed.
+
+- safe / note "Signed" -> **committed**. It is a contract; the counterparty owes the money.
+- equity "Term sheet" -> expected, UNCHANGED. Non-binding, dies in diligence.
+- debt "Commitment letter" -> expected, DELIBERATELY UNCHANGED. It binds the lender only subject to
+  conditions precedent (no MAC, covenant compliance, often a final diligence pass) — more than a term
+  sheet, less than money in the bank, and the spine has no state for it. Leaving it at `expected`
+  FOLLOWS the rule rather than excepting it: conditions you have not satisfied are not a contract you
+  can spend.
+
+`confAuto === false` still wins; Investment.jsx renders the click-to-pin control for exactly the cases a
+per-kind default gets wrong.
+
+⚠️ NO SHIPPED FIXTURE HAS AN INSTRUMENT AT STATUS `committed` — every one is `closed` or `planning`. So
+nothing moved and no golden value shifted, which also means this ships untested against real data. The
+tests assert the mapping directly for that reason.
+
+VERIFIED. 28 assertions under TZ=UTC and TZ=America/Denver, 0 failures. All six fixtures reproduce the
+old all-tiers royalty total exactly (a first comparison "failed" because MY harness defaulted to
+horizon 60 while buildmodel passes HORIZON — the reproduction was wrong, not the code).
+
+## The royalty tier split moved a golden number: canary 3.9 -> 4.2
+
+Four tests failed on the same value. THE OLD NUMBER ENCODED THE BUG.
+
+The canary carries a 2% licence royalty indexed on revenue, and $8.61M of SPECULATIVE revenue. Under
+the old lumping, the royalty on all of it was emitted as ONE line tagged `committed` — so with the
+canary's shipped toggles (speculative OFF) the model still paid **$172,200** of royalty on revenue it
+was not counting. Split per tier, that share is now excluded along with the revenue that earned it, and
+the runway lengthens by exactly that cost:
+
+    royalty by tier, whole horizon:  committed $16,551 · expected $12,680 · speculative $172,200
+    runway, old lumping: 3.895      runway, split: 4.187
+
+Reproduced both ways in one process to be sure it was the royalty and nothing else.
+
+UPDATED, NOT SUPPRESSED, in band.test.js, buildmodel.test.js (x2) and document.test.js — each with the
+reason inline, because one of those comments read "the golden number, unchanged" and would otherwise
+have become a lie sitting next to a changed number.
+
+⚠️ THE SEED CANARY AT 5.6 IS UNTOUCHED, and structurally cannot move: `seedModel` in test/helpers.js
+carries NO commitments, so `indexedLines` emits nothing for it. The 5.6 golden guards the seed; 4.2 is
+the demo's own number. Two numbers, two fixtures, both still guarded.
+
+⚠️ THIS CHANGES WHAT THE DEMO SHOWS. Anywhere the canary's runway appears outside the test suite —
+screenshots, marketing, the demo experience — now reads 4.2 rather than 3.9.
+
+## A rejected `chartHorizon` now falls to the fit, not to a flat 18
+
+`charts.test.js` asserted `monthsShown({ settings: { chartHorizon: 2 } }) === 18`. `monthsShown` USED TO
+BE the flat 18; it is now the adaptive window `RunwayChart` draws, so an out-of-range override falls
+back to whatever that document fits — 12 for a bare doc.
+
+Re-asserted against the no-setting case rather than a literal: the contract is "an invalid override
+gets no special number of its own", not "an invalid override gets 18". Kept an explicit `not.toBe(2)`
+so the original intent — do not trust a nonsense setting — is still tested. `monthsShown(null)` still
+returns the flat default; there is no document there to fit.

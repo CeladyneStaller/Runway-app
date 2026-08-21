@@ -1,5 +1,6 @@
 // Extracted from RunwayApp.jsx. Behaviour unchanged — see test/engine/golden.test.js.
 import React from "react";
+import { chartWindow } from "../../engine/charts.js";
 import { plotFrame, padFor, RUNWAY_PAD } from "../../engine/plotframe";
 import { money } from "../../engine/money";
 import { dateShort, monthLabel } from "../../engine/time";
@@ -25,9 +26,13 @@ export function RunwayChart({ rows, rowsUp, rowsOp, band, upBand = null, cash,
   // ⚠️ THE WINDOW IS ALREADY ADAPTIVE — it fits the crossing and the last milestone rather than a fixed
   // 18. So "show the full horizon" does not widen a fixed window; it REMOVES the fit, which is a
   // different thing from what the option's first draft assumed and worth saying in its wording.
-  const tMax = months
-    ? Math.min(rows.length, months)
-    : Math.min(rows.length, Math.ceil(Math.max((zeroUp?.t || 0) + 2, lastMsT + 2, 12)));
+  // ⚠️ THE ENGINE OWNS THIS RULE NOW. It lived here and a flat 18 lived in `charts.js`, so the dashboard
+  // showed 12 months where the Cash flow tab showed 18 — two charts whose values agree at every shared
+  // month, disagreeing about how much future they were showing. `chartWindow` is the single copy; this
+  // still passes what it already has rather than making the engine rebuild a projection to ask.
+  const tMax = chartWindow({
+    rowCount: rows.length, zeroUpT: zeroUp?.t || 0, lastMilestoneT: lastMsT, override: months,
+  });
 
   // trace points (t = months elapsed; balance = start-of-month value, plus final end)
   const traceOf = (rs) => {

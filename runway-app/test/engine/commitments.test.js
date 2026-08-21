@@ -22,6 +22,69 @@ const runway = (d) => zeroInfo(rowsOf(d), d.startY, d.startM)?.months ?? null;
 // stopped being when the demo's cash changed — a test about the fixture rather than the behaviour.
 const afterCashOut = (d) => Math.ceil((runway(d) ?? 6) + 3);
 
+describe("⚠️ indexedLines — a royalty is charged per tier, not on everything", () => {
+  const royaltyDoc = (extra = {}) => ({
+    startY: 2026, startM: 0, cash: 100000,
+    commitments: [{ id: "roy", label: "Royalty", flavor: "indexed", kind: "debt", signedMonth: 0,
+      payMonth: null, amount: 0, index: { of: "revenue", ref: null, pct: 0.02 }, status: "committed" }],
+    ...extra,
+  });
+  const lines = [
+    { id: "a", kind: "revenue", cadence: "onetime", amount: 10000, start: 1, confidence: "committed" },
+    { id: "b", kind: "revenue", cadence: "onetime", amount: 40000, start: 1, confidence: "expected" },
+  ];
+
+  it("⚠️ DOES NOT BILL COMMITTED FOR REVENUE THE GATE EXCLUDED", async () => {
+    // This summed every line into one basis and emitted the cost hardcoded `confidence: "committed"`,
+    // so a committed-only view paid a royalty on revenue it had not booked. On the canary a 2% licence
+    // royalty went $460 -> $8,460 the moment a TERM SHEET existed. `projection.js` states the rule this
+    // broke: "you never book the cost of a win you haven't counted".
+    const { indexedLines } = await import("../../src/engine/commitments.js");
+    const out = indexedLines(royaltyDoc(), lines, 6).filter((l) => l.start === 1);
+    const byTier = Object.fromEntries(out.map((l) => [l.confidence, Math.round(l.amount)]));
+    expect(byTier).toEqual({ committed: 200, expected: 800 });
+  });
+
+  it("the total across tiers is what the single basis used to give", async () => {
+    // Splitting must not change the number anyone sees with every tier switched on. It is linear —
+    // pct x basis — so per-tier sums reconstruct the total exactly.
+    const { indexedLines } = await import("../../src/engine/commitments.js");
+    const out = indexedLines(royaltyDoc(), lines, 6).filter((l) => l.start === 1);
+    expect(out.reduce((a, l) => a + l.amount, 0)).toBeCloseTo(50000 * 0.02, 6);
+  });
+
+  it("⚠️ SKIPS UNTAGGED REVENUE, mirroring the gate", async () => {
+    // `toggles[undefined]` is falsy, so an untagged revenue line contributes nothing to the projection
+    // and must earn no royalty. Charging for it would be the same defect pointed the other way.
+    const { indexedLines } = await import("../../src/engine/commitments.js");
+    const out = indexedLines(royaltyDoc(), [
+      { id: "u", kind: "revenue", cadence: "onetime", amount: 90000, start: 1 },
+    ], 6);
+    expect(out).toEqual([]);
+  });
+
+  it("emits an UNTIERED line for cost-indexed obligations, because untagged costs always count", async () => {
+    // `of: "project"` measures spend. Costs usually carry no tier and count under every toggle set, so
+    // their share is emitted untagged too — a line that always counts, from lines that always count.
+    const { indexedLines } = await import("../../src/engine/commitments.js");
+    const doc = royaltyDoc();
+    doc.commitments[0].index = { of: "project", ref: "p1", pct: 0.1 };
+    const out = indexedLines(doc, [
+      { id: "c", kind: "cost", cadence: "onetime", amount: 20000, start: 2, projectId: "p1" },
+    ], 6);
+    expect(out).toHaveLength(1);
+    expect(out[0].confidence).toBeUndefined();
+    expect(out[0].amount).toBeCloseTo(2000, 6);
+  });
+
+  it("ids stay unique once one month emits several tiers", async () => {
+    // `ixl_${c.id}_${m}` collided the moment a month produced more than one line.
+    const { indexedLines } = await import("../../src/engine/commitments.js");
+    const out = indexedLines(royaltyDoc(), lines, 6);
+    expect(new Set(out.map((l) => l.id)).size).toBe(out.length);
+  });
+});
+
 describe("commitments", () => {
   const base = bare();
 

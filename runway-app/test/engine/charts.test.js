@@ -245,6 +245,71 @@ describe("nothing throws, ever", () => {
   });
 });
 
+describe("⚠️ one x-axis window, shared by every forward-looking chart", () => {
+  it("the engine's window is the one RunwayChart draws", async () => {
+    // `RunwayChart` fitted its window to the crossing and the last milestone; `charts.js` used a flat
+    // 18. On the canary that is 12 against 18, so switching tabs changed the horizon under the reader —
+    // two charts whose VALUES now agree at every shared month still disagreed about how much future
+    // they showed. `chartWindow` is the single copy of the rule; this asserts both callers land on it.
+    const { chartWindow, monthsShown } = await import("../../src/engine/charts.js");
+    const { buildProjection, zeroInfo, anchorToActuals, forecastFrom, balanceAtDate } =
+      await import("../../src/engine/projection.js");
+    const { buildModelFromDoc } = await import("../../src/engine/buildmodel.js");
+    const { roundMS } = await import("../../src/engine/capital.js");
+    const { demoDoc: realDemo } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const doc of [demoDoc(), ...ARCHETYPES.map(a => realDemo(a.id))]) {
+      const T = doc.settings?.toggles || {};
+      const model = buildModelFromDoc(doc);
+      const ca = doc.cashActuals || {};
+      const rows = anchorToActuals(buildProjection(model, T), ca, true);
+      const up = anchorToActuals(buildProjection(model, { ...T, speculative: true }), ca, true);
+      const zeroUp = zeroInfo(up, doc.startY, doc.startM, forecastFrom(doc));
+      const ms = [...(doc.milestones || []), ...roundMS(doc.rounds, doc.startY, doc.startM)];
+      const lastMsT = Math.max(0, ...ms.map((m) => {
+        const b = balanceAtDate(rows, doc.startY, doc.startM, m.y, m.m, m.day);
+        return b ? b.t : 0;
+      }));
+      // what the dashboard computes, from the values it has in hand
+      const drawn = chartWindow({
+        rowCount: rows.length, zeroUpT: zeroUp?.t || 0, lastMilestoneT: lastMsT, override: null,
+      });
+      expect(monthsShown(doc), doc.demoId || "canary").toBe(drawn);
+    }
+  });
+
+  it("every forward-looking month axis is that wide", async () => {
+    // ⚠️ HISTORY CHARTS ARE EXCLUDED, AND THAT IS NOT AN EXEMPTION — they are bounded by how many
+    // months are RECORDED, which on the canary is 6 (and 4 for the rolling window, which needs three
+    // months to produce its first point). A backward-looking chart cannot show 12 months of a past that
+    // has 6. The rule is "one window for the future", not "one width for everything".
+    const { CHARTS, buildChart, monthsShown } = await import("../../src/engine/charts.js");
+    const { demoDoc: realDemo } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const doc of [demoDoc(), ...ARCHETYPES.map(a => realDemo(a.id))]) {
+      const w = monthsShown(doc);
+      for (const { id } of CHARTS) {
+        if (id.startsWith("hist.")) continue;
+        let spec;
+        try { spec = buildChart(id, doc); } catch { continue; }
+        if (!spec || spec.empty || !Array.isArray(spec.x)) continue;
+        expect(spec.x.length, `${doc.demoId || "canary"} · ${id}`).toBe(w);
+      }
+    }
+  });
+
+  it("an explicit chartHorizon still overrides the fit", async () => {
+    // "Show the full horizon" does not widen a fixed window — it REMOVES the fit, which is a different
+    // thing, and the option's wording says so. Clamped to 6..36 exactly as before.
+    const { monthsShown } = await import("../../src/engine/charts.js");
+    const base = demoDoc();
+    const withH = (v) => monthsShown({ ...base, settings: { ...base.settings, chartHorizon: v } });
+    expect(withH(24)).toBe(24);
+    expect(withH(99)).toBe(36);
+    expect(withH(3)).toBe(monthsShown(base));   // below the floor: ignored, fit applies
+  });
+});
+
 describe("the cash flow chart marks its own line", () => {
   it("⚠️ PUTS THE MARKER WHERE THE DRAWN LINE CROSSES, not where the headline does", () => {
     // ⚠️ THIS TEST ASSERTED THE OPPOSITE, and its comment said so: "the one chart that restates the
@@ -500,9 +565,17 @@ describe("⚠️ every chart follows the same window", () => {
   });
 
   it("clamps a nonsense setting rather than trusting it", async () => {
+    // ⚠️ A REJECTED OVERRIDE NOW FALLS TO THE FIT, NOT TO A FLAT 18. `monthsShown` used to BE the flat
+    // 18; it is now the same adaptive window `RunwayChart` draws, so an out-of-range `chartHorizon`
+    // falls back to whatever that document fits — which for a bare doc is the 12-month floor. Asserted
+    // against the no-setting case rather than against a literal, because the contract is "an invalid
+    // override gets no special number of its own", not "an invalid override gets 18".
+    //
+    // `null` still returns the flat default: there is no document there to fit.
     const { monthsShown } = await import("../../src/engine/charts.js");
     expect(monthsShown({ settings: { chartHorizon: 999 } })).toBe(36);
-    expect(monthsShown({ settings: { chartHorizon: 2 } })).toBe(18);
+    expect(monthsShown({ settings: { chartHorizon: 2 } })).toBe(monthsShown({ settings: {} }));
+    expect(monthsShown({ settings: { chartHorizon: 2 } })).not.toBe(2);
     expect(monthsShown(null)).toBe(18);
   });
 });

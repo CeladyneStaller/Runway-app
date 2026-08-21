@@ -39,7 +39,12 @@ describe("the band brackets the runway", () => {
 
   it("the expected curve equals the base projection (golden-consistent)", () => {
     const b = confidenceBand(withToggles(demoDoc()));
-    expect(b.expected.zero).toBeCloseTo(3.9, 1)   // the DEMO's runway, not the seed's — the demo carries five commitments;   // the golden number, unchanged
+    // ⚠️ 3.9 -> 4.2, AND THE OLD NUMBER ENCODED A BUG. `indexedLines` charged the canary's 2% licence
+    // royalty against ALL revenue and tagged the cost `committed`, so with speculative switched OFF the
+    // model still paid $172,200 of royalty on $8.61M of speculative revenue it was not counting. The
+    // royalty is now split per tier, so the speculative share is excluded with the revenue that earned
+    // it, and the runway lengthens by exactly that cost. See NOTES.md.
+    expect(b.expected.zero).toBeCloseTo(4.2, 1);   // the CANARY's runway, not the seed's
   });
 
   it("reports the spread between floor and ceiling", () => {

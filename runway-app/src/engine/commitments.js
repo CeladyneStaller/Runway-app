@@ -791,6 +791,12 @@ export function setKind(doc, id, kind) {
  *  only one that terminates — and it is stated in the interface, because a founder reading "5% of
  *  profit" is entitled to know which profit.
  */
+// ⚠️ A STRING, NOT A SYMBOL. This was a Symbol — which reads as the safer choice for a sentinel that
+// must never collide with a real tier — and it threw `Cannot convert a Symbol value to a string` the
+// moment it reached the id template below. Template literals refuse Symbols; `String()` accepts them.
+// The tiers are committed/expected/speculative, so a double-underscore name cannot collide.
+const UNTIERED = "__untiered";
+
 export function indexedLines(doc, lineItems, horizon = 60) {
   const out = [];
   // DERIVED ROYALTIES TOO, not just stored commitments — they come from the capital stack and nobody
@@ -803,27 +809,60 @@ export function indexedLines(doc, lineItems, horizon = 60) {
     const ref = c.index?.ref || null;
 
     for (let m = 0; m < horizon; m++) {
-      let basis = 0;
+      // ⚠️ ONE BASIS PER CONFIDENCE TIER, NOT ONE TOTAL. This summed every line into a single basis and
+      // then emitted the cost hardcoded as `confidence: "committed"` — so a royalty indexed on revenue
+      // charged for revenue the tier gate had EXCLUDED. On the canary a 2% licence royalty went from
+      // $460 to $8,460 the moment a TERM SHEET existed, and that cost landed in a committed-only view
+      // whose revenue correctly left the term sheet out.
+      //
+      // `projection.js` already states the rule this broke: "you never book the cost of a win you
+      // haven't counted, or the revenue of one whose cost you've hidden." Its GATE honoured it; the
+      // AMOUNT did not.
+      //
+      // Splitting here rather than filtering is what makes it work at all: `buildModelFromDoc` runs
+      // ONCE and `confidenceBand` projects that one model under THREE different toggle sets, so there
+      // is no single set to filter toward. Emit a line per tier, let the existing gate admit the
+      // matching subset, and no caller changes. This is what `syncFulfilStage` already does for
+      // fulfilment costs — derive the tier from the source rather than asserting one.
+      const buckets = new Map();
+      const add = (tier, v) => buckets.set(tier, (buckets.get(tier) || 0) + v);
       for (const li of lineItems || []) {
         if (!li || li.start > m || (li.end != null && li.end < m)) continue;
         if (li.cadence === "onetime" && li.start !== m) continue;
         const amt = clean(li.amount);
         if (of === "revenue" && li.kind === "revenue") {
-          if (!ref || li.projectId === ref) basis += amt;
+          // Untagged revenue is SKIPPED, mirroring the gate: `toggles[undefined]` is falsy, so an
+          // untagged revenue line contributes nothing to the projection and must earn no royalty.
+          if (!li.confidence) continue;
+          if (!ref || li.projectId === ref) add(li.confidence, amt);
         } else if (of === "project" && li.kind === "cost") {
-          if (ref && li.projectId === ref) basis += amt;
+          // Costs usually carry NO tier and always count, so their share is emitted untagged too —
+          // a line that always counts, computed from lines that always count.
+          if (ref && li.projectId === ref) add(li.confidence || UNTIERED, amt);
         } else if (of === "profit") {
-          basis += li.kind === "revenue" ? amt : -amt;
+          if (li.kind === "revenue") { if (li.confidence) add(li.confidence, amt); }
+          else add(li.confidence || UNTIERED, -amt);
         }
       }
-      const amount = Math.max(0, basis) * pct;
-      if (amount <= 0.005) continue;
-      out.push({
-        id: `ixl_${c.id}_${m}`, label: c.label || "Indexed commitment",
-        cadence: "onetime", kind: "cost", amount, start: m,
-        confidence: "committed", projectId: c.projectId || undefined,
-        indexedFrom: c.id,
-      });
+      for (const [tier, basis] of buckets) {
+        // ⚠️ THE CLAMP IS NOW PER TIER, and `max(0,a) + max(0,b) !== max(0,a+b)`. For a royalty on
+        // REVENUE this is identical in every real case, because revenue tiers do not go negative
+        // (verified on the canary: $180 committed + $280 expected = the $460 the single basis gave).
+        // For `of: "profit"` a tier whose costs exceed its revenue used to net against the others and
+        // now clamps to zero on its own, which raises the total. That is arguably the more correct
+        // reading — a tier you are not counting should not reduce an obligation — but it IS a change,
+        // and `profit` is the one target where the split cannot be made exactly equivalent.
+        const amount = Math.max(0, basis) * pct;
+        if (amount <= 0.005) continue;
+        out.push({
+          // The tier is part of the id: without it three lines a month collide on one key.
+          id: `ixl_${c.id}_${m}_${tier}`, label: c.label || "Indexed commitment",
+          cadence: "onetime", kind: "cost", amount, start: m,
+          confidence: tier === UNTIERED ? undefined : tier,
+          projectId: c.projectId || undefined,
+          indexedFrom: c.id,
+        });
+      }
     }
   }
   return out;
