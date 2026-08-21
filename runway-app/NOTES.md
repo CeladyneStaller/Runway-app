@@ -2017,6 +2017,26 @@ Every "zero revenue lines" result I reported early in this was measuring a field
 **and I used two of those results to justify code changes.** The reading was right by accident and the
 reasoning was worthless.
 
+### ⚠️ AND THE BAND WAS FLAT FOR EVERY COMPANY, ALWAYS — the demo data was never the cause
+
+    const floorToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)
+                                 : T(true, false, false);
+
+`App` passes a `revenue` argument, and **all three tiers used it verbatim** — floor, expected and
+ceiling became the same curve. **The band had zero width by construction, for every company, however
+uncertain its income.**
+
+The argument exists so a chart showing only committed revenue does not draw a ceiling from money the
+reader switched off. That means **INTERSECTING each tier with what the caller allows, not overwriting
+the tier with it.** Now `allow(c, e, sp)` does exactly that.
+
+**⚠️ I VERIFIED THE FIX BY CALLING `confidenceBand(doc)` WITH ONE ARGUMENT AND THE APP CALLS IT WITH
+THREE.** Every band width I reported as proof was measured through a path the product never takes. The
+demo-data work was all real and all necessary — **and it would have shown nothing without this.**
+
+Verified through the real call shape: all four demos wide, and Ridgeline collapses to $0 when
+speculative is switched off, so the argument still does its job.
+
 ### The "Nothing in the model yet" screen — found, and it was mine
 
 **Corey found it: a demo open when a patch deploys.** The page reloads on the new bundle, there is no

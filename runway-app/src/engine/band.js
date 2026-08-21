@@ -94,16 +94,23 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
   // floor: conservative revenue (committed only) AND historical overspend (costs * 1+cv)
   const floorModel = scaleCosts(baseModel, cv);
   // WITH an explicit revenue set, all three curves share it and only the COSTS move.
-  const floorToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)
-                               : T(true, false, false);
+  // ⚠️ `revenue` NARROWS THE BAND, IT DOES NOT REPLACE IT. This used the caller's toggles for ALL
+  // THREE tiers, so floor, expected and ceiling became the same curve and **the band had zero width by
+  // construction — for every company, regardless of how uncertain its income was.**
+  //
+  // The argument exists so a chart showing only committed revenue does not draw a ceiling from money
+  // the reader has switched off. That means INTERSECTING each tier with what the caller allows, not
+  // overwriting the tier with it.
+  const allow = (c, e, sp) => T(c && (revenue ? !!revenue.committed : true),
+                                e && (revenue ? !!revenue.expected : true),
+                                sp && (revenue ? !!revenue.speculative : true));
+  const floorToggles = allow(true, false, false);
   // expected: the base case — committed+expected revenue, costs as-is
   const expModel = baseModel;
-  const expToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)
-                             : T(true, true, false);
+  const expToggles = allow(true, true, false);
   // ceiling: optimistic revenue (+speculative) AND on-plan-or-better spend (costs * 1-cv)
   const ceilModel = scaleCosts(baseModel, -cv);
-  const ceilToggles = revenue ? T(revenue.committed, revenue.expected, revenue.speculative)
-                              : T(true, true, true);
+  const ceilToggles = allow(true, true, true);
 
   const floorRows = buildProjection(floorModel, floorToggles);
   const expRows = buildProjection(expModel, expToggles);
