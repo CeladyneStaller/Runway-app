@@ -202,11 +202,16 @@ export const canaryDoc = () => ({
  *  Four is the number because it is what a real ledger looks like at this stage and because it keeps
  *  every archetype's declared `cash` meaning "cash on hand TODAY" rather than at some notional start.
  *
- *  ⚠️ FOUR IS ALSO BELOW `burnVariance`'s TRIMMING THRESHOLD, which is five. With four points nothing is
- *  discarded, so no month in a ledger below may be an outlier — one extreme figure would dominate the
- *  variance instead of being trimmed as the equipment purchase it represents.
+ *  ⚠️ SIX, NOT FOUR, AND THE THRESHOLD IS WHY. `burnVariance` trims the single most extreme month only
+ *  when there are five or more points. At four, nothing is discarded and one equipment purchase
+ *  dominates the variance instead of being recognised as the one-off it is — so a four-month ledger has
+ *  to be artificially smooth. At six, every archetype's ledger can carry a real outlier and have it
+ *  handled, which is both truer data and a demonstration of the trimming.
+ *
+ *  Six also gives `hist.rolling` four points instead of two — it needs three months before it can
+ *  produce its first value at all.
  */
-const DEMO_BACKFILL = 4;
+const DEMO_BACKFILL = 6;
 
 /** Shift a month index that belongs to a DATED FUTURE EVENT.
  *
@@ -262,7 +267,39 @@ export const demoDoc = (which = "grant-startup") => {
     bal -= ledger[m] || 0;
   }
 
+  // ⚠️ SAAS IS BACK-SOLVED HERE, NOT AUTHORED PRE-DIVIDED. `compileSaas` runs from the product's own
+  // `start` (0 = already trading), NOT from the document's start, so backdating hands the subscription
+  // book extra months to compound. `saasBilled` only maps over months from `start` onward, so setting
+  // `start: DEMO_BACKFILL` would delete the recorded months instead of recording them, and
+  // `rebaseFromActuals` is deliberately a user action rather than something the compiler applies.
+  //
+  // So the model has to begin `DEMO_BACKFILL` months ago with a SMALLER book that grows into the
+  // authored one. EVERY COMPOUNDING FIELD divides back, not just the population: `newPerMonth` grows at
+  // `newGrowthPct` and `arpu` at `arpuGrowthPct` from month 0 too. Correcting `startCustomers` alone
+  // left the model acquiring 8% faster than authored and cost two months of runway — the bug took two
+  // passes to find because the population looked right.
+  //
+  // Doing it here rather than in the archetype keeps the authored numbers READABLE (210 customers, 14 a
+  // month) and keeps them correct if `DEMO_BACKFILL` ever changes.
+  const backSolveSaas = (list) => (list || []).map((x) => {
+    const g = 1 + (Number(x.newGrowthPct) || 0) / 100;
+    const ag = 1 + (Number(x.arpuGrowthPct) || 0) / 100;
+    const churn = Math.min(1, Math.max(0, (Number(x.churnPct) || 0) / 100));
+    const newPerMonth = (Number(x.newPerMonth) || 0) / Math.pow(g, DEMO_BACKFILL);
+    // Walk the authored population backwards through the same recurrence `saasSeries` walks forwards.
+    // ⚠️ THE EXPONENT IS `k` AT STEP `k`, AND THE INVERSE RUNS K DOWN TO 1 — not K-1 down to 0. Forward
+    // is `c[k] = c[k-1] x (1 - churn) + adds0 x (1 + growth)^k` for k >= 1, so inverting step k uses
+    // growth^k. Off by one here and the book lands 1.02 customers heavy, which is invisible on the
+    // population and 1.4% on MRR.
+    let n = Number(x.startCustomers) || 0;
+    for (let k = DEMO_BACKFILL; k >= 1; k--) {
+      n = (n - newPerMonth * Math.pow(g, k)) / (1 - churn);
+    }
+    return { ...x, startCustomers: n, newPerMonth, arpu: (Number(x.arpu) || 0) / Math.pow(ag, DEMO_BACKFILL) };
+  });
+
   const shifted = ledger.length ? {
+    saas: backSolveSaas(built.saas),
     lines: shiftLines(built.lines),
     employees: (built.employees || []).map(e => ({ ...e, start: shiftStart(e.start), end: shiftEnd(e.end) })),
     // ⚠️ `?? 0` ON DELIVERY, BECAUSE AN ABSENT DELIVERY MONTH IS NOT AN ABSENT DATE. `poPaidMonth` reads

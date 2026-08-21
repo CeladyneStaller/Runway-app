@@ -70,7 +70,7 @@ const RIDGELINE = () => {
   // an extra recurring cost for the whole horizon — spend the ledger shows that nobody itemised. A
   // ledger sitting above the itemised total therefore makes the demo silently more expensive: on
   // hardware-vc a first draft added $61,175 a month and cut its runway from 19.97 to 15.30 months.
-  ledger: [76000, 90000, 79000, 86000],
+  ledger: [78000, 118000, 84000, 90000, 79000, 87000],
   ledgerMix: [0.63, 0.24],
   employees: staff,
   lines: [
@@ -118,12 +118,28 @@ const RIDGELINE = () => {
       id: uid(), type: "grant", name: "State clean-energy match",
       budget: 180000, start: 2, end: 19, lines: [],
       grant: {
-        funder: "State Energy Office", assumeFunded: true,
+        // ⚠️ `assumeFunded: false`, OR THE COST SHARE IS CHARGED WITH NO AWARD AGAINST IT. With it TRUE the
+        // revenue branch is skipped entirely and `gross` becomes `t.costShare` — so the grant books the
+        // match as spend and reimburses nothing. That is worse than an inert grant: it is a grant that
+        // only costs you money.
+        funder: "State Energy Office", assumeFunded: false,
         reimburseTiming: "arrears", reimburseLagMonths: 1,
         // ⚠️ CASH COST SHARE — money spent that nobody reimburses. It reduces runway exactly like any
         // other cost, which is what distinguishes it from in-kind.
-        costShareType: "cash", costSharePct: 10,
-        periods: [{ id: uid(), start: 2, end: 19 }], milestones: [], categories: null,
+        // ⚠️ A FRACTION, NOT A PERCENT, DESPITE THE NAME. `computeGrant` reads
+        // `federal = total * (1 - costSharePct)`, so `10` here means "match ten times the award" and
+        // produced revenue of MINUS $1,067,384. Invisible for as long as `categories: null` kept the
+        // budget total at zero — the moment this grant compiled anything, it compiled nonsense.
+        costShareType: "cash", costSharePct: 0.10,
+        periods: [{ id: uid(), start: 2, end: 19 }], milestones: [],
+        // Small and long — one chemist's time plus a modest supplies line, so the 10% CASH match is a
+        // real cost the company carries rather than an accounting entry.
+        categories: {
+          personnel: [onGrant(staff[2], 900)],
+          fringe: { byPeriod: [0.30] },
+          supplies: [{ id: uid(), name: "Reagents", period: 0, qty: 1, unitCost: 24000 }],
+          indirect: { base: "total_direct", incremental: false, rates: [{ byPeriod: [0.25] }] },
+        },
       },
     },
     {
@@ -133,7 +149,14 @@ const RIDGELINE = () => {
         funder: "Department of Energy", assumeFunded: false,
         reimburseTiming: "arrears", reimburseLagMonths: 2,
         costShareType: "cash", costSharePct: 0,
-        periods: [{ id: uid(), start: 18, end: 41 }], milestones: [], categories: null,
+        periods: [{ id: uid(), start: 18, end: 41 }], milestones: [],
+        // ⚠️ `stage: "prospective"` PUTS EVERY DOLLAR OF THIS IN THE EXPECTED TIER, which is the point of
+        // carrying a proposal in the model at all — it widens the band without moving the floor.
+        categories: {
+          personnel: [onGrant(staff[1], 1800), onGrant(staff[3], 1600)],
+          fringe: { byPeriod: [0.30] },
+          indirect: { base: "total_direct", incremental: false, rates: [{ byPeriod: [0.45] }] },
+        },
       },
     },
   ],
@@ -158,7 +181,7 @@ const KESTREL = () => ({
   // Hardware burn is lumpy by nature — tooling and long-lead parts land in whole months. Scatter is
   // wider than the others on purpose, and it is the company where the cost half of the band should be
   // the visible half. cv lands near 0.10.
-  ledger: [198000, 226000, 205000, 228000],
+  ledger: [205000, 296000, 212000, 228000, 208000, 224000],
   ledgerMix: [0.55, 0.34],
   employees: [
     emp("Dana Whitfield", "CEO", 190000), emp("Marcus Oyelaran", "CTO", 185000),
@@ -207,18 +230,10 @@ const KESTREL = () => ({
     { id: uid(), kind: "priced", name: "Series A", status: "closed", amount: 6000000, closeMonth: -4,
       capType: "post", cap: 32000000, discount: 0, confAuto: true, goals: [] },
   ],
-  // ⚠️ BACK-SOLVED FOR THE FOUR RECORDED MONTHS — BOTH FIELDS, NOT JUST THE POPULATION. `compileSaas`
-  // runs from month 0 regardless of the document's start, so backdating gives the subscription base four
-  // extra months to grow. Correcting `startCustomers` alone is NOT enough: `newPerMonth` compounds at
-  // `newGrowthPct` from month 0 too, so by today the model was acquiring 8% faster than authored and the
-  // revenue curve pulled steadily ahead — 22/23/25/26/28 became 22/24/26/28/30, worth two months of
-  // runway by the crossing.
-  //
-  // Divided back by (1 + growth)^4, both fields land on their authored values TODAY: 210/64/7 customers
-  // and 14/6/0.5 a month. Fractional counts are fine — `newPerMonth: 0.5` already was one.
-  //
-  // The real fix is a `startM` on saas products so `compileSaas` shifts like everything else. Until
-  // then this is arithmetic, not a fudge, and it is exact.
+  // ⚠️ AUTHORED AS OF TODAY. `demoDoc` divides every compounding field back through `DEMO_BACKFILL`
+  // months so the model begins with a smaller book that grows into exactly these numbers by the time
+  // the demo is opened. Read them as "210 Solo customers right now, adding 14 a month" — the back-solve
+  // is arithmetic in one place, not magic constants here.
   saas: [],
 });
 
@@ -230,21 +245,27 @@ const KESTREL = () => ({
 // ⚠️ ITS BAND IS NARROW ON PURPOSE. Almost no speculative income, so almost no uncertainty — **set
 // beside Ridgeline's wide band it shows what the band actually measures**: not risk in general, but how
 // much of your runway depends on money nobody has promised.
-const TIDEWATER = () => ({
-  name: "Tidewater Restoration Alliance",
-  cash: 612000,
-  // A programme budget held tightly: payroll-dominated, little discretionary spend, so the scatter is
-  // the narrowest of the four. cv near 0.04 — a demonstrably STEADY organisation, which is its own
-  // useful reading of the band.
-  ledger: [88000, 96000, 90000, 95000],
-  ledgerMix: [0.71, 0.16],
-  employees: [
+const TIDEWATER = () => {
+  const staff = [
     emp("Grace Amadi", "Executive Director", 118000), emp("Peter Lund", "Programme Director", 104000),
     emp("Aisha Rahman", "Field Lead", 88000), emp("Diego Serrano", "Restoration Ecologist", 82000),
     emp("Mei Chen", "Restoration Ecologist", 82000), emp("Tomas Herrera", "Field Technician", 62000),
     emp("Nora Blake", "Field Technician", 62000), emp("Ravi Menon", "Grants Manager", 76000),
     emp("Chloe Dubois", "Finance and Admin", 71000),
-  ],
+  ];
+  // Allocated hours per budget period — salary already leaving as payroll, so the award reimburses it
+  // rather than adding new spend. `rate` is filled from each person's own salary.
+  const onGrant = (e, ...hrs) => ({ id: uid(), name: e.name, employeeId: e.id, byPeriod: hrs.map(h => ({ hrs: h })) });
+
+  return {
+  name: "Tidewater Restoration Alliance",
+  cash: 612000,
+  // A programme budget held tightly: payroll-dominated, little discretionary spend, so the scatter is
+  // the narrowest of the four. cv near 0.04 — a demonstrably STEADY organisation, which is its own
+  // useful reading of the band.
+  ledger: [89000, 121000, 91000, 96000, 90000, 94000],
+  ledgerMix: [0.71, 0.16],
+  employees: staff,
   lines: [
     line("Office and field station", 6800, "cost", "recurring", 0, 35),
     line("Vehicles and fuel", 3900, "cost", "recurring", 0, 35),
@@ -287,31 +308,46 @@ const TIDEWATER = () => ({
       id: uid(), type: "grant", name: "Foundation programme support", budget: 400000, start: 0, end: 23,
       lines: [],
       grant: {
-        funder: "Wexler Foundation", assumeFunded: true,
+        funder: "Wexler Foundation", assumeFunded: false,
         // ⚠️ ADVANCE — money arrives BEFORE the spend, which is the opposite shape from arrears and
         // rare enough that people do not believe it until they see it modelled.
         reimburseTiming: "advance", reimburseLagMonths: 0,
         costShareType: "cash", costSharePct: 0,
         periods: [{ id: uid(), start: 0, end: 11 }, { id: uid(), start: 12, end: 23 }],
-        milestones: [], categories: null,
+        milestones: [],
+        // Two years of programme staff time, allocated — so the award reimburses payroll rather than
+        // adding spend, and the ADVANCE timing puts each year's money in before the year is worked.
+        categories: {
+          personnel: [onGrant(staff[1], 900, 900), onGrant(staff[2], 800, 800), onGrant(staff[3], 700, 700)],
+          fringe: { byPeriod: [0.24, 0.24] },
+          indirect: { base: "total_direct", incremental: false, rates: [{ byPeriod: [0.15, 0.15] }] },
+        },
       },
     },
     {
       id: uid(), type: "grant", name: "State habitat programme", budget: 250000, start: 4, end: 27,
       lines: [],
       grant: {
-        funder: "State Coastal Commission", assumeFunded: true,
+        funder: "State Coastal Commission", assumeFunded: false,
         reimburseTiming: "arrears", reimburseLagMonths: 2,
         // ⚠️ IN-KIND — the most misunderstood number on a grant. It appears on the budget as a large
         // figure and **moves no cash at all**, because the staff time it represents is already on
         // payroll. Counting it as spend would charge those salaries twice.
-        costShareType: "inkind", costSharePct: 25,
-        periods: [{ id: uid(), start: 4, end: 27 }], milestones: [], categories: null,
+        costShareType: "inkind", costSharePct: 0.25,
+        periods: [{ id: uid(), start: 4, end: 27 }], milestones: [],
+        // In-kind means the 25% match is staff time already on payroll — it appears on the budget and
+        // moves no cash, which is exactly what `costShareType: "inkind"` encodes in `computeGrant`.
+        categories: {
+          personnel: [onGrant(staff[4], 1600), onGrant(staff[5], 1400), onGrant(staff[6], 1400)],
+          fringe: { byPeriod: [0.24] },
+          indirect: { base: "total_direct", incremental: false, rates: [{ byPeriod: [0.15] }] },
+        },
       },
     },
   ],
   rounds: [], pos: [], saas: [],
-});
+  };
+};
 
 // ── 4 · SaaS startup ─────────────────────────────────────────────────────────────────────────────
 //
@@ -322,7 +358,7 @@ const LARKSPUR = () => ({
   cash: 310000,
   // Small team, mostly salary and hosting, with one month carrying an annual software renewal. cv near
   // 0.08 — its band width should still be dominated by the revenue tiers, not by spend.
-  ledger: [29000, 32000, 30000, 35000],
+  ledger: [30000, 44000, 31000, 34000, 30000, 33000],
   ledgerMix: [0.68, 0.19],
   employees: [
     emp("Rowan Vasquez", "Founder", 96000), emp("Kit Osei", "Engineer", 128000),
@@ -341,12 +377,12 @@ const LARKSPUR = () => ({
   saas: [
     // ⚠️ THE SOLO PLAN IS ROUGHLY FLAT AND SHRINKS IF YOU TOUCH IT. 3.2% monthly churn against 14 new
     // is nearly balanced — **a SaaS demo where every plan grows teaches nothing about what churn does.**
-    { id: uid(), name: "Solo", startCustomers: 181.27, arpu: 29, churnPct: 3.2,
-      newPerMonth: 12.934, newGrowthPct: 2, include: true },
-    { id: uid(), name: "Team", startCustomers: 46.53, arpu: 149, churnPct: 1.8,
-      newPerMonth: 4.936, newGrowthPct: 5, include: true },
-    { id: uid(), name: "Enterprise", startCustomers: 5.46, arpu: 890, churnPct: 0.5,
-      newPerMonth: 0.368, newGrowthPct: 8, include: true },
+    { id: uid(), name: "Solo", startCustomers: 210, arpu: 29, churnPct: 3.2,
+      newPerMonth: 14, newGrowthPct: 2, include: true },
+    { id: uid(), name: "Team", startCustomers: 64, arpu: 149, churnPct: 1.8,
+      newPerMonth: 6, newGrowthPct: 5, include: true },
+    { id: uid(), name: "Enterprise", startCustomers: 7, arpu: 890, churnPct: 0.5,
+      newPerMonth: 0.5, newGrowthPct: 8, include: true },
   ],
   rounds: [
     // ⚠️ `status: "raising"` MAPS TO SPECULATIVE through INST_CONF, so this is the tier toggle's

@@ -8512,3 +8512,58 @@ buildmodel.test.js and document.test.js read RAW projections, so their 4.2 stand
 bracketing invariants hold under the new default: 555 checks, 0 violations.
 
 Verified TZ=UTC and TZ=America/Denver: 40 assertions, 0 failures.
+
+## Demo data, all three cosmetic items
+
+### saas: the back-solve moved OUT of the data and INTO `demoDoc`
+
+`compileSaas` runs from the product's own `start` (0 = already trading), not the document's, so
+backdating hands the book extra months to compound. Setting `start: DEMO_BACKFILL` does NOT work —
+`saasBilled` only maps over months from `start` onward, so it would DELETE the recorded months rather
+than record them. And `rebaseFromActuals` is deliberately a user action, not something the compiler
+applies. So the model has to begin earlier with a smaller book that grows into the authored one.
+
+Now done in `demoDoc`, dividing EVERY compounding field back: `startCustomers` (walked backwards through
+`saasSeries`' own recurrence), `newPerMonth` by (1+newGrowth)^K, `arpu` by (1+arpuGrowth)^K. Archetypes
+author the numbers as of TODAY — 210 customers, 14 a month — which is what a reader can check.
+
+⚠️ AND THE INVERSE IS OFF BY ONE IF YOU ARE NOT CAREFUL. Forward is
+`c[k] = c[k-1] x (1-churn) + adds0 x (1+g)^k` for k >= 1, so inverting step k uses `g^k` and the loop
+runs K down to 1, NOT K-1 down to 0. Got it wrong first: the book landed 1.02 customers heavy —
+invisible on the population, 1.4% on MRR. Now exact: 210.0000 / 64.0000 / 7.0000, MRR $21,856 on target.
+
+### DEMO_BACKFILL 4 -> 6
+
+`burnVariance` trims the most extreme month only at five or more points. At four, nothing is discarded
+and one equipment purchase dominates the variance — so a four-month ledger had to be artificially
+smooth. At six, every ledger carries a real outlier (118k / 296k / 121k / 44k) and has it TRIMMED, which
+is both truer data and a demonstration of the trimming. `hist.rolling` goes from 2 points to 4; it needs
+three months before it produces its first value at all. Demos now start in February.
+
+### The four inert grants now compile
+
+    grant-startup  SBIR Phase II          $398,340 committed
+                   State clean-energy     $106,738 committed   (10% CASH match, real cost)
+                   Phase III proposal     $412,510 EXPECTED    (prospective -> widens the band only)
+    nonprofit      Coastal restoration  $1,800,000 committed   (milestone-billed, already worked)
+                   Foundation support     $303,573 committed   (ADVANCE — money before the work)
+                   State habitat          $156,725 committed   (25% IN-KIND — no cash moves)
+
+All personnel allocated to real staff, so `cashOut` stays ~0 and the awards reimburse payroll rather
+than adding spend. TIDEWATER restructured to bind `staff` first, same as RIDGELINE.
+
+⚠️ TWO PRE-EXISTING DATA BUGS SURFACED THE MOMENT THESE COMPILED ANYTHING.
+
+1. `assumeFunded: true` ON THREE OF THEM. That skips the revenue branch entirely and makes `gross` the
+   COST SHARE — so the grant books the match as spend and reimburses nothing. Worse than inert: a grant
+   that only costs you money. All three flipped to false.
+2. `costSharePct: 10` AND `25` ARE FRACTIONS, NOT PERCENTS, despite the name. `computeGrant` reads
+   `federal = total * (1 - costSharePct)`, so `10` means "match ten times the award" and produced
+   revenue of MINUS $1,067,384 and MINUS $5,015,185. Invisible for as long as `categories: null` kept
+   the budget total at zero — the moment these grants compiled anything, they compiled nonsense.
+   Now 0.10 and 0.25.
+
+FINAL: all four archetypes — cash exact, cv > 0, band drawn, baseline 0, no stray fields, toggle moves
+the runway, every PO paid after booking, every grant reimbursing and none negative, window agrees with
+RunwayChart, flow line inside its band, hist.rolling >= 4 points. 43 assertions, both timezones, 0 fails.
+Runways: grant-startup 4.71, hardware-vc 19.29, nonprofit 8.42, saas 9.73.
