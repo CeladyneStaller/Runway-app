@@ -160,6 +160,14 @@ const RIDGELINE = () => {
       },
     },
   ],
+  // ⚠️ MONTHS FROM TODAY, resolved to calendar dates by `demoDoc`. Targets are the point: a critical
+  // date with no target passes on any non-negative balance, which for a covenant or a payroll buffer is
+  // the wrong question.
+  milestones: [
+    { label: "SBIR drawdown filed", month: 4 },
+    { label: "Board review — raise or cut", month: 6, target: 250000 },
+    { label: "Pilot rig commissioned", month: 10, target: 100000 },
+  ],
   // Planning, not closed — so it follows its confidence tier rather than being certain money.
   // ⚠️ CLOSES BEFORE THE COMPANY RUNS OUT, WHICH IT DID NOT USED TO. At month 9 the SAFE landed AFTER
   // the zero crossing, so switching the speculative tier moved the runway by 0.00 months — while this
@@ -223,6 +231,11 @@ const KESTREL = () => ({
       bookedMonth: 0, deliveryMonth: 5, termsDays: 60, depositPct: 0, confidence: "committed" },
     { id: uid(), customer: "Bay Terminal Authority", ref: "PO-2209", amount: 310000,
       bookedMonth: 3, deliveryMonth: 9, termsDays: 30, depositPct: 0.3, confidence: "expected" },
+  ],
+  milestones: [
+    { label: "Meridian units shipped", month: 3 },
+    { label: "Series B raise decision", month: 9, target: 1500000 },
+    { label: "Bay Terminal acceptance", month: 12, target: 800000 },
   ],
   rounds: [
     { id: uid(), kind: "safe", name: "2024 SAFE", status: "closed", amount: 1200000, closeMonth: -18,
@@ -345,6 +358,11 @@ const TIDEWATER = () => {
       },
     },
   ],
+  milestones: [
+    { label: "Federal Phase 1 report due", month: 3 },
+    { label: "Board reserve floor", month: 8, target: 300000 },
+    { label: "Foundation year-2 renewal", month: 12, target: 150000 },
+  ],
   rounds: [], pos: [], saas: [],
   };
 };
@@ -383,6 +401,11 @@ const LARKSPUR = () => ({
       newPerMonth: 6, newGrowthPct: 5, include: true },
     { id: uid(), name: "Enterprise", startCustomers: 7, arpu: 890, churnPct: 0.5,
       newPerMonth: 0.5, newGrowthPct: 8, include: true },
+  ],
+  milestones: [
+    { label: "Enterprise tier GA", month: 2 },
+    { label: "Seed close or extend", month: 6, target: 180000 },
+    { label: "Cash-flow positive target", month: 14 },
   ],
   rounds: [
     // ⚠️ `status: "raising"` MAPS TO SPECULATIVE through INST_CONF, so this is the tier toggle's

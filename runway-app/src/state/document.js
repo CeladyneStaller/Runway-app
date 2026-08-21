@@ -3,6 +3,7 @@
 // The engine never sees this — it takes plain arrays. That seam is what keeps multi-user cheap.
 import { SEED_LINES, SEED_EMPLOYEES, SEED_PROJECTS, SEED_ROUNDS, SEED_POS_LINKED, SEED_FULFIL, SEED_MILESTONES, HIST, SEED_JOURNAL } from "../seed";
 import { OVERHEAD } from "../engine/coding";
+import { uid } from "../engine/time";
 import { ARCHETYPES, archetypeById } from "./archetypes";
 
 export const SCHEMA_VERSION = 9;
@@ -298,8 +299,23 @@ export const demoDoc = (which = "grant-startup") => {
     return { ...x, startCustomers: n, newPerMonth, arpu: (Number(x.arpu) || 0) / Math.pow(ag, DEMO_BACKFILL) };
   });
 
+  // ⚠️ MILESTONES ARE AUTHORED AS MONTHS FROM TODAY AND CONVERTED HERE. They carry ABSOLUTE calendar
+  // dates (`y`/`m`/`day`) because a critical date is a real date — but hardcoding 2026-12 in an
+  // archetype means the demo quietly fills up with dates in the PAST as months go by. Authoring the
+  // offset and resolving it at build time keeps "two months out" two months out forever.
+  //
+  // Last day of the month, matching `roundMS`, so a milestone is judged on the balance at month end
+  // rather than on its opening balance.
+  const resolveMilestones = (list) => (list || []).map((ms) => {
+    const at = new Date(start.getFullYear(), start.getMonth() + DEMO_BACKFILL + (ms.month || 0), 1);
+    const y = at.getFullYear(), m = at.getMonth();
+    return { id: uid(), label: ms.label, y, m, day: new Date(y, m + 1, 0).getDate(),
+             ...(ms.target != null ? { target: ms.target } : {}) };
+  });
+
   const shifted = ledger.length ? {
     saas: backSolveSaas(built.saas),
+    milestones: resolveMilestones(built.milestones),
     lines: shiftLines(built.lines),
     employees: (built.employees || []).map(e => ({ ...e, start: shiftStart(e.start), end: shiftEnd(e.end) })),
     // ⚠️ `?? 0` ON DELIVERY, BECAUSE AN ABSENT DELIVERY MONTH IS NOT AN ABSENT DATE. `poPaidMonth` reads

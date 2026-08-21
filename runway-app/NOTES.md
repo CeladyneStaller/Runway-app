@@ -8567,3 +8567,42 @@ FINAL: all four archetypes — cash exact, cv > 0, band drawn, baseline 0, no st
 the runway, every PO paid after booking, every grant reimbursing and none negative, window agrees with
 RunwayChart, flow line inside its band, hist.rolling >= 4 points. 43 assertions, both timezones, 0 fails.
 Runways: grant-startup 4.71, hardware-vc 19.29, nonprofit 8.42, saas 9.73.
+
+## Milestones added — and a trade-off they exposed
+
+No archetype had a single milestone, so "Critical dates" — a headline feature — was demonstrated
+nowhere. Three per archetype now, two of them carrying TARGETS (a milestone with no target passes on any
+non-negative balance, which for a covenant or a payroll buffer is the wrong question).
+
+⚠️ AUTHORED AS MONTHS FROM TODAY, RESOLVED TO CALENDAR DATES IN `demoDoc`. Milestones carry absolute
+`y`/`m`/`day` because a critical date IS a real date — but hardcoding 2026-12 in an archetype means the
+demo quietly fills with dates in the PAST as months go by. Authoring the offset keeps "two months out"
+two months out forever. Last day of the month, matching `roundMS`.
+
+⚠️ THE CHART WINDOW WIDENED TO 23-35 MONTHS, AND MILESTONES ARE NOT THE CAUSE. `chartWindow` is
+`ceil(max(zeroUpT + 2, lastMilestoneT + 2, 12))`, and the components are:
+
+    archetype        zeroUp   lastMilestone   window
+    grant-startup      32.2       17.0          35
+    hardware-vc        32.5       19.0          35
+    nonprofit          28.1       19.0          31
+    saas               none       21.0          23
+
+It is `zeroUp` — the UPSIDE crossing — and it moved because the demos now have meaningful speculative
+revenue. ⚠️ AND `monthsShown` COMPUTES `zeroUp` WITH SPECULATIVE FORCED ON, whatever the document's
+toggles say, exactly as `RunwayChart` always has. So the DEFAULT view is now 35 months wide to
+accommodate a scenario the viewer has not switched on, which squashes the near-term detail the demo is
+actually about.
+
+NOT CHANGED, because it is a product decision rather than a defect: either the window should fit what is
+being SHOWN rather than the best case, or the speculative amounts should be smaller. The rule was
+faithfully extracted from `RunwayChart` and this is the first document rich enough to make it bite.
+
+STILL EMPTY on every archetype, all "a feature no demo exercises":
+  `ms.runway`      — reads critical dates from somewhere other than `doc.milestones`; not traced.
+  `proj.load`      — no project carries a `team`, so the team-load view has nothing to draw.
+  `pay.allocation` — hardware-vc and saas have no project labour lines.
+  `inv.goals`      — every round has `goals: []`.
+  `sales.forecast` — wants revenue LINES; POs alone do not satisfy it.
+
+35 assertions, both timezones, 0 failures.
