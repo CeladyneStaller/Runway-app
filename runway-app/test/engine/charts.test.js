@@ -83,11 +83,15 @@ describe("⚠️ flow.runway — known money, not predicted runway", () => {
     // the closed SAFE must land despite financing being off — it is banked money
     expect(closedOnly[8]).toBeGreaterThan(none[8]);
     // ⚠️ AND THE TERM SHEET'S MONEY MUST NOT LAND. Asserted at the model, not on the drawn values,
-    // because of a SEPARATE pre-existing leak this chart is the first surface to expose (see NOTES):
+    // because of a SEPARATE leak this chart is the first surface to expose (see NOTES):
     // `indexedLines` sums its basis over EVERY revenue line regardless of tier, then tags the cost
     // `committed` — so a royalty indexed on revenue charges $8,460 instead of $460 once a term sheet
-    // exists, and that cost reaches a committed-only view whose revenue excluded it. Until that is
-    // fixed, `both` and `closedOnly` differ by the royalty, not by the round.
+    // exists, and that cost reaches a committed-only view whose revenue excluded it. `both` and
+    // `closedOnly` therefore differ by the royalty, not by the round.
+    //
+    // ⚠️ AND THAT ROYALTY IS ALSO WHY THE CLOSED SAFE MOVES THE LINE $490,000 RATHER THAN $500,000 —
+    // 2% of the draw, nothing to do with cost-share matching, which an earlier draft of this comment
+    // wrongly blamed. `costSharePct` is 0 on two of the canary's three grants and does not enter here.
     const revLines = (rs) => buildModelFromDoc({ ...base, rounds: rs, settings })
       .lineItems.filter((l) => l.kind === "revenue" && l.confidence === "committed");
     expect(revLines(both_).map((l) => l.label).sort()).toEqual(revLines([rounds[0]]).map((l) => l.label).sort());

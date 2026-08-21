@@ -7827,7 +7827,9 @@ The committed-only chart is simply the first surface that shows committed revenu
 revenue, which is why it surfaced now. Needs its own decision.
 
 A TEST ASSERTION WAS WRONG BEFORE THE CODE WAS. First draft asserted the closed SAFE moves the line by
-exactly $500,000; it moves it $490,000, because adding non-grant revenue pulls in COST-SHARE matching.
+exactly $500,000; it moves it $490,000. ⚠️ I BLAMED COST-SHARE MATCHING AND THAT WAS WRONG — it is the
+2% licence ROYALTY on the draw, verified later while building family E: 500,000 x 0.02 = 10,000, exactly
+the gap. Two of the canary's three grants carry `costSharePct: 0` and cost share never enters.
 Testing the property (a term sheet contributes no committed revenue) beats testing a number a real
 modelled interaction is entitled to change.
 
@@ -8031,3 +8033,188 @@ entirely; and add-then-remove returns the exact same series, which catches accum
 caching and in-place mutation — worth having now that `monthsShown` memoises on the doc object.
 
 24 assertions, all passing.
+
+## test/engine/neteffect.test.js — family A: net effect across tier × budget × surface
+
+`causality.test.js` perturbs ONE input and checks ONE number. This perturbs a PAIR — a $10,000 purchase
+order and the fulfilment work that serves it — and reads FIVE surfaces at the same month: the dashboard
+line, the Cash flow chart, and the band's floor / expected / ceiling. 70 assertions, 12 scenarios.
+
+The defects worth catching are DISAGREEMENTS BETWEEN SURFACES, not a wrong number on any one of them.
+Every leak this session was one surface moving when another correctly did not.
+
+    tier          seen by
+    committed     runway · flow · floor · expected · ceiling     (all five)
+    expected      runway · expected · ceiling                    (flow and floor read 0)
+    speculative   runway · ceiling                               (three read 0)
+
+Net is always 10000 − fulfilment: $10,000 / $6,000 / $5,000 / $4,000 for no-cost / under / on / over
+budget. Asserted as EXACT INTEGERS INCLUDING THE ZEROS — a surface not entitled to see a transaction
+must move by nothing, not "a little" or "the right way".
+
+⚠️ THE LOAD-BEARING CELL IS `floor` ON AN EXPECTED ROW, AND IT IS ZERO — not −$6,000. If the fulfilment
+cost did not inherit the order's tier, the committed-only floor would book the COST of a win whose
+REVENUE it refused. `syncFulfilStage` stamps the PO's confidence onto the project's lines ("you don't
+buy the materials, or book the engineer, for a quote you haven't won"). PROVED THE TABLE MEASURES THIS:
+unlink the project from its PO — `type: "internal"`, no `poId` — and that cell goes to −$6,000. Both
+values are asserted, so a regression in the stamping cannot pass.
+
+⚠️ AND THE PROBE IS LIVE. The speculative rows read 0 on four surfaces and $5,000 on the ceiling. Without
+that last cell the four zeros would be indistinguishable from the input being dropped entirely.
+
+`flow` tracks `floor` on every row and never `runway`, which is the Cash flow tab's definition holding:
+committed-only regardless of `settings.toggles`. Asserted directly too — switching every tier off cannot
+move it.
+
+FIXTURE IS BARE ON PURPOSE: $300k, $50k/month, no commitments, no cost share, no payroll, no history
+(so burnCV is 0 and the band's cost scaling is the identity). Every figure is an integer checkable by
+hand. The canary would be the WRONG fixture — a 2% royalty rides on its revenue, so $10,000 of order is
+worth $9,800 and the table would be asserting the absence of a feature.
+
+Verified under TZ=UTC and TZ=America/Denver: 70 pass, 0 fail each.
+
+STILL TO BUILD: family B (timing — grant reimbursement lag, PO terms rounding, deposit split), C
+(cross-surface for one change), D (conservation — order independence, superposition, round trip),
+E (second-order — royalty, fringe, cost share, instrument obligations). Family B needs its grant
+fixture arithmetic established first: my probe produced zero line items, so the minimal shape that
+exercises `periods` + `reimburseTiming: "arrears"` is not yet known.
+
+## test/engine/grantlag.test.js — family B: the reimbursement lag
+
+THE PRODUCT'S WHOLE PREMISE HAD NO TEST. A grant-funded organisation spends before it is paid; standard
+runway tools divide cash by burn and miss the hole. Nothing in the suite exercised that end to end,
+because no fixture produced a reimbursement line at all.
+
+TWO FLAGS GATE EVERYTHING and every shipped fixture fails at least one:
+  `categories: null`   -> `C = {}`, every category sums to 0, NO LINES AT ALL.
+  `assumeFunded: true` -> the revenue branch is `else if (!g.assumeFunded)`: NO REVENUE, only cost share.
+⚠️ AND `byPeriod` IS KEYED BY PERIOD INDEX, NOT MONTH. `{ byPeriod: { 0: 600000 } }` is the whole budget
+for period ZERO. Reading it as a month is what produced an empty fixture on the first attempt.
+
+MINIMAL WORKING FIXTURE: `assumeFunded: false`, `reimburseTiming: "arrears"`, one 6-month period,
+`categories: { other: [{ byPeriod: { 0: 600000 } }] }`, `costSharePct: 0`. Compiles exactly two lines —
+a recurring $100,000/month cost across months 0-5 (`cashOut / nMon`) and a one-time $600,000 at
+`periodEnd(p) + lag`.
+
+⚠️ THE LAG EXTENDS TIME UNDERWATER; IT ONLY DEEPENS THE HOLE WHILE SPENDING CONTINUES. Single period,
+spend stops at m5: depth fixes at cumulative spend minus cash and further lag just holds you there.
+  lag 0/1/2/3 -> depth -200k / -300k / -300k / -300k, closes m6 / m7 / m8 / m9
+Two periods, spend runs to m11 so the lag overlaps live spending:
+  lag 0/1/2/3 -> depth -200k / -300k / -400k / -500k   (one month of burn per month of lag)
+That distinction is the answer to "how much worse is net-90 than net-30" and it is not one number.
+
+Also pinned: arrears pays once at periodEnd+lag; advance once at p.start+lag (and REMOVES the hole
+entirely — min balance >= 0 on the same budget); monthly pays six times at each month+lag, same total.
+Cost share leaves the SPEND alone and cuts the reimbursement (20% -> $100k/mo unchanged, $480k back).
+Cost lines carry no tier (spend is owed regardless); revenue lines do, set by STAGE not `assumeFunded`.
+32 assertions, all passing, TZ=UTC and TZ=America/Denver.
+
+## ⚠️ I WAS WRONG ABOUT THE ARCHETYPES, AND THE GUARD IS WHAT CAUGHT IT
+
+I reported "all grant fixtures are inert" after checking only `grant-startup`. FALSE. `nonprofit` ·
+"Coastal restoration — federal" is MILESTONE-BILLED, and that branch reads `g.milestones` rather than
+`g.categories` — so it compiles four reimbursement lines despite `categories: null`, tiered by milestone
+status (accepted -> committed, planned -> expected). The guard I predicted would fail PASSES.
+
+What IS true: all three `grant-startup` grants compile nothing. That archetype's model is nine cost
+lines and one instrument revenue line, none from a grant — the flagship fixture for
+reimbursement-financed organisations demonstrates no reimbursement.
+
+GUARD SHIPPED IN THE WEAK FORM ASKED FOR: at least one archetype, somewhere, produces a reimbursement.
+Green today. It also records the inert list (5 of 6) with a ceiling, so adding another invisible grant
+trips it.
+
+THE STRONG FORM — every archetype that HAS grants has at least one that compiles — FAILS on
+`grant-startup`. Not shipped: it would land a red suite for a demo-data problem, and fixing that data
+changes the archetype's published runway (5.420 today), which is a product decision. One line away when
+that call is made; the failure list is already in the assertion message.
+
+## test/engine/conservation.test.js — family D: what must stay true regardless of arrangement
+
+The other families check a change produces the right NUMBER. This checks the engine has no memory, no
+order sensitivity and no hidden coupling — properties that are invisible until they break, and that
+break silently when systems get wired together.
+
+ORDER INDEPENDENCE. Two lines in either order; and — the one that matters — a line, a purchase order and
+an employee in either order. Those are compiled by three separate functions whose outputs are
+concatenated, and nothing guarantees that is order-insensitive except that none of them reads the list
+it is being appended to.
+
+SUPERPOSITION HOLDS ON BALANCES. Each month is a plain sum of admitted flows, so the effect of A and B
+together is the effect of A plus the effect of B, exactly. If this fails, two line items have started
+influencing each other — a derived baseline, a clamp, a cost-share match — and the place that happens is
+worth knowing immediately.
+
+⚠️ AND SUPERPOSITION IS FALSE ON THE RUNWAY, DELIBERATELY, WITH ITS OWN TEST. Runway is a FIRST
+CROSSING. On a curve that dips, is rescued by a receipt in month 5, and dips again — the shape of every
+reimbursement-financed organisation:
+
+    baseline           2.0 months
+    +$60k cash         3.2 months     (that dollar buys 1.2 months)
+    +$120k cash       10.4 months     (each of those dollars buys 4.2)
+    superposition predicts 4.4.
+
+The second $60k is worth three and a half times the first, because it is the one that carries the
+balance over the trough to the far side where the receipt is waiting. **This is the product's entire
+argument, as an assertion** — runway is not cash over burn, and the marginal value of a dollar depends
+on whether it closes the gap. A tool reporting 4.4 would be wrong in the direction that costs someone
+their company. Pinned so nobody "corrects" the runway into linearity.
+
+The balances under that same curve still superpose exactly — the nonlinearity is entirely in reading a
+crossing off it. Both facts are asserted side by side so neither reads as evidence against the other.
+
+⚠️ THE PIPELINE RUNS ON A DEEP-FROZEN DOCUMENT. Strongest and cheapest form of "does not mutate its
+input": modules are strict mode, so any write to a frozen object throws instead of silently corrupting
+the caller's document. Worth having now that `monthsShown` caches on the doc — a WeakMap keyed by the
+object is fine, a property stashed on it would not be, and only this tells the two apart.
+
+Plus idempotence (same doc twice, including `monthsShown`) and an add-then-remove round trip through
+both the projection and the chart builder.
+
+14 assertions, TZ=UTC and TZ=America/Denver.
+
+REMAINING: family C (cross-surface for a single change — partly covered by neteffect.test.js) and
+family E (second-order: fringe, cost share, instrument obligations, stated explicitly rather than
+absorbed into a tolerance).
+
+## test/engine/secondorder.test.js — family E: name the shortfall, never tolerate it
+
+A $500,000 round does not move the balance $500,000. A $120,000 salary does not cost $10,000 a month. A
+$600,000 award does not pay $600,000 if you matched 20%. Every assertion here takes the form
+
+    the delta equals X minus <a named derived amount>
+
+rather than `toBeCloseTo(X, -3)`. A tolerance wide enough to swallow a royalty is wide enough to swallow
+a bug, and it teaches the next reader the number is approximate when it is exact.
+
+⚠️ THIS FILE EXISTS BECAUSE I GOT ONE WRONG. Building family A I saw a closed $500,000 SAFE move the
+line $490,000 and wrote "cost-share matching" into a test comment. It is the 2% licence ROYALTY —
+500,000 x 0.02 = 10,000, exactly the gap — and two of the canary's three grants carry `costSharePct: 0`
+so cost share never entered. **A plausible name for an unexplained shortfall is worse than none: it
+stops anyone looking.** Comment corrected in charts.test.js, and the wrong claim corrected in this file
+above. Every figure below was measured.
+
+FRINGE. $120,000 salary: $10,000/month at 0%, $13,000 at 30%. Both ends asserted so the RATE is pinned,
+not just the total.
+
+DEBT, $500k. Fees come off the draw — 2% arrives as $490,000, the same $10,000 shape as the royalty from
+an entirely different mechanism, which is exactly why an unexplained $490,000 must never be shrugged at.
+At 12% APR, io 6, term 36, final 10%, close month 3: interest-only $5,000 months 4-9; P&I $19,374 months
+10-39; final $50,000 at month 39. ⚠️ THE FINAL PAYMENT LANDS ON THE SAME MONTH AS THE LAST P&I —
+asserted as `fin.start === pi.end`, because two obligations in one month is the shape that catches
+people out and is why that line exists separately. Fixed-multiple loans divide a total instead:
+500,000 x 1.5 / 48 = $15,625, one line, no rate solved.
+
+COST SHARE. A 20% match does not mean spending 20% more — the spend line does not move at all
+($100,000/month either way) and the reimbursement drops by exactly the match ($600k -> $480k, share
+$120,000). Both halves asserted; asserting only the reimbursement would leave "and the spend rose too"
+open.
+
+ROYALTY. The rate is READ OFF THE DOCUMENT rather than written as 10000, so retuning the royalty makes
+the test follow rather than fail with a stale constant and invite a tolerance. Plus the specific check
+that would have stopped the wrong comment: two of three canary grants match nothing, so cost share
+cannot be responsible.
+
+17 assertions, TZ=UTC and TZ=America/Denver.
+
+FAMILIES A-E COMPLETE. C is covered by neteffect.test.js (five surfaces from one perturbation).
