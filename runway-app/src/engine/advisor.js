@@ -118,7 +118,7 @@ const histTile = (doc, parts) => {
   const hist = (doc.history || []).slice(-6);
   if (!hist.length) return null;
   const rows = rowsOf(doc, parts);
-  const planned = sum(hist.map((_, i) => Math.abs(clean(rows[i]?.out))));
+  const planned = sum(hist.map((_, i) => Math.abs(clean(rows[i]?.cost))));   // `out` never existed
   const actual = sum(hist.map(h => clean(monthTotal(h))));
   const drift = planned ? (actual - planned) / planned : 0;
   const over = Math.abs(drift) > 0.05;

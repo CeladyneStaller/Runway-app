@@ -8854,3 +8854,49 @@ The Cash flow marker is asserted against the committed-only crossing TO ITS PRIN
 decimal). Tighter would test the formatter; looser would let the marker drift off the line it belongs to.
 
 43 assertions, both timezones, 0 failures. FAMILIES A-E COMPLETE.
+
+## Plan-against-actual: two unrelated bugs, both the same family
+
+### 1. "$0 planned" — SEVEN readers of two fields nothing writes
+
+`buildProjection` pushes `{ m, start, rev, cost, net, end, inNonGrant }`. There is no `in` and no `out`.
+Seven places read them:
+
+    charts.js  flow.inout       r.in / r.out        BOTH SERIES FLAT ZERO — the chart drew nothing
+    charts.js  hist.planvsactual rows[i].out        "Planned" flat zero against a real "Actual"
+    charts.js  histVariance      rows[i].out        every code's variance = its full actual
+    charts.js  sales.cover       r.in / r.out       DEFAULT chart on the Sales tab, flat zero
+    charts.js  runwayCover       r.in               understated
+    advisor.js                   rows[i].out        planned total = 0
+    alerts.js                    rows[i].out        the plan-vs-actual alert compared against 0
+
+All now `r.rev` / `r.cost`. `clean(undefined)` returning 0 is what made it silent: a comparison chart
+with nothing to compare, drawn confidently.
+
+⚠️ FIFTH INSTANCE OF THE SHAPE, and the biggest — `p.team` had three readers, this had seven. The
+one-direction detector does NOT catch it: it compares fields the DATA layer authors against the rest of
+the app, and `in`/`out` are authored nowhere. A field READ but never WRITTEN is the other half, and
+regexes cannot see it (a shorthand `{ rev }` is a write that looks like a read). AST-based detection is
+the only thing that would.
+
+### 2. Hover misaligned — bars occupy slots, `indexAt` assumed points
+
+A line's point `i` sits AT `width * i/(n-1)`. A bar's group `i` OCCUPIES `[i, i+1) * width/n` — `Bars`
+lays out `groupW = pw / n` and centres each group half a slot in. The point model gets the CENTRES right
+and every BOUNDARY wrong:
+
+    six bars, 652px:  hover flips at 65 / 196 / 326 / 456 / 587
+                      bar edges are at 109 / 217 / 326 / 435 / 543
+                      off by  -43 / -22 / 0 / +22 / +43 px
+
+So a third of each end bar reported its neighbour. The tooltip named the wrong month while sitting over
+the right one — which reads as "misaligned to the cursor" because it is.
+
+`indexAt(px, { ..., band })` gains a band model, defaulting to POINT so every line, area and stack is
+untouched. `HoverLayer` passes `band: spec.kind === "bars"`. New `xOfIndex` inverts whichever model it
+is given, so the KEYBOARD path places its guide line on the bar rather than on the edge — two models and
+one placement function is how an arrowed guide lands somewhere the tooltip disagrees with.
+
+Tests: every pixel of every bar reads that bar; the point model is unchanged and still the default;
+`xOfIndex` round-trips through `indexAt` in both models; and the three charts carry real data on every
+fixture. 45 assertions, both timezones.

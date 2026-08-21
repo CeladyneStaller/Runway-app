@@ -100,12 +100,28 @@ export function valueAt(spec, i, ctx = {}) {
  *  ⚠️ NEAREST X, NOT NEAREST MARK. Requiring somebody to hit a 2px line is a chart you can only read
  *  with a mouse and good aim — and it makes the touch case impossible rather than merely awkward.
  */
-export function indexAt(px, { left, width, n }) {
+/** @param band  true for BAR charts, whose values occupy slots rather than sitting at points.
+ *
+ *  ⚠️ LINES AND BARS DO NOT SHARE AN X MODEL, AND THIS ASSUMED THEY DID. A line's point `i` sits AT
+ *  `width * i/(n-1)` — first point on the left edge, last on the right. A bar's group `i` OCCUPIES
+ *  `[i, i+1) * width/n`, centred half a slot in. Reading a bar chart with the point model puts the
+ *  centres in the right place and every BOUNDARY in the wrong one: on a six-bar chart 652px wide the
+ *  hover flips 43px away from the bar edge, so a third of each end bar reads as its neighbour.
+ *
+ *  Point-model default, so every line, area and stack keeps today's behaviour exactly.
+ */
+export function indexAt(px, { left, width, n, band = false }) {
   if (!n || n < 1 || !Number.isFinite(px)) return null;
   if (n === 1) return 0;
   const f = (px - left) / (width || 1);
-  return Math.max(0, Math.min(n - 1, Math.round(f * (n - 1))));
+  const raw = band ? Math.floor(f * n) : Math.round(f * (n - 1));
+  return Math.max(0, Math.min(n - 1, raw));
 }
+
+/** Where index `i` sits on the axis, in the same model `indexAt` reads. Used by the keyboard path, so a
+ *  guide line arrowed onto a bar lands ON the bar rather than on its edge. */
+export const xOfIndex = (i, { width, n, band = false }) =>
+  (band ? (width * (i + 0.5)) / Math.max(1, n) : (width * i) / Math.max(1, n - 1));
 
 /** Where the tooltip sits, given the pointer and the box it must stay inside.
  *

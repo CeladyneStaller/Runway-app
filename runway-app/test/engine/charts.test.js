@@ -620,3 +620,56 @@ describe("⚠️ a balance series plots the OPENING balance", () => {
     expect(first, "first plotted point is the opening balance").toBeCloseTo(doc.cash, -2);
   });
 });
+
+describe("⚠️ charts that read the projection read fields it has", () => {
+  it("plan-against-actual plots real planned spend, not zeros", async () => {
+    // ⚠️ `rows[i].out` NEVER EXISTED. `buildProjection` pushes `{ m, start, rev, cost, net, end,
+    // inNonGrant }`, so `clean(undefined)` returned 0 and "Planned" was a flat line at zero against a
+    // real "Actual" — a comparison chart with nothing to compare. SEVEN readers of `r.in`/`r.out`
+    // across charts.js, advisor.js and alerts.js, none of which any writer has ever produced.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { buildProjection } = await import("../../src/engine/projection.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const parts = buildModelParts(doc);
+      parts.rows = buildProjection(parts.model, doc.settings?.toggles || {});
+      const spec = buildChart("hist.planvsactual", doc, parts);
+      const planned = spec.series.find((s) => s.id === "plan").values;
+      expect(planned.some((v) => v > 0), `${a.id}: every planned month is 0`).toBe(true);
+      expect(planned.every((v) => Number.isFinite(v)), a.id).toBe(true);
+    }
+  });
+
+  it("money in and money out are not both flat zero", async () => {
+    // Same phantom fields, and this chart drew NOTHING AT ALL — both series zero on every fixture.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { buildProjection } = await import("../../src/engine/projection.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const id of ["grant-startup", "saas"]) {
+      const doc = demoDoc(id);
+      const parts = buildModelParts(doc);
+      parts.rows = buildProjection(parts.model, doc.settings?.toggles || {});
+      const spec = buildChart("flow.inout", doc, parts);
+      const out = spec.series.find((s) => s.id === "out").values;
+      expect(out.some((v) => v !== 0), `${id}: money out is flat zero`).toBe(true);
+    }
+  });
+
+  it("revenue-as-a-share-of-burn is not flat zero where there is revenue", async () => {
+    // The DEFAULT chart on the Sales tab, chosen because it draws for everybody — and it divided by a
+    // phantom denominator, so the guard returned 0 and it drew for nobody.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { buildProjection } = await import("../../src/engine/projection.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    const doc = demoDoc("saas");
+    const parts = buildModelParts(doc);
+    parts.rows = buildProjection(parts.model, doc.settings?.toggles || {});
+    const spec = buildChart("sales.cover", doc, parts);
+    expect(spec.series[0].values.some((v) => v > 0)).toBe(true);
+  });
+});

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { formatFor } from "../../engine/measures";
-import { valueAt, indexAt, placeTip, rowAt, rowIndexAt } from "../../engine/hover";
+import { valueAt, indexAt, xOfIndex, placeTip, rowAt, rowIndexAt } from "../../engine/hover";
 import { moneyFull } from "../../engine/money";
 
 // ⚠️ UNITS AND FORMATS ARE DIFFERENT VOCABULARIES, and this file had its own third version of the
@@ -25,6 +25,9 @@ const fmtRow = (r, chartFormat) => fmt(r.value, formatFor(r, chartFormat));
  *  ⚠️ ONE OVERLAY, ONE HANDLER. Not a listener per series and no hit-testing in the renderers — the
  *  spec holds every value, so this reads the spec and the drawing is left alone.
  */
+/** Bar-shaped specs put their values in slots. Everything else places them at points. */
+const isBand = (spec) => spec?.kind === "bars";
+
 export function HoverLayer({ spec, box, ctx = {}, format }) {
   const [at, setAt] = useState(null);      // { i, px, py }
   const ref = useRef(null);
@@ -38,7 +41,9 @@ export function HoverLayer({ spec, box, ctx = {}, format }) {
     const px = ((e.clientX - r.left) / (r.width || 1)) * box.w;
     const py = ((e.clientY - r.top) / (r.height || 1)) * box.h;
     const n = spec?.x?.length || spec?.series?.[0]?.values?.length || 0;
-    const i = indexAt(px, { left: 0, width: box.w, n });
+    // ⚠️ BARS OCCUPY SLOTS, LINES SIT AT POINTS. `Bars` lays out `groupW = pw / n` and centres each
+    // group half a slot in; the point model reads the centres correctly and every boundary wrong.
+    const i = indexAt(px, { left: 0, width: box.w, n, band: isBand(spec) });
     // STORED IN VIEWBOX UNITS, and offset back to the canvas for the guide line and the tooltip.
     if (i != null) setAt({ i, px: box.x + px, py: box.y + py });
   }, [spec, box]);
@@ -55,7 +60,8 @@ export function HoverLayer({ spec, box, ctx = {}, format }) {
     e.preventDefault();
     setAt(p => {
       const i = Math.max(0, Math.min(n - 1, (p?.i ?? 0) + d));
-      return { i, px: box.x + (box.w * i) / Math.max(1, n - 1), py: box.y + box.h / 2 };
+      // Same model as the pointer, so an arrowed guide line lands ON the bar rather than on its edge.
+      return { i, px: box.x + xOfIndex(i, { width: box.w, n, band: isBand(spec) }), py: box.y + box.h / 2 };
     });
   }, [spec, box]);
 

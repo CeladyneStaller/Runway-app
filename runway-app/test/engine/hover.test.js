@@ -194,3 +194,41 @@ describe("⚠️ row-shaped charts get a DIFFERENT hover", () => {
     expect(rowIndexAt(999, { top: 10, rowH: 26, count: 5 })).toBeNull();
   });
 });
+
+describe("⚠️ bars occupy slots; lines sit at points", () => {
+  it("every pixel of a bar reads that bar", async () => {
+    // ⚠️ `indexAt` ASSUMED ONE X MODEL FOR EVERY CHART. A line's point `i` sits AT `width * i/(n-1)`;
+    // a bar's group `i` OCCUPIES `[i, i+1) * width/n`. Reading bars with the point model puts the
+    // CENTRES in the right place and every BOUNDARY in the wrong one — on the six-bar plan-against-
+    // actual chart, 652px wide, the hover flipped 43px from the bar edge, so a third of each end bar
+    // read as its neighbour. The tooltip named the wrong month while sitting over the right one.
+    const { indexAt } = await import("../../src/engine/hover.js");
+    const n = 6, width = 652, slot = width / n;
+    for (let i = 0; i < n; i++) {
+      for (const px of [i * slot + 1, (i + 0.5) * slot, (i + 1) * slot - 1]) {
+        expect(indexAt(px, { left: 0, width, n, band: true }), `${px.toFixed(0)}px is in bar ${i}`).toBe(i);
+      }
+    }
+  });
+
+  it("the point model is untouched, and is still the default", async () => {
+    // Every line, area and stack reads this. A band default would have moved all of them.
+    const { indexAt } = await import("../../src/engine/hover.js");
+    const n = 6, width = 652;
+    expect(indexAt(0, { left: 0, width, n })).toBe(0);
+    expect(indexAt(width, { left: 0, width, n })).toBe(n - 1);
+    expect(indexAt(width * 0.9, { left: 0, width, n }))
+      .toBe(indexAt(width * 0.9, { left: 0, width, n, band: false }));
+  });
+
+  it("xOfIndex inverts whichever model it is given", async () => {
+    // The keyboard path places the guide line with this. Two models and one placement function is how
+    // an arrowed guide lands on a bar EDGE while the tooltip reads the bar.
+    const { indexAt, xOfIndex } = await import("../../src/engine/hover.js");
+    const n = 6, width = 652;
+    for (let i = 0; i < n; i++) {
+      expect(indexAt(xOfIndex(i, { width, n, band: true }), { left: 0, width, n, band: true })).toBe(i);
+      expect(indexAt(xOfIndex(i, { width, n }), { left: 0, width, n })).toBe(i);
+    }
+  });
+});

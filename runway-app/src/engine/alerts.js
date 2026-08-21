@@ -74,7 +74,7 @@ const overPlan = (doc, parts) => {
   const rows = rowsOf(doc, parts);
   let run = 0;
   hist.forEach((h, i) => {
-    const planned = Math.abs(clean(rows[i]?.out));
+    const planned = Math.abs(clean(rows[i]?.cost));   // `out` never existed — the row has `cost`
     run = planned > 0 && clean(monthTotal(h)) > planned * 1.05 ? run + 1 : 0;
   });
   if (run < 3) return null;

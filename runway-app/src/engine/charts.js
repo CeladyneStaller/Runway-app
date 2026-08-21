@@ -286,7 +286,7 @@ const flowComposition = (doc, parts) => {
 
   const pay = rows.slice(0, monthsShown(doc)).map((_, i) =>
     sum((parts?.employeeLines || []).map(l => clean(l.amounts?.[i]))));
-  const all = rows.slice(0, monthsShown(doc)).map(r => Math.max(0, -clean(r.net) + clean(r.in || 0)));
+  const all = rows.slice(0, monthsShown(doc)).map(r => Math.max(0, -clean(r.net) + clean(r.rev || 0)));
   const other = all.map((v, i) => Math.max(0, v - pay[i]));
 
   return {
@@ -308,8 +308,11 @@ const flowInOut = (doc, parts) => {
     kind: "bars",
     x: months(doc), ticks: axisTicks(doc),
     series: [
-      { id: "in", label: "Money in", values: rows.map(r => clean(r.in)), tone: "signal" },
-      { id: "out", label: "Money out", values: rows.map(r => -Math.abs(clean(r.out))), tone: "danger" },
+      // ⚠️ `r.rev` / `r.cost`, NOT `r.in` / `r.out`. `buildProjection` pushes
+      // `{ m, start, rev, cost, net, end, inNonGrant }` — there has never been an `in` or an `out`, so
+      // `clean(undefined)` returned 0 and BOTH SERIES of this chart drew a flat nothing.
+      { id: "in", label: "Money in", values: rows.map(r => clean(r.rev)), tone: "signal" },
+      { id: "out", label: "Money out", values: rows.map(r => -Math.abs(clean(r.cost))), tone: "danger" },
     ],
     format: "money",
     // Grant receipts are lumpy and a net line averages them away; this is where a month with nothing
@@ -577,8 +580,12 @@ const salesCover = (doc, parts) => {
   const rows = projectionRows(doc, parts).slice(0, monthsShown(doc));
   if (!rows.length) return { empty: "No projection yet." };
   const values = rows.map(r => {
-    const out = Math.abs(clean(r.out));
-    return out ? Math.min(1.5, clean(r.in) / out) : 0;
+    // ⚠️ `r.cost` / `r.rev`. This read `r.out` and `r.in`, which `buildProjection` has never produced —
+    // so the denominator was 0, the guard returned 0, and "Revenue as a share of burn" was a flat line
+    // at zero. It is the DEFAULT chart on the Sales tab, chosen precisely because it draws for
+    // everybody, and it drew nothing for anybody.
+    const out = Math.abs(clean(r.cost));
+    return out ? Math.min(1.5, clean(r.rev) / out) : 0;
   });
   return {
     kind: "stack",
@@ -924,7 +931,11 @@ const histPlanVsActual = (doc, parts) => {
   const hist = (doc.history || []).slice(-12);
   if (!hist.length) return { empty: "No spend history imported yet." };
   const rows = projectionRows(doc, parts);
-  const planned = hist.map((_, i) => Math.abs(clean(rows[i]?.out)));
+  // ⚠️ `r.rev` / `r.cost`, NOT `r.in` / `r.out`. `buildProjection` pushes
+  // `{ m, start, rev, cost, net, end, inNonGrant }` — there has never been an `in` or an `out`, so
+  // `clean(undefined)` returned 0 and these drew a flat nothing. Six readers of two fields no writer
+  // has ever produced.
+  const planned = hist.map((_, i) => Math.abs(clean(rows[i]?.cost)));
   const actual = hist.map(h => clean(monthTotal(h)));
   return {
     kind: "bars",
@@ -949,7 +960,7 @@ const histVariance = (doc, parts) => {
 
   const byCode = new Map();
   hist.forEach((h, i) => {
-    const plannedMonth = Math.abs(clean(rows[i]?.out));
+    const plannedMonth = Math.abs(clean(rows[i]?.cost));   // `out` never existed — see histPlanVsActual
     const actualMonth = clean(monthTotal(h));
     const share = actualMonth ? (actualMonth - plannedMonth) / actualMonth : 0;
     for (const l of h.lines || []) {
