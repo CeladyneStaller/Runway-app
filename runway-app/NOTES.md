@@ -2017,6 +2017,26 @@ Every "zero revenue lines" result I reported early in this was measuring a field
 **and I used two of those results to justify code changes.** The reading was right by accident and the
 reasoning was worthless.
 
+### The Investment summary hid unconverted SAFEs
+
+`Investment.jsx` maps over `equity` only. A SAFE appears NESTED under the priced round it converts
+into, via `convertsAt` — so **an instrument with nothing to convert into has nowhere to be shown.**
+
+Ridgeline has one SAFE and no priced round, so the summary rendered "No priced round on the timeline"
+while **$3M sat in the model and drove the entire confidence band on the chart below it.**
+
+**Converting instruments with nowhere to convert are not an edge case** — they are the normal state at
+pre-seed, and until a priced round exists they are the ONLY instrument the company has.
+
+Unconverted SAFEs and notes now get their own card, saying what they are waiting for. The three demos
+with genuinely nothing keep the empty state.
+
+**⚠️ AND I INVENTED SEVEN CLASS NAMES FOR THAT CARD** — `rnd`, `rnd-h`, `rnd-n` and four more, none of
+which exist in `styles.css`. Caught by grepping for them before packaging rather than by seeing an
+unstyled card. **Rewritten with `panel`, `panel-h`, `chip` and `num`, which the neighbouring cards
+already use** — the sixth instance this session of writing a second version of something already
+present.
+
 ### Four test failures — three were my tests, one was a real regression
 
 **⚠️ THE REAL ONE: `zeroOf` RETURNS AN OBJECT NOW AND FOUR READERS DID ARITHMETIC ON IT.** I changed it

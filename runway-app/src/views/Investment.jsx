@@ -30,6 +30,9 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
   const equity = sorted.filter(r => r.kind === "equity" && r.status !== "closed");
   const converting = sorted.filter(r => (r.kind === "safe" || r.kind === "note"));
   const debts = sorted.filter(r => r.kind === "debt" && r.status !== "closed");
+  // ⚠️ CONVERTING INSTRUMENTS WITH NO ROUND TO CONVERT INTO. `convertsAt` returns null for these, so
+  // they never appeared under any equity card and the summary had nowhere else to show them.
+  const orphanConv = converting.filter(x => x.status !== "closed" && !convertsAt(x, rounds));
   const allGoals = equity.flatMap(r => (r.goals || []).map(g => ({ ...g, round: r })));
   const slipping = allGoals.filter(g => g.status === "at-risk" || g.status === "not-started");
   const lateGoals = equity.flatMap(r => (r.goals || []).filter(g => (g.dueMonth ?? 0) > (r.closeMonth ?? 0)).map(g => ({ ...g, round: r })));
@@ -135,7 +138,29 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
             </React.Fragment>
           );
         })}
-        {equity.length === 0 && <div className="emptytab">No priced round on the timeline. Add one under <b>Capital stack</b>.</div>}
+        {/* ⚠️ UNCONVERTED SAFES AND NOTES GET THEIR OWN CARDS. The summary maps over `equity` only,
+            and a SAFE appears nested under the priced round it converts into — so **a company whose
+            only instrument is a SAFE saw "No priced round on the timeline" while $3M sat in its
+            model.** That is Ridgeline, and it is the common shape at pre-seed.
+
+            Converting instruments with nowhere to convert are not an edge case; they are the normal
+            state until a priced round exists. */}
+        {orphanConv.map(x => (
+          <div className="panel" key={x.id}>
+            <div className="panel-h">
+              {x.name}
+              <span className="chip">{x.kind === "safe" ? "SAFE" : "Note"}</span>
+            </div>
+            <div>
+              <b className="num">{moneyFull(x.amount)}</b>
+              {" — "}
+              {x.closeMonth != null ? `closes month ${x.closeMonth}` : "no close date set"}
+              {/* Saying what it is waiting for, rather than leaving a card that reads as incomplete. */}
+              {", converts at the next priced round."}
+            </div>
+          </div>
+        ))}
+        {equity.length === 0 && orphanConv.length === 0 && <div className="emptytab">No priced round on the timeline. Add one under <b>Capital stack</b>.</div>}
       </>)}
 
       {tab === "stack" && (<>
