@@ -673,3 +673,58 @@ describe("⚠️ charts that read the projection read fields it has", () => {
     expect(spec.series[0].values.some((v) => v > 0)).toBe(true);
   });
 });
+
+describe("⚠️ plan-against-actual's x-axis", () => {
+  const built = async (doc) => {
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { buildProjection } = await import("../../src/engine/projection.js");
+    const parts = buildModelParts(doc);
+    parts.rows = buildProjection(parts.model, doc.settings?.toggles || {});
+    return buildChart("hist.planvsactual", doc, parts);
+  };
+
+  it("labels months by name, and month ZERO is not blank", async () => {
+    // ⚠️ `h.period || h.month || ""` MADE THE FIRST RECORDED MONTH AN EMPTY STRING. Month 0 is falsy, so
+    // it fell through to `""` while every other month showed a raw index: "", 1, 2, 3, 4, 5. The one
+    // column a reader looks at first had no label at all, and the rest were numbers nobody thinks in.
+    const { demoDoc } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const a of ARCHETYPES) {
+      const spec = await built(demoDoc(a.id));
+      expect(spec.x[0], `${a.id}: first label is blank`).toBeTruthy();
+      for (const label of spec.x) {
+        expect(String(label), `${a.id}: "${label}" is not a month name`).toMatch(/^[A-Z][a-z]{2} \d{2}$/);
+      }
+    }
+  });
+
+  it("⚠️ EMITS ONE CATEGORICAL TICK PER BAR", async () => {
+    // Without `ticks` the renderer falls to its "ends only" fallback, which places the first and last
+    // labels at the PLOT EDGES. Bars are centred in bands, so neither label sat over the bar it named —
+    // which is what "the ticks and the data do not line up" looks like. `CategoryAxis` positions at
+    // `i * groupW + groupW / 2`, the same band model `Bars` lays out with.
+    const { demoDoc } = await import("../../src/state/document.js");
+    const spec = await built(demoDoc("grant-startup"));
+    expect(spec.ticks?.length, "no ticks: the axis falls back to ends-only").toBe(spec.x.length);
+    expect(spec.ticks.every((t) => t.categorical), "ticks must say they are names, not month offsets").toBe(true);
+    expect(spec.ticks.map((t) => t.label)).toEqual(spec.x);
+    for (const sr of spec.series) expect(sr.values.length).toBe(spec.x.length);
+  });
+
+  it("⚠️ READS PLANNED BY h.month, NOT BY POSITION IN THE SLICE", async () => {
+    // `hist` is `.slice(-12)`. On a document with more than a year of history, position 0 is month 12 —
+    // so every planned figure was read a YEAR EARLY against the actual beside it. Invisible at six
+    // months of ledger and wrong the moment somebody imports two years.
+    const { demoDoc } = await import("../../src/state/document.js");
+    const base = demoDoc("grant-startup");
+    const long = { ...base, history: Array.from({ length: 18 }, (_, m) => ({
+      month: m, lines: [{ code: "6000", amount: 60000 + m * 1000 }] })) };
+    const spec = await built(long);
+    expect(spec.x.length, "the slice should keep the last 12").toBe(12);
+    // The window shown is months 6..17, so the first label must be month 6 — not month 0.
+    const { monthLabel } = await import("../../src/engine/time.js");
+    expect(spec.x[0]).toBe(monthLabel(long.startY, long.startM, 6));
+    expect(spec.x[11]).toBe(monthLabel(long.startY, long.startM, 17));
+  });
+});

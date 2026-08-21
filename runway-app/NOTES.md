@@ -8900,3 +8900,40 @@ one placement function is how an arrowed guide lands somewhere the tooltip disag
 Tests: every pixel of every bar reads that bar; the point model is unchanged and still the default;
 `xOfIndex` round-trips through `indexAt` in both models; and the three charts carry real data on every
 fixture. 45 assertions, both timezones.
+
+## Plan-against-actual, second pass: the axis, not the hover
+
+The hover fix was real but it was not what the user was seeing. Three more bugs in the same builder.
+
+### `x: hist.map(h => h.period || h.month || "")`
+
+⚠️ MONTH ZERO IS FALSY. The first recorded month — the one a reader looks at first — fell through to
+`""`, and every other month showed its raw INDEX. The axis read: `"", 1, 2, 3, 4, 5`. Now
+`monthLabel(startY, startM, h.month)`, giving `Feb 26 · Mar 26 · Apr 26 · May 26 · Jun 26 · Jul 26`.
+
+### `ticks: undefined`
+
+With no ticks the renderer falls to its "ends only" fallback, which draws the first and last labels at
+`x = pad.l` and `x = W - pad.r` — the PLOT EDGES. Bars are centred in bands (`groupW = pw / n`,
+centre at `+ groupW/2`), so NEITHER label sat over the bar it named. That is what "the ticks and the
+data do not align" is.
+
+Now one `categorical: true` tick per bar, which routes to `CategoryAxis` — and `CategoryAxis` positions
+at `i * groupW + groupW / 2`, the same band model `Bars` lays out with. The two agree by construction
+rather than by coincidence.
+
+⚠️ `categorical` IS ALSO WHAT STOPS `TimeAxis` REPLACING THE LABELS. The renderer's own comment says it:
+"A tick that carries its own label is not a month. `TimeAxis` builds labels from `useStart()` and IGNORES
+whatever the spec supplied." Without the flag these would have been overwritten by month offsets again.
+
+### `rows[i]` where `hist` is `.slice(-12)`
+
+Position in the slice is not the month. On a document with more than a year of history, position 0 is
+month 12, so EVERY planned figure was read a year early against the actual beside it. Invisible at six
+months of ledger and wrong the moment somebody imports two years. Now `rows[h.month]`, in both
+`histPlanVsActual` and `histVariance`. Tested with an 18-month history: the window shows months 6..17
+and the first label is month 6.
+
+⚠️ THREE BUGS IN ONE FUNCTION, AND THE FIRST TWO WERE VISIBLE IN ITS OUTPUT ALL ALONG. `x` and `ticks`
+are right there in the spec object — I read the same builder last round to fix `r.out` and did not look
+at the two lines above it. Fixing the reported symptom is not the same as reading the function.

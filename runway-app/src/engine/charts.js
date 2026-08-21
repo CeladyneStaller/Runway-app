@@ -933,13 +933,27 @@ const histPlanVsActual = (doc, parts) => {
   const rows = projectionRows(doc, parts);
   // ⚠️ `r.rev` / `r.cost`, NOT `r.in` / `r.out`. `buildProjection` pushes
   // `{ m, start, rev, cost, net, end, inNonGrant }` — there has never been an `in` or an `out`, so
-  // `clean(undefined)` returned 0 and these drew a flat nothing. Six readers of two fields no writer
+  // `clean(undefined)` returned 0 and these drew a flat nothing. Seven readers of two fields no writer
   // has ever produced.
-  const planned = hist.map((_, i) => Math.abs(clean(rows[i]?.cost)));
+  //
+  // ⚠️ INDEXED BY `h.month`, NOT BY POSITION IN THE SLICE. `hist` is `.slice(-12)`, so on a document
+  // with more than a year of history position 0 is month 12 and every planned figure was read a year
+  // early. Invisible at six months of ledger and wrong the moment somebody imports two years.
+  const plannedAt = (h) => Math.abs(clean(rows[clean(h.month)]?.cost));
+  const planned = hist.map(plannedAt);
   const actual = hist.map(h => clean(monthTotal(h)));
+  // ⚠️ A REAL CALENDAR LABEL, AND `h.month || ""` MADE MONTH ZERO BLANK. `0` is falsy, so the first
+  // recorded month — the one every reader looks at first — rendered as an empty string while the rest
+  // showed raw index numbers: "", 1, 2, 3, 4, 5.
+  const label = (h) => h.period || monthLabel(doc.startY ?? new Date().getFullYear(), doc.startM ?? 0, clean(h.month));
   return {
     kind: "bars",
-    x: hist.map(h => h.period || h.month || ""),
+    x: hist.map(label),
+    // ⚠️ WITHOUT TICKS THIS AXIS FELL TO THE "ends only" FALLBACK, which places the first and last
+    // labels at the PLOT EDGES — and bars are centred in bands, so neither label sat over the bar it
+    // named. `CategoryAxis` positions at `i * groupW + groupW / 2`, the same band model `Bars` lays out
+    // with, so a tick lands on its bar for every count of bars.
+    ticks: hist.map((h, i) => ({ i, label: label(h), categorical: true })),
     series: [
       { id: "plan", label: "Planned", values: planned, tone: "muted" },
       { id: "actual", label: "Actual", values: actual,
@@ -960,7 +974,9 @@ const histVariance = (doc, parts) => {
 
   const byCode = new Map();
   hist.forEach((h, i) => {
-    const plannedMonth = Math.abs(clean(rows[i]?.cost));   // `out` never existed — see histPlanVsActual
+    // `out` never existed — see histPlanVsActual. `h.month` rather than the loop index for the same
+    // reason: a history array is not guaranteed to start at month zero.
+    const plannedMonth = Math.abs(clean(rows[clean(h.month)]?.cost));
     const actualMonth = clean(monthTotal(h));
     const share = actualMonth ? (actualMonth - plannedMonth) / actualMonth : 0;
     for (const l of h.lines || []) {
