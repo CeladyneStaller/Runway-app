@@ -147,16 +147,26 @@ export function Investment({ routeTab, setRouteTab = () => {}, rounds, setRounds
             state until a priced round exists. */}
         {orphanConv.map(x => (
           <div className="panel" key={x.id}>
+            {/* ⚠️ THE TEXT IS WRAPPED, BECAUSE `.panel-h` IS `flex; space-between` — a row of exactly
+                TWO things. A bare text node beside the chip becomes its own flex item and pushes the
+                chip against the edge with the name floating away from it.
+                **Third time this session: `.plancard-h`, `.cad-row`, and now this.** The rule is the
+                same each time — a flex row with `space-between` expects two children, and text put
+                directly inside one is a child. */}
             <div className="panel-h">
-              {x.name}
+              <div>
+                <h3>{x.name}</h3>
+                <p>{x.closeMonth != null ? `Closes month ${x.closeMonth}` : "No close date set"} ·
+                   converts at the next priced round</p>
+              </div>
               <span className="chip">{x.kind === "safe" ? "SAFE" : "Note"}</span>
             </div>
-            <div>
+            {/* ⚠️ NO `.panel-b` EXISTS — I invented it, the same way I invented seven class names for
+                this card an hour ago. Panels in this file have no shared body class; each supplies its
+                own. `.conv-b` is declared here rather than borrowed from a card whose padding happens
+                to look right today. */}
+            <div className="conv-b">
               <b className="num">{moneyFull(x.amount)}</b>
-              {" — "}
-              {x.closeMonth != null ? `closes month ${x.closeMonth}` : "no close date set"}
-              {/* Saying what it is waiting for, rather than leaving a card that reads as incomplete. */}
-              {", converts at the next priced round."}
             </div>
           </div>
         ))}

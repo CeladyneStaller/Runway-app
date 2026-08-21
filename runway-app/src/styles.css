@@ -2219,3 +2219,7 @@ button.sessionpill-who{max-width:180px;overflow:hidden;text-overflow:ellipsis;wh
   paint-order: normal;
   stroke: none;
 }
+
+/* Body of the unconverted-SAFE card. Matching `.panel-h`'s horizontal padding so the amount lines up
+   under the name above it. */
+.conv-b{padding:14px 18px;font-size:19px}

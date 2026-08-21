@@ -2017,6 +2017,23 @@ Every "zero revenue lines" result I reported early in this was measuring a field
 **and I used two of those results to justify code changes.** The reading was right by accident and the
 reasoning was worthless.
 
+### The SAFE card had the flex-row fault, again
+
+`.panel-h` is `display:flex; justify-content:space-between` — **a row of exactly TWO things.** I put a
+bare text node beside the chip, so the text became its own flex item and the two were pushed to
+opposite edges.
+
+**Third instance this session**, after `.plancard-h` (four items in a two-item row) and `.cad-row` (the
+toggle inside the grid). The rule is identical every time: **a `space-between` row expects two
+children, and text placed directly inside it IS a child.** The neighbouring card in the same file wraps
+its text in a `<div>`; mine did not.
+
+**⚠️ AND I INVENTED `.panel-b` WHILE FIXING IT** — one hour after inventing seven class names for this
+same card. There is no shared panel-body class in this file; each panel supplies its own. `.conv-b` is
+declared rather than borrowed from a card whose padding happens to look right today.
+
+Every class in the card verified against `styles.css` before packaging: five used, five defined.
+
 ### The Investment summary hid unconverted SAFEs
 
 `Investment.jsx` maps over `equity` only. A SAFE appears NESTED under the priced round it converts
