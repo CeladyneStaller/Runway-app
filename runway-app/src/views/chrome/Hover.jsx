@@ -68,13 +68,23 @@ export function HoverLayer({ spec, box, ctx = {}, format }) {
   const v = at ? valueAt(spec, at.i, ctx) : null;
   const tip = at ? placeTip(at.px, at.py, { w: box.x + box.w + 40, h: box.y + box.h + 40 }) : null;
 
+  // ⚠️ THE GUIDE SNAPS TO THE COLUMN IT NAMES, IN THE COLUMN'S OWN MODEL. This was recomputed inline as
+  // `box.w * i / (n - 1)` — the POINT model, hardcoded in the JSX and ignoring the band flag the index
+  // was chosen with. On a bar chart that puts the guide for the FIRST bar hard on the y-axis and the
+  // LAST one on the right edge, while the bars themselves are inset half a slot to leave room for their
+  // width. The tooltip read the right bar and the line pointed somewhere else.
+  //
+  // `xOfIndex` is the same function the keyboard path places with and the inverse of the `indexAt` that
+  // produced `at.i`, so the guide cannot disagree with the reading by construction.
+  const guideX = at
+    ? box.x + xOfIndex(at.i, { width: box.w, n: spec?.x?.length || spec?.series?.[0]?.values?.length || 1, band: isBand(spec) })
+    : 0;
+
   return (
     <>
       {/* THE GUIDE LINE, so the tooltip and the chart agree about which column is being read. */}
       {at && (
-        <line x1={box.x + (box.w * at.i) / Math.max(1, (spec?.x?.length || 1) - 1)} y1={box.y}
-              x2={box.x + (box.w * at.i) / Math.max(1, (spec?.x?.length || 1) - 1)} y2={box.y + box.h}
-              className="hv-guide" />
+        <line x1={guideX} y1={box.y} x2={guideX} y2={box.y + box.h} className="hv-guide" />
       )}
       <rect ref={ref} x={box.x} y={box.y} width={box.w} height={box.h}
             fill="transparent" tabIndex={0} className="hv-hit"

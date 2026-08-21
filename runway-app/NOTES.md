@@ -8937,3 +8937,36 @@ and the first label is month 6.
 ⚠️ THREE BUGS IN ONE FUNCTION, AND THE FIRST TWO WERE VISIBLE IN ITS OUTPUT ALL ALONG. `x` and `ticks`
 are right there in the spec object — I read the same builder last round to fix `r.out` and did not look
 at the two lines above it. Fixing the reported symptom is not the same as reading the function.
+
+## Third pass on the same hover: the GUIDE LINE, not the index
+
+The index lookup was fixed. The guide line was not — it RECOMPUTED ITS OWN X, in a different model from
+the index it was drawn for:
+
+    <line x1={box.x + (box.w * at.i) / Math.max(1, (spec?.x?.length || 1) - 1)} ... />
+
+That is the POINT model, hardcoded in the JSX, while `at.i` came from a BAND lookup. Bars are inset half
+a slot to leave room for their width, so on a six-bar 652px chart:
+
+    bar   centre    guide drew at   out by
+     0     106.3          52.0      -54.3   <- hard on the y-axis
+     1     215.0         182.4      -32.6
+     2     323.7         312.8      -10.9
+     3     432.3         443.2      +10.9
+     4     541.0         573.6      +32.6
+     5     649.7         704.0      +54.3   <- past the right edge of the plot
+
+The tooltip read the right bar and the line pointed at a different one, which is what "the terminal ticks
+are inset and the hover does not know it" means.
+
+Now `guideX = box.x + xOfIndex(at.i, { width, n, band })` — the SAME function the keyboard path places
+with, and the inverse of the `indexAt` that produced the index. The two cannot disagree by construction
+rather than by matching arithmetic in two places.
+
+⚠️ THREE PASSES ON ONE FEATURE, EACH FIXING A DIFFERENT COPY OF THE SAME SUM. `indexAt` had the point
+model; the keyboard path recomputed it; the guide line recomputed it again. I fixed the first two and
+left the third — because I read the code that CALCULATES the hover and not the JSX that DRAWS it.
+
+NEW TEST states the property once instead of the arithmetic three times: for every pointer position, in
+both models, the index resolved and the guide drawn for that index describe the SAME column. 338
+assertions per timezone, sweeping every 4px of the plot in both models.

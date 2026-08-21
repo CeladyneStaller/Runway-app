@@ -232,3 +232,47 @@ describe("⚠️ bars occupy slots; lines sit at points", () => {
     }
   });
 });
+
+describe("⚠️ the guide line lands on the column it names", () => {
+  it("a bar's guide sits at the bar's centre, not at the plot edge", async () => {
+    // ⚠️ THE GUIDE RECOMPUTED ITS OWN X, IN A DIFFERENT MODEL FROM THE INDEX IT WAS DRAWN FOR. It was
+    // `box.w * i / (n - 1)` hardcoded in the JSX — the POINT model — while `at.i` came from a BAND
+    // lookup. Bars are inset half a slot to leave room for their width, so the guide for the FIRST bar
+    // sat hard on the y-axis and the LAST one ran past the plot's right edge: 54px out on a six-bar,
+    // 652px chart. The tooltip read the right bar and the line pointed at a different one.
+    //
+    // `xOfIndex` is the inverse of the `indexAt` that produced the index, so the two cannot disagree.
+    const { xOfIndex } = await import("../../src/engine/hover.js");
+    const n = 6, width = 652, slot = width / n;
+    for (let i = 0; i < n; i++) {
+      expect(xOfIndex(i, { width, n, band: true }), `bar ${i}`).toBeCloseTo((i + 0.5) * slot, 6);
+    }
+    // and the ends are INSET — never on the axis, never past the edge
+    expect(xOfIndex(0, { width, n, band: true })).toBeGreaterThan(0);
+    expect(xOfIndex(n - 1, { width, n, band: true })).toBeLessThan(width);
+  });
+
+  it("a line's guide still sits on the point, including both ends", async () => {
+    // The point model puts the first point ON the y-axis and the last ON the right edge, which is
+    // correct for a line and is exactly what a band model would have broken.
+    const { xOfIndex } = await import("../../src/engine/hover.js");
+    const n = 6, width = 652;
+    expect(xOfIndex(0, { width, n })).toBe(0);
+    expect(xOfIndex(n - 1, { width, n })).toBe(width);
+  });
+
+  it("⚠️ AND THE GUIDE AGREES WITH THE READING FOR EVERY POINTER POSITION", async () => {
+    // The property that matters, stated once: wherever the pointer is, the index it resolves to and the
+    // guide drawn for that index describe the same column. Asserted across every pixel of every slot,
+    // in both models — a mismatch anywhere is a line pointing at a bar the tooltip is not reading.
+    const { indexAt, xOfIndex } = await import("../../src/engine/hover.js");
+    const n = 6, width = 652;
+    for (const band of [true, false]) {
+      for (let px = 0; px <= width; px += 4) {
+        const i = indexAt(px, { left: 0, width, n, band });
+        expect(indexAt(xOfIndex(i, { width, n, band }), { left: 0, width, n, band }),
+          `${band ? "band" : "point"} at ${px}px`).toBe(i);
+      }
+    }
+  });
+});
