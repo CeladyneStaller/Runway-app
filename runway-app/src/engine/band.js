@@ -118,7 +118,20 @@ export function confidenceBand(doc, horizon = HORIZON, revenue = null) {
 
   const floorRows = buildProjection(floorModel, floorToggles);
   const expRows = buildProjection(expModel, expToggles);
-  const ceilRows = buildProjection(ceilModel, ceilToggles);
+  const ceilRowsRaw = buildProjection(ceilModel, ceilToggles);
+
+  // ⚠️ THE ORDERING IS AN INVARIANT, NOT AN OUTCOME. Each tier adds revenue, so the ceiling is normally
+  // above the floor — **but a NEGATIVE speculative line (a planned repayment, refund or clawback) makes
+  // the extra tier subtract**, and the ceiling drops below the floor. The polygon then inverts and the
+  // band renders inside out, which reads as a rendering fault rather than a data one.
+  //
+  // Clamping here rather than rejecting the line: a planned repayment is legitimate to model, and the
+  // right presentation is a band of zero width at that month — **"this money is uncertain and it does
+  // not help you" is true and drawable.** The alternative is a chart that lies about which curve is
+  // which.
+  const ceilRows = ceilRowsRaw.map((r, i) => (r.start < floorRows[i].start
+    ? { ...r, start: floorRows[i].start, end: Math.max(r.end, floorRows[i].end) }
+    : r));
 
   const floorZero = zeroOf(floorModel, floorToggles, doc.startY, doc.startM);
   const expZero = zeroOf(expModel, expToggles, doc.startY, doc.startM);

@@ -2017,6 +2017,32 @@ Every "zero revenue lines" result I reported early in this was measuring a field
 **and I used two of those results to justify code changes.** The reading was right by accident and the
 reasoning was worthless.
 
+### Auditing the band maths — there is no Monte Carlo, deliberately
+
+`band.js` says so in its own header: per-line probabilities do not exist in the model, and a
+distribution fitted to a handful of months is false precision. **It is a bracket of defensible cases**,
+built from two mechanisms:
+
+**Tier bracketing** — floor = committed only, ceiling = everything.
+**Burn variance** — `cv` from spend history, applied as `costs * (1 ± cv)`.
+
+**`burnVariance` holds up.** Returns 0 below three months, 0 at zero mean, 0 for credits-only history,
+capped at 0.4, and trims the single furthest point when there are five or more. **One bad month is
+discarded rather than damped**, which is defensible trimming and worth knowing.
+
+**⚠️ THE ONE REAL FAULT: A NEGATIVE SPECULATIVE LINE INVERTS THE BAND.** A planned repayment, refund or
+clawback makes the extra tier SUBTRACT, so the ceiling falls below the floor and the polygon renders
+inside out — six months of it on a test document. **The ordering is an invariant, not an outcome of the
+arithmetic.**
+
+Clamped rather than rejected: a planned repayment is legitimate to model, and a zero-width band at that
+month says "this money is uncertain and it does not help you", which is true and drawable. **The
+alternative is a chart that lies about which curve is which.**
+
+**Worth Corey's judgement, not a bug:** at the 0.4 cap the ceiling burns 60% of plan — a claim of
+permanent 40% underspend derived from cost history alone. Symmetric treatment of overspend and
+underspend is a modelling choice, and the upside half is the weaker one.
+
 ### The hover was a month left of the cursor
 
     const px = ((ev.clientX - r.left) / (r.width || 1)) * W;
