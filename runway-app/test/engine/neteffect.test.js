@@ -196,3 +196,43 @@ describe("⚠️ purchase-order timing — family B's PO half", () => {
     expect(dep.amount + bal.amount).toBe(100000);
   });
 });
+
+describe("⚠️ milestones must not duplicate what roundMS derives", () => {
+  it("no authored milestone shares a month with a derived round close", async () => {
+    // ⚠️ `roundMS` DERIVES A CRITICAL DATE FROM EVERY OPEN INSTRUMENT, and `capital.js` states the rule:
+    // "A close date IS a critical date. Derive it rather than asking anyone to keep two copies in step —
+    // move the close in Investment and the milestone, the chart marker and the balance all follow."
+    //
+    // Authoring a second one puts two markers on one event. They agree on the day they are written and
+    // drift the first time somebody moves the close. saas shipped exactly that: "Seed close or extend"
+    // authored at month 6 beside "Seed round close" derived at month 6.
+    //
+    // A shared month is the detectable form. It also catches the softer version — an unrelated milestone
+    // landing on the close date, which reads as clutter even when it is not a duplicate.
+    const { roundMS } = await import("../../src/engine/capital.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const derived = roundMS(doc.rounds, doc.startY, doc.startM);
+      const taken = new Set(derived.map((m) => `${m.y}-${m.m}`));
+      for (const ms of doc.milestones || []) {
+        const clash = derived.find((r) => r.y === ms.y && r.m === ms.m);
+        expect(taken.has(`${ms.y}-${ms.m}`),
+          `${a.id}: "${ms.label}" lands on the same month as the derived "${clash?.label}"`).toBe(false);
+      }
+    }
+  });
+
+  it("and no authored milestone is labelled like a round close", async () => {
+    // The label is the other half. `roundMS` names its own "<round> close"; an authored milestone using
+    // that wording is claiming to be the same thing whatever month it sits in.
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      for (const ms of demoDoc(a.id).milestones || []) {
+        expect(/\bclose\b/i.test(ms.label), `${a.id}: "${ms.label}" reads as a round close`).toBe(false);
+      }
+    }
+  });
+});

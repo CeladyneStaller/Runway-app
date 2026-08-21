@@ -8669,3 +8669,68 @@ editor writes. Same judgement as `shipMonth`: fix the silence first, decide abou
 This is the fourth instance this session of the same shape — a field that is read but never written, or
 written but never read. `p.team` (three readers, no writer), `revenueDriven` (writer, no reader),
 `shipMonth` (writer, no reader), and now `employeeId` (a required key with an optional-looking default).
+
+## A detector for fields mentioned in exactly one direction
+
+Four instances in one session — `p.team` (three readers, no writer), `revenueDriven` (writer, no
+reader), `shipMonth` (writer, no reader), `employeeId` (required key, optional-looking default). None
+threw. None failed a test. Each decayed in silence because nothing checked the PAIR.
+
+⚠️ THE GENERAL VERSION DOES NOT WORK AND I TRIED IT FIRST. A bidirectional read/write scan over
+`src/` flags 628 of 1,178 identifiers; scoped to engine+state with a builtin stoplist it is still 458 of
+806. The reason is structural, not tuning: a SHORTHAND property `{ derivedBurn }` is textually identical
+to a destructuring READ of the same name, so every module that re-exports a value looks like it only
+consumes it. Regexes cannot separate those. An AST pass could; a grep cannot.
+
+WHAT DOES WORK is one narrow question: **does every field the DATA layer authors get read anywhere?**
+`scripts/one-direction.mjs` compares object keys written in `archetypes.js` / `document.js` / `seed.js`
+against every dot-access, index, destructure and re-emitted key in the rest of `src/`. That answers 5,
+not 458 — a list a person can actually read.
+
+    categoryMap  churn  growth  off  warrantPct
+
+`warrantPct` is genuinely dead: authored once in seed.js, read by NOTHING in the codebase. Found by the
+script on its first run, which is the argument for having it.
+
+⚠️ SCOPE MATTERS AND I GOT IT WRONG ONCE. A first pass compared demo fields against `src/engine/` only,
+and flagged `useOfFunds`, `leadName` and `metric` — all of which ARE read, in views. A field read by a
+view is read. Consumption is consumption wherever it happens.
+
+`test/engine/onedirection.test.js` pins the list: it MAY SHRINK, NEVER GROW. A new one-direction field
+fails at the moment it is written rather than in a chart that quietly draws nothing a year later; a
+fixed one fails too, telling you to trim the allowlist so the guard keeps its edge. Verified both ways —
+reintroducing `shipMonth` into archetypes.js is caught immediately.
+
+NOT A GATE ON EVERYTHING, deliberately. It answers one question well instead of every question badly.
+
+## Duplicate fundraise milestones — I authored a second copy of something derived
+
+`roundMS` derives a critical date from EVERY open instrument, and `capital.js` states the rule at the
+function: "A close date IS a critical date. Derive it rather than asking anyone to keep two copies in
+step — move the close in Investment and the milestone, the chart marker and the balance all follow."
+
+I authored milestones without reading that, and shipped:
+
+  saas           "Seed close or extend"  authored Feb 27  ||  "Seed round close"  derived Feb 27
+                 -> TWO MARKERS, ONE EVENT. They agree the day they are written and drift the first
+                    time somebody moves the close date, which is precisely what deriving prevents.
+  grant-startup  "SBIR drawdown filed"   authored Dec 26  ||  "Seed SAFE close"   derived Dec 26
+                 -> not a duplicate, but two markers on one month reads as clutter.
+  hardware-vc    "Series B raise decision" — named a round the model DOES NOT CARRY, sending a reader
+                    to an Investment tab with nothing in it.
+
+FIXED: saas's authored copy replaced with "Annual contracts renewed" (May 27); grant-startup's drawdown
+moved to Oct 26; hardware-vc's renamed "Production line qualified".
+
+TWO GUARDS in neteffect.test.js, because the defect has two halves:
+  - no authored milestone may share a MONTH with a derived round close (catches the duplicate and the
+    clutter case together)
+  - no authored milestone may be LABELLED like a close (`/\bclose\b/i`) — the label claims to be the
+    same event whatever month it sits on
+
+⚠️ THE SHAPE AGAIN: something DERIVED and something AUTHORED describing one fact. Same family as the
+one-direction fields, and the same failure mode — the two copies are correct on the day they are written
+and nothing checks them afterwards. The engine already knew the rule and had written it down; I added
+the data without reading the code that consumes it.
+
+59 assertions, both timezones, 0 failures.

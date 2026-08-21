@@ -163,8 +163,15 @@ const RIDGELINE = () => {
   // ⚠️ MONTHS FROM TODAY, resolved to calendar dates by `demoDoc`. Targets are the point: a critical
   // date with no target passes on any non-negative balance, which for a covenant or a payroll buffer is
   // the wrong question.
+  // ⚠️ NEVER AUTHOR A ROUND CLOSE HERE. `roundMS` DERIVES one from every open instrument, and
+  // `capital.js` says why: "A close date IS a critical date. Derive it rather than asking anyone to keep
+  // two copies in step — move the close in Investment and the milestone, the chart marker and the
+  // balance all follow." Authoring a second one puts two markers on one event that then drift apart.
+  //
+  // The Seed SAFE closes in month 4, so `roundMS` already places "Seed SAFE close" there. These three
+  // are the things the SAFE is being raised AGAINST, and month 2 keeps the first clear of it.
   milestones: [
-    { label: "SBIR drawdown filed", month: 4 },
+    { label: "SBIR drawdown filed", month: 2 },
     { label: "Board review — raise or cut", month: 6, target: 250000 },
     { label: "Pilot rig commissioned", month: 10, target: 100000 },
   ],
@@ -250,7 +257,9 @@ const KESTREL = () => {
   ],
   milestones: [
     { label: "Meridian units shipped", month: 3 },
-    { label: "Series B raise decision", month: 9, target: 1500000 },
+    // Not "Series B close" — there is no Series B instrument, and a milestone that names a round the
+    // model does not carry sends a reader to an Investment tab that has nothing in it.
+    { label: "Production line qualified", month: 9, target: 1500000 },
     { label: "Bay Terminal acceptance", month: 12, target: 800000 },
   ],
   rounds: [
@@ -431,9 +440,12 @@ const LARKSPUR = () => {
     { id: uid(), name: "Enterprise", startCustomers: 7, arpu: 890, churnPct: 0.5,
       newPerMonth: 0.5, newGrowthPct: 8, include: true },
   ],
+  // ⚠️ "Seed close or extend" WAS HERE AND WAS A DUPLICATE. The Seed round closes in month 6 and
+  // `roundMS` already derives "Seed round close" for exactly that date — two markers, one event, and
+  // the authored copy would not follow if the close date moved.
   milestones: [
     { label: "Enterprise tier GA", month: 2 },
-    { label: "Seed close or extend", month: 6, target: 180000 },
+    { label: "Annual contracts renewed", month: 9, target: 180000 },
     { label: "Cash-flow positive target", month: 14 },
   ],
   rounds: [
