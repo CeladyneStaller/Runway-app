@@ -433,6 +433,44 @@ describe("the milestones chart", () => {
   });
 });
 
+describe("⚠️ labour hours that name nobody", () => {
+  const withLabour = (employeeId) => ({
+    rProjects: [{
+      id: "p1", name: "Build", type: "fulfillment",
+      lines: [{ id: "l1", isLabor: true, employeeId, hours: 640, start: 0, end: 5 }],
+    }],
+  });
+
+  it("fires when an isLabor line has no employee", async () => {
+    // `teamLoad`'s accumulator starts `if (!id || !hrs) return`, so these hours are dropped in silence:
+    // no load, no capacity charged, no allocation view. The work LOOKS recorded, which is worse than an
+    // obvious blank.
+    const { alertsFor } = await import("../../src/engine/alerts.js");
+    const hit = alertsFor("proj", {}, withLabour(null)).find(a => a.id === "unnamed-labour");
+    expect(hit, "expected the unnamed-labour alert").toBeTruthy();
+    expect(hit.text).toMatch(/640/);
+  });
+
+  it("goes quiet once the hours belong to somebody", async () => {
+    const { alertsFor } = await import("../../src/engine/alerts.js");
+    expect(alertsFor("proj", {}, withLabour("e1")).find(a => a.id === "unnamed-labour")).toBeFalsy();
+  });
+
+  it("⚠️ AND NO SHIPPED ARCHETYPE TRIPS IT", async () => {
+    // The guard that keeps demo data honest. Every labour line in every demo names a real person, so
+    // "Team load by project" and the Allocation view both draw what the project actually represents.
+    const { alertsFor } = await import("../../src/engine/alerts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const hit = alertsFor("proj", doc, buildModelParts(doc)).find(x => x.id === "unnamed-labour");
+      expect(hit?.text, `${a.id}: ${hit?.text || ""}`).toBeUndefined();
+    }
+  });
+});
+
 describe("solvency — cash crosses zero and comes back", () => {
   const rowsOf = (ends) => ends.map((end, m) => ({
     m, start: m === 0 ? 100 : ends[m - 1], end, net: 0, in: 0, out: 0, cost: 0,

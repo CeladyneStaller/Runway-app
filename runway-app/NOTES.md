@@ -8641,3 +8641,31 @@ round, no cap table at a nonprofit. That is correct, not a gap: a nonprofit show
 would be worse than a blank panel.
 
 39 assertions, both timezones, 0 failures. oxlint clean (127 warnings, all pre-existing).
+
+## Labour hours that name nobody now say so
+
+The demo-data fix was the symptom. The cause is that `laborLine()` in sales.js creates
+`employeeId: null`, and `teamLoad`'s accumulator starts `if (!id || !hrs) return` — so EVERY labour line
+added through the Projects tab is dropped in silence. No load, no capacity charged, no allocation view.
+The hours are typed, saved and ignored, which is the worst shape of all because the work LOOKS recorded.
+
+New `unnamedLabour` alert on the `pay` and `proj` tabs, counting both `isLabor` lines and grant
+`categories.personnel` entries with no `employeeId`:
+
+    1 labour line totalling 400 hours names nobody, so it charges no capacity.
+    3 labour lines totalling 1,200 hours name nobody, so they charge no capacity.
+
+Prospective projects that are not `include`d are skipped — a proposal is not a commitment.
+
+Three tests: it fires on an unassigned line and names the hours, it goes quiet once the line belongs to
+somebody, and ⚠️ NO SHIPPED ARCHETYPE TRIPS IT — the guard that keeps demo data honest now that every
+labour line in every demo names a real person.
+
+WHAT THIS DOES NOT FIX, and is the better change if you want it: `laborLine()` could refuse to default
+to null, or the Projects editor could require a name before the line is saved. Making the alert is the
+smallest honest step — it tells the truth about data that already exists rather than changing what the
+editor writes. Same judgement as `shipMonth`: fix the silence first, decide about the default second.
+
+This is the fourth instance this session of the same shape — a field that is read but never written, or
+written but never read. `p.team` (three readers, no writer), `revenueDriven` (writer, no reader),
+`shipMonth` (writer, no reader), and now `employeeId` (a required key with an optional-looking default).

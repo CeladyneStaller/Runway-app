@@ -129,6 +129,43 @@ const unallocated = (doc, parts) => {
   };
 };
 
+/** ⚠️ LABOUR HOURS THAT NAME NOBODY, WHICH RECORD NOTHING.
+ *
+ *  `teamLoad`'s accumulator starts `if (!id || !hrs) return`, so an `isLabor` line with a null
+ *  `employeeId` is dropped in silence — it draws no load, charges no capacity, and appears on no
+ *  allocation view. Capacity is a question about PEOPLE; a line naming no one cannot answer it.
+ *
+ *  ⚠️ AND THE DEFAULT IS THE NULL. `laborLine()` in sales.js creates `employeeId: null`, so EVERY line
+ *  added through the Projects tab starts invisible and stays that way until somebody picks a name. The
+ *  hours are entered, saved, and quietly ignored — the worst shape of all, because the work looks
+ *  recorded.
+ *
+ *  Nothing in the app said so. This is the smallest honest fix: name the hours, say where they went.
+ */
+const unnamedLabour = (doc, parts) => {
+  const rProjects = parts?.rProjects || [];
+  if (!rProjects.length) return null;
+  let hours = 0, lines = 0;
+  for (const p of rProjects) {
+    if (p.stage === "prospective" && !p.include) continue;   // proposals aren't commitments yet
+    for (const l of (p.lines || [])) {
+      if (!l.isLabor || l.employeeId || !clean(l.hours)) continue;
+      hours += clean(l.hours); lines += 1;
+    }
+    for (const l of ((p.grant?.categories?.personnel) || [])) {
+      if (l.employeeId) continue;
+      const h = sum((l.byPeriod || []).map(b => clean(b?.hrs)));
+      if (h > 0) { hours += h; lines += 1; }
+    }
+  }
+  if (!lines) return null;
+  return {
+    id: "unnamed-labour", tone: "warn",
+    text: `${plural(lines, "labour line", "labour lines")} totalling ${Math.round(hours).toLocaleString()} hours ${lines === 1 ? "names" : "name"} nobody, so ${lines === 1 ? "it charges" : "they charge"} no capacity.`,
+    action: "Assign", to: "proj",
+  };
+};
+
 const aheadOfPace = (doc, parts) => {
   const worst = (parts?.rProjects || [])
     .filter(p => p.stage !== "prospective" && clean(p.budget) > 0)
@@ -283,8 +320,8 @@ const noHistory = (doc) => {
 
 const RULES = {
   flow: [overPlan, unmapped, noHistory],
-  pay: [hiresAhead, unallocated],
-  proj: [aheadOfPace, overspent, unallocated],
+  pay: [hiresAhead, unallocated, unnamedLabour],
+  proj: [aheadOfPace, overspent, unallocated, unnamedLabour],
   sales: [forecastHot, noHistory],
   inv: [preRaiseUnreachable, slipRisk, misfiledGoal, covenant],
   hist: [overPlan, staleLedger, unmapped, unresolved],
