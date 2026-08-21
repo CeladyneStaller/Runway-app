@@ -13,7 +13,7 @@
 // `empty` is a SENTENCE, not a flag. A chart with nothing to draw should say what is missing — "no
 // spend history yet" — rather than render an empty box that looks like a bug.
 
-import { buildProjection, zeroInfo, solvency, anchorToActuals, forecastFrom, balanceAtDate } from "./projection.js";
+import { buildProjection, zeroInfo, solvency, anchorToActuals, forecastFrom, balanceAtDate, amountAt } from "./projection.js";
 import { accruedCostShare, outstandingDebt, windDownCost } from "./commitments.js";
 import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
@@ -285,7 +285,7 @@ const flowComposition = (doc, parts) => {
   if (!rows.length) return { empty: "No projection yet." };
 
   const pay = rows.slice(0, monthsShown(doc)).map((_, i) =>
-    sum((parts?.employeeLines || []).map(l => clean(l.amounts?.[i]))));
+    sum((parts?.employeeLines || []).map(l => amountAt(l, i))));
   const all = rows.slice(0, monthsShown(doc)).map(r => Math.max(0, -clean(r.net) + clean(r.rev || 0)));
   const other = all.map((v, i) => Math.max(0, v - pay[i]));
 
@@ -326,8 +326,12 @@ const flowInOut = (doc, parts) => {
 const payTimeline = (doc, parts) => {
   const lines = parts?.employeeLines || [];
   if (!lines.length) return { empty: "No employees yet." };
+  // ⚠️ `amountAt(l, i)`, NOT `l.amounts?.[i]`. Line items carry a FLAT `amount` with `start`/`end`/
+  // `cadence`/`growthPct` — there is no per-month array on them, so `clean(undefined)` returned 0 and
+  // this chart drew an empty plot for every company. `advisor.js` diagnosed the same field and fixed
+  // only its own copy; six readers were left.
   const values = Array.from({ length: monthsShown(doc) }, (_, i) =>
-    sum(lines.map(l => clean(l.amounts?.[i]))));
+    sum(lines.map(l => amountAt(l, i))));
 
   // Each step is somebody starting. Marked so a hire is visible before it lands rather than after it
   // shows up in the ledger.
@@ -353,10 +357,10 @@ const payHeadcount = (doc, parts) => {
   const lines = parts?.employeeLines || [];
 
   const heads = Array.from({ length: monthsShown(doc) }, (_, i) =>
-    lines.filter(l => clean(l.amounts?.[i]) > 0).length);
+    lines.filter(l => amountAt(l, i) > 0).length);
   const each = Array.from({ length: monthsShown(doc) }, (_, i) => {
     const n = heads[i];
-    return n ? sum(lines.map(l => clean(l.amounts?.[i]))) / n : 0;
+    return n ? sum(lines.map(l => amountAt(l, i))) / n : 0;
   });
 
   return {
@@ -543,7 +547,7 @@ const salesForecast = (doc, parts) => {
 
   const forecast = (parts?.salesLines || []).length
     ? Array.from({ length: monthsShown(doc) }, (_, i) =>
-        sum((parts.salesLines || []).map(l => clean(l.amounts?.[i]))))
+        sum((parts.salesLines || []).map(l => amountAt(l, i))))
     : [];
   const booked = hist.slice(-monthsShown(doc)).map(h => clean(monthRevenue(h)));
   if (!booked.length) return { empty: "No booked revenue recorded yet." };
@@ -973,7 +977,7 @@ const histVariance = (doc, parts) => {
   const rows = projectionRows(doc, parts);
 
   const byCode = new Map();
-  hist.forEach((h, i) => {
+  hist.forEach((h) => {
     // `out` never existed — see histPlanVsActual. `h.month` rather than the loop index for the same
     // reason: a history array is not guaranteed to start at month zero.
     const plannedMonth = Math.abs(clean(rows[clean(h.month)]?.cost));

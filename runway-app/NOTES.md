@@ -8970,3 +8970,36 @@ left the third — because I read the code that CALCULATES the hover and not the
 NEW TEST states the property once instead of the arithmetic three times: for every pointer position, in
 both models, the index resolved and the guide drawn for that index describe the SAME column. 338
 assertions per timezone, sweeping every 4px of the plot in both models.
+
+## "Payroll, with starts marked" drew nothing — `l.amounts` is a field nothing writes
+
+Line items carry a FLAT `amount` with `start`/`end`/`cadence`/`growthPct`. There is no per-month array.
+Six places read `l.amounts?.[i]` anyway, so `clean(undefined)` returned 0:
+
+    charts.js  payTimeline    payroll flat zero — the reported bug, an empty plot AND no start markers
+    charts.js  payHeadcount   everybody counted as absent, every month
+    charts.js  payCostPerHead divide-by-zero guard returning 0
+    charts.js  runwayCover    employee lines contributed nothing
+    charts.js  salesForecast  the forecast series
+    alerts.js  salesForecast  `(l.amounts || []).slice(0,3)` — an empty list, so the alert compared to 0
+
+⚠️ AND `advisor.js` HAD ALREADY FOUND IT. Its comment says so verbatim: "the first attempt summed
+`l.amounts[0]` across `employeeLines`, and those lines carry a flat `amount` with no per-month array, so
+every payroll tile read '0k/mo · 0% of burn'. A plausible zero is worse than an error: nothing failed,
+and the tile simply lied." The diagnosis was written down, the fix was applied to ONE reader, and six
+others were left alone.
+
+FIXED BY EXTRACTING THE RULE, not by inlining it a seventh time. `amountAt(li, m)` now lives in
+projection.js, pulled OUT of `buildProjection` so the charts and the balance cannot disagree about what
+a line is worth in a month. Verified the extraction is byte-identical: 555 rows across canary + four
+archetypes x three toggle sets, 0 differences.
+
+Payroll now plots, and `pay.timeline`'s month 0 is asserted against `payrollNow` — a figure
+`buildModelParts` computes by a completely different route. Two routes to one number is how you tell a
+real figure from a confident zero. Start markers land on real steps: hardware-vc marks months 8 and 10,
+and each is asserted to be higher than the month before it.
+
+⚠️ SIXTH INSTANCE OF THE ONE-DIRECTION SHAPE, and the second where the codebase had ALREADY diagnosed
+the exact field in a comment. `p.team` (3 readers), `r.in`/`r.out` (7), `l.amounts` (6),
+`revenueDriven`, `shipMonth`, `warrantPct`. The detector cannot see any of the READ-but-never-written
+half — that needs an AST pass, and at six instances it is now clearly worth one.

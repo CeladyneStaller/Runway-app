@@ -728,3 +728,75 @@ describe("⚠️ plan-against-actual's x-axis", () => {
     expect(spec.x[11]).toBe(monthLabel(long.startY, long.startM, 17));
   });
 });
+
+describe("⚠️ charts that read line items read `amount`, not `amounts`", () => {
+  const parted = async (doc) => {
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { buildProjection } = await import("../../src/engine/projection.js");
+    const parts = buildModelParts(doc);
+    parts.rows = buildProjection(parts.model, doc.settings?.toggles || {});
+    return parts;
+  };
+
+  it("the payroll timeline plots payroll, and it matches payrollNow", async () => {
+    // ⚠️ `l.amounts?.[i]` IS A FIELD NOTHING WRITES. Line items carry a FLAT `amount` with
+    // `start`/`end`/`cadence`/`growthPct`, so `clean(undefined)` returned 0 and "Payroll, with starts
+    // marked" drew an empty plot for every company. `advisor.js` hit the same field, wrote the
+    // diagnosis in a comment — "a plausible zero is worse than an error" — and fixed ONLY ITS OWN COPY.
+    // Six readers were left across charts.js and alerts.js.
+    //
+    // Cross-checked against `payrollNow`, which `buildModelParts` computes independently: two routes to
+    // one number is how you tell a real figure from a confident zero.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const parts = await parted(doc);
+      const values = buildChart("pay.timeline", doc, parts).series[0].values;
+      expect(values.some((v) => v > 0), `${a.id}: payroll is flat zero`).toBe(true);
+      expect(values[0], `${a.id}: month 0 disagrees with payrollNow`).toBeCloseTo(parts.payrollNow, 2);
+    }
+  });
+
+  it("a start shows up as a step, marked", async () => {
+    // The chart's whole point — "each step is a hire landing, visible before it happens". With zeros
+    // there were no steps, so there were never any markers either.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    const doc = demoDoc("hardware-vc");
+    const spec = buildChart("pay.timeline", doc, await parted(doc));
+    expect(spec.markers.length, "no hire was marked").toBeGreaterThan(0);
+    for (const m of spec.markers) {
+      const v = spec.series[0].values;
+      expect(v[m.x], `marker at ${m.x} is not a step up`).toBeGreaterThan(v[m.x - 1]);
+    }
+  });
+
+  it("headcount counts people, not zeros", async () => {
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const heads = buildChart("pay.headcount", doc, await parted(doc)).series[0].values;
+      expect(heads[0], `${a.id}: nobody on the payroll at month 0`).toBeGreaterThan(0);
+      expect(heads[0]).toBeLessThanOrEqual((doc.employees || []).length);
+    }
+  });
+
+  it("⚠️ `amountAt` IS THE PROJECTION'S OWN RULE, so a chart cannot disagree with the balance", async () => {
+    // Extracted from `buildProjection` rather than reimplemented beside it. Recurring lines run
+    // start..end and compound `growthPct`; one-time lines fire once and are zero everywhere else.
+    const { amountAt } = await import("../../src/engine/projection.js");
+    const rec = { cadence: "recurring", amount: 1000, start: 2, end: 4, growthPct: 10 };
+    expect(amountAt(rec, 1)).toBe(0);
+    expect(amountAt(rec, 2)).toBe(1000);
+    expect(amountAt(rec, 3)).toBeCloseTo(1100, 6);
+    expect(amountAt(rec, 5)).toBe(0);
+    const once = { cadence: "onetime", amount: 500, start: 3 };
+    expect([2, 3, 4].map((m) => amountAt(once, m))).toEqual([0, 500, 0]);
+    const open = { cadence: "recurring", amount: 200, start: 0, end: null };
+    expect(amountAt(open, 99)).toBe(200);
+  });
+});

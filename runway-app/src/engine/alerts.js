@@ -12,7 +12,7 @@
 // hires start in September and take the runway below six months" is a decision. A rule that cannot
 // finish the sentence "so you should…" does not belong here.
 
-import { buildProjection, zeroInfo } from "./projection.js";
+import { buildProjection, zeroInfo, amountAt } from "./projection.js";
 import { buildModelFromDoc } from "./buildmodel.js";
 import { monthTotal, isCost, lineAmount, unmappedCodes, unresolvedLines } from "./coding.js";
 import { spentToDate } from "./summary.js";
@@ -198,7 +198,9 @@ const overspent = (doc, parts) => {
 const forecastHot = (doc, parts) => {
   const hist = (doc.history || []).slice(-3);
   if (hist.length < 3) return null;
-  const forecast = sum((parts?.salesLines || []).flatMap(l => (l.amounts || []).slice(0, 3)));
+  // `amountAt` per month — `l.amounts` never existed, so this summed an empty list and every sales
+  // forecast alert compared against 0.
+  const forecast = sum((parts?.salesLines || []).flatMap(l => [0, 1, 2].map(m => amountAt(l, m))));
   if (forecast < 1) return null;
   const booked = sum(hist.map(h => sum((h.lines || []).filter(l => !isCost(l)).map(lineAmount))));
   const gap = (booked - forecast) / forecast;

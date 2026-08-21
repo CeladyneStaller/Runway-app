@@ -13,19 +13,39 @@ export const TIERS = ["committed", "expected", "speculative"];
 export const tagRevenue = (lines) => lines.map(l =>
   l.kind === "revenue" && !TIERS.includes(l.confidence) ? { ...l, confidence: "expected" } : l);
 
+/** Is this line item live in month `m`? Recurring lines run start..end; one-time lines fire once. */
+export const isActiveAt = (li, m) => (li.cadence === "recurring"
+  ? (m >= li.start && (li.end == null || m <= li.end))
+  : (m === li.start));
+
+/** What a line item is worth in month `m` — 0 when it is not live.
+ *
+ *  ⚠️ THE ONLY PLACE THIS RULE LIVES. Line items carry a FLAT `amount` plus `start`/`end`/`cadence`/
+ *  `growthPct`; there is no per-month array on them. Six charts and one alert read `l.amounts?.[i]`
+ *  anyway — a field nothing has ever written — so `clean(undefined)` returned 0 and they drew flat
+ *  nothing. `advisor.js` hit the same thing, diagnosed it in a comment, and fixed only its own copy:
+ *  "those lines carry a flat `amount` with no per-month array, so every payroll tile read 0k/mo. A
+ *  plausible zero is worse than an error: nothing failed, and the tile simply lied."
+ *
+ *  Extracted from `buildProjection` rather than reimplemented beside it, so a chart and the projection
+ *  cannot disagree about what a line is worth in a month.
+ */
+export function amountAt(li, m) {
+  if (!li || !isActiveAt(li, m)) return 0;
+  const base = Number(li.amount) || 0;
+  return (li.cadence === "recurring" && li.growthPct)
+    ? base * Math.pow(1 + li.growthPct / 100, m - li.start)
+    : base;
+}
+
 export function buildProjection(model, toggles) {
   const rows = [];
   let bal = model.cashOnHand;
   for (let m = 0; m <= model.horizon; m++) {
     let rev = 0, cost = 0, nonGrant = 0;
     for (const li of model.lineItems) {
-      const active = li.cadence === "recurring"
-        ? (m >= li.start && (li.end == null || m <= li.end))
-        : (m === li.start);
-      if (!active) continue;
-      let amt = Number(li.amount) || 0;
-      if (li.cadence === "recurring" && li.growthPct)
-        amt = amt * Math.pow(1 + li.growthPct / 100, m - li.start);
+      const amt = amountAt(li, m);
+      if (amt === 0 && !isActiveAt(li, m)) continue;
       // "What does the business do" and "what does the balance sheet do" are different questions.
       // Financing is orthogonal to confidence so a $6M raise cannot drown a $480k quote in one trace.
       if (li.financing && !toggles.financing) continue;
