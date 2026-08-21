@@ -295,13 +295,19 @@ export const demoDoc = (which = "grant-startup") => {
     cashActuals,
   } : {};
 
+  // ⚠️ `ledger` AND `ledgerMix` ARE AUTHORING INPUTS, NOT DOCUMENT FIELDS. They exist so an archetype can
+  // declare its recorded months in one readable place; once `history` and `cashActuals` are built from
+  // them they have no further meaning, and spreading `built` wholesale carried them onto the document
+  // and straight through `toJSON`/`fromJSON` into anything a user saved.
+  const { ledger: _led, ledgerMix: _mix, ...rest } = built;
+
   return {
     ...emptyDoc(),
     startY: start.getFullYear(), startM: start.getMonth(),
     // `it` marks the document as a demo for the banner and the save guard.
     it: "demo",
     demoId: a.id,
-    ...built,
+    ...rest,
     ...shifted,
   };
 };

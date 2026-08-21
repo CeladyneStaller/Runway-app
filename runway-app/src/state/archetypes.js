@@ -23,9 +23,42 @@ const line = (label, amount, kind, cadence, start, end, extra = {}) =>
 // ── 1 · Grant-funded startup, eyeing a raise ─────────────────────────────────────────────────────
 //
 // Shows: the reimbursement gap with a real lag, cash cost share, and a proposal sitting in the model
-// without inflating it. **Toggling speculative off drops the runway from ~8 months to ~5** — the most
-// useful single demonstration in the product.
-const RIDGELINE = () => ({
+// without inflating it.
+//
+// ⚠️ THE HEADLINE DEMONSTRATION, WITH THE NUMBERS IT ACTUALLY PRODUCES. This comment used to claim
+// "toggling speculative off drops the runway from ~8 months to ~5", and that was FALSE — the toggle
+// moved it by 0.00 months, because the Seed SAFE closed in month 9 while the company crossed zero
+// around month 8. A raise arriving after you are out cannot change when you get there, and nothing
+// tested the claim.
+//
+// What it does now, from a four-month recorded ledger and a working SBIR award:
+//   speculative OFF  runway 4.7 months, band 4.4 - 5.1, `wide` false
+//   speculative ON   runway 24.6 months, band 4.4 - 26.4, `wide` TRUE
+// One toggle, a 20-month swing, and the band flags that the swing rests on money that may not arrive.
+//
+// And the shape underneath it: cash goes UNDER in Feb 27 and comes back in May 27 when the award's
+// first drawdown lands, two months after the budget period ends. That dip-and-recover IS the
+// reimbursement gap, and no demo showed it before — all three grants here compiled zero lines.
+const RIDGELINE = () => {
+  // ⚠️ STAFF BOUND FIRST, so the SBIR budget can reference the people it pays for. `computeGrant` treats
+  // personnel carrying an `employeeId` as ALLOCATED — salary already leaving as payroll — and subtracts
+  // it from the grant's cash out. Without the link the same wages are charged twice: once by
+  // `compileEmployee` and again by the grant, and the demo burns money nobody spends.
+  const staff = [
+    emp("Priya Raman", "CEO", 155000),
+    emp("Tom Okonkwo", "Principal Investigator", 148000),
+    emp("Sofia Lindqvist", "Senior Chemist", 126000),
+    emp("Wes Adeyemi", "Process Engineer", 118000),
+    emp("Hana Ito", "Lab Technician", 78000),
+    emp("Ben Carter", "Operations", 92000, 3),
+  ];
+  // ⚠️ `byPeriod` IS AN ARRAY INDEXED BY PERIOD, and `hrs` is TOTAL HOURS FOR THAT PERIOD, not monthly.
+  // `resolveProjectRates` fills `rate` from the employee's own salary, so only the hours are authored —
+  // a `rate` here would be overwritten anyway. A first draft keyed `byPeriod` as an object and read the
+  // hours as monthly, which compiled a $66,268 award instead of a $398,343 one.
+  const onGrant = (e, hrs) => ({ id: uid(), name: e.name, employeeId: e.id, byPeriod: [{ hrs }] });
+
+  return {
   name: "Ridgeline Catalysis",
   cash: 487000,
   // Four recorded months, Apr-Jul. Burn runs ~$85k; the May and July figures carry a conference and a
@@ -39,14 +72,7 @@ const RIDGELINE = () => ({
   // hardware-vc a first draft added $61,175 a month and cut its runway from 19.97 to 15.30 months.
   ledger: [76000, 90000, 79000, 86000],
   ledgerMix: [0.63, 0.24],
-  employees: [
-    emp("Priya Raman", "CEO", 155000),
-    emp("Tom Okonkwo", "Principal Investigator", 148000),
-    emp("Sofia Lindqvist", "Senior Chemist", 126000),
-    emp("Wes Adeyemi", "Process Engineer", 118000),
-    emp("Hana Ito", "Lab Technician", 78000),
-    emp("Ben Carter", "Operations", 92000, 3),
-  ],
+  employees: staff,
   lines: [
     line("Rent and utilities", 9200, "cost", "recurring", 0, 35),
     line("Lab consumables", 6400, "cost", "recurring", 0, 35),
@@ -57,13 +83,35 @@ const RIDGELINE = () => ({
       id: uid(), type: "grant", name: "SBIR Phase II — catalyst durability",
       budget: 1150000, start: 0, end: 23, lines: [],
       grant: {
-        funder: "Department of Energy", assumeFunded: true,
+        funder: "Department of Energy",
+        // ⚠️ `assumeFunded: false` AND REAL `categories`, WHICH IS WHAT MAKES THIS GRANT EXIST AT ALL.
+        // With `assumeFunded: true` the revenue branch is skipped entirely and only cost share is cash
+        // out; with `categories: null` every category sums to zero and NOTHING compiles. This grant
+        // carried both and produced no lines whatsoever — the flagship demo for reimbursement-financed
+        // organisations was demonstrating no reimbursement.
+        assumeFunded: false,
         // ⚠️ ARREARS WITH A TWO-MONTH LAG. The default and the most common — and the field that creates
         // the gap this whole product exists to model.
         reimburseTiming: "arrears", reimburseLagMonths: 2,
         costShareType: "cash", costSharePct: 0,
-        periods: [{ id: uid(), start: 0, end: 11 }, { id: uid(), start: 12, end: 23 }],
-        milestones: [], categories: null,
+        // One period, starting next month, so the recorded months stay clean.
+        periods: [{ id: uid(), start: 1, end: 6 }],
+        milestones: [],
+        // ⚠️ EVERY PERSONNEL LINE IS ALLOCATED, so `cashOut` is ~0 and the grant adds no new spend. That
+        // is the true shape of an SBIR-funded lab: the payroll is ALREADY going out; what the award
+        // changes is that some of it comes back, two months after the period ends. The dip and the
+        // recovery both come from timing, not from new cost — which is the entire argument.
+        categories: {
+          // Six months of a five-person team's time, most of it near full-time on the award.
+          personnel: [
+            onGrant(staff[1], 850), onGrant(staff[2], 800), onGrant(staff[3], 750),
+            onGrant(staff[4], 900), onGrant(staff[0], 350),
+          ],
+          fringe: { byPeriod: [0.30] },
+          // `incremental: false` means the indirect recovery is overhead ALREADY being paid — rent,
+          // admin, IT — so it counts as allocated and does not draw cash twice.
+          indirect: { base: "total_direct", incremental: false, rates: [{ byPeriod: [0.45] }] },
+        },
       },
     },
     {
@@ -90,10 +138,15 @@ const RIDGELINE = () => ({
     },
   ],
   // Planning, not closed — so it follows its confidence tier rather than being certain money.
-  rounds: [{ id: uid(), kind: "safe", name: "Seed SAFE", status: "planning", amount: 3000000,
-             closeMonth: 9, capType: "post", cap: 18000000, discount: 0.2, confAuto: true, goals: [] }],
+  // ⚠️ CLOSES BEFORE THE COMPANY RUNS OUT, WHICH IT DID NOT USED TO. At month 9 the SAFE landed AFTER
+  // the zero crossing, so switching the speculative tier moved the runway by 0.00 months — while this
+  // file's own header claimed that toggle was "the most useful single demonstration in the product".
+  // A raise that arrives after you are out cannot change when you get there.
+  rounds: [{ id: uid(), kind: "safe", name: "Seed SAFE", status: "planning", amount: 1500000,
+             closeMonth: 4, capType: "post", cap: 18000000, discount: 0.2, confAuto: true, goals: [] }],
   pos: [], saas: [],
-});
+  };
+};
 
 // ── 2 · Venture-backed hardware, revenue in hand ─────────────────────────────────────────────────
 //

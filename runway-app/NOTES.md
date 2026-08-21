@@ -8321,3 +8321,80 @@ Windows after the fix: canary 12, grant-startup 16, hardware-vc 26, nonprofit 16
 Verified TZ=UTC and TZ=America/Denver: 55 assertions each (window equality, every forward-looking chart
 at that width, override still clamping) plus 14 regression assertions on flow.runway containment,
 wording, and headline-inside-range. 0 failures.
+
+## Demo audit — what the backfill did NOT fix
+
+FIXED NOW: `ledger` and `ledgerMix` were leaking onto the demo document. They are AUTHORING inputs —
+they exist so an archetype declares its recorded months in one readable place — and once `history` and
+`cashActuals` are built from them they have no further meaning. Spreading `built` wholesale carried them
+through `toJSON`/`fromJSON` into anything a user saved. Destructured out in `demoDoc`.
+
+⚠️ STILL OPEN, AND THE FIRST TWO WERE ALREADY TRUE BEFORE ANY OF THIS WORK:
+
+1. THE SPECULATIVE TOGGLE DOES NOTHING ON ANY DEMO. Toggling it moves the runway by 0.00 months on all
+   four. grant-startup's own header comment says "Toggling speculative off drops the runway from ~8
+   months to ~5 — the most useful single demonstration in the product." **That claim is false and was
+   false before the backfill** — verified against the pre-backfill document: 5.42 either way. Its one
+   speculative line is the $3M Seed SAFE, and it lands at month 13 while the company crosses zero
+   around month 8, so it cannot move the FIRST crossing. The other three archetypes have no speculative
+   revenue at all. Either the SAFE moves earlier, or the comment is wrong and should say so.
+
+2. NO DEMO SHOWS A TROUGH THAT RECOVERS. Three dip below zero; none comes back. The dip-and-recover
+   shape IS the reimbursement gap — the product's central claim — and no demo demonstrates it. This is
+   the same root cause as the three inert grants in grant-startup: with no grant compiling a
+   reimbursement, there is no late arrival to climb back to.
+
+3. `wide` FIRES ONLY ON SAAS. The flag exists to say "your range leans on money that may not arrive",
+   and it is the band's most useful single signal. grant-startup — the archetype whose whole premise is
+   uncertain funding — reads spread 0.69, wide false.
+
+4. `hist.rolling` DRAWS ONLY 2 POINTS on four ledger months (it needs three months for its first value).
+   `hist.planvsactual` draws 4. Both work; both are thin. Six ledger months would make them read
+   properly, at the cost of the demo starting in February rather than April.
+
+5. SAAS RUNWAY still reads 12.23 against a 10.03 baseline for a reason not yet isolated — see above,
+   and do not chase it through the population.
+
+Items 1-3 all resolve the same way: give grant-startup a working grant and move its SAFE inside the
+horizon. That is one coherent piece of demo authoring, and it is the piece that would make the flagship
+actually demonstrate the product.
+
+## Demo items 1-3: the flagship now demonstrates the product
+
+THE SBIR PHASE II IS A REAL GRANT. `assumeFunded: false` plus real `categories`. Compiles $398,340 of
+committed reimbursement at month 12 — two months after its budget period ends.
+
+⚠️ EVERY PERSONNEL LINE CARRIES AN `employeeId`, WHICH IS THE WHOLE TRICK. `computeGrant` treats
+employee-linked labour as ALLOCATED — salary already leaving as payroll — and subtracts it from the
+grant's cash out. `cashOut` is therefore 0: the award adds NO new spend. That is the true shape of an
+SBIR-funded lab, and it means the dip and the recovery both come from TIMING rather than from new cost,
+which is the entire argument the product makes. Without the link the same wages are charged twice, once
+by `compileEmployee` and again by the grant.
+
+To do that the archetype had to bind `staff` to a variable before the object literal, so the budget can
+reference the people it pays for.
+
+⚠️ TWO SHAPE ERRORS ON THE WAY, BOTH SILENT. `byPeriod` is an ARRAY indexed by period, not an object
+keyed by index; and `hrs` is TOTAL HOURS FOR THE PERIOD, not monthly. A first draft got both wrong and
+compiled a $66,268 award instead of a $398,343 one — no error, just a small number. `rate` is filled
+from the employee's salary by `resolveProjectRates`, so only hours are authored.
+
+THE SAFE MOVED FROM MONTH 9 TO MONTH 4 (and $3M to $1.5M). At month 9 it landed AFTER the zero
+crossing, so the speculative toggle moved the runway by 0.00 months.
+
+RESULTS, grant-startup:
+    speculative OFF   runway  4.74   band 4.42 - 5.10    spread  0.69   wide false
+    speculative ON    runway 24.63   band 4.42 - 26.43   spread 22.02   wide TRUE
+    cash goes under Feb 27 and comes back May 27 when the drawdown lands.
+
+All three audit items closed for the flagship: the toggle now does something (19.89-month swing), a
+trough recovers, and `wide` fires on the view a user reaches by flipping the toggle.
+
+⚠️ THE ARCHETYPE'S OWN COMMENT WAS WRONG AND IS NOW CORRECTED. It claimed "toggling speculative off
+drops the runway from ~8 months to ~5 — the most useful single demonstration in the product". Verified
+against the PRE-backfill document: 5.42 either way. The claim had been false for as long as it had been
+written, and nothing tested it. The comment now states the numbers the archetype actually produces.
+
+STILL OPEN: hardware-vc, nonprofit and saas have no speculative revenue at all, so the toggle is inert
+on those three. That is defensible — not every company has a raise in the pipeline — but if the toggle
+is meant to be discoverable from any demo, they need one. And the saas runway anomaly is unchanged.
