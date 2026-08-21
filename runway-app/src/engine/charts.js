@@ -549,8 +549,21 @@ const salesForecast = (doc, parts) => {
     ? Array.from({ length: monthsShown(doc) }, (_, i) =>
         sum((parts.salesLines || []).map(l => amountAt(l, i))))
     : [];
-  const booked = hist.slice(-monthsShown(doc)).map(h => clean(monthRevenue(h)));
-  if (!booked.length) return { empty: "No booked revenue recorded yet." };
+  // ⚠️ PLACED BY `h.month`, NOT BY POSITION IN A SLICE, AND PADDED TO THE AXIS. This mapped the last N
+  // history entries onto positions 0..N-1 of a `months(doc)` axis — so a 6-month ledger drew 6 points
+  // against 23 labels, and any history not starting at month 0 was drawn shifted by however far in it
+  // began. Two bugs in one line: a length that disagrees with the axis, and an index that is not a month.
+  const n = monthsShown(doc);
+  const booked = Array.from({ length: n }, () => 0);
+  let anyBooked = false;
+  for (const h of hist) {
+    const m = clean(h.month);
+    if (m < 0 || m >= n) continue;
+    const v = clean(monthRevenue(h));
+    booked[m] += v;
+    if (v !== 0) anyBooked = true;
+  }
+  if (!anyBooked) return { empty: "No booked revenue recorded yet." };
 
   return {
     kind: "lines",

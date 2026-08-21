@@ -9003,3 +9003,34 @@ and each is asserted to be higher than the month before it.
 the exact field in a comment. `p.team` (3 readers), `r.in`/`r.out` (7), `l.amounts` (6),
 `revenueDriven`, `shipMonth`, `warrantPct`. The detector cannot see any of the READ-but-never-written
 half — that needs an AST pass, and at six instances it is now clearly worth one.
+
+## Full chart audit — and the sweep is now a test
+
+Ran every chart against every fixture with the parts App.jsx actually supplies, asking three questions:
+does it throw, does each series agree with its own x-axis, and are the numbers real.
+
+FOUND AND FIXED — `sales.forecast` drew SIX booked points against a TWENTY-THREE month axis. Two bugs
+in one line: `hist.slice(-monthsShown(doc)).map(...)` produced a series shorter than its own axis, AND
+mapped history onto positions 0..N-1 rather than onto `h.month`, so any ledger not starting at month 0
+was drawn shifted. Now padded to the axis and placed by month — the same fix `histPlanVsActual` and
+`histVariance` needed, in a third builder nobody had connected to the other two.
+
+TRIAGED AS CORRECT — 24 all-zero series, every one honest:
+  a nonprofit has no subscribers; three fixtures have no purchase orders; no fixture carries venture
+  debt; three have no cash cost share to accrue. And `cmt.costshare/matched` at zero on the two
+  grant-funded fixtures is THE POINT OF THE CHART — "you cannot match federal money with federal
+  money", so a flat line under a rising accrued line IS the shortfall it exists to show.
+
+0 throws, 0 NaN, 0 length mismatches after the fix.
+
+⚠️ NEW `test/engine/chartaudit.test.js`, BECAUSE A UNIT TEST PER CHART WOULD NOT HAVE CAUGHT ANY OF
+THIS. Not one chart bug this session threw — each returned a well-formed spec full of zeros and drew
+confidently. What catches them is asking every chart the same questions at once:
+  - nothing throws (asserted on the RAW builder; `buildChart` catches, which is right for production
+    and hides the failure in a test)
+  - every series length equals its x-axis length, and a categorical axis has a tick per column
+  - no NaN or Infinity anywhere
+  - the all-zero list is PINNED and may not grow — flat zero is the signature of every phantom-field
+    bug here, but most of the current entries are honest, so demanding zero would be wrong
+
+243 assertions per timezone.
