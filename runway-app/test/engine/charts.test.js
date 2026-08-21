@@ -3,14 +3,115 @@
 // a second answer, and this product exists to give one.
 import { describe, it, expect } from "vitest";
 import { CHARTS, chartsForTab, defaultChartFor, buildChart } from "../../src/engine/charts.js";
-import { buildModelParts, buildModelFromDoc } from "../../src/engine/buildmodel.js";
-import { buildProjection, zeroInfo } from "../../src/engine/projection.js";
+import { buildModelParts } from "../../src/engine/buildmodel.js";
 import { canaryDoc as demoDoc, emptyDoc } from "../../src/state/document.js";
 
 const parts = (doc) => {
   const p = buildModelParts(doc);
   return { ...p, rows: p.rows || [] };
 };
+
+describe("⚠️ flow.runway — known money, not predicted runway", () => {
+  const ALL_ON = { committed: true, expected: true, speculative: true, financing: true };
+
+  it("draws a committed-only line that stays inside its own band", async () => {
+    // The line is committed with BASE costs; the floor is committed with costs x(1+cv); the ceiling is
+    // committed+expected with costs x(1-cv). The line is therefore bracketed by construction — and this
+    // is the property that breaks first if the band definition ever drifts from the line's.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { canaryDoc, demoDoc } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const doc of [canaryDoc(), ...ARCHETYPES.map(a => demoDoc(a.id))]) {
+      const sp = buildChart("flow.runway", doc);
+      if (!sp?.series) continue;
+      sp.series[0].values.forEach((v, i) => {
+        if (v == null) return;
+        expect(v, `${doc.demoId || "canary"} month ${i} above floor`).toBeGreaterThanOrEqual(sp.band.lo[i] - 0.5);
+        expect(v, `${doc.demoId || "canary"} month ${i} below ceiling`).toBeLessThanOrEqual(sp.band.hi[i] + 0.5);
+      });
+    }
+  });
+
+  it("⚠️ NEVER SAYS THE WORD RUNWAY", async () => {
+    // Two tabs showing two dates is the design. Two tabs showing two different numbers BOTH called
+    // runway is the bug that design replaced. This chart says "committed cash out"; the dashboard owns
+    // the word runway. If this fails, the split has stopped being legible and is just a discrepancy.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { canaryDoc, demoDoc } = await import("../../src/state/document.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    for (const doc of [canaryDoc(), ...ARCHETYPES.map(a => demoDoc(a.id))]) {
+      const sp = buildChart("flow.runway", doc);
+      if (!sp?.series) continue;
+      const text = JSON.stringify([sp.basis, sp.markers, sp.series.map(x => x.label)]);
+      expect(text, doc.demoId || "canary").not.toMatch(/runway/i);
+    }
+  });
+
+  it("⚠️ IGNORES THE TIER TOGGLES — it is a definition, not a scenario", async () => {
+    // The line used to be `band.expected.rows`, always committed+expected whatever the user had on,
+    // while the dashboard followed `doc.settings.toggles`. Turning speculative on moved the dashboard
+    // $214,000 and this chart not at all — a divergence with no stated reason. Now the divergence is
+    // the point, so it must hold in BOTH directions: switching tiers cannot move this line at all.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { canaryDoc } = await import("../../src/state/document.js");
+    const base = canaryDoc();
+    const withSpec = { ...base, settings: { ...base.settings, toggles: ALL_ON } };
+    const noExp = { ...base, settings: { ...base.settings,
+      toggles: { committed: true, expected: false, speculative: false, financing: true } } };
+    const a = buildChart("flow.runway", withSpec).series[0].values;
+    const b = buildChart("flow.runway", noExp).series[0].values;
+    expect(a).toEqual(b);
+  });
+
+  it("⚠️ SHOWS A CLOSED ROUND EVEN WITH FINANCING OFF, and never a term sheet", async () => {
+    const { buildModelFromDoc } = await import("../../src/engine/buildmodel.js");
+    // The financing gate is checked BEFORE the confidence tier, so with the toggle off a CLOSED round
+    // vanished — and closed money is banked money. This chart forces `financing: true` and lets the
+    // tier filter: `INST_CONF` maps closed -> committed, term sheet -> expected.
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { canaryDoc } = await import("../../src/state/document.js");
+    const base = canaryDoc();
+    const rounds = [
+      { id: "closed", name: "Seed", kind: "safe", status: "closed", amount: 500000, closeMonth: 6 },
+      { id: "sheet", name: "Bridge", kind: "equity", status: "committed", amount: 400000, closeMonth: 7 },
+    ];
+    const settings = { ...base.settings, toggles: { ...base.settings.toggles, financing: false } };
+    const val = (rs) => buildChart("flow.runway", { ...base, rounds: rs, settings }).series[0].values;
+    const none = val([]);
+    const closedOnly = val([rounds[0]]);
+    const both_ = rounds;
+    // the closed SAFE must land despite financing being off — it is banked money
+    expect(closedOnly[8]).toBeGreaterThan(none[8]);
+    // ⚠️ AND THE TERM SHEET'S MONEY MUST NOT LAND. Asserted at the model, not on the drawn values,
+    // because of a SEPARATE pre-existing leak this chart is the first surface to expose (see NOTES):
+    // `indexedLines` sums its basis over EVERY revenue line regardless of tier, then tags the cost
+    // `committed` — so a royalty indexed on revenue charges $8,460 instead of $460 once a term sheet
+    // exists, and that cost reaches a committed-only view whose revenue excluded it. Until that is
+    // fixed, `both` and `closedOnly` differ by the royalty, not by the round.
+    const revLines = (rs) => buildModelFromDoc({ ...base, rounds: rs, settings })
+      .lineItems.filter((l) => l.kind === "revenue" && l.confidence === "committed");
+    expect(revLines(both_).map((l) => l.label).sort()).toEqual(revLines([rounds[0]]).map((l) => l.label).sort());
+    expect(revLines(rounds).some((l) => /Bridge/.test(l.label))).toBe(false);
+  });
+
+  it("⚠️ BOUNDS THE BRIDGE TO THE MONTHS IT DRAWS", async () => {
+    // On a committed-only line the deficit is unbounded, so `deepest` drifted to the horizon and
+    // reported a bridge for a month no chart shows — $3,348,438 at month 36 against an 18-month plot.
+    const { solvency, buildProjection, anchorToActuals, forecastFrom } = await import("../../src/engine/projection.js");
+    const { buildModelFromDoc } = await import("../../src/engine/buildmodel.js");
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { canaryDoc } = await import("../../src/state/document.js");
+    const doc = canaryDoc();
+    const line = anchorToActuals(
+      buildProjection(buildModelFromDoc(doc),
+        { committed: true, expected: false, speculative: false, financing: true }),
+      doc.cashActuals, true);
+    const shown = buildChart("flow.runway", doc).series[0].values.length;
+    const from = forecastFrom(doc);
+    expect(solvency(line, doc.startY, doc.startM, from, shown - 1).deepest)
+      .toBeLessThan(solvency(line, doc.startY, doc.startM, from).deepest);
+  });
+});
 
 describe("the registry", () => {
   it("offers three on every tab that has a picker", () => {
@@ -144,20 +245,33 @@ describe("nothing throws, ever", () => {
   });
 });
 
-describe("the runway chart agrees with the runway", () => {
-  it("marks the same month the projection does", () => {
-    // THE ONE CHART THAT RESTATES THE HEADLINE NUMBER. If it disagreed, the product would be giving two
-    // answers to the question it exists to answer.
+describe("the cash flow chart marks its own line", () => {
+  it("⚠️ PUTS THE MARKER WHERE THE DRAWN LINE CROSSES, not where the headline does", () => {
+    // ⚠️ THIS TEST ASSERTED THE OPPOSITE, and its comment said so: "the one chart that restates the
+    // headline number. If it disagreed, the product would be giving two answers to the question it
+    // exists to answer." It now disagrees ON PURPOSE. `RunwayChart` PREDICTS runway from the tiers the
+    // user has switched on; this chart shows KNOWN money — a committed-only line whose crossing is a
+    // different, usually earlier date. On the canary the marker moved 3.895 -> 5.159: anchoring pushed
+    // it later, dropping expected revenue pulled it earlier, and the old assertion measured the sum.
     //
-    // Compared against `zeroInfo` rather than against `runwayMonths`, which lives in a view module —
-    // importing it here pulls browser code into the engine project, and `testconfig.test.js` guards
-    // that boundary for a reason: the engine runs in Node and must keep running there.
+    // Two tabs showing two dates is the design. Two tabs showing two numbers BOTH CALLED RUNWAY was the
+    // bug it replaced, which is why `basis` states the difference and a sibling test forbids the word.
+    //
+    // WHAT MUST STILL HOLD is the property a reader actually checks: the marker sits where the line
+    // they can SEE goes under. That is implementation-independent, and it is the thing that was broken
+    // — the hole came from one projection while the line came from another, so with speculative on the
+    // line dipped underwater and nothing was shaded at all.
     const doc = demoDoc();
     const spec = buildChart("flow.runway", doc, parts(doc));
-    const rows = buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {});
-    const z = zeroInfo(rows, doc.startY, doc.startM);
     const marked = spec.markers?.[0];
-    if (marked && z) expect(Math.abs(marked.x - z.months)).toBeLessThan(0.6);
+    if (!marked) return;
+    const v = spec.series[0].values;
+    const i = Math.floor(marked.x);
+    // A marker in the final drawn month has no next point to interpolate toward. Assert what can be
+    // asserted there rather than reading `undefined` and comparing NaN, which passes silently.
+    if (v[i + 1] == null) { expect(Math.sign(v[i])).toBeGreaterThanOrEqual(0); return; }
+    const at = v[i] + (v[i + 1] - v[i]) * (marked.x - i);
+    expect(Math.abs(at), `line at marker x=${marked.x}`).toBeLessThan(1);
   });
 
   it("draws a band that contains its own line", () => {

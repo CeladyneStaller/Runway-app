@@ -7791,3 +7791,75 @@ STILL OPEN: whether `INST_CONF` becomes kind-aware. A signed SAFE and a non-bind
 status `committed` and both map to tier `expected`. Rule agreed is "a contract or money in bank is
 committed", which the equity labelling matches and the safe/note labelling does not. Changes existing
 documents, so not built.
+
+## Flag 1, steps 3-4: the two charts stop answering the same question
+
+APP.JSX. `band` and `upBand` now pass `{ cashActuals, anchorActuals, from: fcFrom }` into
+`confidenceBand`; the local re-anchor block and the `hasRange` recompute are deleted because the engine
+does both. `solvency(rows, startY, startM, fcFrom)` is windowed. The opts go into BOTH bands and that
+matters most for `upBand`: `RunwayChart` clamps its floor up to the green band's ceiling, which is the
+one place two independent `confidenceBand` calls are compared numerically. Anchor one and not the other
+and it compares curves from different baselines.
+
+FLOW.RUNWAY IS NOW COMMITTED-ONLY. RunwayChart PREDICTS runway; this shows KNOWN money. The line was
+`band.expected.rows` — the band's expected TIER, always committed+expected whatever the user had on,
+while the dashboard followed `doc.settings.toggles`. Speculative on moved the dashboard $214,000 and
+this chart $0. And `solvency()` got a THIRD projection, so with speculative on the drawn line dipped
+underwater and NO hole was shaded — the annotation whose comment says it exists "so a recovery stops
+reading as good news" was silent exactly when the line went under. One committed projection now feeds
+the line, the marker and the hole.
+
+`financing: true` FORCED. The financing gate is checked BEFORE the tier, so with the toggle off a
+CLOSED round vanished — and closed money is banked money. Toggles are for scenarios; "known cash" is
+not a scenario. `INST_CONF` does the filtering (closed -> committed, term sheet -> expected).
+
+NEVER THE WORD "RUNWAY" on this chart — asserted by test. Two tabs, two dates is the design; two tabs,
+two numbers both called runway is the bug it replaced. Marker reads "committed cash out · N mo".
+
+⚠️ FOUND WHILE TESTING — `indexedLines` LEAKS EXPECTED REVENUE INTO COMMITTED COST. It sums its basis
+over EVERY revenue line without checking `li.confidence`, then emits the cost with `status:
+"committed"` -> tier `committed`. So a royalty indexed at 2% of revenue charges $8,460 instead of $460
+the moment a TERM SHEET exists, and that cost lands in a committed-only view whose revenue correctly
+excluded it. `projection.js` already states the intended rule — "you never book the cost of a win you
+haven't counted" — and the tier GATE honours it; the AMOUNT does not.
+NOT FIXED HERE. Pre-existing, outside flag 1, and changes every projection with an indexed commitment.
+The committed-only chart is simply the first surface that shows committed revenue WITHOUT expected
+revenue, which is why it surfaced now. Needs its own decision.
+
+A TEST ASSERTION WAS WRONG BEFORE THE CODE WAS. First draft asserted the closed SAFE moves the line by
+exactly $500,000; it moves it $490,000, because adding non-grant revenue pulls in COST-SHARE matching.
+Testing the property (a term sheet contributes no committed revenue) beats testing a number a real
+modelled interaction is entitled to change.
+
+VERIFIED. 11 assertions across canary + 4 archetypes: committed line inside its own band at 90 points,
+no "runway" wording anywhere, tier toggles cannot move the line, closed round survives financing:false,
+term sheet excluded from committed revenue, bridge bounded to the drawn window, and the headline sits
+inside its range on every fixture. oxlint: charts.js 0 warnings, App.jsx 20 (unchanged from baseline).
+
+STILL OPEN: shared horizon (step 7) — needs `RunwayChart`'s `tMax` extracted into the engine, a real
+refactor rather than a parameter pass. And `INST_CONF` kind-awareness.
+
+## The test that had to change with it: "the runway chart agrees with the runway"
+
+`charts.test.js` asserted `|marker.x - zeroInfo(rows).months| < 0.6`, with a comment reading "THE ONE
+CHART THAT RESTATES THE HEADLINE NUMBER. If it disagreed, the product would be giving two answers to
+the question it exists to answer." That contract was deliberately replaced, so the test failed:
+expected 1.264 to be under 0.6.
+
+⚠️ NOTE `import { canaryDoc as demoDoc }` AT THE TOP OF THAT FILE. `demoDoc()` there is the CANARY, not
+the grant-startup demo — which is why the number looked unreproducible at first: the grant-startup demo
+has all-committed revenue and shows a delta of 0.000. Canary marker moved 3.895 -> 5.159. Anchoring
+pushed it LATER, dropping expected revenue pulled it EARLIER, and the old assertion measured the sum.
+
+REPLACED, NOT RELAXED. Loosening the threshold would have kept a test that asserts a contract the
+product no longer has. The new assertion is the property a reader actually checks: THE MARKER SITS
+WHERE THE DRAWN LINE CROSSES ZERO — interpolate the plotted series at `marker.x` and it must be ~0.
+Implementation-independent, and it is the thing that was genuinely broken: the hole came from one
+projection while the line came from another, so with speculative on the line dipped underwater and
+nothing was shaded.
+
+Guards the final-month edge explicitly. `v[i + 1]` is undefined for a marker in the last drawn month,
+and `Math.abs(NaN) < 1` is false but `expect` on NaN reads as a real failure — worse, an assertion that
+compares undefined can pass silently in other shapings. Asserted separately rather than left to luck.
+
+Verified under TZ=UTC and TZ=America/Denver, canary + 4 archetypes: 5 pass, 0 fail each.

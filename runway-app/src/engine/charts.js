@@ -13,7 +13,7 @@
 // `empty` is a SENTENCE, not a flag. A chart with nothing to draw should say what is missing — "no
 // spend history yet" — rather than render an empty box that looks like a bug.
 
-import { buildProjection, zeroInfo, solvency } from "./projection.js";
+import { buildProjection, zeroInfo, solvency, anchorToActuals, forecastFrom } from "./projection.js";
 import { accruedCostShare, outstandingDebt, windDownCost } from "./commitments.js";
 import { confidenceBand } from "./band.js";
 import { buildModelFromDoc } from "./buildmodel.js";
@@ -123,7 +123,35 @@ function projectionRows(doc, parts) {
 // ================================================================== CASH FLOW ==
 
 const flowRunway = (doc) => {
-  const band = confidenceBand(doc, HORIZON);
+  // ⚠️ THIS CHART SHOWS KNOWN MONEY. THE DASHBOARD PREDICTS RUNWAY. They are different questions and
+  // the split is deliberate.
+  //
+  // The line used to be `band.expected.rows` — the band's own expected TIER, always committed+expected
+  // whatever the user had switched on, while the dashboard's line followed `doc.settings.toggles`.
+  // Turn speculative on and the dashboard moved $214,000 and this chart did not. Worse, `solvency()`
+  // below was handed a THIRD projection, so the hole was computed from one curve and drawn under
+  // another: with speculative on the line dipped underwater and no hole was shaded at all.
+  //
+  // Now: ONE committed-only projection feeds the line, the marker and the hole.
+  //
+  // ⚠️ `financing: true`, ALWAYS. The financing gate is checked BEFORE the confidence tier, so with the
+  // toggle off a CLOSED round vanishes — and closed money is banked money. Toggles are for scenarios;
+  // a chart that means "known cash" is not a scenario. The tier does the filtering: `INST_CONF` already
+  // maps closed -> committed and term-sheet -> expected, so a signed round is in and a term sheet is
+  // not, with no extra rule here.
+  const committedToggles = { committed: true, expected: false, speculative: false, financing: true };
+  const model = buildModelFromDoc(doc);
+  const from = forecastFrom(doc);
+  const anchorRows = (rs) => anchorToActuals(rs, doc.cashActuals || {}, doc.settings?.anchorActuals !== false);
+  const line = anchorRows(buildProjection(model, committedToggles));
+
+  // The band's ceiling is "expected lands AND you underspend"; its floor is "committed only AND you
+  // overspend". Speculative is excluded outright — it is not known money, and this chart is about
+  // known money.
+  const band = confidenceBand(doc, HORIZON,
+    { committed: true, expected: true, speculative: false },
+    { cashActuals: doc.cashActuals, anchorActuals: doc.settings?.anchorActuals !== false, from });
+
   // ⚠️ `r.start`, NOT `r.end`. Each row carries both, and **`end` of one month IS `start` of the
   // next** — so plotting `end` under a month's label shows that month's CLOSING balance where the
   // company view shows its opening one. Every value appeared one month early.
@@ -131,27 +159,35 @@ const flowRunway = (doc) => {
   // `RunwayChart` plots `r.start` and is what the company dashboard uses, so this was the copy that
   // disagreed. **Two renderers of the same number is how they drift; the fix is to agree with the one
   // people check against.**
-  const take = (rows) => (rows || []).slice(0, monthsShown(doc)).map(r => clean(r.start));
-  const mid = take(band.expected?.rows);
+  const shown = monthsShown(doc);
+  const take = (rows) => (rows || []).slice(0, shown).map(r => clean(r.start));
+  const mid = take(line);
   if (!mid.length) return { empty: "No projection yet — add cash and a line or two." };
 
-  // `zero` is a NUMBER of months, not an object. Assumed otherwise and every runway chart silently
-  // fell back to its empty state — while the tests passed, because they accepted "said why not" as an
-  // outcome without checking that the DEFAULT charts actually draw.
-  const z = band.expected?.zero;
+  // ⚠️ `zeroFromNow`, NOT `zero`. `zero` counts months from the MODEL START and the label said "mo" as
+  // though it counted from today. On the canary those were 3.9 and 3.8 — near enough to look right,
+  // which is exactly why it survived. The marker's X stays in model-start months because that is what
+  // this axis is; only the LABEL changes.
+  const zAt = zeroInfo(line, doc.startY, doc.startM, from);
   let solv = null;
   try {
-    solv = solvency(buildProjection(buildModelFromDoc(doc), doc.settings?.toggles || {}),
-                    doc.startY, doc.startM);
+    // ⚠️ BOUNDED AT BOTH ENDS. `from` — a hole already crossed is not a hole ahead. `shown - 1` — on a
+    // committed-only line the deficit is unbounded, so `deepest` drifted to the horizon and reported a
+    // bridge for a month this chart does not draw ($3,230,627 at month 36 against an 18-month plot).
+    solv = solvency(line, doc.startY, doc.startM, from, Math.max(0, shown - 1));
   } catch { solv = null; }
   return {
     kind: "lines",
     x: months(doc), ticks: axisTicks(doc),
     band: { lo: take(band.floor?.rows), hi: take(band.ceiling?.rows) },
-    series: [{ id: "balance", label: "Cash balance", values: mid, tone: "signal" }],
+    series: [{ id: "balance", label: "Committed cash", values: mid, tone: "signal" }],
     refLine: { y: 0 },
-    markers: Number.isFinite(z) && z < monthsShown(doc)
-      ? [{ x: z, label: `${z.toFixed(1)} mo`, tone: "danger" }] : [],
+    // ⚠️ NEVER THE WORD "RUNWAY". That word means the dashboard's number, which includes expected
+    // revenue and is a LATER date. Two tabs showing two dates is the design; two tabs showing two
+    // different numbers both called runway is the bug this replaced.
+    basis: "Committed cash only — expected revenue is the upper band, not the line.",
+    markers: zAt && zAt.t < shown
+      ? [{ x: zAt.t, label: `committed cash out · ${zAt.fromNow.toFixed(1)} mo`, tone: "danger" }] : [],
     format: "money",
     // THE HOLE, so a recovery stops reading as good news. The line already dips; naming the gap is
     // what stops somebody seeing the far side and thinking the money is there.

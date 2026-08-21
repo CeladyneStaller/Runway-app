@@ -256,28 +256,17 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
     // ⚠️ THE GREEN BAND NOW USES THE TIERS THAT ARE ACTUALLY ON. Its ceiling used to add speculative
     // unconditionally — so somebody with speculation switched OFF was still shown a band whose top edge
     // assumed it landed.
-    const b = confidenceBand(doc, undefined, {
+    //
+    // ⚠️ ANCHORING AND THE WINDOW GO IN, RATHER THAN BEING APPLIED OUT HERE. This used to anchor the
+    // rows after the fact and recompute `hasRange` from them — but the band's ZERO DATES stayed
+    // measured against the un-anchored originals, so the tile printed "3.8 mo" above a "1.9 - 2.7 mo"
+    // range. The rows drawn and the dates shown were different numbers. `confidenceBand` now anchors
+    // internally and reads its dates off the rows it returns, so there is nothing left to fix up here.
+    return confidenceBand(doc, undefined, {
       committed: !!toggles.committed, expected: !!toggles.expected,
       speculative: !!toggles.speculative,
-    });
-    if (!b) return b;
-    // anchor every band curve to recorded cash exactly as the main line is anchored (line `rows` above),
-    // so the band starts from the same real-cash baseline and its expected curve lands on the line
-    // instead of sitting ~$18k off wherever the un-anchored projection happened to be.
-    const anchor = (rs) => anchorToActuals(rs, cashActuals, anchorActuals);
-    const floorRows = anchor(b.floor.rows);
-    const ceilRows = anchor(b.ceiling.rows);
-    return {
-      ...b,
-      // ⚠️ RECOMPUTED FROM THE ANCHORED ROWS, because those are the ones drawn. `band.js` measures the
-      // raw projection; anchoring can pull the curves together, so **the flag and the polygon were
-      // describing two different sets of numbers.**
-      hasRange: floorRows.some((r, i) => Math.abs(ceilRows[i].start - r.start) > 1),
-      floor: { ...b.floor, rows: floorRows },
-      expected: { ...b.expected, rows: anchor(b.expected.rows) },
-      ceiling: { ...b.ceiling, rows: ceilRows },
-    };
-  }, [doc, cashActuals, anchorActuals, toggles.committed, toggles.expected, toggles.speculative]);
+    }, { cashActuals, anchorActuals, from: fcFrom });
+  }, [doc, cashActuals, anchorActuals, fcFrom, toggles.committed, toggles.expected, toggles.speculative]);
 
   const zeroUp = useMemo(() => zeroInfo(rowsUp, startY, startM, fcFrom), [rowsUp, startY, startM, fcFrom]);
   const zeroConf = useMemo(() => zeroInfo(rowsConf, startY, startM, fcFrom), [rowsConf, startY, startM, fcFrom]);
@@ -299,7 +288,11 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
   // ONE SOLVENCY READING, shared by every milestone. A projection can dip below zero and recover when
   // a receipt lands, and the arithmetic does not know that a company with no cash in January never
   // reaches March — so a date judged only on its own balance reads green while being unreachable.
-  const solv = useMemo(() => solvency(rows, startY, startM), [rows, startY, startM]);
+  // ⚠️ WINDOWED, so a hole the company already crossed is not reported as the one ahead. Without this
+  // the dashboard printed TWO zero dates from ONE row set — the headline passed `fcFrom` to `zeroInfo`
+  // and this did not — and every milestone was judged `stranded` against a date already survived.
+  // Recorded cash already reflects the survival; counting it here counts it twice.
+  const solv = useMemo(() => solvency(rows, startY, startM, fcFrom), [rows, startY, startM, fcFrom]);
 
   const msWithBal = [...milestones, ...roundMS(rounds, startY, startM)].map(ms => {
     const b = balanceAtDate(rows, startY, startM, ms.y, ms.m, ms.day);
@@ -373,15 +366,15 @@ function RunwayApp({ doc, setDoc, onSwitchDemo = null, termsRequired, onAcceptTe
   //   orange — those plus speculative, treated as certain: "if this lands, how wide is it EVEN THEN"
   const upBand = useMemo(() => {
     if (!showUpside) return null;
-    const b = confidenceBand(doc, undefined,
-      { committed: true, expected: true, speculative: true });
-    if (!b) return null;
-    const anchor = (rs) => anchorToActuals(rs, cashActuals, anchorActuals);
-    return { ...b,
-      floor: { ...b.floor, rows: anchor(b.floor.rows) },
-      expected: { ...b.expected, rows: anchor(b.expected.rows) },
-      ceiling: { ...b.ceiling, rows: anchor(b.ceiling.rows) } };
-  }, [doc, showUpside, cashActuals, anchorActuals]);
+    // ⚠️ THE SAME OPTS AS THE GREEN BAND, AND THAT MATTERS MORE HERE THAN ANYWHERE. `RunwayChart` clamps
+    // THIS band's floor up to the GREEN band's ceiling, so two translucent fills never overlap into a
+    // third colour that means nothing. That clamp is the one place two independent `confidenceBand`
+    // calls are compared numerically — anchor one and not the other and it compares curves measured
+    // from different baselines, and the polygon can invert.
+    return confidenceBand(doc, undefined,
+      { committed: true, expected: true, speculative: true },
+      { cashActuals, anchorActuals, from: fcFrom });
+  }, [doc, showUpside, cashActuals, anchorActuals, fcFrom]);
   const upsideDefersZero = !!zero && (!zeroUp || zeroUp.t > zero.t + 0.02);
   // With speculative revenue switched on, the headline date leans on money that may not arrive —
   // so show the floor underneath it: the same plan without speculative.
