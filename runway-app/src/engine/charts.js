@@ -484,11 +484,35 @@ const projLoad = (doc, parts) => {
   const rProjects = parts?.rProjects || [];
   if (!rProjects.length) return { empty: "No projects yet." };
 
-  const perProject = rProjects.slice(0, 6).map(p => ({
-    id: p.id, label: p.name, tone: "signal",
-    values: Array.from({ length: monthsShown(doc) }, (_, i) =>
-      sum((p.team || []).map(t => (i >= clean(t.startM) && i <= clean(t.endM ?? monthsShown(doc))
-        ? clean(t.fte ?? t.pct ?? 0) : 0)))),
+  // ⚠️ `p.team` AGAIN — THE FIELD NOTHING HAS EVER WRITTEN. `payAllocation` was moved off it and
+  // `alerts.js` carries the same warning, but this chart was left reading it, so "Team load by project"
+  // has drawn "No team allocated to any project yet" for every company since it was built, however much
+  // allocation existed. Three readers of a field with no writer; two were fixed and one was missed.
+  //
+  // `teamLoad` is the mechanism that actually knows about allocation — hours, from
+  // `grant.categories.personnel` for grants and `p.lines` with `isLabor` for everything else — and it is
+  // what the Allocation sub-tab and `payAllocation` both use. Reading it here means the tab and its
+  // chart can no longer disagree.
+  //
+  // Converted to FTE so the "team size" reference line means what it says: hours per month over a
+  // full-time month.
+  const load = teamLoad(rProjects, doc?.settings?.toggles || undefined, doc);
+  const cap = HRS_YR / 12;
+  const byProject = new Map();
+  for (const rec of Object.values(load || {})) {
+    for (const it of rec?.items || []) {
+      const start = clean(it.start), end = clean(it.end ?? it.start);
+      const months = Math.max(1, end - start + 1);
+      const perMonth = clean(it.hours) / months;
+      if (!byProject.has(it.project)) byProject.set(it.project, {});
+      const bucket = byProject.get(it.project);
+      for (let m = start; m <= end; m++) bucket[m] = (bucket[m] || 0) + perMonth;
+    }
+  }
+
+  const perProject = [...byProject.entries()].slice(0, 6).map(([name, bucket], i) => ({
+    id: `pl${i}`, label: name, tone: "signal",
+    values: Array.from({ length: monthsShown(doc) }, (_, m) => clean(bucket[m]) / cap),
   }));
 
   if (!perProject.some(s => s.values.some(v => v > 0))) {

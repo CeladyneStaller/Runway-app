@@ -183,15 +183,8 @@ const RIDGELINE = () => {
 //
 // Shows: the capital stack after a conversion, orders whose cash lands months after delivery, a
 // deposit arriving early, and a fulfilment project where cost and revenue move together.
-const KESTREL = () => ({
-  name: "Kestrel Systems",
-  cash: 4120000,
-  // Hardware burn is lumpy by nature — tooling and long-lead parts land in whole months. Scatter is
-  // wider than the others on purpose, and it is the company where the cost half of the band should be
-  // the visible half. cv lands near 0.10.
-  ledger: [205000, 296000, 212000, 228000, 208000, 224000],
-  ledgerMix: [0.55, 0.34],
-  employees: [
+const KESTREL = () => {
+  const staff = [
     emp("Dana Whitfield", "CEO", 190000), emp("Marcus Oyelaran", "CTO", 185000),
     emp("Yuki Tanaka", "VP Engineering", 172000), emp("Rosa Delgado", "Hardware Lead", 158000),
     emp("Sam Bright", "Firmware", 142000), emp("Nina Patel", "Firmware", 138000),
@@ -199,7 +192,17 @@ const KESTREL = () => ({
     emp("Cole Barrett", "Manufacturing", 126000), emp("Amara Diallo", "Supply Chain", 112000),
     emp("Jonah Reed", "Sales", 130000), emp("Iris Kovač", "Customer Success", 98000),
     emp("Theo Nakamura", "Finance", 122000, 2), emp("Priyanka Shah", "Quality", 108000, 4),
-  ],
+  ];
+  return {
+  name: "Kestrel Systems",
+  cash: 4120000,
+  // Hardware burn is lumpy by nature — tooling and long-lead parts land in whole months. Scatter is
+  // wider than the others on purpose, and it is the company where the cost half of the band should be
+  // the visible half. cv lands near 0.10.
+  ledger: [205000, 296000, 212000, 228000, 208000, 224000],
+  ledgerMix: [0.55, 0.34],
+  employees: staff,
+
   lines: [
     line("Rent — office and workshop", 24000, "cost", "recurring", 0, 35),
     line("Cloud and tooling", 7800, "cost", "recurring", 0, 35),
@@ -211,6 +214,19 @@ const KESTREL = () => ({
     lines: [
       line("Components and BOM", 48000, "cost", "recurring", 0, 5),
       line("Contract assembly", 90000, "cost", "onetime", 4, 4),
+      // ⚠️ `isLabor: true` IS HOW `teamLoad` SEES ALLOCATION for anything that is not a grant — HOURS,
+      // not money, and `compileProject` filters these OUT of the projection because payroll has already
+      // paid for the time. Without them the Allocation tab and "Team load by project" draw nothing,
+      // however much work the project actually represents. `amount: 0` is deliberate, not a placeholder.
+      // ⚠️ `employeeId` IS REQUIRED — `teamLoad`'s `push` starts `if (!id || !hrs) return`, so a labour
+      // line with a null employee records NOTHING. Capacity is a question about PEOPLE; a line that
+      // names no one cannot answer it.
+      { id: uid(), label: "Mechanical build", kind: "cost", isLabor: true, employeeId: staff[6].id,
+        hours: 640, cadence: "recurring", amount: 0, start: 0, end: 5, growthPct: 0 },
+      { id: uid(), label: "Firmware and test", kind: "cost", isLabor: true, employeeId: staff[4].id,
+        hours: 420, cadence: "recurring", amount: 0, start: 2, end: 5, growthPct: 0 },
+      { id: uid(), label: "Test and qualification", kind: "cost", isLabor: true, employeeId: staff[7].id,
+        hours: 380, cadence: "recurring", amount: 0, start: 1, end: 5, growthPct: 0 },
     ],
   }],
   pos: [
@@ -248,7 +264,8 @@ const KESTREL = () => ({
   // the demo is opened. Read them as "210 Solo customers right now, adding 14 a month" — the back-solve
   // is arithmetic in one place, not magic constants here.
   saas: [],
-});
+  };
+};
 
 // ── 3 · Grant-funded non-profit ──────────────────────────────────────────────────────────────────
 //
@@ -371,17 +388,20 @@ const TIDEWATER = () => {
 //
 // Shows: churn against acquisition, three plans at very different prices, and an internal project
 // absorbing labor with nothing coming back.
-const LARKSPUR = () => ({
+const LARKSPUR = () => {
+  const staff = [
+    emp("Rowan Vasquez", "Founder", 96000), emp("Kit Osei", "Engineer", 128000),
+    emp("Mira Solberg", "Engineer", 124000), emp("Jae-won Park", "Design and Support", 98000),
+  ];
+  return {
   name: "Larkspur Analytics",
   cash: 310000,
   // Small team, mostly salary and hosting, with one month carrying an annual software renewal. cv near
   // 0.08 — its band width should still be dominated by the revenue tiers, not by spend.
   ledger: [30000, 44000, 31000, 34000, 30000, 33000],
   ledgerMix: [0.68, 0.19],
-  employees: [
-    emp("Rowan Vasquez", "Founder", 96000), emp("Kit Osei", "Engineer", 128000),
-    emp("Mira Solberg", "Engineer", 124000), emp("Jae-won Park", "Design and Support", 98000),
-  ],
+  employees: staff,
+
   lines: [
     line("Cloud hosting", 4200, "cost", "recurring", 0, 35, { growthPct: 2 }),
     line("Tooling and subscriptions", 1900, "cost", "recurring", 0, 35),
@@ -390,7 +410,16 @@ const LARKSPUR = () => ({
   projects: [{
     // Labor only, no revenue — the case that makes the allocation view worth opening.
     id: uid(), type: "internal", name: "Platform rebuild", budget: 180000, start: 1, end: 10,
-    lines: [], labor: [],
+    // ⚠️ `labor: []` IS A FOURTH ALLOCATION MECHANISM AND NOTHING READS IT — `teamLoad` reads `lines`
+    // with `isLabor`, so an internal project's effort has to live there or it is invisible to both the
+    // Allocation tab and the team-load chart. Hours only: the salaries are already in payroll, and
+    // charging them here would bill the same engineer twice.
+    lines: [
+      { id: uid(), label: "Rebuild engineering", kind: "cost", isLabor: true, employeeId: staff[1].id,
+        hours: 900, cadence: "recurring", amount: 0, start: 1, end: 10, growthPct: 0 },
+      { id: uid(), label: "Migration and QA", kind: "cost", isLabor: true, employeeId: staff[2].id,
+        hours: 320, cadence: "recurring", amount: 0, start: 6, end: 10, growthPct: 0 },
+    ],
   }],
   saas: [
     // ⚠️ THE SOLO PLAN IS ROUGHLY FLAT AND SHRINKS IF YOU TOUCH IT. 3.2% monthly churn against 14 new
@@ -413,11 +442,21 @@ const LARKSPUR = () => ({
     // it closes at month 6, comfortably before the crossing, because a round landing after you are out
     // cannot move the date.
     { id: uid(), kind: "equity", name: "Seed round", status: "raising", amount: 2200000,
-      closeMonth: 6, capType: "post", preMoney: 9000000, cap: 0, discount: 0, confAuto: true, goals: [] },
+      closeMonth: 6, capType: "post", preMoney: 9000000, cap: 0, discount: 0, confAuto: true,
+      // ⚠️ GOALS ARE THE EVIDENCE THE ROUND IS BEING RAISED ON, and `phase: "pre"` means it has to be
+      // true BEFORE the money lands. The chart's whole question is whether the runway reaches them —
+      // a goal due after the cash runs out is a round you cannot raise.
+      goals: [
+        { id: uid(), kind: "commercial", label: "$25k MRR", dueMonth: 3, status: "on-track", phase: "pre" },
+        { id: uid(), kind: "technical", label: "Enterprise SSO shipped", dueMonth: 4, status: "at-risk", phase: "pre" },
+        { id: uid(), kind: "commercial", label: "Two lighthouse logos", dueMonth: 5, status: "not-started", phase: "pre" },
+        { id: uid(), kind: "financial", label: "Net retention above 100%", dueMonth: 11, status: "not-started", phase: "post" },
+      ] },
     { id: uid(), kind: "safe", name: "Pre-seed SAFE", status: "closed", amount: 500000,
       closeMonth: -6, capType: "post", cap: 6000000, discount: 0.2, confAuto: true, goals: [] }],
   pos: [],
-});
+  };
+};
 
 /** The list the picker shows.
  *

@@ -8606,3 +8606,38 @@ STILL EMPTY on every archetype, all "a feature no demo exercises":
   `sales.forecast` — wants revenue LINES; POs alone do not satisfy it.
 
 35 assertions, both timezones, 0 failures.
+
+## The five "empty charts": two were my audit, one was an engine bug, two were data
+
+⚠️ TWO WERE NEVER EMPTY. `buildChart(id, doc, parts)` takes a THIRD argument and I audited with none.
+`ms.runway` reads `parts.msWithBal`, which App.jsx builds — supply it and the chart draws. `sales.forecast`
+and `sales.mrr` require `doc.saas`, so they are CORRECTLY empty on the three companies with no
+subscriptions. Auditing a chart without the parts the app gives it measures a code path nobody runs —
+the same mistake as calling `computeGrant` on a raw project.
+
+⚠️ `proj.load` WAS AN ENGINE BUG, THE THIRD READER OF A FIELD WITH NO WRITER. It read `p.team[].fte`.
+`payAllocation` was moved off that field and `alerts.js` carries the warning — but this chart was left
+on it, so "Team load by project" has drawn "No team allocated to any project yet" for every company
+since it was built. Now reads `teamLoad`, converted to FTE so the "team size" reference line means what
+it says. Three readers, two fixed, one missed: exactly the pattern NOTES records five times over.
+
+DATA ADDED so the remaining features have something to show:
+- Labour lines (`isLabor: true`, hours only, `amount: 0`) on the hardware and saas projects. ⚠️ AND THEY
+  NEED A REAL `employeeId` — `teamLoad`'s push starts `if (!id || !hrs) return`, so a labour line naming
+  nobody records NOTHING. Capacity is a question about people. KESTREL and LARKSPUR restructured to bind
+  `staff` first, same as RIDGELINE and TIDEWATER.
+- Four goals on the saas seed round, three `phase: "pre"` — the chart's question is whether the runway
+  reaches the evidence the round is raised on, and a goal due after the cash runs out is a round you
+  cannot raise.
+- Milestones on all four (see above).
+
+FINAL CHART AUDIT, with the parts the app supplies:
+    saas            (none empty)
+    grant-startup   sales.forecast sales.mrr inv.goals
+    hardware-vc     sales.forecast sales.mrr inv.goals
+    nonprofit       sales.forecast sales.mrr inv.slip inv.ownership inv.goals
+Every remaining empty is "this company does not have that thing" — no subscriptions, no open equity
+round, no cap table at a nonprofit. That is correct, not a gap: a nonprofit showing ownership dilution
+would be worse than a blank panel.
+
+39 assertions, both timezones, 0 failures. oxlint clean (127 warnings, all pre-existing).
