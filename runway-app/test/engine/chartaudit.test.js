@@ -37,14 +37,23 @@ const fullParts = (doc) => {
   return parts;
 };
 
-const FIXTURES = () => [["canary", canaryDoc()], ...ARCHETYPES.map((a) => [a.id, demoDoc(a.id)])];
+/** ⚠️ BUILT ONCE, NOT PER TEST. Four tests x five fixtures x a full model build was ~1s of rebuilding
+ *  identical documents. It is not why a Windows run timed out spawning workers — that is process
+ *  startup, not test execution — but a test file that rebuilds the world for every assertion is paying
+ *  for nothing, and `monthsShown` caches on the doc OBJECT, so a fresh `demoDoc()` misses it every time.
+ *
+ *  Frozen after building: these are shared across tests now, so a test that mutated one would corrupt
+ *  the others in a way that depends on execution order.
+ */
+let CACHE = null;
+const FIXTURES = () => (CACHE ||= [["canary", canaryDoc()], ...ARCHETYPES.map((a) => [a.id, demoDoc(a.id)])]
+  .map(([name, doc]) => [name, doc, fullParts(doc)]));
 
 describe("⚠️ chart audit — every chart, every fixture", () => {
   it("nothing throws", () => {
     // `buildChart` catches, so a throw becomes an empty state rather than a stack trace. That is right
     // for production and hides the failure here, so this asserts on the raw builder.
-    for (const [name, doc] of FIXTURES()) {
-      const parts = fullParts(doc);
+    for (const [name, doc, parts] of FIXTURES()) {
       for (const spec of CHARTS) {
         expect(() => spec.build(doc, parts), `${name} / ${spec.id}`).not.toThrow();
       }
@@ -55,8 +64,7 @@ describe("⚠️ chart audit — every chart, every fixture", () => {
     // `sales.forecast` drew 6 booked points against a 23-month axis — the recorded months crammed into
     // the left quarter of the plot, silently. A series shorter than its axis is not a short series; it
     // is a series drawn at the wrong months.
-    for (const [name, doc] of FIXTURES()) {
-      const parts = fullParts(doc);
+    for (const [name, doc, parts] of FIXTURES()) {
       for (const { id } of CHARTS) {
         const spec = buildChart(id, doc, parts);
         if (!spec || spec.empty || !Array.isArray(spec.x)) continue;
@@ -74,8 +82,7 @@ describe("⚠️ chart audit — every chart, every fixture", () => {
   it("no series contains NaN or Infinity", () => {
     // A non-finite value renders as a broken path or a missing bar — visible, but only if somebody is
     // looking at that fixture on that tab.
-    for (const [name, doc] of FIXTURES()) {
-      const parts = fullParts(doc);
+    for (const [name, doc, parts] of FIXTURES()) {
       for (const { id } of CHARTS) {
         const spec = buildChart(id, doc, parts);
         if (!spec || spec.empty) continue;
@@ -95,8 +102,7 @@ describe("⚠️ chart audit — every chart, every fixture", () => {
     // debt closure — so demanding zero here would be wrong. Pinning the list is not: a NEW flat series
     // means either a reader wired to nothing, or demo data that stopped exercising a feature.
     const found = [];
-    for (const [name, doc] of FIXTURES()) {
-      const parts = fullParts(doc);
+    for (const [name, doc, parts] of FIXTURES()) {
       for (const { id } of CHARTS) {
         const spec = buildChart(id, doc, parts);
         if (!spec || spec.empty) continue;

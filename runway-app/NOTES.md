@@ -9112,3 +9112,40 @@ lines. Now gated on any of: subscriptions, `parts.salesLines` (purchase orders),
 the ledger. All four archetypes draw it.
 
 255 assertions per timezone across the full chart audit, 0 failures, 0 length mismatches, 0 NaN.
+
+## One failure and seven errors — and only one of them was a defect
+
+### The failure was the guard doing its job
+
+`ledgerRevenue` came back as a NEW one-direction field. Correct: I added it to the archetypes as an
+authoring input — read by `demoDoc`, turned into `history`, destructured out so it never reaches the
+document — and never declared it in `INTENDED`. `demoDoc` lives inside the data layer, so its reads do
+not count as consumption, which is the right rule and means each authoring field costs one line to
+declare. Declared. The detector caught a real omission on the first run after I made it.
+
+### The seven errors were not tests failing — they were tests NOT RUNNING
+
+    [vitest-pool]: Failed to start forks worker for test files .../test/state/*.test.js
+    Caused by: [vitest-pool-runner]: Timeout waiting for worker to respond
+
+Nothing was wrong with those seven files; the pool timed out waiting for a forked PROCESS to answer.
+The evidence is in the totals: `setup 159s` and `environment 198s` against a `duration` of 174s —
+cumulative worker startup EXCEEDING the wall clock of the entire suite. Forks are a full
+`child_process` spawn each, and on Windows, with a space in the repo path and a scanner reading every
+file each process opens, spawning a dozen at once is where that time goes.
+
+⚠️ AND VITEST REPORTS UNSTARTED WORKERS AS "unhandled errors", NOT FAILURES. The run said
+"1 failed | 1526 passed" while seven files never executed. Treat any pool error as "the suite did not
+finish", not as a passing run with noise attached.
+
+FIXED with `pool: "threads"` in the shared test config. Threads share one process and start in
+milliseconds; nothing here needs process isolation — no test mutates `process.env` or `process.cwd`,
+and the engine is pure functions. ⚠️ UNVERIFIED ON WINDOWS FROM HERE: this is the right change for the
+symptom but the symptom is environmental, so the confirmation is a green run on the machine that failed.
+
+### And a smaller thing that was genuinely mine
+
+`chartaudit.test.js` rebuilt all five fixtures for each of its four tests — ~1s of rebuilding identical
+documents, and `monthsShown` caches on the doc OBJECT so a fresh `demoDoc()` missed it every time. Now
+built once and shared. It is NOT why the workers timed out (971ms -> 784ms, against a 40s -> 174s
+regression) and should not be described as the fix.

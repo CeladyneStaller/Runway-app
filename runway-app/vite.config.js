@@ -18,6 +18,23 @@ import react from "@vitejs/plugin-react";
 // `test/setup.js` is shared by both and guards its own DOM-specific parts on `typeof document`.
 const shared = {
   setupFiles: ["./test/setup.js"],
+  // ⚠️ THREADS, NOT FORKS — A WORKER THAT NEVER STARTS FAILS DIFFERENTLY FROM A TEST THAT FAILS.
+  //
+  // A Windows run reported seven `[vitest-pool]: Failed to start forks worker` errors alongside a
+  // completely unrelated assertion failure. Nothing was wrong with those seven files; the pool timed
+  // out waiting for the forked PROCESS to answer. Forks are a full `child_process` spawn each, and on
+  // Windows — with a space in the repo path and a virus scanner reading every file the process opens —
+  // spawning a dozen of them at once is where that time goes. The run showed `setup 159s` and
+  // `environment 198s` against a `duration` of 174s: cumulative worker startup EXCEEDING the wall clock
+  // of the whole suite.
+  //
+  // Threads share one process and start in milliseconds. Nothing in this suite needs process
+  // isolation: no test mutates `process.env` or `process.cwd`, and the engine is pure functions.
+  //
+  // ⚠️ AND UNSTARTED WORKERS ARE REPORTED AS "unhandled errors" RATHER THAN FAILURES, so the suite says
+  // "1 failed" while seven files did not run at all. Treat any pool error as "the suite did not
+  // finish", not as a passing run with noise attached.
+  pool: "threads",
   // The view tests mount the full app in jsdom and do a lot of DOM work; the default 5s timeout has
   // no margin on a loaded machine (a Windows run timed out at ~5.1s on a test that takes ~1.4s here).
   // 15s is realistic headroom, not a mask for a slow test — the engine tests still run in ms.

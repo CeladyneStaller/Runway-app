@@ -52,7 +52,16 @@ const WORD = /\b([a-z][A-Za-z0-9]{2,})\b/g;
 const DATA = ["src/state/archetypes.js", "src/state/document.js", "src/seed.js"];
 
 /** Authoring-only by design — consumed inside the data layer itself and never meant to leave it. */
-const INTENDED = new Set(["ledger", "ledgerMix", "schemaVersion", "demoId"]);
+/** ⚠️ ADD A FIELD HERE THE MOMENT YOU ADD ONE TO AN ARCHETYPE. These are AUTHORING inputs: `demoDoc`
+ *  reads them, builds `history`/`cashActuals` from them, and destructures them OUT so they never reach
+ *  the document. `demoDoc` is inside the data layer, so its reads do not count as consumption — which
+ *  is correct, and which means each one has to be declared intentional exactly once.
+ *
+ *  `ledgerRevenue` was added without this and the guard caught it on the next run. That is the guard
+ *  working: a NEW one-direction field is either a mistake or a declaration, and it should cost one line
+ *  to say which.
+ */
+const INTENDED = new Set(["ledger", "ledgerMix", "ledgerRevenue", "schemaVersion", "demoId"]);
 
 export function oneDirectionFields() {
   // Compare on resolved absolute paths, which `path.resolve` normalises to the platform's own
