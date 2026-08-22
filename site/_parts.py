@@ -11,8 +11,24 @@ EMAIL = "info@waterline-runway.com"
 # button here 404s — which is correct, because the site is not public until then either.
 APP = "https://app.waterline-runway.com"
 
-def head(title, desc, current=""):
+def head(title, desc, current="", path=None):
+    """⚠️ `current` HIGHLIGHTS A NAV ITEM. `path` IS THIS PAGE'S OWN URL. They are not the same job, and
+    for a long time one variable did both.
+
+    A sub-page passes `current="/product/"` so the Product tab lights up — and that value was ALSO used
+    for the canonical and `og:url`. So `/product/payroll/`, `/product/scenarios/` and
+    `/product/funded-work/` each told Google "the real version of this page is /product/", and the legal
+    pages pointed at the homepage. **A canonical to a different URL is a request to be dropped from the
+    index**, so four content pages and both legal pages were asking not to be found. Funded work is the
+    strongest page on the site and the one nobody else can write; it was invisible.
+
+    They coincide on top-level pages, which is exactly why it survived: every page where the two jobs
+    differ is a page nobody checked.
+
+    `path` defaults to `current` so existing callers keep working; sub-pages pass their own.
+    """
     SITE_ = SITE  # for the f-string below
+    here = path if path is not None else current
     links = "".join(
         f'<a href="{h}"{" aria-current=\"page\"" if h == current else ""}>{t}</a>'
         for h, t in NAV)
@@ -23,12 +39,12 @@ def head(title, desc, current=""):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{desc}">
-<link rel="canonical" href="{SITE_}{current or '/'}">
+<link rel="canonical" href="{SITE_}{here or '/'}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Waterline">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}">
-<meta property="og:url" content="{SITE_}{current or '/'}">
+<meta property="og:url" content="{SITE_}{here or '/'}">
 <meta property="og:image" content="{SITE_}/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg">
@@ -92,8 +108,13 @@ FOOT = f'''<footer class="foot">
 </html>
 '''
 
-def page(path, title, desc, current, body):
+def page(path, title, desc, current, body, url=None):
+    """⚠️ THE PAGE'S OWN URL IS DERIVED FROM WHERE IT IS WRITTEN, not from the nav item it highlights.
+    `product/payroll/index.html` -> `/product/payroll/`. Passing `current` for both is what pointed six
+    canonicals at the wrong page; deriving it means a new sub-page cannot repeat the mistake by
+    forgetting an argument."""
     import os
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    open(path, "w").write(head(title, desc, current) + body + FOOT)
+    derived = "/" + path[:-len("index.html")].lstrip("./") if path.endswith("index.html") else "/" + path.lstrip("./")
+    open(path, "w").write(head(title, desc, current, url or derived) + body + FOOT)
     return path

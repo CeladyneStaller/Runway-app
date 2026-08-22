@@ -534,9 +534,13 @@ const projLoad = (doc, parts) => {
 // ====================================================================== SALES ==
 
 const salesForecast = (doc, parts) => {
-  const saas = doc.saas || [];
   const hist = doc.history || [];
-  if (!saas.length) return { empty: "No revenue lines yet." };
+  // ⚠️ GATED ON `doc.saas` ALONE, WHICH IS NOT WHAT THE CHART IS ABOUT. "Forecast against booked" needs
+  // a forecast OR some booked revenue, and `parts.salesLines` carries purchase orders — so a hardware
+  // company with $680,000 of collected orders and no subscriptions was told "No revenue lines yet."
+  // A subscription check standing in for a revenue check.
+  if (!(doc.saas || []).length && !(parts?.salesLines || []).length && !hist.some(h => clean(monthRevenue(h))))
+    return { empty: "No revenue lines yet." };
 
   const forecast = (parts?.salesLines || []).length
     ? Array.from({ length: monthsShown(doc) }, (_, i) =>

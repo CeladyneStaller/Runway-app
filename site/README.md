@@ -90,3 +90,23 @@ enforceable if they are conspicuous; sentence-casing them for tidiness weakens t
 **Superseded versions must stay reachable.** An acceptance record naming a version points at a document
 that has to still exist — when the text changes, the old build goes to `/terms/<version>/` rather than
 being overwritten.
+
+## SEO
+
+⚠️ `head(title, desc, current, path)` — `current` HIGHLIGHTS A NAV ITEM, `path` IS THE PAGE'S OWN URL.
+They are not the same job. One variable did both for a long time, so every sub-page that passed
+`current="/product/"` to light up the Product tab ALSO declared `/product/` as its canonical — a request
+to be dropped from the index. Four content pages and both legal pages were asking not to be found.
+`page()` now derives the URL from where the file is written, so a new sub-page cannot repeat it by
+forgetting an argument.
+
+    robots.txt      allows everything except the dated legal archives
+    sitemap.xml     regenerate when pages are added — see the snippet in this repo's history
+    og.png          1200x630. ⚠️ `og:image` POINTED AT A .PNG THAT DID NOT EXIST while only og.svg was
+                    committed, so every shared link showed a blank card. SVG would not have rendered
+                    either — LinkedIn, X and Slack do not accept it.
+    JSON-LD         Organization on /, SoftwareApplication on /product/, Article on the essay.
+                    Schema DESCRIBES the page; it never asserts anything a reader cannot find there.
+
+Dated legal archives carry `noindex,follow`: byte-identical to the live versions, so they would compete
+with them, but their links should still pass.

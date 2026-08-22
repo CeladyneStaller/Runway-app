@@ -274,3 +274,57 @@ describe("⚠️ every recorded cost resolves to a project or to overhead", () =
     }
   });
 });
+
+describe("⚠️ the ledger records receipts, not only spend", () => {
+  it("every demo books revenue, and `kind` says so", async () => {
+    // ⚠️ `lineKind` DEFAULTS TO COST AND THAT IS LOAD-BEARING — a receipt without `kind: "revenue"` is
+    // counted as money going OUT. Every demo recorded six months of spend and no receipts at all, so
+    // "Forecast against booked" had nothing to compare and the whole revenue half of the ledger was
+    // untested by any fixture.
+    const { monthRevenue, monthTotal } = await import("../../src/engine/coding.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      const hist = demoDoc(a.id).history || [];
+      expect(hist.some((h) => monthRevenue(h) > 0), `${a.id} books no revenue`).toBe(true);
+      // and every month still records spend — receipts must not have displaced the cost lines
+      expect(hist.every((h) => monthTotal(h) > 0), `${a.id} has a month with no spend`).toBe(true);
+    }
+  });
+
+  it("⚠️ RECEIPTS DO NOT MOVE `burnVariance`, because `monthTotal` sums COSTS ONLY", async () => {
+    // The ledger's spend story has to survive the revenue being added beside it. If a receipt ever
+    // counted toward burn, the confidence band would narrow or widen for a reason nobody could see.
+    const { confidenceBand } = await import("../../src/engine/band.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const stripped = { ...doc, history: (doc.history || []).map((h) => ({ ...h,
+        lines: (h.lines || []).filter((l) => l.kind !== "revenue") })) };
+      const R = { committed: true, expected: true, speculative: false };
+      expect(confidenceBand(doc, undefined, R).burnCV, a.id)
+        .toBe(confidenceBand(stripped, undefined, R).burnCV);
+    }
+  });
+
+  it("booked revenue reaches the forecast chart, for POs as well as subscriptions", async () => {
+    // The gate was `if (!doc.saas.length)` — a SUBSCRIPTION check standing in for a REVENUE check, so a
+    // hardware company with $680,000 of collected orders read "No revenue lines yet."
+    const { buildChart } = await import("../../src/engine/charts.js");
+    const { buildModelParts } = await import("../../src/engine/buildmodel.js");
+    const { buildProjection } = await import("../../src/engine/projection.js");
+    const { ARCHETYPES } = await import("../../src/state/archetypes.js");
+    const { demoDoc } = await import("../../src/state/document.js");
+    for (const a of ARCHETYPES) {
+      const doc = demoDoc(a.id);
+      const parts = buildModelParts(doc);
+      parts.rows = buildProjection(parts.model, doc.settings?.toggles || {});
+      const spec = buildChart("sales.forecast", doc, parts);
+      expect(spec.empty, `${a.id}: ${spec.empty}`).toBeFalsy();
+      const booked = spec.series.find((s) => s.id === "booked").values;
+      expect(booked.some((v) => v > 0), `${a.id}: booked is flat zero`).toBe(true);
+      expect(booked.length, `${a.id}: booked disagrees with its axis`).toBe(spec.x.length);
+    }
+  });
+});

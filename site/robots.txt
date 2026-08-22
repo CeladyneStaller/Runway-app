@@ -1,0 +1,14 @@
+# Waterline — https://waterline-runway.com
+#
+# Everything is public and crawlable. The only exclusions are the app itself, which is behind auth and
+# has nothing to index, and the dated legal archives, which are byte-identical to the live versions and
+# would otherwise compete with them. Those carry `noindex` in the page too — belt and braces, because
+# robots.txt only asks a crawler not to FETCH, while a noindex tag is what keeps a page out of results
+# if somebody links to it anyway.
+
+User-agent: *
+Allow: /
+Disallow: /terms/2026-08-12/
+Disallow: /privacy/2026-08-12/
+
+Sitemap: https://waterline-runway.com/sitemap.xml

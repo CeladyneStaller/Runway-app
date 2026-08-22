@@ -212,6 +212,8 @@ export const canaryDoc = () => ({
  *  Six also gives `hist.rolling` four points instead of two — it needs three months before it can
  *  produce its first value at all.
  */
+const clean = (n) => (Number.isFinite(Number(n)) ? Number(n) : 0);
+
 const DEMO_BACKFILL = 6;
 
 /** Shift a month index that belongs to a DATED FUTURE EVENT.
@@ -239,12 +241,19 @@ const shiftLines = (ls) => (ls || []).map(l => ({ ...l, start: shiftStart(l.star
  *
  *  6000 payroll · 5000 direct costs · 7000 facilities and overhead. Each archetype maps all three.
  */
-const ledgerMonth = (month, total, mix) => ({
+const ledgerMonth = (month, total, revenue, mix) => ({
   month,
   lines: [
     { code: "6000", amount: Math.round(total * mix[0]), note: "payroll" },
     { code: "5000", amount: Math.round(total * mix[1]), note: "direct costs" },
     { code: "7000", amount: total - Math.round(total * mix[0]) - Math.round(total * mix[1]), note: "rent, software, insurance" },
+    // ⚠️ `kind: "revenue"` IS LOAD-BEARING AND ITS ABSENCE MEANS COST. `lineKind` defaults to cost so a
+    // revenue line can never silently subtract from spend — which also means a recorded receipt without
+    // the flag is counted as money going OUT. Money in has to say so.
+    //
+    // `monthTotal` sums COSTS only, so adding these leaves `burnVariance` and `derivedBurn` untouched:
+    // the ledger's spend story is exactly what it was.
+    ...(revenue > 0 ? [{ code: "4000", amount: revenue, kind: "revenue", note: "receipts" }] : []),
   ],
 });
 
@@ -258,6 +267,7 @@ export const demoDoc = (which = "grant-startup") => {
   const start = new Date(now.getFullYear(), now.getMonth() - DEMO_BACKFILL, 1);
 
   const ledger = built.ledger || [];
+  const receipts = built.ledgerRevenue || [];
   const mix = built.ledgerMix || [0.63, 0.24];
   const spent = ledger.reduce((x, v) => x + v, 0);
 
@@ -352,7 +362,7 @@ export const demoDoc = (which = "grant-startup") => {
       } : pj.grant,
     })),
     cash: openingCash,
-    history: ledger.map((v, m) => ledgerMonth(m, v, mix)),
+    history: ledger.map((v, m) => ledgerMonth(m, v, clean(receipts[m]), mix)),
     cashActuals,
   } : {};
 
@@ -360,7 +370,7 @@ export const demoDoc = (which = "grant-startup") => {
   // declare its recorded months in one readable place; once `history` and `cashActuals` are built from
   // them they have no further meaning, and spreading `built` wholesale carried them onto the document
   // and straight through `toJSON`/`fromJSON` into anything a user saved.
-  const { ledger: _led, ledgerMix: _mix, ...rest } = built;
+  const { ledger: _led, ledgerMix: _mix, ledgerRevenue: _rev, ...rest } = built;
 
   return {
     ...emptyDoc(),

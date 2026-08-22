@@ -9079,3 +9079,36 @@ does, and now says so.
 Most are optional parameters (`tipW`, `tipH`, `includeZero`), alternate spellings behind a `??`
 (`valuation` behind `r.post`), or fields consumed only by views. `out` (advisor.js) and `team`
 (alerts.js) are the last two known dead readers. The list is a review queue, not a defect count.
+
+## The ledger records receipts now, not only spend
+
+Every demo recorded six months of spend and NO revenue, so "Forecast against booked" had nothing to
+compare and the revenue half of the ledger was untested by any fixture.
+
+⚠️ `kind: "revenue"` IS LOAD-BEARING AND ITS ABSENCE MEANS COST. `lineKind` defaults to cost so a
+revenue line can never silently subtract from spend — which also means a receipt WITHOUT the flag is
+counted as money going out. Money in has to say so.
+
+    grant-startup   [0, 92, 0, 0, 88, 0]              two drawdowns in six months
+    hardware-vc     [0, 0, 420, 0, 0, 260]            two shipments collected, four months of nothing
+    nonprofit       [76, 76, 78, 155, 78, 79]         monthly drawdown plus a foundation payment
+    saas            [19.8, 20.4, 21, 21.5, 22.1, 22.6] subscriptions collect every month and grow
+
+LUMPY ON PURPOSE for the first three. Two receipts against spend every single month IS the shape this
+product exists to show, and a smooth revenue line would teach the opposite. saas is the one archetype
+whose booked line SHOULD be smooth, which is what makes the others read as lumpy rather than as noise.
+
+⚠️ `monthTotal` SUMS COSTS ONLY, so `burnVariance` is untouched — asserted directly by rebuilding each
+band with the revenue lines stripped and requiring an identical `burnCV`. The ledger's spend story is
+exactly what it was.
+
+Code 4000 mapped to each archetype's main project, so the "every ledger line resolves" guard still holds.
+
+### And the gate that hid it: `salesForecast`
+
+`if (!doc.saas.length) return { empty: "No revenue lines yet." }` — a SUBSCRIPTION check standing in
+for a REVENUE check. A hardware company with $680,000 of collected orders was told it had no revenue
+lines. Now gated on any of: subscriptions, `parts.salesLines` (purchase orders), or booked revenue in
+the ledger. All four archetypes draw it.
+
+255 assertions per timezone across the full chart audit, 0 failures, 0 length mismatches, 0 NaN.

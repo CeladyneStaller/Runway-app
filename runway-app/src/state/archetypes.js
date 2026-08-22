@@ -73,12 +73,16 @@ const RIDGELINE = () => {
   // ledger sitting above the itemised total therefore makes the demo silently more expensive: on
   // hardware-vc a first draft added $61,175 a month and cut its runway from 19.97 to 15.30 months.
   ledger: [78000, 118000, 84000, 90000, 79000, 87000],
+  // ⚠️ LUMPY ON PURPOSE — REIMBURSEMENT DOES NOT ARRIVE MONTHLY. Two drawdowns in six months against
+  // spend every single month is the shape this product exists to show, and a smooth revenue line would
+  // teach the opposite. Three of these months booked nothing at all.
+  ledgerRevenue: [0, 92000, 0, 0, 88000, 0],
   ledgerMix: [0.63, 0.24],
   // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
   // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
   // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
   // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
-  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD, 4000: mainProject },
   employees: staff,
   lines: [
     line("Rent and utilities", 9200, "cost", "recurring", 0, 35),
@@ -215,12 +219,14 @@ const KESTREL = () => {
   // wider than the others on purpose, and it is the company where the cost half of the band should be
   // the visible half. cv lands near 0.10.
   ledger: [205000, 296000, 212000, 228000, 208000, 224000],
+  // Orders land when they land: two shipments collected, four months of nothing.
+  ledgerRevenue: [0, 0, 420000, 0, 0, 260000],
   ledgerMix: [0.55, 0.34],
   // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
   // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
   // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
   // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
-  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD, 4000: mainProject },
   employees: staff,
 
   lines: [
@@ -317,12 +323,15 @@ const TIDEWATER = () => {
   // the narrowest of the four. cv near 0.04 — a demonstrably STEADY organisation, which is its own
   // useful reading of the band.
   ledger: [89000, 121000, 91000, 96000, 90000, 94000],
+  // A programme on monthly drawdown, plus a foundation payment in the fourth month — steadier than a
+  // grant startup and still not flat.
+  ledgerRevenue: [76000, 76000, 78000, 155000, 78000, 79000],
   ledgerMix: [0.71, 0.16],
   // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
   // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
   // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
   // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
-  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD, 4000: mainProject },
   employees: staff,
   lines: [
     line("Office and field station", 6800, "cost", "recurring", 0, 35),
@@ -428,12 +437,15 @@ const LARKSPUR = () => {
   // Small team, mostly salary and hosting, with one month carrying an annual software renewal. cv near
   // 0.08 — its band width should still be dominated by the revenue tiers, not by spend.
   ledger: [30000, 44000, 31000, 34000, 30000, 33000],
+  // Subscriptions collect every month and grow — the one archetype whose booked line SHOULD be smooth,
+  // which is what makes the other three read as lumpy rather than as noise.
+  ledgerRevenue: [19800, 20400, 21000, 21500, 22100, 22600],
   ledgerMix: [0.68, 0.19],
   // ⚠️ EVERY LEDGER CODE MAPS SOMEWHERE. `resolveLine` returns a projectId, OVERHEAD, or null — and null
   // means the spend sits in the baseline attributed to nothing, which is what "unmapped" costs a reader.
   // 6000 payroll and 7000 facilities are genuinely overhead; 5000 is direct cost and belongs to the work
   // it was spent on, which is what makes plan-against-actual and variance-by-code say anything.
-  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD },
+  codeMap: { 6000: OVERHEAD, 5000: mainProject, 7000: OVERHEAD, 4000: mainProject },
   employees: staff,
 
   lines: [
